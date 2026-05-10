@@ -1,0 +1,15 @@
+apiVersion: sourceplane.io/v1
+kind: Component
+metadata:
+  name: infra-terraform-core
+spec:
+  type: turbo-package
+  domain: starter-infra
+  inputs:
+    nodeVersion: "20"
+  labels:
+    layer: infra
+    provider: terraform
+  dependsOn:
+    - component: infra-terraform-state
+      condition: success

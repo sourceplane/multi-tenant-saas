@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+  packages: read
+  id-token: write
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      job-matrix: ${{ steps.matrix.outputs.job-matrix }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: sourceplane/orun-action@v1.1.0
+      - run: orun plan --changed --intent intent.yaml --output plan.json
+      - id: matrix
+        run: echo "job-matrix=$(jq -c '[.jobs[] | {"job-id": .id, "job-name": .checkName}]' plan.json)" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: orun-plan
+          path: plan.json
+
+  run:
+    needs: plan
+    runs-on: ubuntu-latest
+    if: ${{ needs.plan.outputs.job-matrix != '[]' && needs.plan.outputs.job-matrix != '' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.plan.outputs.job-matrix) }}
+    name: ${{ matrix.job-name }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: orun-plan
+      - uses: sourceplane/orun-action@v1.1.0
+      - run: |
+          orun run \
+            --plan plan.json \
+            --runner github-actions \
+            --remote-state \
+            --job "${{ matrix.job-id }}" \
+            --exec-id "${{ github.run_id }}-${{ github.run_attempt }}"
+        env:
+          ORUN_BACKEND_URL: ${{ secrets.ORUN_BACKEND_URL }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          SUPABASE_API_KEY: ${{ secrets.SUPABASE_API_KEY }}

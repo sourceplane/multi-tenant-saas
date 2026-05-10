@@ -1,0 +1,14 @@
+{
+  "goal": "Supabase/Postgres-backed multi-organization Orun SaaS control plane",
+  "current_task": 1,
+  "completed": [],
+  "repo_health": "red",
+  "next_focus": "orun-workspace-bootstrap",
+  "last_verified": "2026-05-11",
+  "waiting_for_input": "false",
+  "task_agent": "ai/tasks/task-0001.md",
+  "notes": [
+    "Planning state initialized from code/spec reality because compact context files were absent.",
+    "Task 0001 is the first implementation task and must not create live Cloudflare or Supabase resources."
+  ]
+}

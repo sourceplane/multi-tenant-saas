@@ -1,0 +1,35 @@
+apiVersion: sourceplane.io/v1
+kind: Intent
+metadata:
+  name: multi-tenant-saas
+  description: Reusable Cloudflare and Supabase multi-tenant SaaS starter
+compositions:
+  sources:
+    - name: stack-tectonic
+      kind: oci
+      ref: oci://ghcr.io/sourceplane/stack-tectonic:0.12.0
+discovery:
+  roots:
+    - apps/
+    - packages/
+    - tests/
+    - infra/
+environments:
+  dev:
+    defaults:
+      lane: dry-run
+      namespacePrefix: dev-
+    policies:
+      requireApproval: "false"
+  staging:
+    defaults:
+      lane: verify
+      namespacePrefix: stg-
+    policies:
+      requireApproval: "true"
+  production:
+    defaults:
+      lane: release
+      namespacePrefix: prod-
+    policies:
+      requireApproval: "true"

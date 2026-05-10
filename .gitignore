@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.wrangler/
+.turbo/
+coverage/
+*.tsbuildinfo
+.env
+.env.local
+*.log
+plan.json
