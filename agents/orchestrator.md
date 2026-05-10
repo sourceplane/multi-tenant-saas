@@ -344,7 +344,7 @@ Must:
 - detect overreach / hidden coupling
 - confirm production-grade basics
 - PASS / FAIL
-- if PASS, merge the PR and sync local main
+- if PASS, merge the PR, sync local `main` to `origin/main`, and leave the local repo clean
 - if FAIL, leave the PR open with clear blockers
 
 Report:
@@ -370,6 +370,8 @@ Verifier Merge Protocol:
 - If verification adds a report or small verification-only fix, commit it to the PR branch, push, and wait for CI again
 - Merge only after local checks and PR CI logs are both acceptable
 - After merge, checkout `main` locally and fast-forward pull from `origin/main`
+- Do not leave the task branch checked out after merge
+- Run `git status --short`; resolve any verifier-created local changes before ending the verifier task
 - Never merge a PR with unresolved verification blockers
 
 ⸻
