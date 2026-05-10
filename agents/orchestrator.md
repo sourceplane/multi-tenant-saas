@@ -31,9 +31,10 @@ For every cycle:
 12. Select the next highest-leverage task that can land as one coherent PR
 13. Generate a detailed prompt file for exactly one PR
     13a. Update `/ai/state.json` — set `task_agent` to the path of the file just written (task or verify `.md`); do this after every file produced, keeping it current
-14. Wait for worker result
-15. Update state and the compact context files (also update `task_agent` if a verify report was the last file written)
-16. Repeat
+14. If human input is required, follow the Human Input Pause Protocol instead of generating or running a task
+15. Wait for worker result
+16. Update state and the compact context files (also update `task_agent` if a verify report was the last file written)
+17. Repeat
 
 ---
 
@@ -58,6 +59,9 @@ Active architecture source:
 - If specs and code reality conflict, prefer a bounded migration task or a spec
   proposal. Do not silently follow stale docs.
 - New task prompts must name the relevant specs in `Read First`.
+- Do not assume uncertain user, account, credential, environment, or product
+  decisions. Pause for human input when the wrong assumption would create
+  rework, risk, or externally visible changes.
 
 Operational access assumptions:
 
@@ -87,6 +91,39 @@ Operational access assumptions:
 - When credential scope, Supabase account/project, Cloudflare account,
   GitHub repository target, environment target, or Stack Tectonic composition
   naming is unclear, ask the user instead of guessing.
+
+---
+
+# Human Input Pause Protocol
+
+Use this protocol whenever human intervention or input is needed before the
+next safe task can be generated or verified.
+
+Required actions:
+
+1. Set `/ai/state.json` field `waiting_for_input` to `"true"`.
+2. Write `/ai/waiting_for_input.md`.
+3. Ask exactly one question in that file.
+4. Do not generate a new implementer task while waiting.
+
+`/ai/waiting_for_input.md` must stay short:
+
+```md
+# Waiting For Input
+
+## Context
+One or two sentences explaining what is blocked.
+
+## Question
+One specific question for the human.
+
+## Needed To Continue
+The task or decision this answer will unblock.
+```
+
+When the answer is incorporated, set `waiting_for_input` to `"false"` and
+replace `/ai/waiting_for_input.md` with a short note that no input is currently
+requested.
 
 ---
 
@@ -209,11 +246,13 @@ Rules:
   "repo_health": "yellow",
   "next_focus": "orun-repo-bootstrap",
   "last_verified": "2026-05-08",
+  "waiting_for_input": "false",
   "task_agent": "/ai/tasks/task-0021.md"
 }
 ```
 
 `task_agent` always holds the path to the most recently produced task or verify `.md` file. Update it immediately after writing each file — do not batch.
+`waiting_for_input` is a string field with values `"true"` or `"false"`.
 
 ⸻
 

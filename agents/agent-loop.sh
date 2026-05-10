@@ -83,6 +83,32 @@ esac
 
 cd "$WORKSPACE_DIR"
 
+exit_if_waiting_for_input() {
+  if [[ ! -f ai/state.json ]]; then
+    return 0
+  fi
+
+  if ! command -v jq >/dev/null 2>&1; then
+    echo "Error: jq is required but not installed"
+    exit 1
+  fi
+
+  local waiting_for_input
+  waiting_for_input="$(jq -r '.waiting_for_input // "false"' ai/state.json)"
+
+  if [[ "$waiting_for_input" == "true" ]]; then
+    echo "⏸ Waiting for human input. Exiting agent loop."
+
+    if [[ -f ai/waiting_for_input.md ]]; then
+      cat ai/waiting_for_input.md
+    else
+      echo "ai/waiting_for_input.md is missing."
+    fi
+
+    exit 0
+  fi
+}
+
 get_task_runner_prompt() {
   if [[ ! -f ai/state.json ]]; then
     echo "Error: ai/state.json not found"
@@ -195,6 +221,7 @@ wait_between_runs() {
 }
 
 if [[ "$START_WITH_TASK" == true ]]; then
+  exit_if_waiting_for_input
   echo "↷ Starting with task-runner using ${TASK_CLI}..."
   run_task_runner
   wait_between_runs
@@ -206,9 +233,11 @@ while true; do
   loop_count=$((loop_count + 1))
   echo "🔁 Loop ${loop_count}"
 
+  exit_if_waiting_for_input
   run_orchestrator
   wait_between_runs
 
+  exit_if_waiting_for_input
   run_task_runner
 
   if [[ "$MAX_LOOPS" -gt 0 && "$loop_count" -ge "$MAX_LOOPS" ]]; then
