@@ -99,12 +99,16 @@ The CLI and SDK must expose the same public contracts for automation.
 
 ## Agent Execution Model
 
-Specs are written for human review and agent execution. Work should be split into PR-sized task loops:
+Specs are written for human review and agent execution. Work is split into PR-sized task loops:
 
 - orchestrator creates or updates the task and verification plan
-- task agent implements only the scoped change
+- task agent implements only the scoped change in one PR
 - verifier runs the stated checks
 - failed verification produces a fix task, not new feature scope
 - decisions and spec changes are recorded before downstream implementation depends on them
 
-Every task should define intent, non-goals, affected files, acceptance criteria, verification, and expected repo state.
+Every task should define intent, PR boundary, non-goals, affected areas, acceptance criteria, verification, and expected repo state.
+
+A PR-sized task has one primary outcome and one owning component, seam, contract, or infra slice. Larger work must be split before assignment.
+
+Spec text should state durable behavior, contracts, constraints, and acceptance criteria. Do not prescribe internal implementation details unless they are required for security, portability, compatibility, or platform operation.

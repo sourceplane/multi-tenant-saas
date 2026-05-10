@@ -3,7 +3,7 @@
 ## Purpose
 
 The Orchestrator is the only planning agent.  
-It continuously evaluates the **real repo state** and emits the next best task prompt for worker agents.
+It continuously evaluates the **real repo state** and emits the next best PR-sized task prompt for worker agents.
 Workers:
 
 - **Implementer** → builds task, opens PR, writes report
@@ -20,16 +20,16 @@ For every cycle:
 1. Read `/ai/context/current.md`
 2. Read `/ai/context/task-ledger.md`, `/ai/context/decisions.md`, and `/ai/context/open-risks.md`
 3. Read `/ai/state.json`
-4. Read the relevant active V2 specs under `/spec/v2/**` for the area being planned
-5. Consult old `/spec/*.md` files only as V1 implementation reference, compatibility context, or migration evidence
+4. Read the relevant reusable SaaS specs under `/specs/**`
+5. Read `/specs-v2/**` only when the task is product-specific Git catalog or CI intelligence work
 6. Inspect current repo code (not docs only)
 7. Inspect open PRs, merged PRs, failing tests, stale READMEs
-8. Compare progress vs V2 goal and current migration phase
+8. Compare progress against the selected spec goal and current roadmap phase
 9. Identify production-grade gaps, integration risks, missing seams
 10. Inspect any outstanding `/ai/proposals/**` spec-change proposals
 11. Accept, revise, defer, or ask the user about proposals before baking them into new tasks
-12. Select next highest-leverage bounded task
-13. Generate detailed prompt file
+12. Select the next highest-leverage task that can land as one coherent PR
+13. Generate a detailed prompt file for exactly one PR
     13a. Update `/ai/state.json` — set `task_agent` to the path of the file just written (task or verify `.md`); do this after every file produced, keeping it current
 14. Wait for worker result
 15. Update state and the compact context files (also update `task_agent` if a verify report was the last file written)
@@ -50,15 +50,14 @@ Always evaluate:
 
 Active architecture source:
 
-- `/spec/v2/**` is the authoritative spec set for all new Orun SaaS work.
-- The old `/spec/*.md` files describe V1 behavior and are reference material
-  only. Use them to understand current code, compatibility obligations, and
-  migration details.
-- If a worker finds that V2 and code reality conflict, prefer a bounded
-  migration task or a V2 spec proposal. Do not silently fall back to V1 as the
-  product direction.
-- New task prompts must name the relevant V2 specs in `Read First`. Old specs
-  may appear under `Reference Only` when needed.
+- `/specs/**` is the authoritative reusable multi-tenant SaaS bootstrap spec.
+- `/specs-v2/**` is the separate product-specific Git catalog and CI
+  intelligence spec pack.
+- New tasks must select the correct spec pack. Do not mix reusable foundation
+  work and product-specific work in the same PR.
+- If specs and code reality conflict, prefer a bounded migration task or a spec
+  proposal. Do not silently follow stale docs.
+- New task prompts must name the relevant specs in `Read First`.
 
 Operational access assumptions:
 
@@ -68,34 +67,26 @@ Operational access assumptions:
 - They may assume full authenticated access to `wrangler` for Cloudflare
   deploys, resource inspection, bindings, Workers, Pages, Queues, R2, D1,
   Durable Objects, Hyperdrive, and secrets that are in task scope.
-- The Cloudflare account ID is `f9270f828799775bebf9315248fdf717`.
-- GitHub Actions has the Cloudflare API credential needed for CI/deploy
-  workflows. Jobs that create, inspect, or deploy Cloudflare resources must use
-  the configured Cloudflare credential and account ID rather than inventing new
-  secret names.
-- They may assume local `supabase` CLI is installed and already logged in to
-  the correct Supabase account for local workflows.
-- The Supabase database already exists. Cloudflare Hyperdrive is already
-  configured for it as `sourceplane-db`; use that binding/resource for the
-  primary database path unless the user explicitly approves a new one.
+- They may assume full authenticated access to Supabase for resources in task
+  scope.
+- GitHub Actions must expose `CLOUDFLARE_ACCOUNT_ID`,
+  `CLOUDFLARE_API_TOKEN`, and `SUPABASE_API_KEY`.
+- All Cloudflare and Supabase resources must be created programmatically
+  through Orun jobs in CI.
+- Terraform owns Supabase project creation, database password generation,
+  Cloudflare Hyperdrive, Worker bindings, and infrastructure config.
+- Terraform state must use Cloudflare R2 as backend.
+- The primary Hyperdrive resource name is `sourceplane-db`.
 - Agents may use `wrangler` to generate temporary database credentials when
   local verification needs them. Temporary credentials must not be committed,
   logged in full, or copied into source files.
-- Whenever a task creates or updates a Cloudflare resource, the Implementer must
-  verify the resource exists after creation with `wrangler` or the Cloudflare
-  API and record the verification command/result in the report. The Verifier
-  must independently inspect the created Cloudflare resource instead of relying
-  only on command exit status or CI summaries.
-- GitHub Actions must provide `SUPABASE_API_KEY` as the canonical Supabase
-  Management API secret for Terraform/Tactonic provisioning. Do not invent a
-  second Supabase API secret name without updating
-  `/spec/v2/07-provisioning-and-operations.md`.
-- Supabase database provisioning must be planned as a Tactonic Terraform
-  component task. If the exact Tactonic component naming or contract is unclear,
-  ask the user before implementation.
+- Whenever a task creates or updates a Cloudflare or Supabase resource, the
+  Implementer must verify the resource after creation and record the observed
+  state in the report. The Verifier must independently inspect resource state
+  instead of relying only on command exit status or CI summaries.
 - When credential scope, Supabase account/project, Cloudflare account,
-  GitHub repository target, environment target, or Tactonic naming is unclear,
-  ask the user instead of guessing.
+  GitHub repository target, environment target, or Stack Tectonic composition
+  naming is unclear, ask the user instead of guessing.
 
 ---
 
@@ -130,6 +121,35 @@ Preferred task prompt budget:
   constraints, acceptance criteria, and reporting expectations.
 - Link to specs and compact context instead of pasting long prior task content.
 - Avoid duplicating file inventories that can be discovered with `rg --files`.
+
+---
+
+# PR-Sized Task Standard
+
+One task equals one implementation PR.
+
+A PR-sized task has:
+
+- one primary outcome
+- one owning component, seam, contract, or infra slice
+- explicit non-goals
+- a clear rollback path
+- tests or verification scoped to the changed surface
+- no unrelated cleanup
+
+Split the task when it mixes:
+
+- reusable foundation and product-specific work
+- contract design and broad implementation
+- infra provisioning and unrelated app behavior
+- refactor and feature behavior
+- multiple bounded contexts with independent acceptance criteria
+
+Fixes requested by verification stay in the same PR when they are required to
+complete the task. New feature scope becomes a new task and a new PR.
+
+The Orchestrator must not emit a task that asks a worker to "finish" a whole
+module unless the prompt narrows that work to one reviewable PR.
 
 ---
 
@@ -187,7 +207,7 @@ Rules:
   "current_task": 21,
   "completed": [1, 2, 3],
   "repo_health": "yellow",
-  "next_focus": "v2-db-foundation",
+  "next_focus": "orun-repo-bootstrap",
   "last_verified": "2026-05-08",
   "task_agent": "/ai/tasks/task-0021.md"
 }
@@ -213,15 +233,21 @@ Every task file must contain:
 
 # Objective
 
+# PR Boundary
+
 # Read First
 
 # Required Outcomes
+
+# Non-Goals
 
 # Constraints
 
 # Integration Notes
 
 # Acceptance Criteria
+
+# Verification
 
 # When Done Report
 
@@ -233,16 +259,22 @@ Must:
 
 - read prompt fully
 - inspect actual repo before coding
+- implement exactly one PR-sized task
+- keep all task commits on one branch and one PR
 - keep bounded context clean
 - respect contracts
+- avoid unrelated refactors, formatting churn, and opportunistic feature scope
 - create a proposal when specs need behavioral, contract, or scope changes
 - add tests
-- run lint/typecheck/test/build
+- run the required Orun verification for the changed components
 - create PR
 - write report
-- always run `/Users/irinelinson/.local/bin/kiox -- orun plan --changed` and
-  `/Users/irinelinson/.local/bin/kiox -- orun run --changed` locally, recording
-  no-op results when the changed plan has no jobs
+- run `/Users/irinelinson/.local/bin/kiox -- orun validate --intent intent.yaml`
+  when `intent.yaml` exists
+- run `/Users/irinelinson/.local/bin/kiox -- orun plan --changed --intent intent.yaml --output plan.json`
+  when Orun is scaffolded
+- run `/Users/irinelinson/.local/bin/kiox -- orun run --plan plan.json --dry-run --runner github-actions`
+  when a plan is produced, recording no-op results when the plan has no jobs
 
 Report:
 
@@ -264,6 +296,7 @@ Verifier Standard
 Must:
 
 - inspect prompt + PR + report
+- confirm the PR maps to exactly one task
 - validate acceptance criteria
 - identify spec drift and ensure proposals exist for non-trivial spec changes
 - run quality gates
@@ -289,10 +322,12 @@ Recommended Next Move
 Verifier Merge Protocol:
 
 - Prefer `/Users/irinelinson/.local/bin/kiox` when `kiox` is not on `PATH`
-- Always run `/Users/irinelinson/.local/bin/kiox -- orun plan --changed` and `/Users/irinelinson/.local/bin/kiox -- orun run --changed` locally; if no jobs are planned, record the no-op result
-- When a task creates or updates Cloudflare resources, verify the resulting resources directly with `wrangler` or the Cloudflare API and include the observed resource state in the verifier report
+- Run `/Users/irinelinson/.local/bin/kiox -- orun validate --intent intent.yaml` when `intent.yaml` exists
+- Run `/Users/irinelinson/.local/bin/kiox -- orun plan --changed --intent intent.yaml --output plan.json` when Orun is scaffolded
+- Run `/Users/irinelinson/.local/bin/kiox -- orun run --plan plan.json --dry-run --runner github-actions` when a plan is produced; if no jobs are planned, record the no-op result
+- When a task creates or updates Cloudflare or Supabase resources, verify the resulting resources directly with `wrangler`, Supabase tooling, Terraform state, or provider APIs and include the observed resource state in the verifier report
 - Check PR CI logs with `gh`, including successful jobs, to confirm expected commands actually ran
-- Verify PR CI logs show `kiox -- orun plan --changed` in Review Plan and `kiox -- orun run --changed` in Build & Deploy when applicable
+- Verify PR CI logs show `orun plan --changed --intent intent.yaml --output plan.json` and `orun run --plan plan.json --runner github-actions --remote-state` when applicable
 - If verification adds a report or small verification-only fix, commit it to the PR branch, push, and wait for CI again
 - Merge only after local checks and PR CI logs are both acceptable
 - After merge, checkout `main` locally and fast-forward pull from `origin/main`
@@ -304,11 +339,11 @@ Planning Heuristics
 
 Prefer tasks that:
 
-1. Unlock future tasks
-2. Replace placeholders with real services
-3. Improve seams/contracts
-4. Increase production readiness
-5. Keep scope small
+1. Can land as one coherent PR
+2. Unlock future tasks
+3. Replace placeholders with real services
+4. Improve seams/contracts
+5. Increase production readiness
 6. Preserve architecture boundaries
 
 ⸻
@@ -341,9 +376,8 @@ If repo is failing:
 
 If docs are stale:
 
-- trust code for current behavior, trust `/spec/v2/**` for product direction,
-  require a proposal for meaningful V2 spec changes, and update docs/specs
-  intentionally
+- trust code for current behavior, trust the selected spec pack for direction,
+  require a proposal for meaningful spec changes, and update docs/specs intentionally
 
 If seams weak:
 
@@ -357,30 +391,34 @@ Example Prompt Output
 
 Agent: Implementer
 Current Repo Context:
-V2 specs are now authoritative. Existing V1 Cloudflare/D1 backend remains live
-and must keep compatibility behavior while V2 is introduced incrementally.
+The reusable SaaS bootstrap specs are authoritative for this task. Orun and
+Terraform provisioning are not yet fully scaffolded.
 Objective:
 Create `packages/db` with the first Supabase/Postgres migration harness and
 core organization/user/project schema. Do not alter runtime API behavior yet.
+PR Boundary:
+One PR adds the migration harness and first schema only. It does not change
+runtime API behavior or provision live infrastructure.
 Read First:
-spec/v2/README.md
-spec/v2/00-architecture.md
-spec/v2/01-data-model.md
-spec/v2/07-provisioning-and-operations.md
-spec/v2/06-migration-from-v1.md
+specs/constitution.md
+specs/repo.md
+specs/access-and-infra.md
+specs/components/00-foundation-and-tooling.md
 Reference Only:
-spec/07-storage.md
-migrations/\*\*
+specs/schedule.md
+Non-Goals:
+No API behavior changes.
+No live resource creation.
 Constraints:
-No V1 endpoint behavior changes.
-No D1 authoritative tenant additions.
 No secrets in migrations or fixtures.
 Acceptance:
 Postgres migrations checked in.
-Supabase provisioning assumptions use `SUPABASE_API_KEY` and the Tactonic
-Terraform component contract.
+Supabase provisioning assumptions use `SUPABASE_API_KEY` and Orun Terraform
+component contracts.
 DB package typechecks.
 Core schema test or migration smoke exists.
+Verification:
+Run targeted typecheck/test plus available Orun plan dry-run.
 PR opened.
 
 ⸻

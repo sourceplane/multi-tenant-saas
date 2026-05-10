@@ -7,30 +7,52 @@ Assumption: 4-6 autopilot coding agents plus 1 human reviewer or lead architect.
 ## Scheduling Principles
 
 - Front-load contracts and seams, not feature polish.
-- Land the minimum platform skeleton first, then parallelize bounded contexts.
+- Land the Orun and Stack Tectonic repo skeleton first, then parallelize bounded contexts.
+- Run all CI, tests, deploys, and smoke checks through Orun components.
+- Treat each implementation task as one PR-sized block.
 - Treat org -> project SaaS starter flows as the baseline product before optional resource/runtime work.
 - Hold metering and billing until tenant, project, policy, and audit contracts are stable.
 - Do not start extraction work until the monorepo contracts have seen real usage.
 
 ## Recommended 8-Week Plan
 
-### Week 0: Architecture lock
+### Week 0: Orun repo bootstrap and architecture lock
 
+- Create the repo skeleton from `specs/repo.md`.
+- Add `intent.yaml`, `kiox.yaml`, `.orun/compositions.lock.yaml`, and `.github/workflows/ci.yml`.
+- Pin Stack Tectonic in `intent.yaml` and the Orun runtime in `kiox.yaml`.
+- Add starter `component.yaml` files for apps, packages, infra, and test components.
+- Add at least one test component dependency so test execution is part of the Orun DAG.
+- Add Terraform components for R2 backend, Supabase project, database password, Hyperdrive, and Worker infra config.
+- Verify local Orun composition lock, validation, plan, and dry-run execution.
+- Verify GitHub Actions plans once and runs the Orun job matrix.
 - Review and freeze the constitution.
 - Review and freeze `specs/product-overview.md` and `specs/domain-model.md`.
 - Review and freeze shared contract docs.
 - Confirm Supabase Postgres ownership model, schema namespace rules, and migration strategy.
-- Confirm Cloudflare account layout, environment naming, and deployment permissions.
-- Pin stack-tectonic version in `intent.yaml` and orun runtime in `kiox.yaml`.
+- Confirm Cloudflare account layout, Supabase organization, environment naming, and deployment permissions.
 - Confirm environment lane policies (dev / staging / production) and approval gates.
 
 Exit criteria:
 
+- Orun repo skeleton is merged before domain code.
+- `intent.yaml` discovers `apps/`, `packages/`, `tests/`, and `infra/`.
+- `.github/workflows/ci.yml` runs only Orun plan/run jobs.
+- A test-only change produces an Orun test component job.
+- Infra changes produce Orun Terraform jobs.
+- CI has `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, and `SUPABASE_API_KEY`.
+- Terraform state uses R2.
 - Shared contract docs approved.
 - Delegation order confirmed.
 - Database and migration ownership model approved.
-- `intent.yaml` and `kiox.yaml` merged to main.
-- `orun plan` runs cleanly against the discovery roots.
+- Local Orun commands pass:
+
+```bash
+/Users/irinelinson/.local/bin/kiox -- orun compositions lock --intent intent.yaml
+/Users/irinelinson/.local/bin/kiox -- orun validate --intent intent.yaml
+/Users/irinelinson/.local/bin/kiox -- orun plan --changed --intent intent.yaml --output plan.json
+/Users/irinelinson/.local/bin/kiox -- orun run --plan plan.json --dry-run --runner github-actions
+```
 
 ### Week 1: Foundation
 
@@ -38,7 +60,9 @@ Exit criteria:
 - Materialize `packages/contracts` from the spec docs.
 - Stand up the public edge Worker skeleton.
 - Establish Supabase Postgres migration conventions and Hyperdrive adapter seams.
-- Each new app and package must include a `component.yaml` so orun discovers it automatically.
+- Provision Supabase and Hyperdrive through Terraform via Orun.
+- Each new app, package, infra unit, and test suite must include a `component.yaml` so Orun discovers it automatically.
+- App and package components must depend on their test components before release lanes are enabled.
 
 Delegation lanes:
 
@@ -53,7 +77,8 @@ Exit criteria:
 - At least one Worker deploys.
 - Contract tests exist.
 - Repository adapters hide Supabase/Hyperdrive details from domain logic.
-- `orun plan --changed` produces a non-empty job matrix for every changed component.
+- `orun plan --changed --intent intent.yaml` produces the expected job matrix for every changed component.
+- `sourceplane-db` Hyperdrive exists and is Terraform-owned.
 
 ### Weeks 2-3: Tenant core
 
@@ -185,11 +210,15 @@ Before assigning a component to an autopilot agent:
 - confirm its upstream dependencies are merged,
 - point the agent to the exact component spec,
 - point the agent to the shared contracts it must honor,
-- define the write scope,
+- define the PR boundary and write scope,
+- confirm the task has one primary outcome,
+- split the task if it spans unrelated components, contracts, infra, or product scope,
 - confirm whether the component may add new contracts or must use existing ones only.
 
 ## Merge Policy
 
+- Merge Orun repo bootstrap before foundation or domain component work.
+- Merge one accepted task per PR.
 - Merge foundation before any domain component.
 - Merge contract changes before dependent implementations.
 - Merge tenant core before starter operations.

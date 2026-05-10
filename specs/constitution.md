@@ -14,6 +14,7 @@ Sourceplane is a reusable multi-tenant SaaS starter bootstrap. It must provide t
 
 - V1 must run compute, routing, async work, caches, and public ingress on Cloudflare-managed primitives wherever practical.
 - Supabase Postgres is the primary relational data plane for product-owned state and must be reached from Workers through Hyperdrive.
+- Cloudflare and Supabase resources must be provisioned through Orun-controlled CI, with Terraform ownership where specified.
 - Internal boundaries must still assume that any component may later move behind an external service or its own repo.
 - No domain may depend on a hosting-specific detail outside its adapter layer.
 
@@ -22,6 +23,7 @@ Sourceplane is a reusable multi-tenant SaaS starter bootstrap. It must provide t
 - Shared contracts are defined before or alongside implementation.
 - Public APIs, internal RPC surfaces, event envelopes, resource documents, and component manifests are versioned contracts.
 - A component may change its internals freely, but it may not silently change a shared contract.
+- Specs define durable behavior, constraints, and acceptance criteria. They must not prescribe internal implementation details unless required for security, portability, compatibility, or platform operation.
 
 ### 3. Organization-scoped multitenancy from day one
 
@@ -96,6 +98,8 @@ Work is not complete unless all of the following are true:
 - It emits the required domain events and audit records for mutations.
 - It preserves extraction seams.
 - It documents any new operational dependency.
+- It does not require manual Cloudflare or Supabase console setup.
+- It lands as one reviewable PR for one accepted task.
 
 ## Change Control
 
