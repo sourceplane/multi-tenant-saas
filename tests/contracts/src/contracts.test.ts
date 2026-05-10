@@ -29,10 +29,15 @@ describe("contracts: health types", () => {
 
 describe("contracts: error types", () => {
   it("exports ERROR_CODES constants", () => {
-    expect(ERROR_CODES.NOT_FOUND).toBe("not_found");
-    expect(ERROR_CODES.UNAUTHORIZED).toBe("unauthorized");
+    expect(ERROR_CODES.BAD_REQUEST).toBe("bad_request");
+    expect(ERROR_CODES.UNAUTHENTICATED).toBe("unauthenticated");
     expect(ERROR_CODES.FORBIDDEN).toBe("forbidden");
-    expect(ERROR_CODES.VALIDATION_ERROR).toBe("validation_error");
+    expect(ERROR_CODES.NOT_FOUND).toBe("not_found");
+    expect(ERROR_CODES.CONFLICT).toBe("conflict");
+    expect(ERROR_CODES.RATE_LIMITED).toBe("rate_limited");
+    expect(ERROR_CODES.VALIDATION_FAILED).toBe("validation_failed");
+    expect(ERROR_CODES.PRECONDITION_FAILED).toBe("precondition_failed");
+    expect(ERROR_CODES.UNSUPPORTED).toBe("unsupported");
     expect(ERROR_CODES.INTERNAL_ERROR).toBe("internal_error");
   });
 
@@ -62,8 +67,8 @@ describe("contracts: tenancy types", () => {
     const ctx: TenantContext = {
       orgId: "org_x",
       actorId: "svc_deployer",
-      actorKind: "service",
+      actorKind: "service_principal",
     };
-    expect(ctx.actorKind).toBe("service");
+    expect(ctx.actorKind).toBe("service_principal");
   });
 });

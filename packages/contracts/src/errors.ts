@@ -7,15 +7,20 @@ export interface ErrorResponse {
 }
 
 export interface ValidationErrorResponse extends ErrorResponse {
-  error: "validation_error";
+  error: "validation_failed";
   fields?: Record<string, string[]>;
 }
 
 export const ERROR_CODES = {
-  NOT_FOUND: "not_found",
-  UNAUTHORIZED: "unauthorized",
+  BAD_REQUEST: "bad_request",
+  UNAUTHENTICATED: "unauthenticated",
   FORBIDDEN: "forbidden",
-  VALIDATION_ERROR: "validation_error",
+  NOT_FOUND: "not_found",
+  CONFLICT: "conflict",
+  RATE_LIMITED: "rate_limited",
+  VALIDATION_FAILED: "validation_failed",
+  PRECONDITION_FAILED: "precondition_failed",
+  UNSUPPORTED: "unsupported",
   INTERNAL_ERROR: "internal_error",
 } as const;
 

@@ -2,13 +2,14 @@
   "goal": "Supabase/Postgres-backed multi-organization Orun SaaS control plane",
   "current_task": 1,
   "completed": [],
-  "repo_health": "red",
-  "next_focus": "orun-workspace-bootstrap",
+  "repo_health": "yellow",
+  "next_focus": "verify-task-0001-pr-4",
   "last_verified": "2026-05-11",
   "waiting_for_input": "false",
-  "task_agent": "ai/tasks/task-0001.md",
+  "task_agent": "ai/tasks/task-0001-verifier.md",
   "notes": [
-    "Planning state initialized from code/spec reality because compact context files were absent.",
-    "Task 0001 is the first implementation task and must not create live Cloudflare or Supabase resources."
+    "Task 0001 implementation is on PR #4 from branch task-0001-scaffold at 60168d4.",
+    "No human input is required before verification.",
+    "Verification must inspect missing/empty PR status checks, local Orun plan output, contract-spec alignment, and the manually reconstructed Orun lock file."
   ]
 }

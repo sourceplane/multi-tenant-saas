@@ -13,5 +13,5 @@ export interface TenantContext {
   orgId: string;
   projectId?: string;
   actorId: string;
-  actorKind: "user" | "service" | "workflow";
+  actorKind: "user" | "service_principal" | "workflow" | "system";
 }

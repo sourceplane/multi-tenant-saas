@@ -4,18 +4,20 @@ Last updated: 2026-05-11
 
 ## Repo Reality
 
-- `main` is synced with `origin/main` at `c07e350`.
-- The repository currently contains specs, agent instructions, a minimal README, and `ai/waiting_for_input.md`.
-- There is no implemented workspace yet: no `intent.yaml`, `kiox.yaml`, `.github/workflows/ci.yml`, `apps/`, `packages/`, `tests/`, or `infra/` scaffolds.
-- No GitHub pull requests are open. PRs #1, #2, and #3 are merged and only changed specs or orchestrator behavior.
+- `main` is at `c07e350` on `origin/main`.
+- The local checkout is on `task-0001-scaffold` at `60168d4`, the head of PR #4.
+- PR #4 implements Task 0001: the initial pnpm/Turbo/Orun monorepo scaffold with starter Worker, Pages app, shared packages, contract tests, infra placeholders, and Orun-only CI.
+- The implementer report exists at `ai/reports/task-0001-implementer.md`.
+- No `ai/proposals/**` files are present.
+- GitHub PR metadata showed `mergeStateStatus: CLEAN` and no status check rollup during Orchestrator inspection. Verification must independently inspect GitHub Actions state and logs.
 
 ## Current Roadmap Position
 
 - Active spec pack: reusable SaaS starter under `specs/**`.
 - Current phase: Week 0 / initial foundation.
-- Next focus: bootstrap the Orun-discovered monorepo skeleton before any domain logic.
+- Next focus: verify and merge the initial Orun-discovered monorepo skeleton before sequencing Terraform or domain tasks.
 
 ## Current Task
 
-- `ai/tasks/task-0001.md` is assigned to an Implementer.
-- The task is intentionally bounded to the initial workspace and Orun component scaffold. Live Cloudflare/Supabase provisioning and domain behavior are deferred.
+- `ai/tasks/task-0001-verifier.md` is assigned to a Verifier for PR #4.
+- The verification is intentionally bounded to Task 0001. Live Cloudflare/Supabase provisioning and domain behavior remain deferred.
