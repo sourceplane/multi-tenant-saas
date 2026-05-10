@@ -1,0 +1,7 @@
+{
+  "name": "api-edge",
+  "compatibility_date": "2025-05-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "main": "src/index.ts",
+  "minify": false
+}
