@@ -5,8 +5,8 @@ Last updated: 2026-05-11
 ## Active Risks
 
 - Existing Cloudflare/Supabase resources are partly human-provided. Next infra work must discover and record live IDs/configuration before Terraform adoption or new provisioning.
-- `infra/terraform/state` and `infra/terraform/core` still contain descriptors/READMEs only; no Terraform files exist yet.
-- The current local stack supports Terraform validation but not a full apply/import workflow; the next task may need a narrow local stack adjustment or a conservative plan-only first step.
+- `infra/terraform/state` and `infra/terraform/core` have Terraform configs that pass validation, but no `terraform apply` has been run yet. The R2 state bucket does not exist and the Hyperdrive import has not been executed.
+- The Orun Terraform composition only has a `validate-terraform` job; plan/apply jobs are needed before CI can provision or import resources.
 
 ## Watch Items
 

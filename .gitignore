@@ -8,6 +8,12 @@ coverage/
 .env.local
 *.log
 plan.json
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+crash.log
 .workspace/
 
 # orun per-job staged workspaces
