@@ -12,3 +12,4 @@ spec:
     typecheckCommand: pnpm exec turbo run typecheck --filter=./
     lintCommand: pnpm exec turbo run lint --filter=./
     outputDirectory: dist
+
