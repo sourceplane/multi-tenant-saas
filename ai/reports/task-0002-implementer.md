@@ -94,4 +94,4 @@ None. The existing specs accurately describe the target architecture.
 
 ## PR Number
 
-TBD – PR not yet created.
+[#8](https://github.com/sourceplane/multi-tenant-saas/pull/8)
