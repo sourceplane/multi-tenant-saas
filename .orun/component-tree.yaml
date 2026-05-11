@@ -2,7 +2,7 @@ apiVersion: sourceplane.io/v1
 kind: ComponentTree
 metadata:
     intent: /Users/irinelinson/sourceplane/multi-tenant-saas/intent.yaml
-    generatedAt: "2026-05-11T09:02:42Z"
+    generatedAt: "2026-05-11T09:55:05Z"
 discovery:
     roots:
         - apps
@@ -15,9 +15,12 @@ components:
       domain: starter-runtime
       enabled: false
       path: apps/api-edge
+      subscribe:
+        environments:
+            - dev
       inputs:
         buildCommand: pnpm exec turbo run build --filter=./
-        nodeVersion: "20"
+        nodeVersion: "22"
         pnpmVersion: 10.12.1
         productionBranch: main
         typecheckCommand: pnpm exec turbo run typecheck --filter=./
@@ -28,13 +31,16 @@ components:
           condition: success
       source: discovered
       sourcePath: apps/api-edge/component.yaml
-      fileSize: 414
-      fileModTime: "2026-05-11T08:36:24.894393133Z"
+      fileSize: 457
+      fileModTime: "2026-05-11T09:54:36.549222284Z"
     - name: web-console
       type: cloudflare-pages-turbo
       domain: starter-ui
       enabled: false
       path: apps/web-console
+      subscribe:
+        environments:
+            - dev
       inputs:
         buildCommand: pnpm exec turbo run build --filter=./
         nodeVersion: "20"
@@ -44,16 +50,19 @@ components:
         projectName: sourceplane-web-console
       source: discovered
       sourcePath: apps/web-console/component.yaml
-      fileSize: 337
-      fileModTime: "2026-05-11T08:36:24.894595418Z"
+      fileSize: 380
+      fileModTime: "2026-05-11T09:39:02.101109791Z"
     - name: infra-terraform-core
-      type: turbo-package
+      type: terraform
       domain: starter-infra
       enabled: false
       path: infra/terraform/core
+      subscribe:
+        environments:
+            - dev
       inputs:
-        nodeVersion: "20"
-        pnpmVersion: 10.12.1
+        stackName: core
+        terraformDir: infra/terraform/core
       labels:
         layer: infra
         provider: terraform
@@ -64,28 +73,34 @@ components:
           condition: success
       source: discovered
       sourcePath: infra/terraform/core/component.yaml
-      fileSize: 324
-      fileModTime: "2026-05-11T08:36:24.894801078Z"
+      fileSize: 373
+      fileModTime: "2026-05-11T09:55:01.640397421Z"
     - name: infra-terraform-state
-      type: turbo-package
+      type: terraform
       domain: starter-infra
       enabled: false
       path: infra/terraform/state
+      subscribe:
+        environments:
+            - dev
       inputs:
-        nodeVersion: "20"
-        pnpmVersion: 10.12.1
+        stackName: state
+        terraformDir: infra/terraform/state
       labels:
         layer: infra
         provider: terraform
       source: discovered
       sourcePath: infra/terraform/state/component.yaml
-      fileSize: 248
-      fileModTime: "2026-05-11T08:36:24.894967947Z"
+      fileSize: 299
+      fileModTime: "2026-05-11T09:55:01.63843247Z"
     - name: contracts
       type: turbo-package
       domain: starter-contracts
       enabled: false
       path: packages/contracts
+      subscribe:
+        environments:
+            - dev
       inputs:
         buildCommand: pnpm exec turbo run build --filter=./
         nodeVersion: "20"
@@ -93,13 +108,16 @@ components:
         typecheckCommand: pnpm exec turbo run typecheck --filter=./
       source: discovered
       sourcePath: packages/contracts/component.yaml
-      fileSize: 309
-      fileModTime: "2026-05-11T08:36:24.895631134Z"
+      fileSize: 352
+      fileModTime: "2026-05-11T09:39:02.107788344Z"
     - name: shared
       type: turbo-package
       domain: starter-shared
       enabled: false
       path: packages/shared
+      subscribe:
+        environments:
+            - dev
       inputs:
         buildCommand: pnpm exec turbo run build --filter=./
         nodeVersion: "20"
@@ -107,13 +125,16 @@ components:
         typecheckCommand: pnpm exec turbo run typecheck --filter=./
       source: discovered
       sourcePath: packages/shared/component.yaml
-      fileSize: 303
-      fileModTime: "2026-05-11T08:36:24.895800254Z"
+      fileSize: 346
+      fileModTime: "2026-05-11T09:39:02.109424431Z"
     - name: testing
       type: turbo-package
       domain: starter-shared
       enabled: false
       path: packages/testing
+      subscribe:
+        environments:
+            - dev
       inputs:
         buildCommand: pnpm exec turbo run build --filter=./
         nodeVersion: "20"
@@ -123,13 +144,16 @@ components:
         layer: test-utilities
       source: discovered
       sourcePath: packages/testing/component.yaml
-      fileSize: 340
-      fileModTime: "2026-05-11T08:36:24.895976289Z"
+      fileSize: 383
+      fileModTime: "2026-05-11T09:39:02.111899581Z"
     - name: contracts-tests
       type: turbo-package
       domain: starter-tests
       enabled: false
       path: tests/contracts
+      subscribe:
+        environments:
+            - dev
       inputs:
         buildCommand: pnpm exec turbo run build --filter=./
         nodeVersion: "20"
@@ -140,5 +164,5 @@ components:
         layer: test
       source: discovered
       sourcePath: tests/contracts/component.yaml
-      fileSize: 395
-      fileModTime: "2026-05-11T08:36:24.922825244Z"
+      fileSize: 438
+      fileModTime: "2026-05-11T09:39:02.1135905Z"

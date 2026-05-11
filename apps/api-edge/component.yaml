@@ -9,7 +9,7 @@ spec:
     environments:
       - dev
   inputs:
-    nodeVersion: "20"
+    nodeVersion: "22"
     pnpmVersion: "10.12.1"
     productionBranch: main
     buildCommand: pnpm exec turbo run build --filter=./
