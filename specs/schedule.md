@@ -19,12 +19,12 @@ Assumption: 4-6 autopilot coding agents plus 1 human reviewer or lead architect.
 ### Week 0: Orun repo bootstrap and architecture lock
 
 - Create the repo skeleton from `specs/repo.md`.
-- Add `intent.yaml`, `kiox.yaml`, `.orun/compositions.lock.yaml`, and `.github/workflows/ci.yml`.
-- Pin Stack Tectonic in `intent.yaml` and the Orun runtime in `kiox.yaml`.
+- Add `intent.yaml`, `kiox.yaml`, `kiox.lock`, local `stack-tectonic/`, and `.github/workflows/ci.yml`.
+- Point `intent.yaml` at local `stack-tectonic/` and pin the Orun provider in `kiox.yaml`.
 - Add starter `component.yaml` files for apps, packages, infra, and test components.
 - Add at least one test component dependency so test execution is part of the Orun DAG.
-- Add Terraform components for R2 backend, Supabase project, database password, Hyperdrive, and Worker infra config.
-- Verify local Orun composition lock, validation, plan, and dry-run execution.
+- Add Terraform components for R2 backend, existing Supabase/Hyperdrive adoption, and Worker infra config.
+- Verify local Orun validation, plan, and dry-run execution.
 - Verify GitHub Actions plans once and runs the Orun job matrix.
 - Review and freeze the constitution.
 - Review and freeze `specs/product-overview.md` and `specs/domain-model.md`.
@@ -60,7 +60,7 @@ Exit criteria:
 - Materialize `packages/contracts` from the spec docs.
 - Stand up the public edge Worker skeleton.
 - Establish Supabase Postgres migration conventions and Hyperdrive adapter seams.
-- Provision Supabase and Hyperdrive through Terraform via Orun.
+- Adopt or provision Supabase and Hyperdrive through Terraform-aware Orun workflows.
 - Each new app, package, infra unit, and test suite must include a `component.yaml` so Orun discovers it automatically.
 - App and package components must depend on their test components before release lanes are enabled.
 
@@ -78,7 +78,7 @@ Exit criteria:
 - Contract tests exist.
 - Repository adapters hide Supabase/Hyperdrive details from domain logic.
 - `orun plan --changed --intent intent.yaml` produces the expected job matrix for every changed component.
-- `sourceplane-db` Hyperdrive exists and is Terraform-owned.
+- `sourceplane-db` Hyperdrive exists and is verified, with Terraform ownership or an explicit import/adoption path.
 
 ### Weeks 2-3: Tenant core
 

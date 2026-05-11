@@ -31,10 +31,10 @@ Bootstrap a production-grade Cloudflare monorepo that all later SaaS starter bou
 - Worker and Pages app scaffolds
 - shared environment typing
 - Supabase Postgres and Hyperdrive adapter conventions
-- Terraform-owned Supabase, Hyperdrive, Worker infra, and R2 backend setup
+- Terraform adoption/provisioning for the Supabase, Hyperdrive, Worker infra, and R2 backend baseline
 - local development scripts
 - Orun and Stack Tectonic CI/deploy pipeline skeleton
-- root `intent.yaml`, `kiox.yaml`, and committed Orun composition lock
+- root `intent.yaml`, `kiox.yaml`, committed `kiox.lock`, and local `stack-tectonic/`
 - `component.yaml` scaffolds for apps, packages, infra, and test components
 - contract-test harness wired to `packages/contracts`
 
@@ -61,11 +61,12 @@ Bootstrap a production-grade Cloudflare monorepo that all later SaaS starter bou
 ### Orun Structure
 
 - `intent.yaml` discovers `apps/`, `packages/`, `tests/`, and `infra/`.
-- `intent.yaml` pins `oci://ghcr.io/sourceplane/stack-tectonic:0.12.0` or a newer approved Stack Tectonic release.
-- `kiox.yaml` pins the Orun runtime image.
-- `.orun/compositions.lock.yaml` is generated and committed.
+- `intent.yaml` points at the committed local `stack-tectonic/` directory.
+- `stack-tectonic/` is refreshed deliberately with `kiox -- orun fetch ghcr.io/sourceplane/stack-tectonic:0.12.0 --overwrite` when adopting a new upstream stack baseline.
+- `kiox.yaml` pins the Orun provider image and `kiox.lock` records the resolved digest.
+- `.orun/` contains generated local plans, locks, and run state and is not committed.
 - Each app, package, infra unit, and test suite has a colocated `component.yaml`.
-- Test components start as `turbo-package` components with `labels.layer: test` unless the pinned stack provides a dedicated test type.
+- Test components start as `turbo-package` components with `labels.layer: test` unless the local stack provides a dedicated test type.
 
 ### Testing
 
@@ -85,7 +86,7 @@ Bootstrap a production-grade Cloudflare monorepo that all later SaaS starter bou
 
 ### Infrastructure Provisioning
 
-- Terraform provisions the Supabase project, database password, Cloudflare Hyperdrive, Worker bindings, and infra config.
+- Terraform adopts existing Supabase/Hyperdrive baseline resources when they are human-provided, and provisions future missing resources through Orun jobs.
 - Terraform state uses Cloudflare R2 as backend.
 - Infra provisioning is exposed as Orun components under `infra/terraform`.
 - CI provides `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, and `SUPABASE_API_KEY`.
@@ -123,7 +124,7 @@ Bootstrap a production-grade Cloudflare monorepo that all later SaaS starter bou
 - GitHub Actions uses the same Orun plan/run model and executes at least one test component.
 - A test-only change produces a test component job in the Orun matrix.
 - Infra changes run Terraform plan/apply through Orun with R2-backed state.
-- Supabase project and `sourceplane-db` Hyperdrive creation are verified after apply.
+- Existing Supabase and `sourceplane-db` Hyperdrive adoption, or future creation, is verified against live provider state.
 
 ## Extraction Seam
 

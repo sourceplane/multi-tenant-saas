@@ -1,16 +1,16 @@
 {
   "goal": "Supabase/Postgres-backed multi-organization Orun SaaS control plane",
   "current_task": 2,
-  "completed": [1],
-  "repo_health": "red",
-  "next_focus": "github-actions-orun-action-policy",
+  "completed": [1, "0001.1"],
+  "repo_health": "green",
+  "next_focus": "infra-baseline-adoption",
   "last_verified": "2026-05-11",
   "waiting_for_input": "false",
-  "task_agent": "ai/reports/task-0001-verifier.md",
+  "task_agent": "ai/tasks/task-0002.md",
   "notes": [
     "Task 0001 passed verification and PR #4 is merged into main at 4d38ded.",
-    "Local package gates and local Orun verification passed for Task 0001.",
-    "GitHub Actions failed before jobs started because sourceplane/orun-action@v1.1.0 appears blocked by org policy.",
-    "Pause before Task 0002 until an org admin enables the Orun action."
+    "Task 0001.1 human-intervention follow-up is merged through PR #5 and PR #6; main is at b68794c.",
+    "GitHub Actions run 25671141175 passed plan plus Orun matrix jobs on main.",
+    "Next task should adopt and verify existing Cloudflare/Supabase baseline resources instead of recreating them."
   ]
 }
