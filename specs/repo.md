@@ -9,13 +9,21 @@ This repository starts as a Cloudflare-first monorepo for a reusable multi-tenan
 ## Canonical Repo Shape
 
 ```text
-intent.yaml                Orun intent: composition sources, discovery roots, environment lanes
+intent.yaml                Orun intent — repo-owned stack catalog release, discovery roots, environment lanes
 kiox.yaml                  Orun runtime pin
-.orun/
-  compositions.lock.yaml   Committed resolved composition lock
-.github/
+/.orun
+  /compositions.lock.yaml  Locked resolved catalog digest used by local and CI runs
+/.github
   /workflows
-    ci.yml                 Orun plan/run workflow; no direct test or deploy jobs
+    ci.yml                 Portable Orun plan/run workflow for PRs and main
+
+/ops
+  /stack-tectonic          Editable repo-owned operations catalog derived from Stack Tectonic OCI releases
+    stack.yaml
+    /compositions
+    /blueprints
+    /registry
+    /docs
 
 /apps
   /api-edge                Public HTTP entry Worker
@@ -60,18 +68,19 @@ kiox.yaml                  Orun runtime pin
     component.yaml
   /shared                  Generic helpers only: errors, logging, ids, tracing
     component.yaml
-  /testing                 Test utilities and fixtures only
+  /testing                 Test utilities, fixtures, contract assertions
     component.yaml
 
 /tests
-  /contracts
-    component.yaml         Test component descriptor
-  /api-edge
-    component.yaml
-  /membership
-    component.yaml
-  /e2e-bootstrap
-    component.yaml
+  /components
+    /contracts-tests
+      component.yaml       Test suite descriptor (type: turbo-test)
+    /api-edge-tests
+      component.yaml
+    /identity-worker-tests
+      component.yaml
+    /web-console-tests
+      component.yaml
 
 /tooling
   /eslint
@@ -79,13 +88,8 @@ kiox.yaml                  Orun runtime pin
   /scripts
 
 /infra
-  /terraform
-    /state
-      component.yaml       R2 backend/bootstrap component
-    /core
-      component.yaml       Terraform-owned Supabase, Hyperdrive, Worker infra
-  /cloudflare              Wrangler configs, environments, bindings derived from infra
-  /ci                      Orun workflow templates
+  /cloudflare              Wrangler configs, environments, bindings
+  /ci                      CI templates and deployment pipelines
 
 /specs
   ...this spec pack...
@@ -96,8 +100,8 @@ kiox.yaml                  Orun runtime pin
 ### Workspace and toolchain
 
 - Use `pnpm` workspaces for package management.
-- Use `turbo` or an equivalent task graph runner behind Orun for package-level task execution.
-- Use Orun as the only CI entry point for build, lint, typecheck, test, deploy, and smoke workflows.
+- Use `turbo` or an equivalent task graph runner for build, test, typecheck, lint, and deploy pipelines inside components.
+- Use `orun` as the only CI orchestration layer for validate, plan, test, verify, and deploy flows. Root scripts may wrap `kiox -- orun ...`, but CI gates must not bypass Orun with ad hoc shell steps.
 - Use TypeScript across Workers, SDK, CLI, and shared packages for V1 velocity.
 - Each deployable Worker keeps its own `wrangler.jsonc` and deployment pipeline.
 
@@ -132,6 +136,14 @@ kiox.yaml                  Orun runtime pin
 - Domain logic must not live in `packages/shared`.
 - UI packages must not import internal Worker code.
 
+### Test component rules
+
+- Every CI-gated test suite is modeled as a first-class Orun component under `tests/components/`.
+- `packages/testing` holds shared fixtures, harnesses, and helpers; it is not the CI gate by itself.
+- Deployable, package, and infra components must declare `dependsOn` edges to the test components that gate them.
+- The starter test composition should begin as a repo-owned `turbo-test` contract inside `ops/stack-tectonic/compositions/` so unit, contract, integration, and smoke suites can run through Orun with repo-specific inputs.
+- A component that cannot name its required test component dependency is not ready to merge.
+
 ## Platform Resource Mapping
 
 Use platform primitives deliberately:
@@ -154,9 +166,8 @@ Use platform primitives deliberately:
 Supabase Postgres is the primary operational database for product-owned relational state, including identity, membership, projects, config metadata, canonical events, audit indexes, usage rollups, billing state, notifications, webhooks, support actions, and optional resource/runtime metadata.
 
 - Workers connect to Supabase Postgres through Hyperdrive bindings. Raw connection strings and Supabase service keys must stay in platform configuration and must not leak into domain logic.
-- The V1 Supabase project, database password, Cloudflare Hyperdrive config, and Worker infrastructure config are Terraform-owned.
-- Terraform state must use Cloudflare R2 as its backend.
-- Workers that need the primary database must use the Terraform-created `sourceplane-db` Hyperdrive binding/resource instead of inventing a second database binding.
+- The V1 Supabase database already exists and Cloudflare Hyperdrive is already configured for it as `sourceplane-db`.
+- Workers that need the primary database must use the configured `sourceplane-db` Hyperdrive binding/resource instead of inventing a second database binding.
 - Local database verification may use temporary credentials generated through `wrangler` when needed. Temporary credentials must never be committed, logged in full, or copied into source files.
 - Repository adapters own SQL, pooling assumptions, transaction boundaries, and Hyperdrive-specific behavior. Domain services receive typed repositories or unit-of-work abstractions, not platform database clients.
 - Each bounded context owns its schema or table namespace and migration history. Cross-context foreign keys are prohibited; use opaque IDs, service calls, and published events instead.
@@ -166,13 +177,13 @@ Supabase Postgres is the primary operational database for product-owned relation
 
 ## Operational Access And Resource Verification
 
-Agents may assume full authenticated access to `gh`, `wrangler`, and Supabase for repository, CI, Cloudflare, Supabase, and deployment work in task scope.
+Agents may assume full authenticated access to `gh` and `wrangler` for repository, CI, Cloudflare, and deployment work in task scope.
 
-- GitHub Actions exposes `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, and `SUPABASE_API_KEY`.
-- All Cloudflare and Supabase resources are created programmatically through Orun jobs in CI.
-- Terraform owns Supabase project creation, database password generation, Cloudflare Hyperdrive, Worker bindings, and infra config.
-- Direct manual console changes are prohibited except emergency repair; reconcile any emergency change back into Terraform or repo config.
-- Any task that creates or updates a Cloudflare or Supabase resource must verify the resource exists after creation using `wrangler`, Supabase tooling, Terraform state, or provider APIs.
+- The Cloudflare account ID is `f9270f828799775bebf9315248fdf717`.
+- GitHub Actions has the Cloudflare API credential needed for CI and deploy workflows.
+- GitHub Actions must also expose the Cloudflare account ID to jobs that create, inspect, or deploy Cloudflare resources.
+- Any task that creates or updates a Cloudflare resource must verify the resource exists after creation using `wrangler` or the Cloudflare API, then record that verification in the implementer or verifier report.
+- Verifiers must not rely only on successful deploy or migration command exit codes when a Cloudflare resource is created. They must inspect the resulting Cloudflare resource state directly.
 
 ## Extraction Model
 
@@ -193,168 +204,67 @@ When a component outgrows Cloudflare-native storage or queueing:
 - optionally front the external service with the same Worker contract,
 - keep Hyperdrive or standard outbound connectivity only at the adapter layer.
 
-## Orun And Stack Tectonic Model
+## Composition and CI Model
 
-This repo uses Orun with Stack Tectonic (`sourceplane/stack-tectonic`) for composition-driven CI and deployment.
+This repo uses [orun](https://orun-api.sourceplane.ai) with a repo-owned operations catalog derived from [stack-tectonic](https://github.com/sourceplane/stack-tectonic) for composition-driven CI and deployment.
 
-Required root files:
+- **`ops/stack-tectonic/`** is a checked-in copy of the pinned Stack Tectonic OCI release. Composition edits start there so repo-specific test or deploy behavior can be added without waiting on an upstream repo change.
+- **`intent.yaml`** at the repo root pins the repo-owned OCI publication produced from `ops/stack-tectonic/`, records discovery roots (`apps/`, `packages/`, `tests/components/`, `infra/`), and defines dev → staging → production lane policies.
+- **`.orun/compositions.lock.yaml`** is committed and refreshed whenever the repo-owned catalog release changes so local and CI execution resolve the same digest.
+- **`component.yaml`** in each app, package, infra module, and test suite describes the composition type, environment subscriptions, and inputs. No component is wired into the CI workflow directly.
+- **`kiox.yaml`** pins the orun runtime version.
 
-- `kiox.yaml` pins `ghcr.io/sourceplane/orun:v1.11.0` or a newer approved Orun runtime.
-- `intent.yaml` pins the Stack Tectonic OCI source and declares discovery roots, environments, and policies.
-- `.orun/compositions.lock.yaml` is committed after `orun compositions lock --intent intent.yaml`.
-- `.github/workflows/ci.yml` calls Orun only. It must not run `pnpm test`, `turbo test`, deploy commands, or Wrangler directly.
-
-Baseline `intent.yaml` shape:
-
-```yaml
-apiVersion: sourceplane.io/v1
-kind: Intent
-metadata:
-  name: multi-tenant-saas
-  description: Reusable Cloudflare and Supabase multi-tenant SaaS starter
-compositions:
-  sources:
-    - name: stack-tectonic
-      kind: oci
-      ref: oci://ghcr.io/sourceplane/stack-tectonic:0.12.0
-discovery:
-  roots:
-    - apps/
-    - packages/
-    - tests/
-    - infra/
-environments:
-  dev:
-    defaults:
-      lane: dry-run
-      namespacePrefix: dev-
-    policies:
-      requireApproval: "false"
-  staging:
-    defaults:
-      lane: verify
-      namespacePrefix: stg-
-    policies:
-      requireApproval: "true"
-  production:
-    defaults:
-      lane: release
-      namespacePrefix: prod-
-    policies:
-      requireApproval: "true"
-```
+Orun currently resolves composition sources from OCI during `plan` and `run`, so the checked-in `ops/stack-tectonic/` tree is the editable source of truth and the repo-owned OCI publication is the execution contract consumed by both local and CI runs.
 
 Composition types used:
 
-| Type                      | Used by                                         |
-| ------------------------- | ----------------------------------------------- |
-| `cloudflare-worker-turbo` | Workers in `apps/` except `web-console`         |
-| `cloudflare-pages-turbo`  | `apps/web-console`                              |
-| `turbo-package`           | Packages in `packages/` and test packages in `tests/` |
+| Type                      | Used by                                           |
+| ------------------------- | ------------------------------------------------- |
+| `cloudflare-worker-turbo` | All Workers in `apps/` except `web-console`       |
+| `cloudflare-pages-turbo`  | `apps/web-console`                                |
+| `turbo-package`           | Shared packages in `packages/`                    |
+| `turbo-test`              | Test suites in `tests/components/`                |
+| `terraform`               | Optional repo-owned infra components in `infra/`  |
 
-Test components use `turbo-package` until the pinned Stack Tectonic release provides a dedicated test composition.
+The first implementation task in this repo is the repo-operations scaffold: materialize `ops/stack-tectonic/`, add `intent.yaml`, `kiox.yaml`, `.orun/compositions.lock.yaml`, and land the portable `ci.yml` workflow before any bounded-context code begins.
 
-Adding a new app, package, infra unit, or test suite requires only a colocated `component.yaml`. The workflow does not change.
+The base commands stay portable between local execution and GitHub Actions:
 
-Baseline GitHub Actions flow:
+- `kiox -- orun validate --intent intent.yaml`
+- `kiox -- orun plan --changed --output plan.json`
+- `kiox -- orun run --plan plan.json --job <job-id>`
 
-```yaml
-permissions:
-  contents: read
-  packages: read
-  id-token: write
+GitHub Actions may add `--gha`, matrix-selected `--job`, and optional remote-state flags, but it must not swap to a different task runner or a different job graph.
 
-jobs:
-  plan:
-    outputs:
-      job-matrix: ${{ steps.matrix.outputs.job-matrix }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: sourceplane/orun-action@v1.1.0
-      - run: orun plan --changed --intent intent.yaml --output plan.json
-      - id: matrix
-        run: echo "job-matrix=$(jq -c '[.jobs[] | {\"job-id\": .id, \"job-name\": .checkName}]' plan.json)" >> "$GITHUB_OUTPUT"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: orun-plan
-          path: plan.json
+The CI workflow (`ci.yml`) compiles one Orun plan on every PR and push to main, uploads the plan artifact, and fans out `orun run` jobs per selected component or test component. Deployment lanes are encoded in `intent.yaml` environments — there is no separate hand-maintained deploy graph.
 
-  run:
-    needs: plan
-    strategy:
-      matrix:
-        include: ${{ fromJson(needs.plan.outputs.job-matrix) }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with:
-          name: orun-plan
-      - uses: sourceplane/orun-action@v1.1.0
-      - run: |
-          orun run \
-            --plan plan.json \
-            --runner github-actions \
-            --remote-state \
-            --job "${{ matrix.job-id }}" \
-            --exec-id "${{ github.run_id }}-${{ github.run_attempt }}"
-```
+Adding a new app, package, infra module, or test suite requires only a colocated `component.yaml`. The workflow does not need to change.
 
-`ORUN_BACKEND_URL` is provided by CI secrets or repository environment configuration when `--remote-state` is used.
+If a repo-specific composition change is needed:
+
+1. update `ops/stack-tectonic/` first,
+2. add or update the matching smoke fixture there,
+3. publish a new repo-owned OCI release from that checked-in catalog,
+4. refresh `.orun/compositions.lock.yaml`,
+5. then merge the consuming component change.
 
 ## CI And Quality Gates
 
-Every automated test suite is an Orun component under `tests/`.
+Every change must pass the gates enforced by the matched Orun component graph:
 
-- Source and delivery components that require a test gate declare `dependsOn` on the matching test component.
-- Test components may depend on packages or apps they exercise, but tests are never hardcoded in `.github/workflows/ci.yml`.
-- `packages/testing` contains reusable helpers only; it is not the CI test entry point.
-- A test-only change must produce an Orun job for the changed test component.
+- lint
+- typecheck
+- unit tests
+- contract tests
+- integration tests for the changed component
+- downstream smoke tests required by changed dependencies
+- local `kiox -- orun validate --intent intent.yaml`
+- local `kiox -- orun plan --changed`
+- local `kiox -- orun run --changed --dry-run`
+- GitHub Actions `kiox -- orun run --plan plan.json --job <job-id> --gha`
 
-Example dependency shape:
-
-```yaml
-# apps/api-edge/component.yaml
-apiVersion: sourceplane.io/v1
-kind: Component
-metadata:
-  name: api-edge
-spec:
-  type: cloudflare-worker-turbo
-  domain: starter-runtime
-  dependsOn:
-    - component: api-edge-tests
-      condition: success
-
-# tests/api-edge/component.yaml
-apiVersion: sourceplane.io/v1
-kind: Component
-metadata:
-  name: api-edge-tests
-spec:
-  type: turbo-package
-  domain: starter-tests
-  inputs:
-    nodeVersion: "20"
-    pnpmVersion: "10.12.1"
-    buildCommand: pnpm exec turbo run test --filter=./
-    typecheckCommand: pnpm exec turbo run typecheck --filter=./
-  labels:
-    layer: test
-```
-
-Local verification commands:
-
-```bash
-/Users/irinelinson/.local/bin/kiox -- orun compositions lock --intent intent.yaml
-/Users/irinelinson/.local/bin/kiox -- orun validate --intent intent.yaml
-/Users/irinelinson/.local/bin/kiox -- orun plan --changed --intent intent.yaml --output plan.json
-/Users/irinelinson/.local/bin/kiox -- orun run --plan plan.json --dry-run --runner github-actions
-```
-
-Every PR and push to main must pass the Orun plan/run workflow. Expected gates come from the matched components and must include lint, typecheck, unit tests, contract tests, integration tests where applicable, and deploy or smoke checks for changed deployable components.
+All test execution that can block merge or release must happen through Orun jobs owned by `tests/components/*`. Standalone `pnpm test` jobs in CI are allowed only when they are invoked by a test component composition, not as a second orchestration path beside Orun.
 
 Changes that affect `packages/contracts`, `specs/`, or shared auth, tenancy, project, billing, audit, resource, or webhook flows require downstream smoke tests for every impacted component.
 
-If `orun plan --changed` produces no component jobs, the matching `orun run --plan plan.json` result should be recorded as a no-op instead of skipped silently.
+If `orun plan --changed` produces no component jobs, the matching `orun run --changed` result should be recorded as a no-op instead of skipped silently.

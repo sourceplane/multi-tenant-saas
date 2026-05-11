@@ -5,12 +5,13 @@ metadata:
 spec:
   type: cloudflare-worker-turbo
   domain: starter-runtime
+  subscribe:
+    environments:
+      - dev
   inputs:
-    nodeVersion: "20"
+    nodeVersion: "22"
     pnpmVersion: "10.12.1"
     productionBranch: main
     buildCommand: pnpm exec turbo run build --filter=./
     typecheckCommand: pnpm exec turbo run typecheck --filter=./
-  dependsOn:
-    - component: contracts-tests
-      condition: success
+
