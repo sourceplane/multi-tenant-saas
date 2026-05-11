@@ -1,0 +1,52 @@
+{
+  "apiVersion": "orun.io/v1",
+  "kind": "Plan",
+  "metadata": {
+    "name": "multi-tenant-saas",
+    "description": "Reusable Cloudflare and Supabase multi-tenant SaaS starter",
+    "generatedAt": "2026-05-11T08:57:48Z",
+    "checksum": "sha256-cb31b68e4593a31f2f6a7a6debbe5c2dcc62f63c8f56a58cc43be549b8292800",
+    "workDir": "."
+  },
+  "execution": {
+    "concurrency": 4,
+    "failFast": true
+  },
+  "spec": {
+    "jobBindings": {
+      "cloudflare-pages": "stack-tectonic",
+      "cloudflare-pages-terraform": "stack-tectonic",
+      "cloudflare-pages-turbo": "stack-tectonic",
+      "cloudflare-pages-turbo-terraform": "stack-tectonic",
+      "cloudflare-worker": "stack-tectonic",
+      "cloudflare-worker-turbo": "stack-tectonic",
+      "helm-chart": "stack-tectonic",
+      "helm-values": "stack-tectonic",
+      "terraform": "stack-tectonic",
+      "turbo-package": "stack-tectonic",
+      "workspace": "stack-tectonic"
+    },
+    "compositionSources": [
+      {
+        "name": "stack-tectonic",
+        "kind": "dir",
+        "path": "stack-tectonic/",
+        "resolvedDigest": "sha256:570c01c14c9bae9cae4bb9f0490edf8f148b5e8f92f6cf55ea466737195f1f88",
+        "exports": [
+          "cloudflare-pages",
+          "cloudflare-pages-terraform",
+          "cloudflare-pages-turbo",
+          "cloudflare-pages-turbo-terraform",
+          "cloudflare-worker",
+          "cloudflare-worker-turbo",
+          "helm-chart",
+          "helm-values",
+          "terraform",
+          "turbo-package",
+          "workspace"
+        ]
+      }
+    ]
+  },
+  "jobs": []
+}

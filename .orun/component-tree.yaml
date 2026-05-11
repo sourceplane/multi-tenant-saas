@@ -2,7 +2,7 @@ apiVersion: sourceplane.io/v1
 kind: ComponentTree
 metadata:
     intent: /Users/irinelinson/sourceplane/multi-tenant-saas/intent.yaml
-    generatedAt: "2026-05-11T08:21:38Z"
+    generatedAt: "2026-05-11T09:02:42Z"
 discovery:
     roots:
         - apps
@@ -29,7 +29,7 @@ components:
       source: discovered
       sourcePath: apps/api-edge/component.yaml
       fileSize: 414
-      fileModTime: "2026-05-11T08:21:00.188522091Z"
+      fileModTime: "2026-05-11T08:36:24.894393133Z"
     - name: web-console
       type: cloudflare-pages-turbo
       domain: starter-ui
@@ -45,7 +45,7 @@ components:
       source: discovered
       sourcePath: apps/web-console/component.yaml
       fileSize: 337
-      fileModTime: "2026-05-11T08:20:57.723174245Z"
+      fileModTime: "2026-05-11T08:36:24.894595418Z"
     - name: infra-terraform-core
       type: turbo-package
       domain: starter-infra
@@ -65,7 +65,7 @@ components:
       source: discovered
       sourcePath: infra/terraform/core/component.yaml
       fileSize: 324
-      fileModTime: "2026-05-11T08:21:18.281701292Z"
+      fileModTime: "2026-05-11T08:36:24.894801078Z"
     - name: infra-terraform-state
       type: turbo-package
       domain: starter-infra
@@ -80,7 +80,7 @@ components:
       source: discovered
       sourcePath: infra/terraform/state/component.yaml
       fileSize: 248
-      fileModTime: "2026-05-11T08:21:18.670413113Z"
+      fileModTime: "2026-05-11T08:36:24.894967947Z"
     - name: contracts
       type: turbo-package
       domain: starter-contracts
@@ -94,7 +94,7 @@ components:
       source: discovered
       sourcePath: packages/contracts/component.yaml
       fileSize: 309
-      fileModTime: "2026-05-11T08:21:11.3591141Z"
+      fileModTime: "2026-05-11T08:36:24.895631134Z"
     - name: shared
       type: turbo-package
       domain: starter-shared
@@ -108,7 +108,7 @@ components:
       source: discovered
       sourcePath: packages/shared/component.yaml
       fileSize: 303
-      fileModTime: "2026-05-11T08:21:14.266637652Z"
+      fileModTime: "2026-05-11T08:36:24.895800254Z"
     - name: testing
       type: turbo-package
       domain: starter-shared
@@ -124,7 +124,7 @@ components:
       source: discovered
       sourcePath: packages/testing/component.yaml
       fileSize: 340
-      fileModTime: "2026-05-11T08:21:15.734744605Z"
+      fileModTime: "2026-05-11T08:36:24.895976289Z"
     - name: contracts-tests
       type: turbo-package
       domain: starter-tests
@@ -141,4 +141,4 @@ components:
       source: discovered
       sourcePath: tests/contracts/component.yaml
       fileSize: 395
-      fileModTime: "2026-05-11T08:21:17.292856279Z"
+      fileModTime: "2026-05-11T08:36:24.922825244Z"
