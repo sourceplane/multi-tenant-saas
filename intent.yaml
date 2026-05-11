@@ -3,6 +3,10 @@ kind: Intent
 metadata:
   name: multi-tenant-saas
   description: Reusable Cloudflare and Supabase multi-tenant SaaS starter
+execution:
+  state:
+    backendUrl: https://orun-api.sourceplane.ai
+
 compositions:
   sources:
     - name: stack-tectonic
