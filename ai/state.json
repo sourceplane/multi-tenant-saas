@@ -5,7 +5,7 @@
   "repo_health": "red",
   "next_focus": "github-actions-orun-action-policy",
   "last_verified": "2026-05-11",
-  "waiting_for_input": "true",
+  "waiting_for_input": "false",
   "task_agent": "ai/reports/task-0001-verifier.md",
   "notes": [
     "Task 0001 passed verification and PR #4 is merged into main at 4d38ded.",
