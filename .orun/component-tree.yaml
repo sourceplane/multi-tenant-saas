@@ -1,8 +1,8 @@
 apiVersion: sourceplane.io/v1
 kind: ComponentTree
 metadata:
-    intent: /Users/irinelinson/sourceplane/multi-tenant-saas/intent.yaml
-    generatedAt: "2026-05-11T09:55:05Z"
+    intent: intent.yaml
+    generatedAt: "2026-05-11T11:14:08Z"
 discovery:
     roots:
         - apps
@@ -62,7 +62,7 @@ components:
             - dev
       inputs:
         stackName: core
-        terraformDir: infra/terraform/core
+        terraformDir: .
       labels:
         layer: infra
         provider: terraform
@@ -73,8 +73,8 @@ components:
           condition: success
       source: discovered
       sourcePath: infra/terraform/core/component.yaml
-      fileSize: 373
-      fileModTime: "2026-05-11T09:55:01.640397421Z"
+      fileSize: 354
+      fileModTime: "2026-05-11T10:12:27.985559231Z"
     - name: infra-terraform-state
       type: terraform
       domain: starter-infra
@@ -85,14 +85,14 @@ components:
             - dev
       inputs:
         stackName: state
-        terraformDir: infra/terraform/state
+        terraformDir: .
       labels:
         layer: infra
         provider: terraform
       source: discovered
       sourcePath: infra/terraform/state/component.yaml
-      fileSize: 299
-      fileModTime: "2026-05-11T09:55:01.63843247Z"
+      fileSize: 279
+      fileModTime: "2026-05-11T10:10:24.188661334Z"
     - name: contracts
       type: turbo-package
       domain: starter-contracts
@@ -109,7 +109,7 @@ components:
       source: discovered
       sourcePath: packages/contracts/component.yaml
       fileSize: 352
-      fileModTime: "2026-05-11T09:39:02.107788344Z"
+      fileModTime: "2026-05-11T10:11:21.892762223Z"
     - name: shared
       type: turbo-package
       domain: starter-shared

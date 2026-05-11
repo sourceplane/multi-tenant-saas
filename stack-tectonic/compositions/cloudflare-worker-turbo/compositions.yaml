@@ -76,9 +76,13 @@ spec:
       steps:
         - id: setup-node
           name: setup-node
-          use: actions/setup-node@v4
-          with:
-            node-version: "{{.nodeVersion}}"
+          shell: bash
+          run: |
+            fnm install "{{.nodeVersion}}"
+            fnm use "{{.nodeVersion}}"
+            eval "$(fnm env --use-on-cd --shell bash)"
+            echo "$(dirname "$(which node)")" >> "$GITHUB_PATH"
+            node --version
         - id: setup-pnpm
           name: setup-pnpm
           use: pnpm/action-setup@v4

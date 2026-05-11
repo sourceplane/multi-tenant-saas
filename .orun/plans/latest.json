@@ -4,8 +4,8 @@
   "metadata": {
     "name": "multi-tenant-saas",
     "description": "Reusable Cloudflare and Supabase multi-tenant SaaS starter",
-    "generatedAt": "2026-05-11T09:55:05Z",
-    "checksum": "sha256-17a0c2b2395bb6d6c3306df39510b06db1cb50451eda9f2ed1e041a538e1d322",
+    "generatedAt": "2026-05-11T11:14:08Z",
+    "checksum": "sha256-9004d663cc9a3c2068e72708e6fd0b1f110d8d43d7a8cd1b2ef81977fd01b512",
     "workDir": "."
   },
   "execution": {
@@ -31,7 +31,7 @@
         "name": "stack-tectonic",
         "kind": "dir",
         "path": "stack-tectonic/",
-        "resolvedDigest": "sha256:570c01c14c9bae9cae4bb9f0490edf8f148b5e8f92f6cf55ea466737195f1f88",
+        "resolvedDigest": "sha256:af454ff5204a71f4eeeec78dc4a6fe3d9d0ae09e61e945beea30afdf376c1186",
         "exports": [
           "cloudflare-pages",
           "cloudflare-pages-terraform",
@@ -51,7 +51,7 @@
   "jobs": [
     {
       "id": "shared.dev.verify-turbo-package",
-      "uid": "job_17a0c2b_503773a5592d",
+      "uid": "job_9004d66_76d22d075c58",
       "displayName": "Verify turbo package",
       "checkName": "shared · dev · Verify turbo package",
       "name": "verify-turbo-package",
@@ -137,98 +137,8 @@
       }
     },
     {
-      "id": "testing.dev.verify-turbo-package",
-      "uid": "job_17a0c2b_d00c290ab00f",
-      "displayName": "Verify turbo package",
-      "checkName": "testing · dev · Verify turbo package",
-      "name": "verify-turbo-package",
-      "component": "testing",
-      "environment": "dev",
-      "composition": "turbo-package",
-      "jobRegistry": "stack-tectonic",
-      "job": "verify-turbo-package",
-      "runsOn": "ubuntu-22.04",
-      "path": "packages/testing",
-      "steps": [
-        {
-          "id": "setup-node",
-          "name": "setup-node",
-          "phase": "main",
-          "use": "actions/setup-node@v4",
-          "with": {
-            "node-version": "20"
-          }
-        },
-        {
-          "id": "setup-pnpm",
-          "name": "setup-pnpm",
-          "phase": "main",
-          "use": "pnpm/action-setup@v4",
-          "with": {
-            "version": "10.12.1"
-          }
-        },
-        {
-          "id": "install-workspace-dependencies",
-          "name": "install-workspace-dependencies",
-          "phase": "main",
-          "run": "pnpm install --no-frozen-lockfile",
-          "onFailure": "stop"
-        },
-        {
-          "id": "pre-build",
-          "name": "pre-build",
-          "phase": "main",
-          "run": "\necho \"Skipping pre-build.\"\n\n",
-          "shell": "bash",
-          "onFailure": "stop"
-        },
-        {
-          "id": "verify-package-structure",
-          "name": "verify-package-structure",
-          "phase": "main",
-          "run": "test -f package.json",
-          "onFailure": "stop"
-        },
-        {
-          "id": "build-package",
-          "name": "build-package",
-          "phase": "main",
-          "run": "pnpm exec turbo run build --filter=./",
-          "onFailure": "stop"
-        },
-        {
-          "id": "typecheck-package",
-          "name": "typecheck-package",
-          "phase": "main",
-          "run": "pnpm exec turbo run typecheck --filter=./",
-          "onFailure": "stop"
-        }
-      ],
-      "timeout": "25m",
-      "env": {
-        "buildCommand": "pnpm exec turbo run build --filter=./",
-        "lane": "dry-run",
-        "namespacePrefix": "dev-",
-        "nodeVersion": "20",
-        "pnpmVersion": "10.12.1",
-        "typecheckCommand": "pnpm exec turbo run typecheck --filter=./"
-      },
-      "labels": {
-        "layer": "test-utilities"
-      },
-      "config": {
-        "buildCommand": "pnpm exec turbo run build --filter=./",
-        "lane": "dry-run",
-        "namespacePrefix": "dev-",
-        "nodeVersion": "20",
-        "pnpmVersion": "10.12.1",
-        "typecheckCommand": "pnpm exec turbo run typecheck --filter=./"
-      }
-    },
-    {
       "id": "web-console.dev.verify-deploy-cloudflare-pages-turbo",
-      "uid": "job_17a0c2b_75e26336d7d2",
+      "uid": "job_9004d66_335a0f1803a9",
       "displayName": "Verify deploy cloudflare pages turbo",
       "checkName": "web-console · dev · Verify deploy cloudflare pages turbo",
       "name": "verify-deploy-cloudflare-pages-turbo",
@@ -335,8 +245,98 @@
       }
     },
     {
+      "id": "testing.dev.verify-turbo-package",
+      "uid": "job_9004d66_b1f9819c18a5",
+      "displayName": "Verify turbo package",
+      "checkName": "testing · dev · Verify turbo package",
+      "name": "verify-turbo-package",
+      "component": "testing",
+      "environment": "dev",
+      "composition": "turbo-package",
+      "jobRegistry": "stack-tectonic",
+      "job": "verify-turbo-package",
+      "runsOn": "ubuntu-22.04",
+      "path": "packages/testing",
+      "steps": [
+        {
+          "id": "setup-node",
+          "name": "setup-node",
+          "phase": "main",
+          "use": "actions/setup-node@v4",
+          "with": {
+            "node-version": "20"
+          }
+        },
+        {
+          "id": "setup-pnpm",
+          "name": "setup-pnpm",
+          "phase": "main",
+          "use": "pnpm/action-setup@v4",
+          "with": {
+            "version": "10.12.1"
+          }
+        },
+        {
+          "id": "install-workspace-dependencies",
+          "name": "install-workspace-dependencies",
+          "phase": "main",
+          "run": "pnpm install --no-frozen-lockfile",
+          "onFailure": "stop"
+        },
+        {
+          "id": "pre-build",
+          "name": "pre-build",
+          "phase": "main",
+          "run": "\necho \"Skipping pre-build.\"\n\n",
+          "shell": "bash",
+          "onFailure": "stop"
+        },
+        {
+          "id": "verify-package-structure",
+          "name": "verify-package-structure",
+          "phase": "main",
+          "run": "test -f package.json",
+          "onFailure": "stop"
+        },
+        {
+          "id": "build-package",
+          "name": "build-package",
+          "phase": "main",
+          "run": "pnpm exec turbo run build --filter=./",
+          "onFailure": "stop"
+        },
+        {
+          "id": "typecheck-package",
+          "name": "typecheck-package",
+          "phase": "main",
+          "run": "pnpm exec turbo run typecheck --filter=./",
+          "onFailure": "stop"
+        }
+      ],
+      "timeout": "25m",
+      "env": {
+        "buildCommand": "pnpm exec turbo run build --filter=./",
+        "lane": "dry-run",
+        "namespacePrefix": "dev-",
+        "nodeVersion": "20",
+        "pnpmVersion": "10.12.1",
+        "typecheckCommand": "pnpm exec turbo run typecheck --filter=./"
+      },
+      "labels": {
+        "layer": "test-utilities"
+      },
+      "config": {
+        "buildCommand": "pnpm exec turbo run build --filter=./",
+        "lane": "dry-run",
+        "namespacePrefix": "dev-",
+        "nodeVersion": "20",
+        "pnpmVersion": "10.12.1",
+        "typecheckCommand": "pnpm exec turbo run typecheck --filter=./"
+      }
+    },
+    {
       "id": "contracts.dev.verify-turbo-package",
-      "uid": "job_17a0c2b_57d00a2edd79",
+      "uid": "job_9004d66_6bef95f33558",
       "displayName": "Verify turbo package",
       "checkName": "contracts · dev · Verify turbo package",
       "name": "verify-turbo-package",
@@ -423,7 +423,7 @@
     },
     {
       "id": "contracts-tests.dev.verify-turbo-package",
-      "uid": "job_17a0c2b_fae1fce01671",
+      "uid": "job_9004d66_ba92702a2a55",
       "displayName": "Verify turbo package",
       "checkName": "contracts-tests · dev · Verify turbo package",
       "name": "verify-turbo-package",
@@ -515,7 +515,7 @@
     },
     {
       "id": "infra-terraform-state.dev.validate-terraform",
-      "uid": "job_17a0c2b_b959f50beab0",
+      "uid": "job_9004d66_47d57624ac77",
       "displayName": "Validate terraform",
       "checkName": "infra-terraform-state · dev · Validate terraform",
       "name": "validate-terraform",
@@ -541,7 +541,7 @@
           "id": "terraform-context",
           "name": "terraform-context",
           "phase": "main",
-          "run": "terraform version\necho \"Validating state at infra/terraform/state\"\n",
+          "run": "terraform version\necho \"Validating state at .\"\n",
           "shell": "bash",
           "onFailure": "stop"
         },
@@ -549,21 +549,21 @@
           "id": "terraform-fmt-check",
           "name": "terraform-fmt-check",
           "phase": "main",
-          "run": "terraform fmt -check infra/terraform/state",
+          "run": "terraform fmt -check .",
           "onFailure": "stop"
         },
         {
           "id": "terraform-init",
           "name": "terraform-init",
           "phase": "main",
-          "run": "terraform -chdir=infra/terraform/state init -backend=false -input=false",
+          "run": "terraform -chdir=. init -backend=false -input=false",
           "onFailure": "stop"
         },
         {
           "id": "terraform-validate",
           "name": "terraform-validate",
           "phase": "main",
-          "run": "terraform -chdir=infra/terraform/state validate -no-color",
+          "run": "terraform -chdir=. validate -no-color",
           "onFailure": "stop"
         }
       ],
@@ -572,7 +572,7 @@
         "lane": "dry-run",
         "namespacePrefix": "dev-",
         "stackName": "state",
-        "terraformDir": "infra/terraform/state"
+        "terraformDir": "."
       },
       "labels": {
         "layer": "infra",
@@ -582,12 +582,12 @@
         "lane": "dry-run",
         "namespacePrefix": "dev-",
         "stackName": "state",
-        "terraformDir": "infra/terraform/state"
+        "terraformDir": "."
       }
     },
     {
       "id": "api-edge.dev.verify-deploy-cloudflare-worker-turbo",
-      "uid": "job_17a0c2b_e90a1e4ddc92",
+      "uid": "job_9004d66_525d81299ce4",
       "displayName": "Verify deploy cloudflare worker turbo",
       "checkName": "api-edge · dev · Verify deploy cloudflare worker turbo",
       "name": "verify-deploy-cloudflare-worker-turbo",
@@ -603,10 +603,8 @@
           "id": "setup-node",
           "name": "setup-node",
           "phase": "main",
-          "use": "actions/setup-node@v4",
-          "with": {
-            "node-version": "22"
-          }
+          "run": "fnm install \"22\"\nfnm use \"22\"\neval \"$(fnm env --use-on-cd --shell bash)\"\necho \"$(dirname \"$(which node)\")\" \u003e\u003e \"$GITHUB_PATH\"\nnode --version\n",
+          "shell": "bash"
         },
         {
           "id": "setup-pnpm",
@@ -688,7 +686,7 @@
     },
     {
       "id": "infra-terraform-core.dev.validate-terraform",
-      "uid": "job_17a0c2b_1411d9cded8e",
+      "uid": "job_9004d66_722024870779",
       "displayName": "Validate terraform",
       "checkName": "infra-terraform-core · dev · Validate terraform",
       "name": "validate-terraform",
@@ -714,7 +712,7 @@
           "id": "terraform-context",
           "name": "terraform-context",
           "phase": "main",
-          "run": "terraform version\necho \"Validating core at infra/terraform/core\"\n",
+          "run": "terraform version\necho \"Validating core at .\"\n",
           "shell": "bash",
           "onFailure": "stop"
         },
@@ -722,21 +720,21 @@
           "id": "terraform-fmt-check",
           "name": "terraform-fmt-check",
           "phase": "main",
-          "run": "terraform fmt -check infra/terraform/core",
+          "run": "terraform fmt -check .",
           "onFailure": "stop"
         },
         {
           "id": "terraform-init",
           "name": "terraform-init",
           "phase": "main",
-          "run": "terraform -chdir=infra/terraform/core init -backend=false -input=false",
+          "run": "terraform -chdir=. init -backend=false -input=false",
           "onFailure": "stop"
         },
         {
           "id": "terraform-validate",
           "name": "terraform-validate",
           "phase": "main",
-          "run": "terraform -chdir=infra/terraform/core validate -no-color",
+          "run": "terraform -chdir=. validate -no-color",
           "onFailure": "stop"
         }
       ],
@@ -748,7 +746,7 @@
         "lane": "dry-run",
         "namespacePrefix": "dev-",
         "stackName": "core",
-        "terraformDir": "infra/terraform/core"
+        "terraformDir": "."
       },
       "labels": {
         "layer": "infra",
@@ -758,7 +756,7 @@
         "lane": "dry-run",
         "namespacePrefix": "dev-",
         "stackName": "core",
-        "terraformDir": "infra/terraform/core"
+        "terraformDir": "."
       }
     }
   ]
