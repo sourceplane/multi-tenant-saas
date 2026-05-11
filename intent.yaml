@@ -6,8 +6,9 @@ metadata:
 compositions:
   sources:
     - name: stack-tectonic
-      kind: oci
-      ref: oci://ghcr.io/sourceplane/stack-tectonic:0.12.0
+      kind: dir
+      path: stack-tectonic/
+      
 discovery:
   roots:
     - apps/

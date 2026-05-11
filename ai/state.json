@@ -1,15 +1,16 @@
 {
   "goal": "Supabase/Postgres-backed multi-organization Orun SaaS control plane",
-  "current_task": 1,
-  "completed": [],
-  "repo_health": "yellow",
-  "next_focus": "verify-task-0001-pr-4",
+  "current_task": 2,
+  "completed": [1],
+  "repo_health": "red",
+  "next_focus": "github-actions-orun-action-policy",
   "last_verified": "2026-05-11",
-  "waiting_for_input": "false",
-  "task_agent": "ai/tasks/task-0001-verifier.md",
+  "waiting_for_input": "true",
+  "task_agent": "ai/reports/task-0001-verifier.md",
   "notes": [
-    "Task 0001 implementation is on PR #4 from branch task-0001-scaffold at 60168d4.",
-    "No human input is required before verification.",
-    "Verification must inspect missing/empty PR status checks, local Orun plan output, contract-spec alignment, and the manually reconstructed Orun lock file."
+    "Task 0001 passed verification and PR #4 is merged into main at 4d38ded.",
+    "Local package gates and local Orun verification passed for Task 0001.",
+    "GitHub Actions failed before jobs started because sourceplane/orun-action@v1.1.0 appears blocked by org policy.",
+    "Pause before Task 0002 until an org admin enables the Orun action."
   ]
 }
