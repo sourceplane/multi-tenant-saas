@@ -1,9 +1,11 @@
 apiVersion: kiox.io/v1
 kind: WorkspaceLock
+metadata:
+    name: example-platform
 providers:
     - alias: orun
       provider: sourceplane/orun
-      source: ghcr.io/sourceplane/orun:v1.12.56
-      version: v1.12.56
-      resolved: ghcr.io/sourceplane/orun@sha256:bf7e2c5a5de3f0becffc84a84459e31c7c85694fc3a81cf2b79646236968a86d
-      store: 84c8010dcb6aed793daf20ca2f9519181950f87aaaf96f51bed307de64e91b2d
+      source: ghcr.io/sourceplane/orun:v1.12.57
+      version: v1.12.57
+      resolved: ghcr.io/sourceplane/orun@sha256:ed5fdffa712cb81f8deb3917b0b9d9a2ac17ff3affd84a067fbef643de9ee9c4
+      store: a46b08b3fc24ec7c4eeb2dc6e38bd54ee0d4ea7145da8a30374d097ce26d1920
