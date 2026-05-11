@@ -30,15 +30,23 @@ Non-secret Terraform inputs, such as Supabase organization ID and resource names
 
 All Cloudflare and Supabase resources must be created programmatically through Orun jobs in CI.
 
-Manual console changes are allowed only for emergency repair and must be reconciled back into Terraform or repo config.
+Manual console changes are allowed only for emergency repair or when the human provides an existing account/resource baseline. Existing resources must be discovered, verified, and reconciled into Terraform or repo config before later tasks depend on them.
+
+Current baseline to preserve:
+
+- Cloudflare account ID: `f9270f828799775bebf9315248fdf717`
+- Primary Hyperdrive resource name: `sourceplane-db`
+- A V1 Supabase Postgres database already exists behind that Hyperdrive resource.
+
+Do not recreate the existing database or Hyperdrive resource blindly. Adoption work must inspect the live resource state first and record the observed IDs/configuration in the task report.
 
 ## Terraform Ownership
 
 Use Terraform for:
 
-- Supabase project
-- Supabase database password generation
-- Cloudflare Hyperdrive
+- Cloudflare resources and worker bindings
+- adoption/import metadata for existing Cloudflare Hyperdrive
+- future Supabase resources when they are not already provided by the human baseline
 - Worker bindings and infrastructure config
 
 Terraform state must use Cloudflare R2 as the backend.
@@ -46,6 +54,8 @@ Terraform state must use Cloudflare R2 as the backend.
 The primary database Hyperdrive resource name is `sourceplane-db`.
 
 ## Terraform Shape
+
+Greenfield environments may use this shape. The current V1 environment already has the database and `sourceplane-db` Hyperdrive baseline, so adoption/import work must not apply this as a create-new-resources plan without explicit human approval.
 
 ```hcl
 resource "random_password" "supabase_db" {
@@ -89,10 +99,11 @@ CI must run Terraform plan and apply through Orun. Direct Terraform workflow ste
 
 ## Acceptance Criteria
 
-- Terraform backend uses R2.
-- Supabase project is Terraform-owned.
-- Database password is generated once and retained in Terraform state.
-- Cloudflare Hyperdrive is Terraform-owned.
+- Terraform backend uses R2, or the missing R2 backend is explicitly recorded as the next provisioning step.
+- Existing Supabase project/database baseline is discovered and recorded before dependent work begins.
+- Existing `sourceplane-db` Hyperdrive baseline is discovered and recorded before dependent work begins.
+- Newly created database credentials are generated once and retained in Terraform state; pre-existing credentials must not be rotated or exposed by adoption work.
+- Cloudflare resources are Terraform-owned or have a documented Terraform import/adoption path.
 - Worker infrastructure config is Terraform-owned.
 - Orun can run infra plan locally and in GitHub Actions.
 - Resource creation is verified after apply.

@@ -14,10 +14,23 @@ Last updated: 2026-05-11
 - Verifier report: `ai/reports/task-0001-verifier.md`
 - Durable outcome: initial scaffold landed. Verifier fixed contract drift in PR branch before merge and confirmed local package gates plus Orun verification passed.
 
-## Current Blocker
+## Task 0001.1
 
-- GitHub Actions CI cannot run Orun jobs yet because the organization policy appears to block `sourceplane/orun-action@v1.1.0`.
-- Orchestration is paused for human/admin action before Task 0002 is generated.
+- Agent: Implementer + Verifier
+- Prompt: `ai/tasks/task-0001.1.md`
+- Verifier prompt: `ai/tasks/task-0001.1-verifier.md`
+- Status: verified and merged
+- PRs: #5 (`codex/human-01`) and #6 (`codex/fix-composition-input-ci`), merged into `main` by `b68794c`
+- Objective: preserve the human local Stack Tectonic change and fix component input/CI failures.
+- Reports: `ai/reports/task-0001.1-implementer.md`, `ai/reports/task-0001.1-verifier.md`
+- Durable outcome: `stack-tectonic/` is the committed local composition catalog, component descriptors validate against it, Orun CI reaches and passes the matrix, and generated `.orun/` files are ignored.
+
+## Task 0002
+
+- Agent: Implementer
+- Prompt: `ai/tasks/task-0002.md`
+- Status: ready for implementation.
+- Objective: discover, document, and begin Terraform adoption for the existing Cloudflare/Supabase baseline without blindly recreating `sourceplane-db` or the V1 database.
 
 ## Historical Notes
 

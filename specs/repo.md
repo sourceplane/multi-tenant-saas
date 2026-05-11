@@ -9,21 +9,20 @@ This repository starts as a Cloudflare-first monorepo for a reusable multi-tenan
 ## Canonical Repo Shape
 
 ```text
-intent.yaml                Orun intent — repo-owned stack catalog release, discovery roots, environment lanes
+intent.yaml                Orun intent — local stack catalog, discovery roots, environment lanes
 kiox.yaml                  Orun runtime pin
-/.orun
-  /compositions.lock.yaml  Locked resolved catalog digest used by local and CI runs
+kiox.lock                  Resolved Kiox provider lock
+/.orun                     Generated local Orun state, plans, locks, and runs; ignored by git
 /.github
   /workflows
     ci.yml                 Portable Orun plan/run workflow for PRs and main
 
-/ops
-  /stack-tectonic          Editable repo-owned operations catalog derived from Stack Tectonic OCI releases
-    stack.yaml
-    /compositions
-    /blueprints
-    /registry
-    /docs
+/stack-tectonic            Editable repo-owned operations catalog fetched from Stack Tectonic
+  stack.yaml
+  /compositions
+  /blueprints
+  /registry
+  /docs
 
 /apps
   /api-edge                Public HTTP entry Worker
@@ -141,7 +140,7 @@ kiox.yaml                  Orun runtime pin
 - Every CI-gated test suite is modeled as a first-class Orun component under `tests/components/`.
 - `packages/testing` holds shared fixtures, harnesses, and helpers; it is not the CI gate by itself.
 - Deployable, package, and infra components must declare `dependsOn` edges to the test components that gate them.
-- The starter test composition should begin as a repo-owned `turbo-test` contract inside `ops/stack-tectonic/compositions/` so unit, contract, integration, and smoke suites can run through Orun with repo-specific inputs.
+- The starter test composition should begin as a repo-owned `turbo-test` contract inside `stack-tectonic/compositions/` so unit, contract, integration, and smoke suites can run through Orun with repo-specific inputs.
 - A component that cannot name its required test component dependency is not ready to merge.
 
 ## Platform Resource Mapping
@@ -206,15 +205,15 @@ When a component outgrows Cloudflare-native storage or queueing:
 
 ## Composition and CI Model
 
-This repo uses [orun](https://orun-api.sourceplane.ai) with a repo-owned operations catalog derived from [stack-tectonic](https://github.com/sourceplane/stack-tectonic) for composition-driven CI and deployment.
+This repo uses [orun](https://orun-api.sourceplane.ai) with a repo-owned local operations catalog derived from [stack-tectonic](https://github.com/sourceplane/stack-tectonic) for composition-driven CI and deployment.
 
-- **`ops/stack-tectonic/`** is a checked-in copy of the pinned Stack Tectonic OCI release. Composition edits start there so repo-specific test or deploy behavior can be added without waiting on an upstream repo change.
-- **`intent.yaml`** at the repo root pins the repo-owned OCI publication produced from `ops/stack-tectonic/`, records discovery roots (`apps/`, `packages/`, `tests/components/`, `infra/`), and defines dev → staging → production lane policies.
-- **`.orun/compositions.lock.yaml`** is committed and refreshed whenever the repo-owned catalog release changes so local and CI execution resolve the same digest.
+- **`stack-tectonic/`** is a checked-in copy fetched with `kiox -- orun fetch ghcr.io/sourceplane/stack-tectonic:0.12.0 --overwrite`. Composition edits start there so repo-specific test or deploy behavior can be added without waiting on an upstream repo change.
+- **`intent.yaml`** at the repo root points at that local directory with `kind: dir` / `path: stack-tectonic/`, records discovery roots (`apps/`, `packages/`, `tests/`, `infra/`), and defines dev → staging → production lane policies.
+- **`.orun/`** contains generated local Orun plans, locks, and run state. It is ignored by git; `kiox.lock` is the committed runtime/provider lock.
 - **`component.yaml`** in each app, package, infra module, and test suite describes the composition type, environment subscriptions, and inputs. No component is wired into the CI workflow directly.
 - **`kiox.yaml`** pins the orun runtime version.
 
-Orun currently resolves composition sources from OCI during `plan` and `run`, so the checked-in `ops/stack-tectonic/` tree is the editable source of truth and the repo-owned OCI publication is the execution contract consumed by both local and CI runs.
+Orun currently resolves the checked-in local stack directory during `plan` and `run`, so local and CI execution consume the same repo-owned composition files.
 
 Composition types used:
 
@@ -226,7 +225,7 @@ Composition types used:
 | `turbo-test`              | Test suites in `tests/components/`                |
 | `terraform`               | Optional repo-owned infra components in `infra/`  |
 
-The first implementation task in this repo is the repo-operations scaffold: materialize `ops/stack-tectonic/`, add `intent.yaml`, `kiox.yaml`, `.orun/compositions.lock.yaml`, and land the portable `ci.yml` workflow before any bounded-context code begins.
+The first implementation task in this repo is the repo-operations scaffold: materialize `stack-tectonic/`, add `intent.yaml`, `kiox.yaml`, `kiox.lock`, and land the portable `ci.yml` workflow before any bounded-context code begins.
 
 The base commands stay portable between local execution and GitHub Actions:
 
@@ -242,11 +241,10 @@ Adding a new app, package, infra module, or test suite requires only a colocated
 
 If a repo-specific composition change is needed:
 
-1. update `ops/stack-tectonic/` first,
+1. update `stack-tectonic/` first,
 2. add or update the matching smoke fixture there,
-3. publish a new repo-owned OCI release from that checked-in catalog,
-4. refresh `.orun/compositions.lock.yaml`,
-5. then merge the consuming component change.
+3. run local `kiox -- orun validate`, `plan`, and `run --dry-run`,
+4. then merge the consuming component change.
 
 ## CI And Quality Gates
 
