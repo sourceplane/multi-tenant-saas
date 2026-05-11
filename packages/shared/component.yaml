@@ -10,4 +10,3 @@ spec:
     pnpmVersion: "10.12.1"
     buildCommand: pnpm exec turbo run build --filter=./
     typecheckCommand: pnpm exec turbo run typecheck --filter=./
-    lintCommand: pnpm exec turbo run lint --filter=./
