@@ -3,4 +3,4 @@ kind: Workspace
 metadata:
     name: example-platform
 providers:
-  orun: ghcr.io/sourceplane/orun:v1.14.1
+  orun: ghcr.io/sourceplane/orun:v1.15.0
