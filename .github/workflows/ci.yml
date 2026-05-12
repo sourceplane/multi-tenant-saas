@@ -20,7 +20,7 @@ jobs:
         with:
           fetch-depth: 0
       - uses: sourceplane/orun-action@v1.1.0
-      - run: orun plan --changed --intent intent.yaml --output plan.json
+      - run: orun plan --changed --intent intent.yaml --output plan.json --trigger github-pull-request
       - id: matrix
         run: |
          echo "job-matrix=$(jq -c '[.jobs[] | {"job-id": .id, "job-name": .checkName}]' plan.json)" >> "$GITHUB_OUTPUT"
