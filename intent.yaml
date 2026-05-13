@@ -6,84 +6,6 @@ metadata:
 execution:
   state:
     backendUrl: https://orun-api.sourceplane.ai
-  profiles:
-    dry-run:
-      controls:
-        terraform:
-          fmt:
-            enabled: true
-          init:
-            enabled: true
-            backend: false
-          validate:
-            enabled: true
-          plan:
-            enabled: false
-          apply:
-            enabled: false
-
-    verify:
-      controls:
-        terraform:
-          fmt:
-            enabled: true
-          init:
-            enabled: true
-            backend: true
-          validate:
-            enabled: true
-          plan:
-            enabled: true
-          apply:
-            enabled: false
-
-    release:
-      controls:
-        terraform:
-          fmt:
-            enabled: true
-          init:
-            enabled: true
-            backend: true
-          validate:
-            enabled: true
-          plan:
-            enabled: true
-          apply:
-            enabled: false
-
-automation:
-  triggers:
-    - name: github-pull-request
-      on:
-        provider: github
-        event: pull_request
-        actions:
-          - opened
-          - synchronize
-          - reopened
-          - ready_for_review
-      plan:
-        profile: dry-run
-
-    - name: github-push-main
-      on:
-        provider: github
-        event: push
-        branches:
-          - main
-      plan:
-        profile: verify
-
-    - name: github-tag-release
-      on:
-        provider: github
-        event: push
-        tags:
-          - "v*"
-      plan:
-        profile: release
-
 compositions:
   sources:
     - name: stack-tectonic
@@ -97,11 +19,10 @@ discovery:
     - tests/
     - infra/
 
-
 environments:
   dev:
     execution:
-      profile: release
+      profile: verify
     defaults:
       lane: dry-run
       namespacePrefix: dev-
@@ -109,7 +30,7 @@ environments:
       requireApproval: "false"
   staging:
     execution:
-      profile: verify
+      profile: release
     defaults:
       lane: verify
       namespacePrefix: stg-
