@@ -54,7 +54,12 @@ spec:
         validate-terraform:
           stepsEnabled:
             - setup-terraform
-
+            - setup-terraform
+            - terraform-context
+            - terraform-fmt-check
+            - terraform-init
+            - terraform-validate
+            - terraform-plan
     verify:
       description: Full non-mutating verification
       jobs:
@@ -65,6 +70,7 @@ spec:
             - terraform-fmt-check
             - terraform-init
             - terraform-validate
+            - terraform-plan
     release:
       description: Release-grade validation
       jobs:
@@ -75,9 +81,10 @@ spec:
             - terraform-fmt-check
             - terraform-init
             - terraform-validate
+            - terraform-plan
   jobs:
     - name: validate-terraform
-      description: Validate Terraform stacks with fmt, init, and validate
+      description: Validate Terraform stacks with fmt, init, validate, and plan
       runsOn: ubuntu-22.04
       timeout: 20m
       retries: 0
