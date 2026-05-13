@@ -14,4 +14,5 @@ spec:
     buildCommand: pnpm exec turbo run build --filter=./
     typecheckCommand: pnpm exec turbo run typecheck --filter=./
   labels:
+    team: platform
     layer: test-utilities

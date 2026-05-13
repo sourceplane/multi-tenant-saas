@@ -5,7 +5,7 @@ metadata:
 providers:
     - alias: orun
       provider: sourceplane/orun
-      source: ghcr.io/sourceplane/orun:v1.18.0
-      version: v1.18.0
-      resolved: ghcr.io/sourceplane/orun@sha256:18f5774bd8c22e82e34aad4bcf50e693e5696532a5e111e7d7133938d46d5b28
-      store: c61c514e02af479b6905f8f3b23bcbffc8edb59e2402dfee5f6cc64e1b423482
+      source: ghcr.io/sourceplane/orun:v1.23.0
+      version: v1.23.0
+      resolved: ghcr.io/sourceplane/orun@sha256:c58479c6ca9566b1b1a1726e5137f1cf32b913290e0e5726b2e6a9aca8ec94ac
+      store: 5c857ac35a0c25ac10fb2c4f901f811f1ef1433579aa5d067dcdc06c732e8c0d

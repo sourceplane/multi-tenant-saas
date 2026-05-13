@@ -8,8 +8,14 @@ spec:
   subscribe:
     environments:
       - dev
+      - staging
+      - production
   inputs:
     nodeVersion: "20"
     pnpmVersion: "10.12.1"
     buildCommand: pnpm exec turbo run build --filter=./
     typecheckCommand: pnpm exec turbo run typecheck --filter=./
+  labels:
+    team: platform
+    layer: shared
+    surface: contracts

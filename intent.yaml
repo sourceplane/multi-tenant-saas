@@ -11,7 +11,7 @@ compositions:
     - name: stack-tectonic
       kind: dir
       path: stack-tectonic/
-      
+
 discovery:
   roots:
     - apps/
@@ -21,26 +21,16 @@ discovery:
 
 environments:
   dev:
-    execution:
-      profile: verify
     defaults:
-      lane: dry-run
       namespacePrefix: dev-
-    policies:
-      requireApproval: "false"
+
+
   staging:
-    execution:
-      profile: release
     defaults:
-      lane: verify
       namespacePrefix: stg-
-    policies:
-      requireApproval: "true"
+
+
   production:
-    execution:
-      profile: release
     defaults:
-      lane: release
       namespacePrefix: prod-
-    policies:
-      requireApproval: "true"
+
