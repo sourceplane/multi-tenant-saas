@@ -34,29 +34,29 @@ spec:
       shell: bash
       run: |
         terraform version
-        echo "Validating {{.stackName}} at {{.terraformDir}}"
+        echo "Validating.."
       onFailure: stop
 
     - id: terraform-fmt-check
       name: terraform-fmt-check
       capability: terraform.fmt
-      run: terraform fmt -check {{.terraformDir}}
+      run: terraform fmt -check
       onFailure: stop
 
     - id: terraform-init
       name: terraform-init
       capability: terraform.init
-      run: terraform -chdir={{.terraformDir}} init -backend=false -input=false
+      run: terraform init 
       onFailure: stop
 
     - id: terraform-validate
       name: terraform-validate
       capability: terraform.validate
-      run: terraform -chdir={{.terraformDir}} validate -no-color
+      run: terraform validate -no-color
       onFailure: stop
 
     - id: terraform-plan
       name: terraform-plan
       capability: terraform.plan
-      run: terraform -chdir={{.terraformDir}} plan -no-color
+      run: terraform plan -no-color
       onFailure: stop
