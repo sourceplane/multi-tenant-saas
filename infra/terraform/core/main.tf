@@ -30,7 +30,6 @@ terraform {
   #     s3 = "https://f9270f828799775bebf9315248fdf717.r2.cloudflarestorage.com"
   #   }
   # }
-  backend "local" {}
 }
 
 provider "cloudflare" {
