@@ -8,4 +8,7 @@ metadata:
   owner: sourceplane
   tags:
     - terraform
+    - helm
+    - cloudflare
+    - turbo
     - platform

@@ -7,7 +7,8 @@ spec:
   domain: starter-shared
   subscribe:
     environments:
-      - dev
+      - name: dev
+        profile: quick-check
   inputs:
     nodeVersion: "20"
     pnpmVersion: "10.12.1"
