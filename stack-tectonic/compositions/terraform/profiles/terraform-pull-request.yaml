@@ -6,7 +6,7 @@ spec:
   description: Fast PR validation with speculative planning
 
   jobs:
-    validate:
+    terraform:
       includeCapabilities:
         - terraform.setup
         - terraform.context

@@ -11,7 +11,7 @@ spec:
     requireApproval: true
 
   jobs:
-    validate:
+    terraform:
       includeCapabilities:
         - terraform.setup
         - terraform.context
