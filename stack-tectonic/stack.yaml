@@ -15,5 +15,5 @@ metadata:
 registry:
   host: ghcr.io
   namespace: sourceplane
-  repository: stack-tectonic
+  repository: saas-stack-tectonic
   visibility: public
