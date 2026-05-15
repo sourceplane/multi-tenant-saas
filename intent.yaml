@@ -18,6 +18,7 @@ discovery:
     - packages/
     - tests/
     - infra/
+    - stack-tectonic/
 
 automation:
   triggerBindings:
