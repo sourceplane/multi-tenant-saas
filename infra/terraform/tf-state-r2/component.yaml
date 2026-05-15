@@ -1,7 +1,7 @@
 apiVersion: sourceplane.io/v1
 kind: Component
 metadata:
-  name: infra-terraform-state
+  name: infra-tf-state-r2
 spec:
   type: terraform
   domain: starter-infra
