@@ -27,13 +27,7 @@ spec:
       capability: publish-stack.dry-run
       shell: bash
       run: |
-        STACK_VERSION="${STACK_VERSION:-{{.version}}}"
-        STACK_ROOT="{{if .root}}{{.root}}{{else}}.{{end}}"
-        echo "::notice::DRY-RUN: Validating orun publish for {{.Component}} — {{.registry}}:${STACK_VERSION}"
-        orun publish "{{.registry}}:${STACK_VERSION}" \
-          --dry-run \
-          --root "${STACK_ROOT}" \
-          --version "${STACK_VERSION}"
+        orun publish --dry-run
       onFailure: stop
 
     - id: publish
@@ -41,11 +35,5 @@ spec:
       capability: publish-stack.publish
       shell: bash
       run: |
-        STACK_VERSION="${STACK_VERSION:-{{.version}}}"
-        STACK_ROOT="{{if .root}}{{.root}}{{else}}.{{end}}"
-        echo "::notice::PUBLISH: Publishing {{.Component}} — {{.registry}}:${STACK_VERSION}"
-        orun publish "{{.registry}}:${STACK_VERSION}" \
-          --root "${STACK_ROOT}" \
-          --version "${STACK_VERSION}"
-        echo "::notice::PUBLISH SUCCESS: {{.Component}} published as {{.registry}}:${STACK_VERSION}"
+        orun publish
       onFailure: stop
