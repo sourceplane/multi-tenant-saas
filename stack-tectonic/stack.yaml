@@ -17,4 +17,3 @@ registry:
   namespace: sourceplane
   repository: saas-stack-tectonic
   visibility: public
-
