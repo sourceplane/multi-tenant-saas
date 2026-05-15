@@ -12,3 +12,8 @@ metadata:
     - cloudflare
     - turbo
     - platform
+registry:
+  host: ghcr.io
+  namespace: sourceplane
+  repository: stack-tectonic
+  visibility: public
