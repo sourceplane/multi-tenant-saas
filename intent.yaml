@@ -9,8 +9,8 @@ execution:
 compositions:
   sources:
     - name: stack-tectonic
-      kind: dir
-      path: stack-tectonic/
+      kind: oci
+      ref: oci://ghcr.io/sourceplane/saas-stack-tectonic:1.0.0
 
 discovery:
   roots:
