@@ -58,10 +58,10 @@ variable "cloudflare_account_id" {
 #
 # The import block is declarative and safe – it is a no-op if the resource
 # is already in state.
-import {
-  to = cloudflare_hyperdrive_config.sourceplane_db
-  id = "f9270f828799775bebf9315248fdf717/d9c62c4acf934dd7bb82f63ed02db564"
-}
+# import {
+#   to = cloudflare_hyperdrive_config.sourceplane_db
+#   id = "f9270f828799775bebf9315248fdf717/d9c62c4acf934dd7bb82f63ed02db564"
+# }
 
 resource "cloudflare_hyperdrive_config" "sourceplane_db" {
   account_id = var.cloudflare_account_id
