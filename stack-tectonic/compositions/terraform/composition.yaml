@@ -9,11 +9,11 @@ spec:
   schemaRef:
     name: terraform-component
 
-  defaultJob: validate
+  defaultJob: terraform
   defaultProfile: verify
 
   jobs:
-    - name: validate
+    - name: terraform
       templateRef:
         name: terraform-validate
 

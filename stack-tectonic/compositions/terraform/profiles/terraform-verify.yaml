@@ -6,7 +6,7 @@ spec:
   description: Full non-mutating verification
 
   jobs:
-    validate:
+    terraform:
       includeCapabilities:
         - terraform.setup
         - terraform.context
@@ -14,3 +14,4 @@ spec:
         - terraform.init
         - terraform.validate
         - terraform.plan
+        - terraform.apply
