@@ -58,6 +58,7 @@ jobs:
             --job "${{ matrix.job-id }}" \
             --exec-id "${{ github.run_id }}-${{ github.run_attempt }}"
         env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ORUN_BACKEND_URL: ${{ secrets.ORUN_BACKEND_URL }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
