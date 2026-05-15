@@ -20,5 +20,5 @@ spec:
     layer: infra
     provider: terraform
   dependsOn:
-    - component: infra-terraform-state
+    - component: infra-tf-state-r2
       condition: success
