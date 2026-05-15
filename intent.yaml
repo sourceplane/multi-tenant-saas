@@ -9,8 +9,9 @@ execution:
 compositions:
   sources:
     - name: stack-tectonic
-      kind: oras
-      ref: ghcr.io/sourceplane/saas-stack-tectonic:1.0.0
+      kind: git
+      url: https://github.com/sourceplane/multi-tenant-saas
+      path: stack-tectonic/
 
 discovery:
   roots:
