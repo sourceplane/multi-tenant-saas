@@ -12,7 +12,7 @@ spec:
       - name: dev
         profile: dry-run
       - name: staging
-        profile: verify
+        profile: release
       - name: production
         profile: release
   inputs:
