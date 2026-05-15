@@ -60,6 +60,7 @@ spec:
       capability: terraform.plan
       run: terraform plan -no-color
       onFailure: stop
+
     - id: terraform-apply
       name: Apply
       capability: terraform.apply
