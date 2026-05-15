@@ -13,7 +13,7 @@ spec:
   defaultProfile: verify
 
   jobs:
-    - name: validate
+    - name: Terraform
       templateRef:
         name: terraform-validate
 
