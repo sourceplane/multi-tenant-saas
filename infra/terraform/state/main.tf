@@ -17,9 +17,6 @@ terraform {
     }
   }
 
-  # Bootstrap component – local backend until the bucket exists.
-  # After first apply, migrate to the R2 backend.
-  backend "local" {}
 }
 
 provider "cloudflare" {
