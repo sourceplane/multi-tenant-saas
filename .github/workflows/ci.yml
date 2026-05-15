@@ -49,6 +49,12 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: orun-plan
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - uses: sourceplane/orun-action@v1.1.0
       - run: |
           orun run \
