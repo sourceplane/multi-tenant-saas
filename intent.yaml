@@ -9,7 +9,7 @@ execution:
 compositions:
   sources:
     - name: stack-tectonic
-      kind: registry
+      kind: oras
       ref: ghcr.io/sourceplane/saas-stack-tectonic:1.0.0
 
 discovery:
