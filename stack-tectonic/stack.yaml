@@ -3,7 +3,7 @@ kind: Stack
 metadata:
   name: tectonic
   title: Tectonic Platform Stack
-  version: 1.0.0
+  version: 2.0.0
   description: Full-lifecycle platform stack with profiles, triggers, and override policy.
   owner: sourceplane
   tags:
