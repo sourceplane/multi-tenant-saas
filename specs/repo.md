@@ -9,20 +9,17 @@ This repository starts as a Cloudflare-first monorepo for a reusable multi-tenan
 ## Canonical Repo Shape
 
 ```text
-intent.yaml                Orun intent — local stack catalog, discovery roots, environment lanes
-kiox.yaml                  Orun runtime pin
+intent.yaml                Orun intent — composition sources, discovery roots, env lanes
+kiox.yaml                  Orun runtime pin, aligned with aws-admin
 kiox.lock                  Resolved Kiox provider lock
 /.orun                     Generated local Orun state, plans, locks, and runs; ignored by git
 /.github
   /workflows
     ci.yml                 Portable Orun plan/run workflow for PRs and main
 
-/stack-tectonic            Editable repo-owned operations catalog fetched from Stack Tectonic
+/stack-tectonic            Repo-owned operations catalog, aligned with aws-admin stack style
   stack.yaml
   /compositions
-  /blueprints
-  /registry
-  /docs
 
 /apps
   /api-edge                Public HTTP entry Worker
@@ -87,8 +84,12 @@ kiox.lock                  Resolved Kiox provider lock
   /scripts
 
 /infra
+  /terraform
+    /tf-state-s3           S3 backend migration/verification component
+    /supabase              Supabase database/project and AWS Secrets Manager component
+    /cloudflare            Worker, Hyperdrive, queue, and binding infrastructure
   /cloudflare              Wrangler configs, environments, bindings
-  /ci                      CI templates and deployment pipelines
+  /ci                      CI templates and deployment notes
 
 /specs
   ...this spec pack...
@@ -165,9 +166,10 @@ Use platform primitives deliberately:
 Supabase Postgres is the primary operational database for product-owned relational state, including identity, membership, projects, config metadata, canonical events, audit indexes, usage rollups, billing state, notifications, webhooks, support actions, and optional resource/runtime metadata.
 
 - Workers connect to Supabase Postgres through Hyperdrive bindings. Raw connection strings and Supabase service keys must stay in platform configuration and must not leak into domain logic.
-- The V1 Supabase database already exists and Cloudflare Hyperdrive is already configured for it as `sourceplane-db`.
-- Workers that need the primary database must use the configured `sourceplane-db` Hyperdrive binding/resource instead of inventing a second database binding.
-- Local database verification may use temporary credentials generated through `wrangler` when needed. Temporary credentials must never be committed, logged in full, or copied into source files.
+- Terraform must provision the target Supabase database or project for each environment once the AWS-admin role and S3 backend path are in place.
+- Generated database credentials and connection details must be stored in AWS Secrets Manager under `<org>/<repo>/<component>/<env>`.
+- Workers that need the primary database must use the configured Hyperdrive binding/resource for their environment instead of inventing ad hoc connection strings.
+- Local database verification may use temporary credentials only when the task explicitly allows it. Temporary credentials must never be committed, logged in full, or copied into source files.
 - Repository adapters own SQL, pooling assumptions, transaction boundaries, and Hyperdrive-specific behavior. Domain services receive typed repositories or unit-of-work abstractions, not platform database clients.
 - Each bounded context owns its schema or table namespace and migration history. Cross-context foreign keys are prohibited; use opaque IDs, service calls, and published events instead.
 - Every tenant-scoped table must include `org_id` directly or have an auditable path to `org_id` through a table owned by the same bounded context.
@@ -176,13 +178,23 @@ Supabase Postgres is the primary operational database for product-owned relation
 
 ## Operational Access And Resource Verification
 
-Agents may assume full authenticated access to `gh` and `wrangler` for repository, CI, Cloudflare, and deployment work in task scope.
+Agents may assume authenticated access to `gh`, to AWS through the
+`aws-admin`-managed repo roles, and to `wrangler` or Supabase tooling when a
+task explicitly needs provider inspection.
 
-- The Cloudflare account ID is `f9270f828799775bebf9315248fdf717`.
-- GitHub Actions has the Cloudflare API credential needed for CI and deploy workflows.
-- GitHub Actions must also expose the Cloudflare account ID to jobs that create, inspect, or deploy Cloudflare resources.
-- Any task that creates or updates a Cloudflare resource must verify the resource exists after creation using `wrangler` or the Cloudflare API, then record that verification in the implementer or verifier report.
-- Verifiers must not rely only on successful deploy or migration command exit codes when a Cloudflare resource is created. They must inspect the resulting Cloudflare resource state directly.
+- AWS IAM roles and state buckets are owned by `aws-admin`.
+- This repo consumes the `sourceplane/multi-tenant-saas` GitHub OIDC roles and
+  must not create IAM roles directly.
+- Terraform state uses the shared `sourceplane-<env>` S3 buckets and native S3
+  locking, following the `aws-admin` backend contract.
+- Secrets are stored in AWS Secrets Manager, not in committed files or
+  task/report bodies.
+- Any task that creates or updates Cloudflare, Supabase, AWS IAM, S3, or
+  Secrets Manager resources must verify the resource exists after creation and
+  record non-secret observed state in the implementer or verifier report.
+- Verifiers must not rely only on successful command exit codes. They must
+  inspect provider state directly when a task claims a live resource or
+  permission change.
 
 ## Extraction Model
 
@@ -205,15 +217,24 @@ When a component outgrows Cloudflare-native storage or queueing:
 
 ## Composition and CI Model
 
-This repo uses [orun](https://orun-api.sourceplane.ai) with a repo-owned local operations catalog derived from [stack-tectonic](https://github.com/sourceplane/stack-tectonic) for composition-driven CI and deployment.
+This repo uses [orun](https://orun-api.sourceplane.ai) for composition-driven
+CI and deployment. The working model is the Orun golden path captured in
+`specs/orun-golden-path.md`, with `aws-admin` as the reference implementation
+for Terraform, S3 backend, and environment structure.
 
-- **`stack-tectonic/`** is a checked-in copy fetched with `kiox -- orun fetch ghcr.io/sourceplane/stack-tectonic:0.12.0 --overwrite`. Composition edits start there so repo-specific test or deploy behavior can be added without waiting on an upstream repo change.
-- **`intent.yaml`** at the repo root points at that local directory with `kind: dir` / `path: stack-tectonic/`, records discovery roots (`apps/`, `packages/`, `tests/`, `infra/`), and defines dev → staging → production lane policies.
-- **`.orun/`** contains generated local Orun plans, locks, and run state. It is ignored by git; `kiox.lock` is the committed runtime/provider lock.
-- **`component.yaml`** in each app, package, infra module, and test suite describes the composition type, environment subscriptions, and inputs. No component is wired into the CI workflow directly.
-- **`kiox.yaml`** pins the orun runtime version.
-
-Orun currently resolves the checked-in local stack directory during `plan` and `run`, so local and CI execution consume the same repo-owned composition files.
+- **`stack-tectonic/`** is the repo-owned operations catalog. Its Terraform
+  composition must be brought in line with `../aws-admin/stacks/aws-admin-terraform/`
+  before new infra work depends on it.
+- **`intent.yaml`** records discovery roots, composition sources and bindings,
+  trigger bindings, and `dev` -> `stage` -> `prod` environment promotion. It
+  uses `parameterDefaults.terraform` and `env.AWS_REGION` like `aws-admin`.
+- **`.orun/`** contains generated local Orun plans, locks, and run state. It is
+  ignored by git; `kiox.lock` is the committed runtime/provider lock.
+- **`component.yaml`** in each app, package, infra module, and test suite
+  describes the composition type, environment subscriptions, typed parameters,
+  labels, and dependencies. No component is wired into the CI workflow directly.
+- **`kiox.yaml`** pins the Orun runtime version and should match the current
+  `aws-admin` pin.
 
 Composition types used:
 
@@ -225,15 +246,20 @@ Composition types used:
 | `turbo-test`              | Test suites in `tests/components/`                |
 | `terraform`               | Optional repo-owned infra components in `infra/`  |
 
-The first implementation task in this repo is the repo-operations scaffold: materialize `stack-tectonic/`, add `intent.yaml`, `kiox.yaml`, `kiox.lock`, and land the portable `ci.yml` workflow before any bounded-context code begins.
+The immediate operations tasks are to align the local Orun runtime and
+Stack Tectonic contracts with `aws-admin`, add the missing AWS-admin IAM role
+component for this repo, migrate Terraform state from R2 to S3, and then add
+Supabase infrastructure as a Terraform component.
 
 The base commands stay portable between local execution and GitHub Actions:
 
 - `kiox -- orun validate --intent intent.yaml`
-- `kiox -- orun plan --changed --output plan.json`
+- `kiox -- orun plan --changed --intent intent.yaml --output plan.json`
 - `kiox -- orun run --plan plan.json --job <job-id>`
 
-GitHub Actions may add `--gha`, matrix-selected `--job`, and optional remote-state flags, but it must not swap to a different task runner or a different job graph.
+GitHub Actions may add matrix-selected `--job`, `--runner github-actions`, and
+remote-state flags, but it must not swap to a different task runner or a
+different job graph.
 
 The CI workflow (`ci.yml`) compiles one Orun plan on every PR and push to main, uploads the plan artifact, and fans out `orun run` jobs per selected component or test component. Deployment lanes are encoded in `intent.yaml` environments — there is no separate hand-maintained deploy graph.
 
@@ -242,9 +268,10 @@ Adding a new app, package, infra module, or test suite requires only a colocated
 If a repo-specific composition change is needed:
 
 1. update `stack-tectonic/` first,
-2. add or update the matching smoke fixture there,
-3. run local `kiox -- orun validate`, `plan`, and `run --dry-run`,
-4. then merge the consuming component change.
+2. update the schema/profile/job contract and README together,
+3. add or update the matching smoke fixture there when one exists,
+4. run local `kiox -- orun validate`, `plan`, and `run --dry-run`,
+5. then merge the consuming component change.
 
 ## CI And Quality Gates
 
@@ -258,8 +285,8 @@ Every change must pass the gates enforced by the matched Orun component graph:
 - downstream smoke tests required by changed dependencies
 - local `kiox -- orun validate --intent intent.yaml`
 - local `kiox -- orun plan --changed`
-- local `kiox -- orun run --changed --dry-run`
-- GitHub Actions `kiox -- orun run --plan plan.json --job <job-id> --gha`
+- local `kiox -- orun run --plan plan.json --dry-run --runner github-actions`
+- GitHub Actions `kiox -- orun run --plan plan.json --job <job-id> --runner github-actions --remote-state`
 
 All test execution that can block merge or release must happen through Orun jobs owned by `tests/components/*`. Standalone `pnpm test` jobs in CI are allowed only when they are invoked by a test component composition, not as a second orchestration path beside Orun.
 

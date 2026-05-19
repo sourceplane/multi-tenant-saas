@@ -2,6 +2,9 @@ apiVersion: sourceplane.io/v1
 kind: Component
 metadata:
   name: infra-terraform-core
+inputs:
+  stackName: core
+  terraformDir: .
 spec:
   type: terraform
   domain: starter-infra

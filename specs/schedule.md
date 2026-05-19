@@ -19,11 +19,11 @@ Assumption: 4-6 autopilot coding agents plus 1 human reviewer or lead architect.
 ### Week 0: Orun repo bootstrap and architecture lock
 
 - Create the repo skeleton from `specs/repo.md`.
-- Add `intent.yaml`, `kiox.yaml`, `kiox.lock`, local `stack-tectonic/`, and `.github/workflows/ci.yml`.
-- Point `intent.yaml` at local `stack-tectonic/` and pin the Orun provider in `kiox.yaml`.
+- Add `intent.yaml`, `kiox.yaml`, `kiox.lock`, `stack-tectonic/`, and `.github/workflows/ci.yml`.
+- Align `intent.yaml`, `kiox.yaml`, and the Terraform composition with the current `aws-admin` Orun golden path.
 - Add starter `component.yaml` files for apps, packages, infra, and test components.
 - Add at least one test component dependency so test execution is part of the Orun DAG.
-- Add Terraform components for R2 backend, existing Supabase/Hyperdrive adoption, and Worker infra config.
+- Add Terraform components for S3 backend migration, Supabase database provisioning, AWS Secrets Manager writes, and Worker/Hyperdrive infra config.
 - Verify local Orun validation, plan, and dry-run execution.
 - Verify GitHub Actions plans once and runs the Orun job matrix.
 - Review and freeze the constitution.
@@ -31,7 +31,7 @@ Assumption: 4-6 autopilot coding agents plus 1 human reviewer or lead architect.
 - Review and freeze shared contract docs.
 - Confirm Supabase Postgres ownership model, schema namespace rules, and migration strategy.
 - Confirm Cloudflare account layout, Supabase organization, environment naming, and deployment permissions.
-- Confirm environment lane policies (dev / staging / production) and approval gates.
+- Confirm environment lane policies (`dev` / `stage` / `prod`) and approval gates.
 
 Exit criteria:
 
@@ -40,8 +40,8 @@ Exit criteria:
 - `.github/workflows/ci.yml` runs only Orun plan/run jobs.
 - A test-only change produces an Orun test component job.
 - Infra changes produce Orun Terraform jobs.
-- CI has `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, and `SUPABASE_API_KEY`.
-- Terraform state uses R2.
+- `aws-admin` has created the repo-scoped multi-tenant SaaS roles with S3 state and Secrets Manager access.
+- Terraform state uses the shared S3 buckets `sourceplane-<env>`.
 - Shared contract docs approved.
 - Delegation order confirmed.
 - Database and migration ownership model approved.
@@ -78,7 +78,7 @@ Exit criteria:
 - Contract tests exist.
 - Repository adapters hide Supabase/Hyperdrive details from domain logic.
 - `orun plan --changed --intent intent.yaml` produces the expected job matrix for every changed component.
-- `sourceplane-db` Hyperdrive exists and is verified, with Terraform ownership or an explicit import/adoption path.
+- Supabase database provisioning and any Hyperdrive wiring are verified, with Terraform ownership or an explicit adoption path.
 
 ### Weeks 2-3: Tenant core
 

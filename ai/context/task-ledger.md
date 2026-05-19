@@ -1,6 +1,6 @@
 # Task Ledger
 
-Last updated: 2026-05-11
+Last updated: 2026-05-19
 
 ## Task 0001
 
@@ -29,8 +29,39 @@ Last updated: 2026-05-11
 
 - Agent: Implementer
 - Prompt: `ai/tasks/task-0002.md`
-- Status: ready for implementation.
+- Status: verified and merged
 - Objective: discover, document, and begin Terraform adoption for the existing Cloudflare/Supabase baseline without blindly recreating `sourceplane-db` or the V1 database.
+- PR: #8
+- Reports: `ai/reports/task-0002-implementer.md`, `ai/reports/task-0002-verifier.md`
+- Durable outcome: initial Terraform R2/Hyperdrive adoption scaffold landed and passed verification. This is now historical context; the current spec direction migrates infra work to AWS S3 backend and AWS Secrets Manager.
+
+## Task 0003
+
+- Agent: Implementer
+- Prompt: `ai/tasks/task-0003.md`
+- Status: ready for implementation.
+- Objective: align `multi-tenant-saas` Orun runtime, Stack Tectonic Terraform contract, environment shape, component descriptors, READMEs, and CI/local behavior with the `aws-admin` golden path.
+
+## Task 0004
+
+- Agent: Implementer
+- Prompt: `ai/tasks/task-0004.md`
+- Status: planned, depends on Task 0003.
+- Objective: add and verify the `aws-admin` repo-scoped IAM component for `sourceplane/multi-tenant-saas`, including S3 state and Secrets Manager permissions.
+
+## Task 0005
+
+- Agent: Implementer
+- Prompt: `ai/tasks/task-0005.md`
+- Status: planned, depends on Task 0004.
+- Objective: consume the `aws-admin` role in `multi-tenant-saas`, migrate Terraform backend usage from R2 to S3, and verify Secrets Manager access.
+
+## Task 0006
+
+- Agent: Implementer
+- Prompt: `ai/tasks/task-0006.md`
+- Status: planned, depends on Task 0005.
+- Objective: add a Supabase Terraform infra component with S3 backend that creates the target database/project resources and stores generated secrets in AWS Secrets Manager.
 
 ## Historical Notes
 
