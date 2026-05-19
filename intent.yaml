@@ -1,16 +1,25 @@
 apiVersion: sourceplane.io/v1
 kind: Intent
+
 metadata:
   name: multi-tenant-saas
   description: Reusable Cloudflare and Supabase multi-tenant SaaS starter
+  namespace: sourceplane
+
 execution:
   state:
     backendUrl: https://orun-api.sourceplane.ai
+
 compositions:
   sources:
     - name: stack-tectonic
-      kind: oci
-      ref: oci://ghcr.io/sourceplane/saas-stack-tectonic:1.0.0
+      kind: dir
+      path: stack-tectonic
+  resolution:
+    precedence:
+      - stack-tectonic
+    bindings:
+      terraform: stack-tectonic
 
 discovery:
   roots:
@@ -18,7 +27,6 @@ discovery:
     - packages/
     - tests/
     - infra/
-    - stack-tectonic/
 
 automation:
   triggerBindings:
@@ -40,54 +48,72 @@ automation:
         head: pull_request.head.sha
 
     github-push-main:
-      description: Main branch verification after merge
+      description: Main branch stack convergence after merge
       on:
         provider: github
         event: push
         branches:
           - main
       plan:
-        scope: changed
-        base: before
-        head: after
-
-    github-tag-release:
-      description: Release tag planning
-      on:
-        provider: github
-        event: push
-        tags:
-          - "v*"
-      plan:
-        scope: full
+        scope: all
 
 environments:
   dev:
     activation:
       triggerRefs:
         - github-pull-request
-    defaults:
-      lane: dry-run
-      namespacePrefix: dev-
+        - github-push-main
+    parameterDefaults:
+      terraform:
+        awsRegion: us-east-1
+        lane: verify
+        namespace: sourceplane
+        namespacePrefix: dev-
+        owner: sourceplane
+        repo: multi-tenant-saas
     policies:
       requireApproval: "false"
+    env:
+      AWS_REGION: us-east-1
 
-  staging:
+  stage:
     activation:
       triggerRefs:
+        - github-pull-request
         - github-push-main
-    defaults:
-      lane: verify
-      namespacePrefix: stg-
+    promotion:
+      dependsOn:
+        - environment: dev
+    parameterDefaults:
+      terraform:
+        awsRegion: us-east-1
+        lane: verify
+        namespace: sourceplane
+        namespacePrefix: stg-
+        owner: sourceplane
+        repo: multi-tenant-saas
     policies:
       requireApproval: "true"
+    env:
+      AWS_REGION: us-east-1
 
-  production:
+  prod:
     activation:
       triggerRefs:
-        - github-tag-release
-    defaults:
-      lane: release
-      namespacePrefix: prod-
+        - github-pull-request
+        - github-push-main
+    promotion:
+      dependsOn:
+        - environment: stage
+    parameterDefaults:
+      terraform:
+        awsRegion: us-east-1
+        lane: verify
+        namespace: sourceplane
+        namespacePrefix: prod-
+        owner: sourceplane
+        repo: multi-tenant-saas
     policies:
       requireApproval: "true"
+    env:
+      AWS_REGION: us-east-1

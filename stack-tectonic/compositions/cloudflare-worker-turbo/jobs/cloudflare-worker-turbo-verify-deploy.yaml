@@ -27,14 +27,14 @@ spec:
       capability: cloudflare-worker-turbo.setup-node
       use: actions/setup-node@v4
       with:
-        node-version: "{{.nodeVersion}}"
+        node-version: "{{.parameters.nodeVersion}}"
 
     - id: setup-pnpm
       name: setup-pnpm
       capability: cloudflare-worker-turbo.setup-pnpm
       use: pnpm/action-setup@v4
       with:
-        version: "{{.pnpmVersion}}"
+        version: "{{.parameters.pnpmVersion}}"
 
     - id: install-workspace-dependencies
       name: install-workspace-dependencies
@@ -48,7 +48,7 @@ spec:
       shell: bash
       run: |
         {{if .preBuildCommand}}
-        {{.preBuildCommand}}
+        {{.parameters.preBuildCommand}}
         {{else}}
         echo "Skipping pre-build."
         {{end}}
@@ -61,7 +61,7 @@ spec:
       run: |
         test -f package.json
         {{if .wranglerConfig}}
-        test -f "{{.wranglerConfig}}"
+        test -f "{{.parameters.wranglerConfig}}"
         {{else}}
         test -f wrangler.jsonc || test -f wrangler.toml
         {{end}}
@@ -70,13 +70,13 @@ spec:
     - id: build-worker
       name: build-worker
       capability: cloudflare-worker-turbo.build
-      run: "{{if .buildCommand}}{{.buildCommand}}{{else}}pnpm exec turbo run build --filter=./{{end}}"
+      run: "{{if .buildCommand}}{{.parameters.buildCommand}}{{else}}pnpm exec turbo run build --filter=./{{end}}"
       onFailure: stop
 
     - id: typecheck-worker
       name: typecheck-worker
       capability: cloudflare-worker-turbo.typecheck
-      run: "{{if .typecheckCommand}}{{.typecheckCommand}}{{else}}pnpm exec turbo run typecheck --filter=./{{end}}"
+      run: "{{if .typecheckCommand}}{{.parameters.typecheckCommand}}{{else}}pnpm exec turbo run typecheck --filter=./{{end}}"
       onFailure: stop
 
     - id: deploy-worker
@@ -84,14 +84,14 @@ spec:
       capability: cloudflare-worker-turbo.deploy
       shell: bash
       run: |
-        if [ "{{.Environment}}" = "dev" ]; then
-          echo "::notice::DRY-RUN: Running wrangler deploy --dry-run for {{.Component}} in dev environment."
+        if [ "{{.orun.environment.name}}" = "dev" ]; then
+          echo "::notice::DRY-RUN: Running wrangler deploy --dry-run for {{.orun.component.name}} in dev environment."
           pnpm exec wrangler deploy --dry-run
           exit 0
         fi
 
-        if [ "{{.Environment}}" != "production" ] || [ "${GITHUB_REF:-}" != "refs/heads/{{.productionBranch}}" ]; then
-          echo "::notice::SKIPPED: Cloudflare Worker deploy for {{.Component}} in {{.Environment}} on ${GITHUB_REF:-local} (not production branch)."
+        if [ "{{.orun.environment.name}}" != "production" ] || [ "${GITHUB_REF:-}" != "refs/heads/{{.parameters.productionBranch}}" ]; then
+          echo "::notice::SKIPPED: Cloudflare Worker deploy for {{.orun.component.name}} in {{.orun.environment.name}} on ${GITHUB_REF:-local} (not production branch)."
           exit 0
         fi
 
@@ -100,24 +100,24 @@ spec:
 
         {{if .preDeployCommand}}
         echo "::group::Pre-deploy"
-        {{.preDeployCommand}}
+        {{.parameters.preDeployCommand}}
         echo "::endgroup::"
         {{end}}
 
         {{if .migrationCommand}}
         echo "::group::Run migrations"
-        {{.migrationCommand}}
+        {{.parameters.migrationCommand}}
         echo "::endgroup::"
         {{end}}
 
-        echo "::notice::LIVE DEPLOY: Deploying {{.Component}} to Cloudflare from ${GITHUB_REF:-}."
-        {{if .deployCommand}}{{.deployCommand}}{{else}}pnpm run deploy{{end}}
+        echo "::notice::LIVE DEPLOY: Deploying {{.orun.component.name}} to Cloudflare from ${GITHUB_REF:-}."
+        {{if .deployCommand}}{{.parameters.deployCommand}}{{else}}pnpm run deploy{{end}}
 
         {{if .smokeCommand}}
         echo "::group::Post-deploy smoke test"
-        {{.smokeCommand}}
+        {{.parameters.smokeCommand}}
         echo "::endgroup::"
         {{end}}
 
-        echo "::notice::DEPLOY SUCCESS: {{.Component}} deployed to Cloudflare."
+        echo "::notice::DEPLOY SUCCESS: {{.orun.component.name}} deployed to Cloudflare."
       onFailure: stop

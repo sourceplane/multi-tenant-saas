@@ -39,14 +39,18 @@ Last updated: 2026-05-19
 
 - Agent: Implementer
 - Prompt: `ai/tasks/task-0003.md`
-- Status: ready for implementation.
+- Follow-up prompt: `ai/tasks/task-0003-pr-completion.md`
+- Status: implemented locally but no PR exists yet; needs commit, push, PR, and
+  verifier handoff.
 - Objective: align `multi-tenant-saas` Orun runtime, Stack Tectonic Terraform contract, environment shape, component descriptors, READMEs, and CI/local behavior with the `aws-admin` golden path.
+- Implementer report: `ai/reports/task-0003-implementer.md` currently exists
+  locally and still needs its actual PR number.
 
 ## Task 0004
 
 - Agent: Implementer
 - Prompt: `ai/tasks/task-0004.md`
-- Status: planned, depends on Task 0003.
+- Status: planned, blocked on Task 0003 PR verification/merge.
 - Objective: add and verify the `aws-admin` repo-scoped IAM component for `sourceplane/multi-tenant-saas`, including S3 state and Secrets Manager permissions.
 
 ## Task 0005

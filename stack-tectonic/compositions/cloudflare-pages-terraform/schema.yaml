@@ -11,14 +11,14 @@ spec:
     required:
       - name
       - type
-      - inputs
+      - parameters
     properties:
       name:
         type: string
       type:
         type: string
         const: cloudflare-pages-terraform
-      inputs:
+      parameters:
         type: object
         required:
           - siteDir

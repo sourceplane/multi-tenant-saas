@@ -11,28 +11,39 @@ spec:
     required:
       - name
       - type
-      - inputs
+      - parameters
     properties:
       name:
         type: string
       type:
         type: string
         const: terraform
-      inputs:
+      parameters:
         type: object
         required:
           - stackName
           - terraformDir
+          - terraformVersion
         properties:
+          awsRegion:
+            type: string
+          lane:
+            type: string
+          namespace:
+            type: string
+          namespacePrefix:
+            type: string
+          orgName:
+            type: string
+          owner:
+            type: string
+          repo:
+            type: string
           stackName:
             type: string
           terraformDir:
             type: string
           terraformVersion:
-            type: string
-          varFile:
-            type: string
-          backendKey:
             type: string
         additionalProperties: false
     additionalProperties: true

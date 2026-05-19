@@ -1,21 +1,18 @@
 apiVersion: sourceplane.io/v1alpha1
 kind: ExecutionProfile
 metadata:
-  name: terraform-release
+  name: terraform-plan-only
 spec:
-  description: Release-grade validation before apply-capable workflows
-
-  policies:
-    requireCleanGitTree: true
-    requirePinnedTerraformVersion: true
-    requireApproval: true
+  description: PR Terraform plan with no-lock flag for non-mutating preview
 
   jobs:
     terraform:
       includeCapabilities:
         - terraform.setup
+        - terraform.env
         - terraform.context
         - terraform.fmt
         - terraform.init
+        - terraform.workspace
         - terraform.validate
         - terraform.plan

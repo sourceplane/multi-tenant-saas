@@ -1,39 +1,54 @@
-# infra/terraform/core
+# infra-terraform-core
 
-Core Terraform component. Adopts existing Cloudflare Hyperdrive and will
-eventually manage Supabase project, Worker bindings, and environment config.
-
-Depends on `infra-terraform-state` (the R2 state bucket must exist first).
-
-## Observed Baseline (Task 0002 Discovery)
-
-| Resource | Status | Details |
-|---|---|---|
-| Hyperdrive `sourceplane-db` | **Exists** | ID: `d9c62c4acf934dd7bb82f63ed02db564` |
-| Hyperdrive origin host | — | `aws-1-ap-southeast-1.pooler.supabase.com:5432` |
-| Hyperdrive origin user | — | `postgres.kfgwglxvxoiisoakkndm` (Supabase pooler format) |
-| Hyperdrive origin database | — | `postgres` |
-| Hyperdrive `oruncloud-db` | Exists (unrelated) | ID: `d8cada8abda7451aaa1e2ce189dc8a17` – not managed here |
-| Supabase project ref | Inferred | `kfgwglxvxoiisoakkndm` (from pooler username) |
-| Supabase region | Inferred | `ap-southeast-1` (from pooler hostname) |
+Core Terraform component managing Cloudflare Hyperdrive configuration and
+environment-level infrastructure bindings.
 
 ## Resources
 
-- `cloudflare_hyperdrive_config.sourceplane_db` – Adopts the existing Hyperdrive via `import` block.
+| Resource | Description |
+| --- | --- |
+| `cloudflare_hyperdrive_config.sourceplane_db` | Adopts existing Hyperdrive `sourceplane-db` via import |
 
-## Adoption Status
+## Parameters
 
-The Hyperdrive config already exists. An `import` block is declared so that
-`terraform apply` will adopt it into state without recreating it.
+| Parameter | Value | Source |
+| --- | --- | --- |
+| `orgName` | `sourceplane` | component |
+| `stackName` | `infra-terraform-core` | component |
+| `terraformDir` | `.` | component |
+| `terraformVersion` | `1.15.3` | component |
 
-**Credentials required at apply time** (via `TF_VAR_hyperdrive_origin_user` and
-`TF_VAR_hyperdrive_origin_password`):
-- The Supabase pooler user and password. These must NOT be committed.
+## Outputs
 
-## Next Steps
+| Output | Description |
+| --- | --- |
+| `hyperdrive_id` | Hyperdrive configuration ID |
 
-1. Provision the R2 state bucket (state component).
-2. Set `TF_VAR_hyperdrive_origin_user` and `TF_VAR_hyperdrive_origin_password` in CI.
-3. Run `terraform apply` via Orun to import the existing Hyperdrive.
-4. Verify state matches live config with `terraform plan` (expect no changes).
-5. Add Supabase project resource once Supabase Terraform provider credentials are available.
+## Dependencies
+
+| Component | Condition |
+| --- | --- |
+| `tf-state-r2` | State bucket must exist before init |
+
+## Environments
+
+| Environment | Default Profile | Apply Trigger |
+| --- | --- | --- |
+| dev | `plan-only` | `github-push-main` |
+| stage | `plan-only` | `github-push-main` |
+| prod | `plan-only` | `github-push-main` |
+
+## Local Verification
+
+```bash
+kiox -- orun validate --intent intent.yaml
+kiox -- orun plan --changed --intent intent.yaml --output plan.json
+```
+
+## Operational Notes
+
+- Requires `TF_VAR_hyperdrive_origin_user` and `TF_VAR_hyperdrive_origin_password`
+  at apply time. These must never be committed.
+- The Hyperdrive config already exists (ID: `d9c62c4acf934dd7bb82f63ed02db564`).
+  First apply imports it into state.
+- After S3 migration (Task 0005), backend config will switch from R2 to S3.

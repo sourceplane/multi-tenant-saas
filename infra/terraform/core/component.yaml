@@ -1,27 +1,46 @@
 apiVersion: sourceplane.io/v1
 kind: Component
+
 metadata:
   name: infra-terraform-core
-inputs:
-  stackName: core
-  terraformDir: .
+  description: Core Terraform component for Cloudflare Hyperdrive and environment config
+  labels:
+    domain: infra
+    security-boundary: repo
+
 spec:
   type: terraform
-  domain: starter-infra
+  domain: infra
+
+  parameters:
+    orgName: sourceplane
+    stackName: infra-terraform-core
+    terraformDir: .
+    terraformVersion: "1.15.3"
+
+  env:
+    AWS_EC2_METADATA_DISABLED: "true"
+
+  dependsOn:
+    - component: tf-state-r2
+
   subscribe:
     environments:
       - name: dev
-        profile: pull-request
-      - name: staging
-        profile: verify
-      - name: production
-        profile: release
-  inputs:
-    stackName: core
-    terraformDir: .
-  labels:
-    layer: infra
-    provider: terraform
-  dependsOn:
-    - component: infra-tf-state-r2
-      condition: success
+        profile: plan-only
+        profileRules:
+          - profile: apply
+            when:
+              triggerRef: github-push-main
+      - name: stage
+        profile: plan-only
+        profileRules:
+          - profile: apply
+            when:
+              triggerRef: github-push-main
+      - name: prod
+        profile: plan-only
+        profileRules:
+          - profile: apply
+            when:
+              triggerRef: github-push-main
