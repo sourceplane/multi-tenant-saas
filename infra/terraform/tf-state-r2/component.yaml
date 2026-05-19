@@ -2,6 +2,9 @@ apiVersion: sourceplane.io/v1
 kind: Component
 metadata:
   name: infra-tf-state-r2
+inputs:
+  stackName: state
+  terraformDir: .
 spec:
   type: terraform
   domain: starter-infra

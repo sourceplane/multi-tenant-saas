@@ -52,6 +52,8 @@ Always evaluate:
 Active architecture source:
 
 - `/specs/**` is the authoritative reusable multi-tenant SaaS bootstrap spec.
+- `/specs/orun-golden-path.md` is the short shared context for Orun repo
+  structure, component manifests, composition contracts, and validation.
 - `/specs-v2/**` is the separate product-specific Git catalog and CI
   intelligence spec pack.
 - New tasks must select the correct spec pack. Do not mix reusable foundation
@@ -68,29 +70,30 @@ Operational access assumptions:
 - The Orchestrator, Implementer, and Verifier may assume full authenticated
   access to `gh` for GitHub PRs, Actions, checks, workflow logs, and repository
   inspection.
-- They may assume full authenticated access to `wrangler` for Cloudflare
-  deploys, resource inspection, bindings, Workers, Pages, Queues, R2, D1,
-  Durable Objects, Hyperdrive, and secrets that are in task scope.
-- They may assume full authenticated access to Supabase for resources in task
-  scope.
-- GitHub Actions must expose `CLOUDFLARE_ACCOUNT_ID`,
-  `CLOUDFLARE_API_TOKEN`, and `SUPABASE_API_KEY`.
-- All Cloudflare and Supabase resources must be created programmatically
-  through Orun jobs in CI.
-- Terraform owns Supabase project creation, database password generation,
-  Cloudflare Hyperdrive, Worker bindings, and infrastructure config.
-- Terraform state must use Cloudflare R2 as backend.
-- The primary Hyperdrive resource name is `sourceplane-db`.
-- Agents may use `wrangler` to generate temporary database credentials when
-  local verification needs them. Temporary credentials must not be committed,
-  logged in full, or copied into source files.
-- Whenever a task creates or updates a Cloudflare or Supabase resource, the
-  Implementer must verify the resource after creation and record the observed
-  state in the report. The Verifier must independently inspect resource state
-  instead of relying only on command exit status or CI summaries.
-- When credential scope, Supabase account/project, Cloudflare account,
-  GitHub repository target, environment target, or Stack Tectonic composition
-  naming is unclear, ask the user instead of guessing.
+- They may assume authenticated AWS access only through the repo-scoped IAM
+  roles created by `aws-admin`, unless a task explicitly says it is migrating a
+  temporary compatibility credential.
+- They may assume authenticated `wrangler` and Supabase access only for
+  resources in task scope.
+- GitHub Actions must use the `aws-admin`-managed role path for AWS S3 backend
+  and AWS Secrets Manager access.
+- All Cloudflare, Supabase, AWS secret, and Terraform backend resources must be
+  created programmatically through Orun jobs in CI.
+- Terraform owns Supabase project/database creation, database password
+  generation, AWS Secrets Manager writes, Cloudflare Hyperdrive, Worker
+  bindings, and infrastructure config.
+- Terraform state must use the shared AWS S3 buckets named `sourceplane-<env>`
+  with the same backend pattern as `aws-admin`.
+- Generated database credentials and connection details must be stored under
+  `<org>/<repo>/<component>/<env>` in AWS Secrets Manager.
+- Whenever a task creates or updates a Cloudflare, Supabase, AWS IAM, S3, or
+  Secrets Manager resource, the Implementer must verify the resource after
+  creation and record non-secret observed state in the report. The Verifier must
+  independently inspect resource state instead of relying only on command exit
+  status or CI summaries.
+- When credential scope, AWS role ARN, Supabase account/project, Cloudflare
+  account, GitHub repository target, environment target, or Stack Tectonic
+  composition naming is unclear, ask the user instead of guessing.
 
 ---
 
@@ -364,7 +367,7 @@ Verifier Merge Protocol:
 - Run `/Users/irinelinson/.local/bin/kiox -- orun validate --intent intent.yaml` when `intent.yaml` exists
 - Run `/Users/irinelinson/.local/bin/kiox -- orun plan --changed --intent intent.yaml --output plan.json` when Orun is scaffolded
 - Run `/Users/irinelinson/.local/bin/kiox -- orun run --plan plan.json --dry-run --runner github-actions` when a plan is produced; if no jobs are planned, record the no-op result
-- When a task creates or updates Cloudflare or Supabase resources, verify the resulting resources directly with `wrangler`, Supabase tooling, Terraform state, or provider APIs and include the observed resource state in the verifier report
+- When a task creates or updates Cloudflare, Supabase, AWS IAM, S3, or Secrets Manager resources, verify the resulting resources directly with provider CLIs/APIs, Terraform state, or GitHub Actions logs and include non-secret observed resource state in the verifier report
 - Check PR CI logs with `gh`, including successful jobs, to confirm expected commands actually ran
 - Verify PR CI logs show `orun plan --changed --intent intent.yaml --output plan.json` and `orun run --plan plan.json --runner github-actions --remote-state` when applicable
 - If verification adds a report or small verification-only fix, commit it to the PR branch, push, and wait for CI again
@@ -454,8 +457,8 @@ Constraints:
 No secrets in migrations or fixtures.
 Acceptance:
 Postgres migrations checked in.
-Supabase provisioning assumptions use `SUPABASE_API_KEY` and Orun Terraform
-component contracts.
+Supabase provisioning assumptions use AWS-admin-provided repo roles, S3
+Terraform state, AWS Secrets Manager, and Orun Terraform component contracts.
 DB package typechecks.
 Core schema test or migration smoke exists.
 Verification:

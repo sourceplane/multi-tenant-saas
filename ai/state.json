@@ -1,18 +1,17 @@
 {
   "goal": "Supabase/Postgres-backed multi-organization Orun SaaS control plane",
-  "current_task": 2,
-  "completed": [1, "0001.1"],
+  "current_task": 3,
+  "completed": [1, "0001.1", 2],
   "repo_health": "green",
-  "next_focus": "infra-baseline-adoption",
-  "last_verified": "2026-05-11",
+  "next_focus": "aws-admin-orun-golden-path",
+  "last_verified": "2026-05-19",
   "waiting_for_input": "false",
-  "task_agent": "ai/tasks/task-0002-verifier.md",
+  "task_agent": "ai/tasks/task-0003.md",
   "notes": [
-    "Task 0001 passed verification and PR #4 is merged into main at 4d38ded.",
-    "Task 0001.1 human-intervention follow-up is merged through PR #5 and PR #6; main is at b68794c.",
-    "GitHub Actions run 25671141175 passed plan plus Orun matrix jobs on main.",
-    "Next task should adopt and verify existing Cloudflare/Supabase baseline resources instead of recreating them.",
-    "Task 0002 implementation is open as PR #8 on task-0002/infra-terraform-baseline at a359740b; CI run 25674026581 passed plan plus Terraform validation jobs.",
-    "Next orchestration step is verifier prompt ai/tasks/task-0002-verifier.md."
+    "Task 0001, Task 0001.1, and Task 0002 are verified and merged.",
+    "The active spec direction now follows the Orun golden-path reference in specs/orun-golden-path.md.",
+    "aws-admin is the reference repo for Orun v2.1.0, Terraform component style, dev/stage/prod environments, S3 backend, and repo-scoped IAM roles.",
+    "Task 0003 aligns multi-tenant-saas Orun runtime, stack-tectonic Terraform behavior, component descriptors, READMEs, and CI/local kiox behavior with aws-admin.",
+    "Tasks 0004-0006 sequence aws-admin IAM access, S3 backend migration, and Supabase Terraform provisioning with AWS Secrets Manager."
   ]
 }

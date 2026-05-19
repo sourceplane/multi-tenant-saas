@@ -31,7 +31,7 @@ Bootstrap a production-grade Cloudflare monorepo that all later SaaS starter bou
 - Worker and Pages app scaffolds
 - shared environment typing
 - Supabase Postgres and Hyperdrive adapter conventions
-- Terraform adoption/provisioning for the Supabase, Hyperdrive, Worker infra, and R2 backend baseline
+- Terraform provisioning for Supabase, Hyperdrive, Worker infra, AWS Secrets Manager secrets, and the S3 backend baseline
 - local development scripts
 - Orun and Stack Tectonic CI/deploy pipeline skeleton
 - root `intent.yaml`, `kiox.yaml`, committed `kiox.lock`, and local `stack-tectonic/`
@@ -61,8 +61,10 @@ Bootstrap a production-grade Cloudflare monorepo that all later SaaS starter bou
 ### Orun Structure
 
 - `intent.yaml` discovers `apps/`, `packages/`, `tests/`, and `infra/`.
-- `intent.yaml` points at the committed local `stack-tectonic/` directory.
-- `stack-tectonic/` is refreshed deliberately with `kiox -- orun fetch ghcr.io/sourceplane/stack-tectonic:0.12.0 --overwrite` when adopting a new upstream stack baseline.
+- `intent.yaml` follows the `aws-admin` environment model: `dev`, `stage`, `prod`, promotion gates, `parameterDefaults.terraform`, and `AWS_REGION`.
+- `intent.yaml` points at the repo's selected Stack Tectonic composition source and binds component types centrally.
+- `stack-tectonic/` is aligned with `../aws-admin/stacks/aws-admin-terraform/` for Terraform schema, jobs, profiles, README style, and local/CI behavior before new infra components depend on it.
+- `kiox.yaml` pins the same Orun runtime version as `aws-admin`.
 - `kiox.yaml` pins the Orun provider image and `kiox.lock` records the resolved digest.
 - `.orun/` contains generated local plans, locks, and run state and is not committed.
 - Each app, package, infra unit, and test suite has a colocated `component.yaml`.
@@ -86,10 +88,12 @@ Bootstrap a production-grade Cloudflare monorepo that all later SaaS starter bou
 
 ### Infrastructure Provisioning
 
-- Terraform adopts existing Supabase/Hyperdrive baseline resources when they are human-provided, and provisions future missing resources through Orun jobs.
-- Terraform state uses Cloudflare R2 as backend.
+- Terraform provisions the target Supabase database/project and Cloudflare runtime resources through Orun jobs.
+- Terraform state uses AWS S3 backend buckets `sourceplane-<env>` with native S3 locking, matching `aws-admin`.
 - Infra provisioning is exposed as Orun components under `infra/terraform`.
-- CI provides `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, and `SUPABASE_API_KEY`.
+- AWS IAM roles, S3 state buckets, and the multi-tenant SaaS repo permissions are created in `aws-admin`.
+- Generated database credentials and connection details are written to AWS Secrets Manager under `<org>/<repo>/<component>/<env>`.
+- CI assumes the `aws-admin`-created repo role through OIDC before Terraform needs AWS access.
 - No GitHub Actions job may run Terraform directly outside Orun.
 
 ### CI
@@ -123,8 +127,8 @@ Bootstrap a production-grade Cloudflare monorepo that all later SaaS starter bou
 
 - GitHub Actions uses the same Orun plan/run model and executes at least one test component.
 - A test-only change produces a test component job in the Orun matrix.
-- Infra changes run Terraform plan/apply through Orun with R2-backed state.
-- Existing Supabase and `sourceplane-db` Hyperdrive adoption, or future creation, is verified against live provider state.
+- Infra changes run Terraform plan/apply through Orun with S3-backed state.
+- Supabase database creation, secret writes, and Cloudflare/Hyperdrive wiring are verified against live provider state when they are in task scope.
 
 ## Extraction Seam
 
