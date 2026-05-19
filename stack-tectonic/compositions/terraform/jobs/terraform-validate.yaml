@@ -3,7 +3,7 @@ kind: JobTemplate
 metadata:
   name: terraform-validate
 spec:
-  description: Validate Terraform stacks with fmt, init, validate, and plan
+  description: Run Terraform fmt, init, validate, and plan for component roots
   runsOn: ubuntu-22.04
   timeout: 20m
   retries: 0
@@ -13,11 +13,14 @@ spec:
 
   capabilities:
     - terraform.setup
+    - terraform.env
     - terraform.context
     - terraform.fmt
     - terraform.init
+    - terraform.workspace
     - terraform.validate
     - terraform.plan
+    - terraform.apply
 
   steps:
     - id: setup-terraform
@@ -25,8 +28,27 @@ spec:
       capability: terraform.setup
       use: hashicorp/setup-terraform@v4
       with:
-        terraform_version: "{{.terraformVersion}}"
+        terraform_version: "{{.parameters.terraformVersion}}"
         terraform_wrapper: "false"
+
+    - id: terraform-env
+      name: Export Terraform Env
+      capability: terraform.env
+      shell: bash
+      run: |
+        {
+          {{- range $key, $value := .env }}
+          printf '%s=%s\n' '{{ $key }}' '{{ $value }}'
+          {{- end }}
+
+          {{- range $key, $value := .parameters }}
+          printf 'TF_VAR_{{ $key }}=%s\n' '{{ $value }}'
+          {{- end }}
+
+          printf 'TF_VAR_environment=%s\n' "{{ .orun.environment.name }}"
+          printf 'TF_VAR_component=%s\n' "{{ .orun.component.name }}"
+        } >> "$ORUN_ENV"
+      onFailure: stop
 
     - id: terraform-context
       name: Terraform Context
@@ -34,35 +56,57 @@ spec:
       shell: bash
       run: |
         terraform version
-        echo "Validating.."
+        echo "Component: {{ .orun.component.name }}"
+        echo "Environment: {{ .orun.environment.name }}"
+        echo "Terraform directory: {{ .parameters.terraformDir }}"
       onFailure: stop
 
     - id: terraform-fmt-check
       name: fmt Check
       capability: terraform.fmt
-      run: terraform fmt -check
+      run: "terraform -chdir={{ .parameters.terraformDir }} fmt -check"
       onFailure: stop
 
     - id: terraform-init
       name: Init
       capability: terraform.init
-      run: terraform init 
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        terraform -chdir={{ .parameters.terraformDir }} init \
+          -input=false \
+          -reconfigure \
+          -backend-config="bucket={{.parameters.orgName}}-{{.orun.environment.name}}" \
+          -backend-config="key={{.parameters.repo}}/{{.orun.component.name}}/terraform.tfstate" \
+          -backend-config="region=${AWS_REGION:-{{.parameters.awsRegion}}}"
+      onFailure: stop
+
+    - id: terraform-workspace
+      name: Workspace
+      capability: terraform.workspace
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        terraform -chdir={{ .parameters.terraformDir }} workspace select -or-create {{ .orun.environment.name }}
+        echo "TF_WORKSPACE={{ .orun.environment.name }}" >> "$ORUN_ENV"
       onFailure: stop
 
     - id: terraform-validate
       name: Validate
       capability: terraform.validate
-      run: terraform validate -no-color
+      run: "terraform -chdir={{ .parameters.terraformDir }} validate -no-color"
       onFailure: stop
 
     - id: terraform-plan
       name: Plan
       capability: terraform.plan
-      run: terraform plan -no-color
+      run: "terraform -chdir={{ .parameters.terraformDir }} plan -no-color"
       onFailure: stop
 
     - id: terraform-apply
       name: Apply
       capability: terraform.apply
-      run: terraform apply -no-color -auto-approve
+      run: "terraform -chdir={{ .parameters.terraformDir }} apply -no-color -auto-approve"
       onFailure: stop

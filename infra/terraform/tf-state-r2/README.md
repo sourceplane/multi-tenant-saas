@@ -1,26 +1,54 @@
-# infra/terraform/state
+# tf-state-r2
 
-Terraform backend bootstrap component. Provisions the Cloudflare R2 bucket used
-as the Terraform remote state backend for all other infra components.
+Cloudflare R2 state bucket — legacy Terraform state backend.
 
-## Observed Baseline (Task 0002 Discovery)
-
-| Item | Status |
-|---|---|
-| Cloudflare account ID | `f9270f828799775bebf9315248fdf717` (confirmed via `wrangler whoami`) |
-| R2 bucket `sourceplane-tf-state` | **Does not exist yet.** Only `orun-storage` exists. |
-| R2 bucket `orun-storage` | Exists (created 2026-05-02). Not managed by this component. |
+> **Migration Note:** This component is a migration target. The new backend
+> direction is AWS S3 (see Task 0005). This component remains to document
+> existing state and provide a clean migration path.
 
 ## Resources
 
-- `cloudflare_r2_bucket.tf_state` – Creates the `sourceplane-tf-state` R2 bucket.
+| Resource | Description |
+| --- | --- |
+| `cloudflare_r2_bucket.tf_state` | R2 bucket `sourceplane-tf-state` |
 
-## Adoption Status
+## Parameters
 
-The R2 state bucket does not exist yet, so this is a **create** (not import).
+| Parameter | Value | Source |
+| --- | --- | --- |
+| `orgName` | `sourceplane` | component |
+| `stackName` | `tf-state-r2` | component |
+| `terraformDir` | `.` | component |
+| `terraformVersion` | `1.15.3` | component |
 
-## Next Steps
+## Outputs
 
-1. Set `CLOUDFLARE_API_TOKEN` in CI secrets.
-2. Run `terraform apply` via Orun to create the bucket.
-3. After bucket exists, migrate `core/` backend from local to R2.
+| Output | Description |
+| --- | --- |
+| `bucket_name` | Name of the R2 bucket |
+
+## Dependencies
+
+None (root component).
+
+## Environments
+
+| Environment | Default Profile | Apply Trigger |
+| --- | --- | --- |
+| dev | `plan-only` | `github-push-main` |
+| stage | `plan-only` | `github-push-main` |
+| prod | `plan-only` | `github-push-main` |
+
+## Local Verification
+
+```bash
+kiox -- orun validate --intent intent.yaml
+kiox -- orun plan --changed --intent intent.yaml --output plan.json
+```
+
+## Operational Notes
+
+- The R2 bucket `sourceplane-tf-state` does not yet exist.
+- Once AWS S3 state is available (Task 0005), this component will be
+  decommissioned and state migrated.
+- Do not use this bucket for new components; new state goes to S3.

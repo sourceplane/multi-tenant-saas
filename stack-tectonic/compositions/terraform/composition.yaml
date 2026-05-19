@@ -4,13 +4,13 @@ metadata:
   name: terraform
 spec:
   type: terraform
-  description: Terraform validation jobs for infra components
+  description: Terraform validation and planning for multi-tenant SaaS infrastructure components
 
   schemaRef:
     name: terraform-component
 
   defaultJob: terraform
-  defaultProfile: verify
+  defaultProfile: apply
 
   jobs:
     - name: terraform
@@ -18,12 +18,9 @@ spec:
         name: terraform-validate
 
   profiles:
-    - name: pull-request
+    - name: plan-only
       profileRef:
-        name: terraform-pull-request
-    - name: verify
+        name: terraform-plan-only
+    - name: apply
       profileRef:
-        name: terraform-verify
-    - name: release
-      profileRef:
-        name: terraform-release
+        name: terraform-apply

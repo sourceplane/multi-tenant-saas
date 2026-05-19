@@ -11,14 +11,14 @@ spec:
     required:
       - name
       - type
-      - inputs
+      - parameters
     properties:
       name:
         type: string
       type:
         type: string
         const: cloudflare-worker
-      inputs:
+      parameters:
         type: object
         required:
           - installCommand
