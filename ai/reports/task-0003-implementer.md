@@ -90,7 +90,9 @@ None. The implementation follows existing specs without deviation.
   and Task 0005 (S3 state migration) complete.
 - The `tf-state-r2` component still targets Cloudflare R2. It should be
   decommissioned or replaced after S3 migration.
-- Non-terraform composition job templates were not updated (out of scope).
+- ~~Non-terraform composition job templates were not updated (out of scope).~~
+  **Fixed:** All 7 non-Terraform job templates updated to use `{{ .parameters.* }}`
+  and `{{ .orun.environment.name }}` / `{{ .orun.component.name }}` context.
 
 ## Next Task Dependencies
 
@@ -102,3 +104,45 @@ None. The implementation follows existing specs without deviation.
 ## PR Number
 
 [#25](https://github.com/sourceplane/multi-tenant-saas/pull/25)
+
+## CI Failure & Fix (Task 0003-CI-Fix)
+
+**Failure:** PR #25 CI run `26109080001` — all non-Terraform jobs (`contracts`,
+`testing`, `web-console`, etc.) failed at `setup-node` with:
+
+```
+Unable to find Node version '<no value>' for platform linux and architecture x64.
+```
+
+**Root Cause:** Schemas were migrated from `spec.inputs` to `spec.parameters`,
+but non-Terraform job templates still used top-level Go template placeholders
+(`{{.nodeVersion}}`) instead of the Orun v2 namespaced context
+(`{{.parameters.nodeVersion}}`).
+
+**Fix:** Updated all 7 non-Terraform job templates to use:
+- `{{ .parameters.<key> }}` for all component parameters
+- `{{ .orun.environment.name }}` instead of `{{ .Environment }}`
+- `{{ .orun.component.name }}` instead of `{{ .Component }}`
+
+**Files Fixed:**
+1. `stack-tectonic/compositions/turbo-package/jobs/turbo-package-verify.yaml`
+2. `stack-tectonic/compositions/cloudflare-worker-turbo/jobs/cloudflare-worker-turbo-verify-deploy.yaml`
+3. `stack-tectonic/compositions/cloudflare-pages-turbo/jobs/cloudflare-pages-turbo-verify-deploy.yaml`
+4. `stack-tectonic/compositions/cloudflare-worker/jobs/cloudflare-worker-verify-deploy.yaml`
+5. `stack-tectonic/compositions/cloudflare-pages/jobs/cloudflare-pages-verify-deploy.yaml`
+6. `stack-tectonic/compositions/cloudflare-pages-terraform/jobs/cloudflare-pages-terraform-verify-reconcile.yaml`
+7. `stack-tectonic/compositions/cloudflare-pages-turbo-terraform/jobs/cloudflare-pages-turbo-terraform-verify-reconcile.yaml`
+
+**Post-Fix Checks:**
+```
+kiox -- orun validate --intent intent.yaml                              ✓
+kiox -- orun plan --changed --intent intent.yaml --output plan.json     ✓ (20 jobs)
+kiox -- orun run --plan plan.json --dry-run --runner github-actions      ✓
+plan.json shows node-version: "20" or "22" for all app/package/test jobs ✓
+pnpm lint        ✓
+pnpm typecheck   ✓
+pnpm test        ✓
+pnpm build       ✓
+```
+
+**CI Status:** Fix committed and pushed; awaiting green CI on PR #25.
