@@ -26,7 +26,6 @@ discovery:
     - apps/
     - packages/
     - tests/
-    - infra/
 
 automation:
   triggerBindings:

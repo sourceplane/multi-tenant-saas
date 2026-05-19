@@ -40,17 +40,39 @@ Last updated: 2026-05-19
 - Agent: Implementer
 - Prompt: `ai/tasks/task-0003.md`
 - Follow-up prompt: `ai/tasks/task-0003-pr-completion.md`
-- Status: implemented locally but no PR exists yet; needs commit, push, PR, and
-  verifier handoff.
+- CI fix prompt: `ai/tasks/task-0003-ci-fix.md`
+- Verifier prompt: `ai/tasks/task-0003-verifier.md`
+- Status: verified and merged.
 - Objective: align `multi-tenant-saas` Orun runtime, Stack Tectonic Terraform contract, environment shape, component descriptors, READMEs, and CI/local behavior with the `aws-admin` golden path.
-- Implementer report: `ai/reports/task-0003-implementer.md` currently exists
-  locally and still needs its actual PR number.
+- PR: #25 (`task-0003-orun-golden-path`)
+- Implementer report: `ai/reports/task-0003-implementer.md`
+- Verifier report: `ai/reports/task-0003-verifier.md`
+- Durable outcome: Orun v2.1.0 golden-path alignment landed and PR verification
+  passed. Follow-up repo stabilization is still required because merged `main`
+  selected live Terraform apply for legacy components and failed against the
+  existing R2 bucket. Human intervention now directs the follow-up to delete
+  the legacy Terraform component source only; live resource cleanup is not in
+  scope.
+
+## Task 0003.1
+
+- Agent: Implementer
+- Prompt: `ai/tasks/task-0003.1.md`
+- Implementer report: `ai/reports/task-0003.1-implementer.md`
+- Status: implemented, pending verification and merge.
+- Objective: restore green `main` by deleting the active source for
+  `infra/terraform/tf-state-r2/` and `infra/terraform/core/` only, with no live
+  cleanup, import, destroy, or cloud mutations. This makes the repo ready for
+  Task 0004 and the later AWS S3/Supabase Terraform sequence.
+- Durable outcome (pending): legacy Terraform component source removed; Orun
+  no longer discovers or plans `tf-state-r2`, `infra-tf-state-r2`, or
+  `infra-terraform-core`. No live resources mutated.
 
 ## Task 0004
 
 - Agent: Implementer
 - Prompt: `ai/tasks/task-0004.md`
-- Status: planned, blocked on Task 0003 PR verification/merge.
+- Status: planned, blocked on Task 0003.1 repo stabilization.
 - Objective: add and verify the `aws-admin` repo-scoped IAM component for `sourceplane/multi-tenant-saas`, including S3 state and Secrets Manager permissions.
 
 ## Task 0005
