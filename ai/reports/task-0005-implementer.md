@@ -9,12 +9,19 @@ bootstrap Terraform component that uses the shared S3 backend. The bootstrap
 component validates S3 state bucket access and `aws_caller_identity` without
 creating any new infrastructure.
 
+CI fix (task-0005-ci-fix): Replaced `use: aws-actions/configure-aws-credentials@v4`
+inside the Orun job template with a native shell OIDC exchange that writes
+credential values directly to `$ORUN_ENV`. The `use:` action step was setting
+credentials via GitHub Actions `::set-env::` workflow commands, whose values
+were corrupted (malformed `X-Amz-Security-Token` header) by the time Terraform
+consumed them from Orun's environment handoff layer.
+
 ## Files Changed
 
 | File | Change |
 | ---- | ------ |
 | `intent.yaml` | Added `infra/` to `discovery.roots` |
-| `stack-tectonic/compositions/terraform/jobs/terraform-validate.yaml` | Added `terraform.aws-credentials` capability and `aws-actions/configure-aws-credentials@v4` step before init |
+| `stack-tectonic/compositions/terraform/jobs/terraform-validate.yaml` | Added `terraform.aws-credentials` capability and native shell OIDC step before init (CI fix: replaced `use: aws-actions/configure-aws-credentials@v4`) |
 | `stack-tectonic/compositions/terraform/profiles/terraform-plan-only.yaml` | Added `terraform.aws-credentials` to `includeCapabilities` |
 | `stack-tectonic/compositions/terraform/profiles/terraform-apply.yaml` | Added `terraform.aws-credentials` to `includeCapabilities` |
 | `infra/terraform/bootstrap/component.yaml` | New bootstrap component manifest |
@@ -23,6 +30,51 @@ creating any new infrastructure.
 | `infra/terraform/bootstrap/README.md` | Documents backend, roles, and purpose |
 | `ai/context/current.md` | Updated current task status |
 | `ai/reports/task-0005-implementer.md` | This file |
+
+## CI Failure And Fix
+
+### Failure (CI run 26143814753, job 76894703388)
+
+```
+Error: validating provider credentials: retrieving caller identity from STS:
+operation error STS: GetCallerIdentity, decomposing request:
+net/http: invalid header field value for "X-Amz-Security-Token"
+```
+
+The `Configure AWS Credentials` step (step 02) succeeded — OIDC assumption
+completed and the role was authenticated. The failure happened at step 06
+`Init` when Terraform attempted to validate provider credentials using the
+backend S3 connection.
+
+### Root Cause
+
+`aws-actions/configure-aws-credentials@v4` used as an Orun `use:` step sets
+AWS credential env vars via GitHub Actions' `::set-env::` workflow commands
+(writing to `$GITHUB_ENV`). Orun's job runner captures and re-serializes those
+values through its own `$ORUN_ENV` environment handoff layer. The session token
+value — which contains base64 characters including `+`, `/`, and `=`, as well
+as `//` path separators common in STS tokens — was corrupted in transit. The
+resulting `X-Amz-Security-Token` header value contained an invalid character,
+causing `net/http` to reject it.
+
+The `aws-admin` reference composition never uses this pattern. It passes
+long-lived static `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` at the
+workflow `env:` level, bypassing Orun env handoff entirely for credentials.
+
+### Fix
+
+Replaced the `use: aws-actions/configure-aws-credentials@v4` step with a
+native `shell: bash` `run:` step that:
+
+1. Fetches the GitHub OIDC JWT directly via `curl` using
+   `ACTIONS_ID_TOKEN_REQUEST_TOKEN` and `ACTIONS_ID_TOKEN_REQUEST_URL`
+2. Calls `aws sts assume-role-with-web-identity` with the JWT
+3. Writes `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`,
+   and `AWS_REGION` to `$ORUN_ENV` using `printf` — exact same mechanism the
+   `terraform-env` step uses — ensuring no intermediate encoding
+
+This avoids the GitHub Actions env-file injection path entirely and gives Orun
+full control over how credential values are persisted and consumed.
 
 ## Backend Setup Notes
 
@@ -120,6 +172,7 @@ Total plan: 7 components × 3 envs → 17 jobs (bootstrap adds 3 jobs).
 | `terraform init -backend=false` (bootstrap) | ✓ Pass |
 | `terraform validate` (bootstrap) | ✓ Pass |
 | No R2 backend references in active components | ✓ Confirmed |
+| CI fix: native OIDC shell step replaces `use:` action | ✓ Implemented |
 
 ## Assumptions
 
