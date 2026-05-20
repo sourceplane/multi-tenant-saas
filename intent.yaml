@@ -54,14 +54,12 @@ automation:
         event: push
         branches:
           - main
-      plan:
-        scope: all
+
     local-development:
       description: Local testing with full Terraform execution
       on:
         provider: local
-      plan:
-        scope: all
+
 environments:
   dev:
     activation:
