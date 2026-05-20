@@ -35,40 +35,11 @@ spec:
     - id: aws-credentials
       name: Configure AWS Credentials
       capability: terraform.aws-credentials
-      shell: bash
-      run: |
-        set -euo pipefail
-
-        ROLE_ARN="arn:aws:iam::306024784101:role/{{.orun.environment.name}}-github-{{.parameters.owner}}-{{.parameters.repo}}-plan"
-        AWS_REGION_VAL="${AWS_REGION:-{{.parameters.awsRegion}}}"
-
-        # Exchange GitHub OIDC token for AWS STS credentials
-        OIDC_TOKEN=$(curl -fsSL \
-          -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
-          -H "Accept: application/json; api-version=2.0" \
-          "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=sts.amazonaws.com" \
-          | jq -r '.value')
-
-        CREDS=$(aws sts assume-role-with-web-identity \
-          --role-arn "${ROLE_ARN}" \
-          --role-session-name "GitHubActions" \
-          --web-identity-token "${OIDC_TOKEN}" \
-          --region "${AWS_REGION_VAL}" \
-          --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]' \
-          --output text)
-
-        AWS_KEY=$(echo "${CREDS}" | cut -f1)
-        AWS_SECRET=$(echo "${CREDS}" | cut -f2)
-        AWS_TOKEN=$(echo "${CREDS}" | cut -f3)
-
-        {
-          printf 'AWS_ACCESS_KEY_ID=%s\n' "${AWS_KEY}"
-          printf 'AWS_SECRET_ACCESS_KEY=%s\n' "${AWS_SECRET}"
-          printf 'AWS_SESSION_TOKEN=%s\n' "${AWS_TOKEN}"
-          printf 'AWS_REGION=%s\n' "${AWS_REGION_VAL}"
-        } >> "${ORUN_ENV}"
-
-        echo "Authenticated as role: ${ROLE_ARN}"
+      use: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: "arn:aws:iam::306024784101:role/{{.orun.environment.name}}-github-{{.parameters.owner}}-{{.parameters.repo}}-plan"
+        aws-region: "{{.parameters.awsRegion}}"
+        audience: sts.amazonaws.com
       onFailure: stop
 
     - id: terraform-env

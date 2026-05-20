@@ -56,13 +56,19 @@ automation:
           - main
       plan:
         scope: all
-
+    local-development:
+      description: Local testing with full Terraform execution
+      on:
+        provider: local
+      plan:
+        scope: all
 environments:
   dev:
     activation:
       triggerRefs:
         - github-pull-request
         - github-push-main
+        - local-development
     parameterDefaults:
       terraform:
         awsRegion: us-east-1

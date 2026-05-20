@@ -29,6 +29,9 @@ spec:
           - profile: apply
             when:
               triggerRef: github-push-main
+          - profile: local
+            when:
+              triggerRef: local-development
 
       - name: stage
         profile: plan-only

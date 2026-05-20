@@ -24,3 +24,6 @@ spec:
     - name: apply
       profileRef:
         name: terraform-apply
+    - name: local
+      profileRef:
+        name: terraform-local
