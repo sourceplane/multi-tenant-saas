@@ -94,22 +94,29 @@ Last updated: 2026-05-20
 - Prompt: `ai/tasks/task-0005.md`
 - Follow-up prompt: `ai/tasks/task-0005-pr-completion.md`
 - Verifier prompt: `ai/tasks/task-0005-verifier.md`
-- Status: implementation PR is open and awaiting verification.
-- Objective: consume the `aws-admin` role in `multi-tenant-saas`, migrate Terraform backend usage from R2 to S3, and verify Secrets Manager access.
-- PR: #27 (`feat/task-0005-aws-s3-terraform-seam`)
 - Implementer report: `ai/reports/task-0005-implementer.md`
-- Durable outcome so far: the Task 0005 branch and PR now exist with green PR
-  CI, but verification still needs to confirm the PR is properly bounded,
-  resolve code/report drift around the AWS credentials step, and decide whether
-  deploy-role / Secrets Manager write-path verification remains an acceptable
-  residual gap.
+- Verifier report: `ai/reports/task-0005-verifier.md`
+- Status: verified and merged.
+- Objective: consume the `aws-admin` role in `multi-tenant-saas`, migrate Terraform backend usage from R2 to S3, and verify Secrets Manager access.
+- PR: #27 (`feat/task-0005-aws-s3-terraform-seam`), merged into `main` at
+  `0af75d05bb3660c58d9f991924f2f821c2522d0f`
+- Durable outcome: `infra/` discovery and `infra/terraform/bootstrap/` are back
+  in active source, Terraform now uses the AWS S3 backend seam via the
+  `aws-admin` repo-scoped roles, and post-merge main CI run `26160643425`
+  passed. Verification removed an out-of-scope file, corrected report/code drift
+  around the AWS credentials step, accepted the missing GitHub environment as a
+  residual deploy-role gap, and deferred Secrets Manager write-path verification
+  to Task 0006.
 
 ## Task 0006
 
 - Agent: Implementer
 - Prompt: `ai/tasks/task-0006.md`
-- Status: planned, blocked on Task 0005 PR completion and verification.
-- Objective: add a Supabase Terraform infra component with S3 backend that creates the target database/project resources and stores generated secrets in AWS Secrets Manager.
+- Status: planned and ready for implementation.
+- Objective: add a Supabase Terraform infra component with S3 backend that
+  creates separate `stage` and `prod` Supabase projects/databases under
+  organization `sourceplane` (`dwazxcrywsdbxpuouifa`), stores generated secrets
+  in AWS Secrets Manager, and leaves `dev` unprovisioned for now.
 
 ## Historical Notes
 

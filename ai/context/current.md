@@ -4,86 +4,55 @@ Last updated: 2026-05-20
 
 ## Repo Reality
 
-- `main` is synced with `origin/main` at `f6e9ee3`.
-- Task 0003 merged as PR #25:
-  https://github.com/sourceplane/multi-tenant-saas/pull/25
-- PR #25 head was `fb0f2e4`; merge commit on `main` is `f645d41`.
-- PR #25 checks passed on CI run `26110433274`.
-- Post-merge `main` CI run `26113133649` failed because legacy Terraform
-  component `tf-state-r2` attempted to create the existing bucket
-  `sourceplane-tf-state` and failed with Cloudflare `409 Conflict`.
-  This is resolved by Task 0003.1 (see below).
-- Tasks 0001, 0001.1, 0002, and 0003 are verified and merged.
-- Task 0003.1 merged as PR #26:
-  https://github.com/sourceplane/multi-tenant-saas/pull/26
-- PR #26 head was `727bda7`; merge commit on `main` is `f6e9ee3`.
-- PR #26 checks passed on CI run `26114914435`.
-- Post-merge `main` CI run `26115035887` passed after deleting
-  `infra/terraform/tf-state-r2/` and `infra/terraform/core/` from active repo
-  source. No live resource cleanup was performed; the orphaned R2 bucket and
-  Hyperdrive adoption scaffold remain as historical Task 0002 artifacts.
-- The repo uses Orun v2.1.0 with `sourceplane/orun-action@v1.2.0`.
-- Environments are `dev`, `stage`, `prod` with promotion chains and
-  `parameterDefaults.terraform` matching `aws-admin`.
-- Composition source is `kind: dir` pointing to `stack-tectonic/`, bound as
-  the `terraform` type. Non-terraform compositions (turbo-package,
-  cloudflare-worker-turbo, cloudflare-pages-turbo) are also resolved from the
-  same local stack.
-- Terraform components use `spec.parameters`, `plan-only`/`apply` profiles,
-  explicit `dependsOn`, and colocated READMEs in `aws-admin` style.
-- All non-terraform components migrated from `spec.inputs` to `spec.parameters`
-  and from old environment names (`staging`/`production`) to `stage`/`prod`.
-- CI uses the same plan/run shape as `aws-admin` with conditional `--changed`.
-- Task 0004 merged in `../aws-admin` as PR #22:
-  https://github.com/sourceplane/aws-admin/pull/22
-- PR #22 head was `c309a06`; local `../aws-admin` is synced to `main` at
-  `6c406a9` after verifier merge.
-- PR #22 CI run `26134161800` passed on the PR branch.
-- Post-merge `aws-admin` main CI run `26134394923` passed and applied the new
-  IAM component for `sourceplane/multi-tenant-saas`.
-- The merged `aws-admin` component is
-  `domains/access/github-repositories/sourceplane-multi-tenant-saas/` and adds
-  environment-scoped GitHub OIDC IAM roles for `sourceplane/multi-tenant-saas`
-  with S3 state and Secrets Manager access scoped to
-  `sourceplane/multi-tenant-saas/*`.
-- Verified plan role ARNs:
-  - `arn:aws:iam::306024784101:role/dev-github-sourceplane-multi-tenant-saas-plan`
-  - `arn:aws:iam::306024784101:role/stage-github-sourceplane-multi-tenant-saas-plan`
-  - `arn:aws:iam::306024784101:role/prod-github-sourceplane-multi-tenant-saas-plan`
-- Verified deploy role ARNs:
-  - `arn:aws:iam::306024784101:role/dev-github-sourceplane-multi-tenant-saas-production-deploy`
-  - `arn:aws:iam::306024784101:role/stage-github-sourceplane-multi-tenant-saas-production-deploy`
-  - `arn:aws:iam::306024784101:role/prod-github-sourceplane-multi-tenant-saas-production-deploy`
-- This repo can now proceed with S3 backend and Secrets Manager consumption in
-  Task 0005.
+- `main` is synced with `origin/main` at `0af75d05bb3660c58d9f991924f2f821c2522d0f`.
+- Tasks 0001, 0001.1, 0002, 0003, 0003.1, 0004, and 0005 are verified and
+  merged.
+- Task 0005 merged as PR #27:
+  https://github.com/sourceplane/multi-tenant-saas/pull/27
+- PR #27 head after verifier fixes was `4c343b22a1f4d5bebfda251595f68c90f9029164`;
+  merge commit on `main` is `0af75d05bb3660c58d9f991924f2f821c2522d0f`.
+- Post-merge `main` CI run `26160643425` passed with the bootstrap Terraform job
+  succeeding in `dev`, `stage`, and `prod`.
+- The repo now uses Orun `v2.2.1` with `sourceplane/orun-action@v1.2.0`.
+- `intent.yaml` discovers `apps/`, `infra/`, `packages/`, and `tests/`, and the
+  repo continues to use `dev`, `stage`, and `prod` environments with
+  `parameterDefaults.terraform` aligned to the `aws-admin` shape.
+- Terraform components are discovered under `infra/terraform/**` and currently
+  include `infra/terraform/bootstrap/`, which proves the S3 backend and AWS role
+  seam for this repo.
+- The active Terraform job path still uses
+  `aws-actions/configure-aws-credentials@v4`; Task 0005 verification confirmed
+  the earlier native-shell claim was report drift, not shipped code.
+- `gh api repos/sourceplane/multi-tenant-saas/environments` still returns no
+  configured GitHub environments, so the deploy-role trust subject requiring
+  environment `production` is still not exercised end-to-end.
+- Historical Task 0002 artifacts remain outside active source: the orphaned R2
+  bucket cleanup question and Hyperdrive adoption scaffold were intentionally not
+  revisited by Task 0003.1 or Task 0005.
+- Human input for Task 0006 is resolved. Supabase provisioning target is
+  organization `sourceplane` with slug/id `dwazxcrywsdbxpuouifa`, `stage` and
+  `prod` only, with separate projects/databases named
+  `multi-tenant-saas-stage` and `multi-tenant-saas-prod`. `dev` stays
+  unprovisioned for now.
+- Local read-only Supabase CLI check confirmed the `sourceplane` org id/slug.
+  `supabase projects list` did not reveal a reusable existing project target in
+  this checkout.
+- Local worktree note: untracked `agents/agent-loop.sh` is present in this
+  checkout but is not part of merged `main`.
 
 ## Current Roadmap Position
 
 - Active spec pack: reusable SaaS starter under `specs/**`.
-- Current phase: Week 0 / operations foundation aligned with golden path.
-- Immediate focus: verify Task 0005 PR #27, tighten scope if needed, and merge
-  only if the AWS S3 backend and Terraform credential seam are correctly landed
-  before advancing to Task 0006.
+- Current phase: Week 0 / operations foundation remains active, but the AWS S3
+  backend and Terraform credential seam are now landed.
+- Immediate focus: implement Task 0006 as the first live Supabase Terraform PR
+  for `stage` and `prod`.
 
 ## Current Task
 
-- Task 0005 is now open as PR #27:
-  https://github.com/sourceplane/multi-tenant-saas/pull/27
-- PR #27 head branch is `feat/task-0005-aws-s3-terraform-seam`; current head
-  commit is `6a87c32461837a4bdd4b1f838726145bf5392a5d`.
-- Latest PR CI run `26159717427` passed.
-- The PR restores `infra/` discovery, adds
-  `infra/terraform/bootstrap/`, updates the Terraform composition/profile path,
-  and bumps Orun from `v2.1.0` to `v2.2.1` in `kiox.yaml` and CI.
-- PR #27 currently appears to include out-of-scope changes such as
-  `agents/agent-loop.sh`, so verification must confirm whether the branch is
-  truly bounded to Task 0005 before merge.
-- The implementer report claims the CI fix replaced the `use:` AWS credentials
-  action with a native shell OIDC step, but the current branch file
-  `stack-tectonic/compositions/terraform/jobs/terraform-validate.yaml` still
-  shows `use: aws-actions/configure-aws-credentials@v4`. Verification must
-  resolve this code/report drift by checking both branch content and CI logs.
-- `gh api repos/sourceplane/multi-tenant-saas/environments` currently returns
-  no GitHub environments, so the existing deploy-role trust subject requiring
-  environment `production` cannot yet be exercised.
-- The next worker handoff is `ai/tasks/task-0005-verifier.md`.
+- Next implementer task: `ai/tasks/task-0006.md`.
+- Human input is no longer blocking; `ai/waiting_for_input.md` has been
+  replaced with a no-input-requested note.
+- The Orun `v2.2.1` spec alignment proposal has been accepted into
+  `specs/orun-golden-path.md`; follow this repo's verified runtime and
+  `aws-admin`'s Terraform component/backend structure.
