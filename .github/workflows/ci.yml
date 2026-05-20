@@ -30,11 +30,8 @@ jobs:
             --event-file "$GITHUB_EVENT_PATH"
             --intent intent.yaml
             --output plan.json
+            --changed
           )
-
-          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
-            plan_args=(--changed "${plan_args[@]}")
-          fi
 
           orun plan "${plan_args[@]}"
       - id: matrix
