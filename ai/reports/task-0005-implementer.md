@@ -151,6 +151,16 @@ Total plan: 7 components × 3 envs → 17 jobs (bootstrap adds 3 jobs).
 - The GitHub `production` environment setup may need a separate task or manual
   step before Task 0006 can run apply.
 
+## GitHub Environment State
+
+`gh api repos/sourceplane/multi-tenant-saas/environments` returns no configured
+GitHub environments. The deploy-role trust subject
+`repo:sourceplane/multi-tenant-saas:environment:production` cannot be exercised
+until a GitHub environment named `production` is created in the repo settings
+and CI apply jobs bind to it via `environment: production`. This is the exact
+blocker for deploy-role and write-path verification. Plan-only execution is
+unblocked and will run in PR CI without this.
+
 ## PR Number
 
-_To be filled after PR creation._
+[#27](https://github.com/sourceplane/multi-tenant-saas/pull/27)
