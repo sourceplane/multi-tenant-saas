@@ -28,6 +28,12 @@
     "Human input resolved the Task 0006 Supabase target: use organization sourceplane with slug/id dwazxcrywsdbxpuouifa, provision separate stage and prod Supabase projects/databases, and leave dev unprovisioned for now.",
     "Local read-only Supabase CLI status confirmed the sourceplane org slug/id dwazxcrywsdbxpuouifa. supabase projects list did not reveal a reusable existing project target in this checkout.",
     "Task 0006 is ready for implementation at ai/tasks/task-0006.md.",
-    "Spec-update proposal ai/proposals/task-0005-spec-update.md was accepted by updating specs/orun-golden-path.md and related context to treat Orun v2.2.1 as the current verified runtime for this repo."
+    "Spec-update proposal ai/proposals/task-0005-spec-update.md was accepted by updating specs/orun-golden-path.md and related context to treat Orun v2.2.1 as the current verified runtime for this repo.",
+    "PR #28 prepared the Task 0006 Supabase target/context updates and merged at 9982aaeecbc78c6adde3edf4fae436e299b79515 without mutating live resources.",
+    "PR #28 post-merge main CI run 26179180475 failed because the workflow still planned unchanged jobs on push and Orun remote execution failed/timed out.",
+    "PR #29 merged at 024f8fe99c0b646acd0d7da36178cce5499ea41d to run orun plan --changed on push to main as well as pull_request.",
+    "Post-merge main CI run 26180142027 passed with an empty changed-job matrix for that merge commit.",
+    "Task 0006 remains the active implementation task and no Task 0006 PR is open yet.",
+    "Local main currently has uncommitted Task 0006 draft work in .github/workflows/ci.yml, kiox.lock, infra/terraform/supabase/, and ai/reports/task-0006-implementer.md."
   ]
 }
