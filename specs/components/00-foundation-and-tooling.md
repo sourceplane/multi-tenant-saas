@@ -89,6 +89,9 @@ Bootstrap a production-grade Cloudflare monorepo that all later SaaS starter bou
 ### Infrastructure Provisioning
 
 - Terraform provisions the target Supabase database/project and Cloudflare runtime resources through Orun jobs.
+- The current Supabase provisioning target is `stage` and `prod` only, under
+  Supabase organization `sourceplane` (`dwazxcrywsdbxpuouifa`), with one
+  separate project/database per environment. `dev` is intentionally deferred.
 - Terraform state uses AWS S3 backend buckets `sourceplane-<env>` with native S3 locking, matching `aws-admin`.
 - Infra provisioning is exposed as Orun components under `infra/terraform`.
 - AWS IAM roles, S3 state buckets, and the multi-tenant SaaS repo permissions are created in `aws-admin`.

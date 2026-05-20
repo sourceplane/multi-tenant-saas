@@ -165,7 +165,13 @@ Use platform primitives deliberately:
 Supabase Postgres is the primary operational database for product-owned relational state, including identity, membership, projects, config metadata, canonical events, audit indexes, usage rollups, billing state, notifications, webhooks, support actions, and optional resource/runtime metadata.
 
 - Workers connect to Supabase Postgres through Hyperdrive bindings. Raw connection strings and Supabase service keys must stay in platform configuration and must not leak into domain logic.
-- Terraform must provision the target Supabase database or project for each environment once the AWS-admin role and S3 backend path are in place.
+- Terraform must provision the target Supabase project/database for the approved
+  environments once the AWS-admin role and S3 backend path are in place. The
+  current approved Supabase live environments are `stage` and `prod`; `dev` is
+  intentionally deferred.
+- The approved Supabase organization is `sourceplane` with slug/id
+  `dwazxcrywsdbxpuouifa`. `stage` and `prod` must use separate Supabase
+  projects/databases, not one shared project/database.
 - Generated database credentials and connection details must be stored in AWS Secrets Manager under `<org>/<repo>/<component>/<env>`.
 - Workers that need the primary database must use the configured Hyperdrive binding/resource for their environment instead of inventing ad hoc connection strings.
 - Local database verification may use temporary credentials only when the task explicitly allows it. Temporary credentials must never be committed, logged in full, or copied into source files.

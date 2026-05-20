@@ -5,10 +5,6 @@ Last updated: 2026-05-20
 ## Active Risks
 
 - Supabase provisioning must not log generated database passwords or API keys. Secret names may be reported; secret values may not.
-- Cross-repo sequencing matters: `aws-admin` role creation must land before `multi-tenant-saas` consumes the role in CI or Terraform components.
-- Task 0005 must wire AWS credentials into the Orun Terraform path before any
-  Terraform component is added in this repo. Without that, `terraform init`
-  against the S3 backend will fail in CI and local verification.
 - The deploy trust subject from Task 0004 is
   `repo:sourceplane/multi-tenant-saas:environment:production`. If this repo
   later adopts per-environment GitHub environments for live apply, `aws-admin`
@@ -16,17 +12,37 @@ Last updated: 2026-05-20
 - This repo currently has no GitHub environments configured. Until environment
   `production` exists and apply jobs bind to it correctly, the Task 0005
   deploy-role path cannot be exercised end-to-end.
-- PR #27 for Task 0005 appears to include at least one likely out-of-scope file
-  (`agents/agent-loop.sh`). Verification must confirm the PR boundary before
-  merge.
-- Task 0005 branch content and `ai/reports/task-0005-implementer.md` currently
-  disagree about whether the Terraform credential step uses
-  `aws-actions/configure-aws-credentials@v4` or a native shell OIDC exchange.
-  Verification must resolve this drift from code and CI logs, not by trusting
-  the report.
+- Task 0006 will create live Supabase `stage` and `prod` projects. The PR must
+  prove the plan targets only organization `sourceplane`
+  (`dwazxcrywsdbxpuouifa`), does not create `dev`, and does not leak
+  `SUPABASE_API_KEY`, generated database passwords, service keys, or connection
+  strings.
+- `multi-tenant-saas` now runs Orun `v2.2.1`; specs were updated to treat this
+  repo's verified runtime as intentional while continuing to use `aws-admin` as
+  the Terraform structure/backend reference.
 - The orphaned R2 bucket `sourceplane-tf-state` and Hyperdrive adoption scaffold
   created in Task 0002 remain as live resources. They are intentionally out of
   scope for deletion in Task 0003.1; a future cleanup task may address them.
+
+## Resolved Risks (Task 0005)
+
+- The repo-level AWS S3 Terraform seam was blocking all new Terraform
+  components. Resolved by merging PR #27, restoring `infra/` discovery, adding
+  `infra/terraform/bootstrap/`, and confirming post-merge main CI run
+  `26160643425` passed.
+- Task 0005 report/code drift around the AWS credentials mechanism was resolved
+  during verification. The shipped path uses
+  `aws-actions/configure-aws-credentials@v4`; the report was corrected before
+  merge.
+
+## Resolved Risks (Task 0006 Planning)
+
+- Supabase organization/account and environment mapping were blocking Task 0006.
+  Human input resolved the target: use organization `sourceplane`
+  (`dwazxcrywsdbxpuouifa`), provision separate `stage` and `prod`
+  projects/databases, and leave `dev` unprovisioned for now.
+- Orun runtime spec drift was resolved for this repo by accepting `v2.2.1` as
+  the current verified local runtime in `specs/orun-golden-path.md`.
 
 ## Resolved Risks (Task 0004)
 
@@ -46,12 +62,15 @@ Last updated: 2026-05-20
 
 ## Resolved Risks (Task 0003)
 
-- Orun runtime/CI/composition drift from `aws-admin` — resolved by aligning to v2.1.0 and matching composition contract.
-- Environment name mismatch (`staging`/`production` vs `stage`/`prod`) — resolved by renaming all component subscriptions.
-- Schema contract mismatch (`inputs` vs `parameters`) — resolved by migrating all schemas and components to `parameters`.
-- Non-Terraform setup-node `<no value>` failures — resolved in PR #25 by
-  updating job templates to use `{{ .parameters.* }}` and Orun identity context.
-- Task 0003 PR verification/merge gating — resolved; PR #25 is merged.
+- Orun runtime/CI/composition drift from `aws-admin` resolved by aligning to
+  v2.1.0 and matching composition contract at that time.
+- Environment name mismatch (`staging`/`production` vs `stage`/`prod`) resolved
+  by renaming all component subscriptions.
+- Schema contract mismatch (`inputs` vs `parameters`) resolved by migrating all
+  schemas and components to `parameters`.
+- Non-Terraform setup-node `<no value>` failures resolved in PR #25 by updating
+  job templates to use `{{ .parameters.* }}` and Orun identity context.
+- Task 0003 PR verification/merge gating resolved; PR #25 is merged.
 
 ## Watch Items
 

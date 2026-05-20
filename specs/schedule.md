@@ -26,7 +26,8 @@ Assumption: 4-6 autopilot coding agents plus 1 human reviewer or lead architect.
 - Delete deprecated `tf-state-r2` and `infra-terraform-core` component source,
   add the repo-scoped AWS-admin IAM role, establish S3 backend usage with the
   shared `sourceplane-<env>` buckets, and then add fresh Supabase Terraform
-  provisioning with AWS Secrets Manager writes.
+  provisioning for `stage` and `prod` with AWS Secrets Manager writes. `dev`
+  Supabase provisioning is intentionally deferred.
 - Verify local Orun validation, plan, and dry-run execution.
 - Verify GitHub Actions plans once and runs the Orun job matrix.
 - Review and freeze the constitution.

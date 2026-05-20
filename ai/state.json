@@ -1,16 +1,16 @@
 {
   "goal": "Supabase/Postgres-backed multi-organization Orun SaaS control plane",
-  "current_task": "0005",
-  "completed": [1, "0001.1", 2, 3, "0003.1", "0004"],
+  "current_task": "0006",
+  "completed": [1, "0001.1", 2, 3, "0003.1", "0004", "0005"],
   "repo_health": "green",
-  "next_focus": "merge-task-0005-then-task-0006",
+  "next_focus": "task-0006-supabase-stage-prod-terraform",
   "last_verified": "2026-05-20",
   "waiting_for_input": "false",
-  "task_agent": "ai/reports/task-0005-verifier.md",
+  "task_agent": "ai/tasks/task-0006.md",
   "notes": [
     "Task 0001, Task 0001.1, and Task 0002 are verified and merged.",
     "The active spec direction follows the Orun golden-path reference in specs/orun-golden-path.md.",
-    "aws-admin is the reference repo for Orun v2.1.0, Terraform component style, dev/stage/prod environments, S3 backend, and repo-scoped IAM roles.",
+    "aws-admin is the reference repo for Terraform component style, dev/stage/prod environments, S3 backend, and repo-scoped IAM roles.",
     "Task 0003 is verified and merged via PR #25; main is now at f645d41.",
     "PR #25 CI passed on run 26110433274 after the non-Terraform spec.parameters template fix and CI credential cleanup.",
     "Post-merge main CI run 26113133649 failed because legacy terraform components selected apply on github-push-main and tf-state-r2 attempted to create an existing R2 bucket.",
@@ -20,10 +20,14 @@
     "Task 0004 implementer work opened as aws-admin PR #22 (feat/github-repo-sourceplane-multi-tenant-saas) with passing PR CI run 26134161800.",
     "Task 0004 is verified and merged via sourceplane/aws-admin PR #22; post-merge main CI run 26134394923 applied the IAM component and the local aws-admin checkout was synced to main at 6c406a9.",
     "Verified IAM roles now exist in AWS account 306024784101 for dev, stage, and prod with role names and ARNs recorded in ai/reports/task-0004-verifier.md.",
-    "Task 0005 is open as PR #27 (feat/task-0005-aws-s3-terraform-seam). Verifier fixed two issues: removed out-of-scope agents/agent-loop.sh and corrected the implementer report to reflect that use: aws-actions/configure-aws-credentials@v4 is the final credential mechanism (not a native shell OIDC step). Orun bumped to v2.2.1 resolves the ORUN_ENV session token corruption. CI run 26159717427 passed.",
-    "Waiting on re-CI after verifier commit before merge. After merge, proceed to Task 0006 (Supabase Terraform).",
+    "Task 0005 merged as PR #27 (feat/task-0005-aws-s3-terraform-seam) at merge commit 0af75d05bb3660c58d9f991924f2f821c2522d0f.",
+    "Verifier fixes for Task 0005 removed out-of-scope agents/agent-loop.sh from the PR and corrected the implementer report to reflect that use: aws-actions/configure-aws-credentials@v4 is the shipped credential mechanism.",
+    "Post-merge main CI run 26160643425 passed, including bootstrap Terraform jobs in dev, stage, and prod.",
     "GitHub repo environments are currently absent; deploy-role trust subject requiring environment production is a documented gap (not a Task 0005 blocker).",
     "Secrets Manager write-path verification deferred to Task 0006.",
-    "Spec-update proposal needed: specs/orun-golden-path.md should reflect Orun v2.2.1 as current reference."
+    "Human input resolved the Task 0006 Supabase target: use organization sourceplane with slug/id dwazxcrywsdbxpuouifa, provision separate stage and prod Supabase projects/databases, and leave dev unprovisioned for now.",
+    "Local read-only Supabase CLI status confirmed the sourceplane org slug/id dwazxcrywsdbxpuouifa. supabase projects list did not reveal a reusable existing project target in this checkout.",
+    "Task 0006 is ready for implementation at ai/tasks/task-0006.md.",
+    "Spec-update proposal ai/proposals/task-0005-spec-update.md was accepted by updating specs/orun-golden-path.md and related context to treat Orun v2.2.1 as the current verified runtime for this repo."
   ]
 }
