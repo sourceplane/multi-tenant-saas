@@ -21,9 +21,6 @@ spec:
   env:
     AWS_EC2_METADATA_DISABLED: "true"
 
-  dependsOn:
-    - component: bootstrap
-
   subscribe:
     environments:
       - name: stage
