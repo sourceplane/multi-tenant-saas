@@ -61,23 +61,29 @@ Last updated: 2026-05-20
 
 - Active spec pack: reusable SaaS starter under `specs/**`.
 - Current phase: Week 0 / operations foundation aligned with golden path.
-- Immediate focus: finish Task 0005 as a reviewable PR in this repo so the AWS
-  S3 backend and Terraform credential seam are actually landed and verified
+- Immediate focus: verify Task 0005 PR #27, tighten scope if needed, and merge
+  only if the AWS S3 backend and Terraform credential seam are correctly landed
   before advancing to Task 0006.
 
 ## Current Task
 
-- Task 0005 exists only as local, uncommitted work on `main`; there is not yet
-  a Task 0005 branch or PR.
-- The local Task 0005 draft re-adds `infra/` to `intent.yaml`, adds explicit
-  AWS OIDC credential setup to the Terraform composition, and creates
-  `infra/terraform/bootstrap/`.
-- Local Task 0005 checks are reported as passing for Orun validate, plan DAG,
-  changed plan, dry-run, Terraform fmt, `init -backend=false`, and validate.
-- The current local Task 0005 report still defers deploy-role / Secrets
-  Manager write-path verification and does not include a PR number.
-- `gh pr list --state open` currently returns no open PRs for this repo.
+- Task 0005 is now open as PR #27:
+  https://github.com/sourceplane/multi-tenant-saas/pull/27
+- PR #27 head branch is `feat/task-0005-aws-s3-terraform-seam`; current head
+  commit is `6a87c32461837a4bdd4b1f838726145bf5392a5d`.
+- Latest PR CI run `26159717427` passed.
+- The PR restores `infra/` discovery, adds
+  `infra/terraform/bootstrap/`, updates the Terraform composition/profile path,
+  and bumps Orun from `v2.1.0` to `v2.2.1` in `kiox.yaml` and CI.
+- PR #27 currently appears to include out-of-scope changes such as
+  `agents/agent-loop.sh`, so verification must confirm whether the branch is
+  truly bounded to Task 0005 before merge.
+- The implementer report claims the CI fix replaced the `use:` AWS credentials
+  action with a native shell OIDC step, but the current branch file
+  `stack-tectonic/compositions/terraform/jobs/terraform-validate.yaml` still
+  shows `use: aws-actions/configure-aws-credentials@v4`. Verification must
+  resolve this code/report drift by checking both branch content and CI logs.
 - `gh api repos/sourceplane/multi-tenant-saas/environments` currently returns
   no GitHub environments, so the existing deploy-role trust subject requiring
   environment `production` cannot yet be exercised.
-- The next worker handoff is `ai/tasks/task-0005-pr-completion.md`.
+- The next worker handoff is `ai/tasks/task-0005-verifier.md`.

@@ -9,19 +9,20 @@ bootstrap Terraform component that uses the shared S3 backend. The bootstrap
 component validates S3 state bucket access and `aws_caller_identity` without
 creating any new infrastructure.
 
-CI fix (task-0005-ci-fix): Replaced `use: aws-actions/configure-aws-credentials@v4`
-inside the Orun job template with a native shell OIDC exchange that writes
-credential values directly to `$ORUN_ENV`. The `use:` action step was setting
-credentials via GitHub Actions `::set-env::` workflow commands, whose values
-were corrupted (malformed `X-Amz-Security-Token` header) by the time Terraform
-consumed them from Orun's environment handoff layer.
+CI investigation: An initial CI failure (`X-Amz-Security-Token` header corruption)
+was reproduced on run `26143814753`. A fix replacing `use: aws-actions/configure-aws-credentials@v4`
+with a native shell OIDC step was implemented in commit `8c6a169` and then
+reverted in commit `5e756e2` after confirming that the `use:` action approach
+worked correctly with Orun `v2.2.1`. The final shipped composition uses
+`use: aws-actions/configure-aws-credentials@v4`, which succeeded in CI run
+`26159717427` with "Assuming role with OIDC" and S3 backend access confirmed.
 
 ## Files Changed
 
 | File | Change |
 | ---- | ------ |
 | `intent.yaml` | Added `infra/` to `discovery.roots` |
-| `stack-tectonic/compositions/terraform/jobs/terraform-validate.yaml` | Added `terraform.aws-credentials` capability and native shell OIDC step before init (CI fix: replaced `use: aws-actions/configure-aws-credentials@v4`) |
+| `stack-tectonic/compositions/terraform/jobs/terraform-validate.yaml` | Added `terraform.aws-credentials` capability and `use: aws-actions/configure-aws-credentials@v4` step before init |
 | `stack-tectonic/compositions/terraform/profiles/terraform-plan-only.yaml` | Added `terraform.aws-credentials` to `includeCapabilities` |
 | `stack-tectonic/compositions/terraform/profiles/terraform-apply.yaml` | Added `terraform.aws-credentials` to `includeCapabilities` |
 | `infra/terraform/bootstrap/component.yaml` | New bootstrap component manifest |
@@ -63,18 +64,15 @@ workflow `env:` level, bypassing Orun env handoff entirely for credentials.
 
 ### Fix
 
-Replaced the `use: aws-actions/configure-aws-credentials@v4` step with a
-native `shell: bash` `run:` step that:
+The native shell OIDC approach (commit `8c6a169`) was tested and then reverted
+in commit `5e756e2` after confirming `use: aws-actions/configure-aws-credentials@v4`
+worked correctly once Orun was upgraded to `v2.2.1`. The `X-Amz-Security-Token`
+corruption issue did not reproduce on `v2.2.1` in CI run `26159717427`, which
+completed with "Assuming role with OIDC" and successful S3 backend init.
 
-1. Fetches the GitHub OIDC JWT directly via `curl` using
-   `ACTIONS_ID_TOKEN_REQUEST_TOKEN` and `ACTIONS_ID_TOKEN_REQUEST_URL`
-2. Calls `aws sts assume-role-with-web-identity` with the JWT
-3. Writes `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`,
-   and `AWS_REGION` to `$ORUN_ENV` using `printf` — exact same mechanism the
-   `terraform-env` step uses — ensuring no intermediate encoding
-
-This avoids the GitHub Actions env-file injection path entirely and gives Orun
-full control over how credential values are persisted and consumed.
+The final composition retains `use: aws-actions/configure-aws-credentials@v4`.
+The Orun bump from `v2.1.0` → `v2.2.1` appears to have resolved the env
+handoff corruption.
 
 ## Backend Setup Notes
 
@@ -172,7 +170,7 @@ Total plan: 7 components × 3 envs → 17 jobs (bootstrap adds 3 jobs).
 | `terraform init -backend=false` (bootstrap) | ✓ Pass |
 | `terraform validate` (bootstrap) | ✓ Pass |
 | No R2 backend references in active components | ✓ Confirmed |
-| CI fix: native OIDC shell step replaces `use:` action | ✓ Implemented |
+| CI run `26159717427`: `use: aws-actions/configure-aws-credentials@v4` passed with Orun v2.2.1 | ✓ Confirmed |
 
 ## Assumptions
 
@@ -185,6 +183,10 @@ Total plan: 7 components × 3 envs → 17 jobs (bootstrap adds 3 jobs).
   job templates (the `configure-aws-credentials` step uses this).
 - The `id-token: write` permission in CI workflow is sufficient for OIDC token
   generation.
+- Orun `v2.2.1` (bumped from `v2.1.0` in this PR) resolves the `ORUN_ENV`
+  session token corruption that caused `X-Amz-Security-Token` header failures
+  on the initial CI run. The `use: aws-actions/configure-aws-credentials@v4`
+  approach works correctly on `v2.2.1`.
 
 ## Remaining Gaps
 

@@ -93,12 +93,16 @@ Last updated: 2026-05-20
 - Agent: Implementer
 - Prompt: `ai/tasks/task-0005.md`
 - Follow-up prompt: `ai/tasks/task-0005-pr-completion.md`
-- Status: local implementation draft exists, but no PR is open yet.
+- Verifier prompt: `ai/tasks/task-0005-verifier.md`
+- Status: implementation PR is open and awaiting verification.
 - Objective: consume the `aws-admin` role in `multi-tenant-saas`, migrate Terraform backend usage from R2 to S3, and verify Secrets Manager access.
-- Durable outcome so far: local worktree contains the draft AWS/S3 Terraform
-  seam (`intent.yaml`, Terraform composition updates, and
-  `infra/terraform/bootstrap/`), but the task has not yet been isolated into a
-  PR and deploy-role / Secrets Manager write-path verification remains open.
+- PR: #27 (`feat/task-0005-aws-s3-terraform-seam`)
+- Implementer report: `ai/reports/task-0005-implementer.md`
+- Durable outcome so far: the Task 0005 branch and PR now exist with green PR
+  CI, but verification still needs to confirm the PR is properly bounded,
+  resolve code/report drift around the AWS credentials step, and decide whether
+  deploy-role / Secrets Manager write-path verification remains an acceptable
+  residual gap.
 
 ## Task 0006
 

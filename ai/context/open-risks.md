@@ -16,6 +16,14 @@ Last updated: 2026-05-20
 - This repo currently has no GitHub environments configured. Until environment
   `production` exists and apply jobs bind to it correctly, the Task 0005
   deploy-role path cannot be exercised end-to-end.
+- PR #27 for Task 0005 appears to include at least one likely out-of-scope file
+  (`agents/agent-loop.sh`). Verification must confirm the PR boundary before
+  merge.
+- Task 0005 branch content and `ai/reports/task-0005-implementer.md` currently
+  disagree about whether the Terraform credential step uses
+  `aws-actions/configure-aws-credentials@v4` or a native shell OIDC exchange.
+  Verification must resolve this drift from code and CI logs, not by trusting
+  the report.
 - The orphaned R2 bucket `sourceplane-tf-state` and Hyperdrive adoption scaffold
   created in Task 0002 remain as live resources. They are intentionally out of
   scope for deletion in Task 0003.1; a future cleanup task may address them.
