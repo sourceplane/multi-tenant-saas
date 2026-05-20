@@ -17,6 +17,14 @@ Last updated: 2026-05-20
   (`dwazxcrywsdbxpuouifa`), does not create `dev`, and does not leak
   `SUPABASE_API_KEY`, generated database passwords, service keys, or connection
   strings.
+- Task 0006 post-merge apply on `main` is currently blocked by two verified
+  issues: the Supabase provider call must omit `instance_size` for the current
+  free-plan organization, and the `aws-admin`-managed repo role still lacks the
+  Secrets Manager create/write actions required for
+  `sourceplane/multi-tenant-saas/supabase/<env>`.
+- PR CI is not sufficient proof for Terraform components that switch from
+  plan-only in pull requests to apply on `github-push-main`; remediation and
+  verification must inspect the post-merge apply path directly.
 - `multi-tenant-saas` now runs Orun `v2.2.1`; specs were updated to treat this
   repo's verified runtime as intentional while continuing to use `aws-admin` as
   the Terraform structure/backend reference.

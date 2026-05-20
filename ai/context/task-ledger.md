@@ -112,11 +112,30 @@ Last updated: 2026-05-20
 
 - Agent: Implementer
 - Prompt: `ai/tasks/task-0006.md`
-- Status: planned and ready for implementation.
+- Implementer report: `ai/reports/task-0006-implementer.md`
+- Status: merged but not yet fully verified end-to-end.
 - Objective: add a Supabase Terraform infra component with S3 backend that
   creates separate `stage` and `prod` Supabase projects/databases under
   organization `sourceplane` (`dwazxcrywsdbxpuouifa`), stores generated secrets
   in AWS Secrets Manager, and leaves `dev` unprovisioned for now.
+- PR: #30 (`chore: update supabase-infra`), merged into `main` at
+  `fc795e4d974ae57d3e262084c393c04e18076f90`
+- Durable outcome so far: the first `infra/terraform/supabase/` component,
+  README, provider lock, and CI env mapping landed. PR CI passed in plan-only
+  mode, but merged `main` apply failed because the Supabase provider call sent
+  `instance_size` to a free-plan organization and the repo-scoped AWS role lacks
+  Secrets Manager create/write permission for the Supabase secret namespace.
+
+## Task 0006.1
+
+- Agent: Implementer
+- Prompt: `ai/tasks/task-0006.1-supabase-merge-fix.md`
+- Implementer report: `ai/reports/task-0006.1-implementer.md`
+- Status: planned and active.
+- Objective: keep Task 0006 in one bounded remediation line by removing the
+  free-plan-incompatible Supabase `instance_size` usage in this repo and
+  documenting the exact `aws-admin` IAM delta required for Secrets Manager
+  writes after the post-merge `main` apply failure.
 
 ## Historical Notes
 

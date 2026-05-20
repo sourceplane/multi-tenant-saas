@@ -4,7 +4,7 @@ Last updated: 2026-05-21
 
 ## Repo Reality
 
-- `main` is synced with `origin/main` at `024f8fe99c0b646acd0d7da36178cce5499ea41d`.
+- `main` is synced with `origin/main` at `fc795e4d974ae57d3e262084c393c04e18076f90`.
 - Tasks 0001, 0001.1, 0002, 0003, 0003.1, 0004, and 0005 are verified and
   merged.
 - Task 0005 merged as PR #27:
@@ -51,24 +51,40 @@ Last updated: 2026-05-21
   this checkout.
 - Local worktree note: untracked `agents/agent-loop.sh` is present in this
   checkout but is now also part of merged `main` via PR #29.
-- Local worktree currently contains uncommitted Task 0006 draft implementation
-  artifacts on `main`: modified `.github/workflows/ci.yml` and `kiox.lock`, plus
-  untracked `infra/terraform/supabase/` and
-  `ai/reports/task-0006-implementer.md`. No Task 0006 PR is open yet.
+- PR #30 (`chore: update supabase-infra`) merged at
+  `fc795e4d974ae57d3e262084c393c04e18076f90` and landed the first
+  `infra/terraform/supabase/` component plus CI mapping of `SUPABASE_API_KEY`
+  to `SUPABASE_ACCESS_TOKEN`.
+- PR #30 PR CI run `26185038583` passed, including `supabase · stage · Terraform`
+  and `supabase · prod · Terraform` in plan-only mode.
+- Post-merge `main` CI run `26185145757` failed in live apply for both
+  `supabase.stage.terraform` and `supabase.prod.terraform`.
+- The `stage` apply failure exposed two concrete gaps:
+  - the Supabase provider call still sent `instance_size`, which the current
+    free-plan `sourceplane` organization rejects with HTTP 402;
+  - the repo-scoped AWS role lacks Secrets Manager create/write permissions for
+    `sourceplane/multi-tenant-saas/supabase/<env>`.
+- Local worktree currently includes Task 0006.1 remediation artifacts on `main`:
+  modified `infra/terraform/supabase/terraform/main.tf` plus untracked
+  `ai/tasks/task-0006.1-supabase-merge-fix.md` and
+  `ai/reports/task-0006.1-implementer.md`.
 
 ## Current Roadmap Position
 
 - Active spec pack: reusable SaaS starter under `specs/**`.
 - Current phase: Week 0 / operations foundation remains active, but the AWS S3
-  backend and Terraform credential seam are now landed.
-- Immediate focus: implement Task 0006 as the first live Supabase Terraform PR
-  for `stage` and `prod`.
+  backend, Terraform credential seam, and first Supabase component are now
+  landed.
+- Immediate focus: remediate the Task 0006 post-merge apply failure with Task
+  0006.1, keeping the repo-local fix in `multi-tenant-saas` and recording the
+  exact `aws-admin` IAM delta required for Secrets Manager writes.
 
 ## Current Task
 
-- Next implementer task: `ai/tasks/task-0006.md`.
-- Task 0006 remains the active implementation task; do not generate Task 0007
-  until Task 0006 has produced a single PR and verifier outcome.
+- Next implementer task: `ai/tasks/task-0006.1-supabase-merge-fix.md`.
+- Task 0006 shipped in PR #30, but verification is not complete because merged
+  `main` apply failed. Task 0006.1 is the active remediation task; do not
+  generate Task 0007 until the Supabase apply path is stabilized and verified.
 - Human input is no longer blocking; `ai/waiting_for_input.md` has been
   replaced with a no-input-requested note.
 - The Orun `v2.2.1` spec alignment proposal has been accepted into

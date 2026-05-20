@@ -1,12 +1,12 @@
 {
   "goal": "Supabase/Postgres-backed multi-organization Orun SaaS control plane",
-  "current_task": "0006",
+  "current_task": "0006.1",
   "completed": [1, "0001.1", 2, 3, "0003.1", "0004", "0005"],
-  "repo_health": "green",
-  "next_focus": "task-0006-supabase-stage-prod-terraform",
+  "repo_health": "yellow",
+  "next_focus": "task-0006.1-supabase-merge-fix",
   "last_verified": "2026-05-20",
   "waiting_for_input": "false",
-  "task_agent": "ai/tasks/task-0006.md",
+  "task_agent": "ai/tasks/task-0006.1-supabase-merge-fix.md",
   "notes": [
     "Task 0001, Task 0001.1, and Task 0002 are verified and merged.",
     "The active spec direction follows the Orun golden-path reference in specs/orun-golden-path.md.",
@@ -33,7 +33,11 @@
     "PR #28 post-merge main CI run 26179180475 failed because the workflow still planned unchanged jobs on push and Orun remote execution failed/timed out.",
     "PR #29 merged at 024f8fe99c0b646acd0d7da36178cce5499ea41d to run orun plan --changed on push to main as well as pull_request.",
     "Post-merge main CI run 26180142027 passed with an empty changed-job matrix for that merge commit.",
-    "Task 0006 remains the active implementation task and no Task 0006 PR is open yet.",
-    "Local main currently has uncommitted Task 0006 draft work in .github/workflows/ci.yml, kiox.lock, infra/terraform/supabase/, and ai/reports/task-0006-implementer.md."
+    "Task 0006 merged as PR #30 (chore: update supabase-infra) at fc795e4d974ae57d3e262084c393c04e18076f90.",
+    "PR #30 CI run 26185038583 passed in plan-only mode for the supabase stage and prod jobs.",
+    "Post-merge main CI run 26185145757 failed in supabase.stage.terraform and supabase.prod.terraform during apply.",
+    "The verified root causes are: Supabase free-plan orgs reject instance_size in project creation, and the aws-admin-managed repo role lacks Secrets Manager create/write permission for sourceplane/multi-tenant-saas/supabase/<env>.",
+    "Task 0006.1 is now the active remediation task at ai/tasks/task-0006.1-supabase-merge-fix.md.",
+    "Local main currently includes Task 0006.1 remediation artifacts in infra/terraform/supabase/terraform/main.tf, ai/tasks/task-0006.1-supabase-merge-fix.md, and ai/reports/task-0006.1-implementer.md."
   ]
 }
