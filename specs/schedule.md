@@ -23,7 +23,10 @@ Assumption: 4-6 autopilot coding agents plus 1 human reviewer or lead architect.
 - Align `intent.yaml`, `kiox.yaml`, and the Terraform composition with the current `aws-admin` Orun golden path.
 - Add starter `component.yaml` files for apps, packages, infra, and test components.
 - Add at least one test component dependency so test execution is part of the Orun DAG.
-- Add Terraform components for S3 backend migration, Supabase database provisioning, AWS Secrets Manager writes, and Worker/Hyperdrive infra config.
+- Delete deprecated `tf-state-r2` and `infra-terraform-core` component source,
+  add the repo-scoped AWS-admin IAM role, establish S3 backend usage with the
+  shared `sourceplane-<env>` buckets, and then add fresh Supabase Terraform
+  provisioning with AWS Secrets Manager writes.
 - Verify local Orun validation, plan, and dry-run execution.
 - Verify GitHub Actions plans once and runs the Orun job matrix.
 - Review and freeze the constitution.
@@ -42,6 +45,7 @@ Exit criteria:
 - Infra changes produce Orun Terraform jobs.
 - `aws-admin` has created the repo-scoped multi-tenant SaaS roles with S3 state and Secrets Manager access.
 - Terraform state uses the shared S3 buckets `sourceplane-<env>`.
+- No active Terraform component still uses Cloudflare R2 for state.
 - Shared contract docs approved.
 - Delegation order confirmed.
 - Database and migration ownership model approved.

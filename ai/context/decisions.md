@@ -1,6 +1,6 @@
 # Decisions
 
-Last updated: 2026-05-19
+Last updated: 2026-05-20
 
 ## Active Decisions
 
@@ -22,5 +22,16 @@ Last updated: 2026-05-19
 
 ## Pending Decisions
 
-- Exact AWS role ARNs for `sourceplane/multi-tenant-saas` are pending the `aws-admin` task.
 - Exact Supabase organization/project naming and whether each environment maps to a Supabase project or database must be confirmed by the Supabase infra implementation task before apply.
+
+## Verified Inputs
+
+- Task 0004 verified and merged the `aws-admin` IAM component for `sourceplane/multi-tenant-saas`.
+- Verified plan role ARNs:
+  - `arn:aws:iam::306024784101:role/dev-github-sourceplane-multi-tenant-saas-plan`
+  - `arn:aws:iam::306024784101:role/stage-github-sourceplane-multi-tenant-saas-plan`
+  - `arn:aws:iam::306024784101:role/prod-github-sourceplane-multi-tenant-saas-plan`
+- Verified deploy role ARNs:
+  - `arn:aws:iam::306024784101:role/dev-github-sourceplane-multi-tenant-saas-production-deploy`
+  - `arn:aws:iam::306024784101:role/stage-github-sourceplane-multi-tenant-saas-production-deploy`
+  - `arn:aws:iam::306024784101:role/prod-github-sourceplane-multi-tenant-saas-production-deploy`

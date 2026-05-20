@@ -1,6 +1,6 @@
 # Task Ledger
 
-Last updated: 2026-05-19
+Last updated: 2026-05-20
 
 ## Task 0001
 
@@ -59,34 +59,56 @@ Last updated: 2026-05-19
 - Agent: Implementer
 - Prompt: `ai/tasks/task-0003.1.md`
 - Implementer report: `ai/reports/task-0003.1-implementer.md`
-- Status: implemented, pending verification and merge.
+- Verifier prompt: `ai/tasks/task-0003.1-verifier.md`
+- Verifier report: `ai/reports/task-0003.1-verifier.md`
+- Status: verified and merged.
 - Objective: restore green `main` by deleting the active source for
   `infra/terraform/tf-state-r2/` and `infra/terraform/core/` only, with no live
   cleanup, import, destroy, or cloud mutations. This makes the repo ready for
   Task 0004 and the later AWS S3/Supabase Terraform sequence.
-- Durable outcome (pending): legacy Terraform component source removed; Orun
-  no longer discovers or plans `tf-state-r2`, `infra-tf-state-r2`, or
-  `infra-terraform-core`. No live resources mutated.
+- PR: #26 (`task-0003.1-delete-legacy-terraform`), merged into `main` at
+  `f6e9ee3`
+- Durable outcome: legacy Terraform component source removed; Orun no longer
+  discovers or plans `tf-state-r2`, `infra-tf-state-r2`, or
+  `infra-terraform-core`. `main` CI is green again and no live resources were
+  mutated.
 
 ## Task 0004
 
 - Agent: Implementer
 - Prompt: `ai/tasks/task-0004.md`
-- Status: planned, blocked on Task 0003.1 repo stabilization.
+- Implementer report: `ai/reports/task-0004-implementer.md`
+- Verifier prompt: `ai/tasks/task-0004-verifier.md`
+- Verifier report: `ai/reports/task-0004-verifier.md`
+- Status: verified and merged.
 - Objective: add and verify the `aws-admin` repo-scoped IAM component for `sourceplane/multi-tenant-saas`, including S3 state and Secrets Manager permissions.
+- PR: `sourceplane/aws-admin#22` (`feat/github-repo-sourceplane-multi-tenant-saas`)
+- Durable outcome: the `github-repo-sourceplane-multi-tenant-saas` component is
+  merged in `aws-admin`, post-merge CI run `26134394923` applied successfully,
+  and verified IAM roles now exist for `dev`, `stage`, and `prod`. Task 0005
+  can consume these roles for S3 backend access and AWS Secrets Manager.
 
 ## Task 0005
 
 - Agent: Implementer
 - Prompt: `ai/tasks/task-0005.md`
-- Status: planned, depends on Task 0004.
+- Follow-up prompt: `ai/tasks/task-0005-pr-completion.md`
+- Verifier prompt: `ai/tasks/task-0005-verifier.md`
+- Status: implementation PR is open and awaiting verification.
 - Objective: consume the `aws-admin` role in `multi-tenant-saas`, migrate Terraform backend usage from R2 to S3, and verify Secrets Manager access.
+- PR: #27 (`feat/task-0005-aws-s3-terraform-seam`)
+- Implementer report: `ai/reports/task-0005-implementer.md`
+- Durable outcome so far: the Task 0005 branch and PR now exist with green PR
+  CI, but verification still needs to confirm the PR is properly bounded,
+  resolve code/report drift around the AWS credentials step, and decide whether
+  deploy-role / Secrets Manager write-path verification remains an acceptable
+  residual gap.
 
 ## Task 0006
 
 - Agent: Implementer
 - Prompt: `ai/tasks/task-0006.md`
-- Status: planned, depends on Task 0005.
+- Status: planned, blocked on Task 0005 PR completion and verification.
 - Objective: add a Supabase Terraform infra component with S3 backend that creates the target database/project resources and stores generated secrets in AWS Secrets Manager.
 
 ## Historical Notes

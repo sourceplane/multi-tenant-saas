@@ -104,8 +104,10 @@ The effective state object path is therefore:
 env/<environment>/<repo>/<component>/terraform.tfstate
 ```
 
-The old R2 bootstrap component is deprecated and must be removed or migrated by
-the S3-backend migration task.
+The old R2 bootstrap component is deprecated and must be removed from active
+repo source by Task 0003.1. That task is source deletion only; it must not
+clean up, import, destroy, or otherwise mutate live Cloudflare, R2, Hyperdrive,
+Supabase, AWS, or Terraform state resources.
 
 ## Terraform Components
 
@@ -114,8 +116,6 @@ components under `infra/terraform/**`.
 
 Minimum target components:
 
-- a backend migration or cleanup component that removes the R2 backend path and
-  confirms S3 backend use;
 - a Supabase infrastructure component that creates the environment database or
   project resources and stores generated secrets in AWS Secrets Manager;
 - Cloudflare infrastructure components that wire Workers, Hyperdrive, queues,

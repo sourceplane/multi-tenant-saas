@@ -85,7 +85,6 @@ kiox.lock                  Resolved Kiox provider lock
 
 /infra
   /terraform
-    /tf-state-s3           S3 backend migration/verification component
     /supabase              Supabase database/project and AWS Secrets Manager component
     /cloudflare            Worker, Hyperdrive, queue, and binding infrastructure
   /cloudflare              Wrangler configs, environments, bindings
@@ -247,9 +246,10 @@ Composition types used:
 | `terraform`               | Optional repo-owned infra components in `infra/`  |
 
 The immediate operations tasks are to align the local Orun runtime and
-Stack Tectonic contracts with `aws-admin`, add the missing AWS-admin IAM role
-component for this repo, migrate Terraform state from R2 to S3, and then add
-Supabase infrastructure as a Terraform component.
+Stack Tectonic contracts with `aws-admin`, delete deprecated R2/core Terraform
+component source, add the missing AWS-admin IAM role component for this repo,
+establish S3 backend usage with the shared `sourceplane-<env>` buckets, and
+then add fresh Supabase infrastructure as a Terraform component.
 
 The base commands stay portable between local execution and GitHub Actions:
 

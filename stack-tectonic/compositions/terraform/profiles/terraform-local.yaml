@@ -1,15 +1,14 @@
 apiVersion: sourceplane.io/v1alpha1
 kind: ExecutionProfile
 metadata:
-  name: terraform-plan-only
+  name: terraform-local
 spec:
-  description: PR Terraform plan with no-lock flag for non-mutating preview
+  description: Full Terraform plan and apply for live environments
 
   jobs:
     terraform:
       includeCapabilities:
         - terraform.setup
-        - terraform.aws-credentials
         - terraform.env
         - terraform.context
         - terraform.fmt
