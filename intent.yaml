@@ -24,6 +24,7 @@ compositions:
 discovery:
   roots:
     - apps/
+    - infra/
     - packages/
     - tests/
 

@@ -1,18 +1,31 @@
 # Open Risks
 
-Last updated: 2026-05-19
+Last updated: 2026-05-20
 
 ## Active Risks
 
-- The `aws-admin` repo does not yet have the repo-scoped `sourceplane/multi-tenant-saas` IAM component. Until it lands and is verified, this repo cannot safely assume AWS roles for S3 state or Secrets Manager.
 - Supabase provisioning must not log generated database passwords or API keys. Secret names may be reported; secret values may not.
 - Cross-repo sequencing matters: `aws-admin` role creation must land before `multi-tenant-saas` consumes the role in CI or Terraform components.
-- The S3 backend init step in future terraform components will fail on live runs
-  until Task 0004 creates the IAM roles and Task 0005 wires them. Plan-only
-  profile skips apply but init may still attempt backend connection.
+- Task 0005 must wire AWS credentials into the Orun Terraform path before any
+  Terraform component is added in this repo. Without that, `terraform init`
+  against the S3 backend will fail in CI and local verification.
+- The deploy trust subject from Task 0004 is
+  `repo:sourceplane/multi-tenant-saas:environment:production`. If this repo
+  later adopts per-environment GitHub environments for live apply, `aws-admin`
+  trust subjects will need a follow-up update.
+- This repo currently has no GitHub environments configured. Until environment
+  `production` exists and apply jobs bind to it correctly, the Task 0005
+  deploy-role path cannot be exercised end-to-end.
 - The orphaned R2 bucket `sourceplane-tf-state` and Hyperdrive adoption scaffold
   created in Task 0002 remain as live resources. They are intentionally out of
   scope for deletion in Task 0003.1; a future cleanup task may address them.
+
+## Resolved Risks (Task 0004)
+
+- Cross-repo AWS access was blocking S3 backend and Secrets Manager work.
+  Resolved by verifying and merging `sourceplane/aws-admin#22`, then confirming
+  post-merge apply in CI run `26134394923` and recording the exact IAM role
+  identifiers for Task 0005.
 
 ## Resolved Risks (Task 0003.1)
 
@@ -20,7 +33,8 @@ Last updated: 2026-05-19
   Terraform `apply` on `github-push-main` and attempted to create the existing
   bucket `sourceplane-tf-state`, failing with Cloudflare `409 Conflict`. Resolved
   by deleting `infra/terraform/tf-state-r2/` and `infra/terraform/core/` from
-  active repo source. No live resource cleanup was performed.
+  active repo source in PR #26. Post-merge `main` CI run `26115035887` passed.
+  No live resource cleanup was performed.
 
 ## Resolved Risks (Task 0003)
 

@@ -13,6 +13,7 @@ spec:
 
   capabilities:
     - terraform.setup
+    - terraform.aws-credentials
     - terraform.env
     - terraform.context
     - terraform.fmt
@@ -30,6 +31,15 @@ spec:
       with:
         terraform_version: "{{.parameters.terraformVersion}}"
         terraform_wrapper: "false"
+
+    - id: aws-credentials
+      name: Configure AWS Credentials
+      capability: terraform.aws-credentials
+      use: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: "arn:aws:iam::306024784101:role/{{.orun.environment.name}}-github-{{.parameters.owner}}-{{.parameters.repo}}-plan"
+        aws-region: "{{.parameters.awsRegion}}"
+        audience: sts.amazonaws.com
 
     - id: terraform-env
       name: Export Terraform Env
