@@ -36,7 +36,7 @@ provider "aws" {
 
 # Authenticates via CLOUDFLARE_API_TOKEN env var
 provider "cloudflare" {
-  api_token = var.cloudflareApiToken
+  api_token = var.cloudflare_api_token
 }
 
 # --- Variables (standard Orun parameters) ---
@@ -46,16 +46,16 @@ variable "awsRegion" {
   default = "us-east-1"
 }
 
-variable "cloudflareApiToken" {
+variable "cloudflare_api_token" {
   type        = string
   sensitive   = true
-  description = "Cloudflare API token with Hyperdrive permissions (from CLOUDFLARE_API_TOKEN env var or -var flag)"
+  description = "Cloudflare API token with Hyperdrive permissions (from CLOUDFLARE_API_TOKEN env var)"
 }
 
-variable "cloudflareAccountId" {
+variable "cloudflare_account_id" {
   type        = string
   sensitive   = true
-  description = "Cloudflare account ID (from CLOUDFLARE_ACCOUNT_ID env var or -var flag)"
+  description = "Cloudflare account ID (from CLOUDFLARE_ACCOUNT_ID env var)"
 }
 
 variable "orgName" {
@@ -140,7 +140,7 @@ locals {
 # --- Create Hyperdrive resource ---
 
 resource "cloudflare_hyperdrive_config" "postgres" {
-  account_id = var.cloudflareAccountId
+  account_id = var.cloudflare_account_id
   name       = local.hyperdrive_name
 
   origin = {
