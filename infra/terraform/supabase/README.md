@@ -33,6 +33,16 @@ sourceplane/multi-tenant-saas/supabase/stage
 sourceplane/multi-tenant-saas/supabase/prod
 ```
 
+The named Secrets Manager secret is treated as a stable container. Terraform
+must not replace it during normal credential refreshes because AWS keeps deleted
+secret names reserved during the recovery window. Credential and connection
+changes should be written by creating a new `aws_secretsmanager_secret_version`
+with `AWSCURRENT` instead of recreating `aws_secretsmanager_secret`.
+
+If a prior failed apply left the secret scheduled for deletion, restore or
+cancel deletion for the existing secret before retrying the Orun apply, then
+remove any accidental Terraform taint from `aws_secretsmanager_secret.supabase`.
+
 ### Secret JSON Shape
 
 ```json
