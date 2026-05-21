@@ -5,7 +5,8 @@ No human input is currently requested.
 
 ## Last Resolved Input
 The user answered the Task 0007 blocker: continue from the existing local Task
-0007 work and drive it toward a PR.
+0007 work and drive it toward a PR. PR #34 has since merged and Task 0007.1
+verified the result.
 
 ## Needed To Continue
-None. Task 0007.1 is ready for implementation.
+None. Task 0008 is ready for verification.

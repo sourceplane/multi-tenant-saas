@@ -47,12 +47,24 @@ Last updated: 2026-05-21
 - Cloudflare/Supabase human-provided resources discovered in Task 0002 remain
   historical context. New infrastructure work follows the AWS S3 backend and
   AWS Secrets Manager path unless a later spec explicitly says otherwise.
+- Task 0007/0007.1 established `packages/db` as the canonical migration
+  manifest package and `tests/db` as the verifier suite. Default `@saas/db`
+  exports are Worker-safe; Node-only migration runner or CLI code must use a
+  separate explicit entry point.
+- The missing `dependsOn` edge from `db` to `db-tests` is accepted as a
+  non-blocking Orun/spec limitation for now because the components subscribe to
+  different environments. Proposal `ai/proposals/task-0007.1-spec-update.md`
+  records the deferred follow-up.
+- Task 0008 has moved from implementation to verification. PR #35 must not be
+  merged until the `db-migrate` PR CI failures are fixed and replacement CI is
+  green.
 
 ## Pending Decisions
 
-- Database migration tool and live migration apply path are not yet
-  established. Task 0007 should define the migration harness and ownership
-  conventions, but should not apply schema changes to live Supabase databases.
+- Database migration ownership conventions are established, but the live
+  migration runner/apply path is not yet verified. Task 0008 PR #35 should
+  define the runner and Orun-controlled `stage`/`prod` apply path without
+  adding new domain schemas beyond the existing baseline migration.
 - Cloudflare Hyperdrive wiring for the new Supabase `stage` and `prod` projects
   is still pending. The historical Cloudflare account from Task 0002 is
   `f9270f828799775bebf9315248fdf717`, but any new Hyperdrive task must verify
@@ -77,3 +89,5 @@ Last updated: 2026-05-21
   Terraform apply through Orun on `main`.
 - Local `supabase projects list` confirmed stage/prod projects in organization
   `dwazxcrywsdbxpuouifa`.
+- PR #34 and main CI run `26221338775` verified the database migration harness
+  and verifier component on `main`.
