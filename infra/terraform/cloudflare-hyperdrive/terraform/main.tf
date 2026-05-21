@@ -49,13 +49,15 @@ variable "awsRegion" {
 variable "cloudflareApiToken" {
   type        = string
   sensitive   = true
+  default     = ""
   description = "Cloudflare API token with Hyperdrive permissions (from CLOUDFLARE_API_TOKEN env var)"
 }
 
 variable "cloudflareAccountId" {
   type        = string
+  sensitive   = true
   default     = ""
-  description = "Cloudflare account ID (overrides CLOUDFLARE_ACCOUNT_ID env var if set)"
+  description = "Cloudflare account ID (from CLOUDFLARE_ACCOUNT_ID env var)"
 }
 
 variable "orgName" {
