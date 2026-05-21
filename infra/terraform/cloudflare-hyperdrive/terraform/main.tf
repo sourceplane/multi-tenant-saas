@@ -49,15 +49,13 @@ variable "awsRegion" {
 variable "cloudflareApiToken" {
   type        = string
   sensitive   = true
-  default     = ""
-  description = "Cloudflare API token with Hyperdrive permissions (from CLOUDFLARE_API_TOKEN env var)"
+  description = "Cloudflare API token with Hyperdrive permissions (from CLOUDFLARE_API_TOKEN env var or -var flag)"
 }
 
 variable "cloudflareAccountId" {
   type        = string
   sensitive   = true
-  default     = ""
-  description = "Cloudflare account ID (from CLOUDFLARE_ACCOUNT_ID env var)"
+  description = "Cloudflare account ID (from CLOUDFLARE_ACCOUNT_ID env var or -var flag)"
 }
 
 variable "orgName" {
@@ -178,21 +176,25 @@ output "hyperdrive_connection_string" {
 }
 
 output "database_host" {
-  description = "Database host (for reference)"
+  description = "Database host (from Supabase secrets)"
   value       = local.database_host
+  sensitive   = true
 }
 
 output "database_port" {
-  description = "Database port (for reference)"
+  description = "Database port (from Supabase secrets)"
   value       = local.database_port
+  sensitive   = true
 }
 
 output "database_name" {
-  description = "Database name (for reference)"
+  description = "Database name (from Supabase secrets)"
   value       = local.database_name
+  sensitive   = true
 }
 
 output "database_user" {
-  description = "Database user (for reference)"
+  description = "Database user (from Supabase secrets)"
   value       = local.database_user
+  sensitive   = true
 }
