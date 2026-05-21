@@ -127,25 +127,60 @@ Last updated: 2026-05-21
 
 - Agent: Implementer
 - Prompt: `ai/tasks/task-0007.md`
-- Status: local draft exists; continuation required
+- Status: verified and merged through Task 0007.1
 - Objective: add a PR-sized database migration harness and migration ownership
   conventions for Supabase Postgres without applying live schema changes or
   implementing domain runtime behavior.
-- Current state: draft artifacts exist locally on `main`, including
-  `packages/db/`, `tests/db/`, README updates, lockfile updates, and
-  `ai/reports/task-0007-implementer.md`, but there is no branch or PR yet.
+- PR: #34 (`feat: add database migration harness and verifier`), merged at
+  `cc40ff0750880b0c34a3b487bec447937968952c`
+- Reports: `ai/reports/task-0007-implementer.md`,
+  `ai/reports/task-0007.1-verifier.md`
+- Durable outcome: `packages/db` owns the canonical migration manifest and
+  baseline `_migrations.applied` migration; `tests/db` verifies deterministic
+  ordering, duplicate IDs, missing files, checksum drift, bounded-context
+  ownership, descriptions, and the project-scoped `org_id + project_id`
+  invariant. No live migration runner or apply path exists yet.
 
 ## Task 0007.1
 
 - Agent: Implementer
 - Prompt: `ai/tasks/task-0007.1.md`
-- Status: planned and active
+- Status: verified and merged
 - Objective: continue from the existing local Task 0007 work, finish checks,
   create/push a task branch, open a GitHub PR, and update the implementer
   report with the real PR number.
 - Durable orchestrator update: `agents/orchestrator.md` now requires generated
   implementer tasks to enforce PR creation; `PR Number: TBD` is not an
   acceptable completed state.
+- PR: #34 (`feat: add database migration harness and verifier`), merged at
+  `cc40ff0750880b0c34a3b487bec447937968952c`
+- Verifier prompt: `ai/tasks/task-0007.1-verifier.md`
+- Verifier report: `ai/reports/task-0007.1-verifier.md`
+- Verification: local package checks, Orun validate/changed-plan/dry-run, PR CI
+  run `26220171323`, and post-merge main CI run `26221338775` passed.
+- Follow-up: the verifier accepted the missing `dependsOn` edge from `db` to
+  `db-tests` as a deferred Orun/spec limitation because the components do not
+  subscribe to the same environments.
+
+## Task 0008
+
+- Agent: Implementer
+- Prompt: `ai/tasks/task-0008.md`
+- Status: implementation open; verifier prompt generated
+- Objective: add the first production-safe Supabase migration runner/apply path
+  for the `packages/db` manifest, with PR CI verification and post-merge
+  `stage`/`prod` apply behavior routed through Orun-controlled jobs.
+- Scope boundary: no domain schema beyond the existing baseline migration, no
+  Hyperdrive wiring, no Worker repository adapter, and no `dev` Supabase
+  project.
+- PR: #35 (`feat: add database migration runner and Orun apply path`)
+- Branch: `codex/task-0008-db-migration-apply`
+- Implementer report: `ai/reports/task-0008-implementer.md`
+- Verifier prompt: `ai/tasks/task-0008-verifier.md`
+- Current verification note: PR CI run `26222938898` failed
+  `db-migrate.stage.migrate` at `Migration Plan` because the job tried
+  `cd packages/db` from the `infra/db-migrate` workdir. The prod migrate job
+  failed because it depends on stage.
 
 ## Historical Notes
 

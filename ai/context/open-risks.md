@@ -12,12 +12,18 @@ Last updated: 2026-05-21
 - Cloudflare Hyperdrive is not yet wired to the new Supabase `stage` and `prod`
   projects. Workers must not invent direct connection strings or bypass the
   planned Hyperdrive adapter seam.
-- No `packages/db` migration harness has landed yet. A local Task 0007 draft
-  exists, but identity, membership, projects, events, and other bounded contexts
-  still have no merged migration ownership convention until Task 0007.1 lands.
-- Local Task 0007 draft work exists on `main` but is not on a task branch and
-  has no PR. Task 0007.1 must preserve the draft, finish verification, and open
-  one PR before it can be considered complete.
+- The `packages/db` migration harness has landed, but no live migration runner
+  or apply path exists yet. Identity, membership, projects, events, and other
+  bounded contexts should not add live schema expectations until Task 0008 or a
+  successor lands the apply path.
+- PR #35 implements the live migration runner/apply path but is not mergeable
+  yet. CI run `26222938898` failed `db-migrate.stage.migrate` because the job
+  tried `cd packages/db` from the `infra/db-migrate` workdir; prod failed due
+  to the stage dependency.
+- Orun does not currently express environment-scoped `dependsOn` edges. The
+  `db` component cannot safely depend on `db-tests` while `db` subscribes to
+  `dev`/`stage`/`prod` and `db-tests` subscribes only to `dev`; proposal
+  `ai/proposals/task-0007.1-spec-update.md` is deferred.
 - Ignored generated outputs from the draft exist locally (`dist`,
   `node_modules`, TypeScript build info, `.orun`, Terraform working dirs, and
   `plan.json`). They must not be staged or committed.
@@ -41,8 +47,12 @@ Last updated: 2026-05-21
   free-plan-incompatible Supabase `instance_size` attribute, `aws-admin` PR #26
   added the missing Secrets Manager lifecycle access, and PR #33 changed
   credential writes to use `aws_secretsmanager_secret_version`.
-- Latest `multi-tenant-saas` main CI run `26209010693` passed with
+- Main CI run `26209010693` passed with
   `supabase.stage.terraform` and `supabase.prod.terraform` apply jobs.
+- PR #34 and latest main CI run `26221338775` passed, landing the offline DB
+  migration harness and verifier suite.
+- Task 0007.1 resolved the local Task 0007 draft/PR gap by opening and merging
+  PR #34.
 - Supabase `stage` and `prod` projects now exist under organization
   `sourceplane` (`dwazxcrywsdbxpuouifa`) with refs `thielrrsejwhjkdluwqm` and
   `npbvrxkrlyrpnhrqucxa`.
