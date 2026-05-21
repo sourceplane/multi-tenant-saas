@@ -53,8 +53,8 @@ variable "cloudflareApiToken" {
 }
 
 variable "cloudflareAccountId" {
-  type    = string
-  default = ""
+  type        = string
+  default     = ""
   description = "Cloudflare account ID (overrides CLOUDFLARE_ACCOUNT_ID env var if set)"
 }
 
@@ -123,12 +123,12 @@ data "aws_secretsmanager_secret_version" "supabase" {
 
 locals {
   supabase_secret = jsondecode(data.aws_secretsmanager_secret_version.supabase.secret_string)
-  
+
   database_host = local.supabase_secret.database_host
   database_port = tonumber(local.supabase_secret.database_port)
   database_name = local.supabase_secret.database_name
   database_user = local.supabase_secret.database_user
-  
+
   hyperdrive_name = "${var.namespacePrefix}multi-tenant-saas-${var.environment}"
 }
 
@@ -142,7 +142,7 @@ locals {
 resource "cloudflare_hyperdrive_config" "postgres" {
   account_id = var.cloudflareAccountId
   name       = local.hyperdrive_name
-  
+
   origin {
     host     = local.database_host
     port     = local.database_port
@@ -171,7 +171,7 @@ output "hyperdrive_name" {
 output "hyperdrive_connection_string" {
   description = "Hyperdrive-formatted connection string for Workers (to be used in bindings)"
   # Note: actual connection string is built at binding time; this is the resource ID
-  value       = "hyperdrive://${cloudflare_hyperdrive_config.postgres.id}"
+  value = "hyperdrive://${cloudflare_hyperdrive_config.postgres.id}"
 }
 
 output "database_host" {
