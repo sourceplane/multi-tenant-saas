@@ -110,6 +110,17 @@ locals {
   supabase_region = "ap-southeast-1"
   project_name    = "multi-tenant-saas-${var.environment}"
   secret_name     = "${var.orgName}/multi-tenant-saas/supabase/${var.environment}"
+
+  supabase_secret_payload = {
+    project_ref       = supabase_project.this.id
+    project_url       = "https://${supabase_project.this.id}.supabase.co"
+    database_host     = "db.${supabase_project.this.id}.supabase.co"
+    database_port     = "5432"
+    database_name     = "postgres"
+    database_user     = "postgres"
+    database_password = random_password.db_password.result
+    connection_uri    = "postgresql://postgres:${random_password.db_password.result}@db.${supabase_project.this.id}.supabase.co:5432/postgres"
+  }
 }
 
 # --- Generate database password ---
@@ -133,27 +144,28 @@ resource "supabase_project" "this" {
 # --- Store credentials in AWS Secrets Manager ---
 
 resource "aws_secretsmanager_secret" "supabase" {
-  name        = local.secret_name
-  description = "Supabase project credentials for ${local.project_name}"
+  name                    = local.secret_name
+  description             = "Supabase project credentials for ${local.project_name}"
+  recovery_window_in_days = 30
 
   tags = {
     Project     = local.project_name
     Environment = var.environment
   }
+
+  lifecycle {
+    # Keep the named secret as a stable container. Credential changes must create
+    # a new aws_secretsmanager_secret_version rather than replacing the secret,
+    # because AWS prevents immediate reuse of a deleted secret name during the
+    # recovery window.
+    prevent_destroy = true
+  }
 }
 
 resource "aws_secretsmanager_secret_version" "supabase" {
-  secret_id = aws_secretsmanager_secret.supabase.id
-  secret_string = jsonencode({
-    project_ref       = supabase_project.this.id
-    project_url       = "https://${supabase_project.this.id}.supabase.co"
-    database_host     = "db.${supabase_project.this.id}.supabase.co"
-    database_port     = "5432"
-    database_name     = "postgres"
-    database_user     = "postgres"
-    database_password = random_password.db_password.result
-    connection_uri    = "postgresql://postgres:${random_password.db_password.result}@db.${supabase_project.this.id}.supabase.co:5432/postgres"
-  })
+  secret_id      = aws_secretsmanager_secret.supabase.id
+  secret_string  = jsonencode(local.supabase_secret_payload)
+  version_stages = ["AWSCURRENT"]
 }
 
 # --- Outputs (non-secret only) ---
