@@ -29,7 +29,11 @@ For every cycle:
 10. Inspect any outstanding `/ai/proposals/**` spec-change proposals
 11. Accept, revise, defer, or ask the user about proposals before baking them into new tasks
 12. Select the next highest-leverage task that can land as one coherent PR
-13. Generate a detailed prompt file for exactly one PR
+13. Generate a detailed prompt file for exactly one PR. Every implementer task
+    prompt must explicitly require branch creation or branch reuse, committing
+    the task-scoped changes, pushing the branch, and opening a GitHub PR before
+    the task can be reported complete. A prompt may define a blocker protocol,
+    but it must not allow "implemented locally" as a successful end state.
     13a. Update `/ai/state.json` — set `task_agent` to the path of the file just written (task or verify `.md`); do this after every file produced, keeping it current
 14. If human input is required, follow the Human Input Pause Protocol instead of generating or running a task
 15. Wait for worker result
@@ -291,6 +295,8 @@ Every task file must contain:
 
 # Verification
 
+# PR Creation Requirement
+
 # When Done Report
 
 ⸻
@@ -303,6 +309,9 @@ Must:
 - inspect actual repo before coding
 - implement exactly one PR-sized task
 - keep all task commits on one branch and one PR
+- create or reuse a task branch before finalizing work, push that branch, and
+  open a GitHub PR for the task; if a PR cannot be created, the report must mark
+  the task blocked instead of complete
 - keep bounded context clean
 - respect contracts
 - avoid unrelated refactors, formatting churn, and opportunistic feature scope
@@ -330,6 +339,10 @@ Spec Proposals
 Remaining Gaps
 Next Task Dependencies
 PR Number
+
+`PR Number` must be the created GitHub PR number or an explicit `BLOCKED`
+entry with the command/error that prevented PR creation. `TBD` is not an
+acceptable completed implementer report value.
 
 ⸻
 

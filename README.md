@@ -2,10 +2,11 @@
 
 Reusable Cloudflare and Supabase multi-tenant SaaS starter scaffold.
 
-## Scaffold Status
+## Status
 
-This repository contains the initial workspace and Orun component skeleton only.
-Live Cloudflare and Supabase resource provisioning is **not** part of this scaffold — it is deferred to a later task.
+- Supabase `stage` and `prod` projects are provisioned via Terraform with credentials stored in AWS Secrets Manager.
+- Database migration harness (`packages/db`) establishes conventions for bounded-context-owned migrations.
+- Cloudflare Workers, Hyperdrive, and live migration apply are not yet implemented.
 
 ## Prerequisites
 
@@ -38,11 +39,13 @@ pnpm build
 apps/api-edge         Cloudflare Worker — public HTTP entry point
 apps/web-console      Cloudflare Pages — web console scaffold
 packages/contracts    Shared API, tenancy, and error types
+packages/db           Database migration harness and manifest
 packages/shared       Generic helpers (IDs, errors) — no domain logic
 packages/testing      Test fixtures and utilities
 tests/contracts       Contract tests for packages/contracts
-infra/terraform/state Terraform R2 backend bootstrap (descriptor only)
-infra/terraform/core  Core Terraform infra (descriptor only)
+tests/db              Migration verifier tests
+infra/terraform/state Terraform state backend (S3)
+infra/terraform/supabase  Supabase project provisioning (stage/prod)
 tooling/tsconfig      Shared TypeScript configurations
 tooling/eslint        Shared ESLint configuration
 ```
@@ -62,8 +65,9 @@ CI is powered by [Orun](https://opencode.ai/docs) with Stack Tectonic. The `.git
 
 ## Infrastructure
 
-Terraform provisioning (Supabase, Hyperdrive, Cloudflare Workers) is **not implemented** in this PR.
-The `infra/terraform/state` and `infra/terraform/core` directories contain only `component.yaml` descriptors and README files.
+Terraform provisions Supabase projects for `stage` and `prod` environments. Credentials are stored in AWS Secrets Manager at `sourceplane/multi-tenant-saas/supabase/<env>`. The `dev` environment has no Supabase project yet.
+
+Cloudflare Hyperdrive and Worker database adapters are not yet implemented.
 
 ## Adding a New Component
 

@@ -4,9 +4,8 @@
 No human input is currently requested.
 
 ## Last Resolved Input
-Task 0006 should provision only `stage` and `prod` for now. Use Supabase
-organization `sourceplane` with slug/id `dwazxcrywsdbxpuouifa`, create separate
-projects/databases for `stage` and `prod`, and leave `dev` unprovisioned.
+The user answered the Task 0007 blocker: continue from the existing local Task
+0007 work and drive it toward a PR.
 
 ## Needed To Continue
-None. Task 0006 is ready for implementation.
+None. Task 0007.1 is ready for implementation.
