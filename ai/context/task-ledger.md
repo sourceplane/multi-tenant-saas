@@ -164,23 +164,25 @@ Last updated: 2026-05-21
 
 ## Task 0008
 
-- Agent: Implementer
+- Agent: Implementer + Verifier
 - Prompt: `ai/tasks/task-0008.md`
-- Status: implementation open; verifier prompt generated
+- Status: verified and merged
 - Objective: add the first production-safe Supabase migration runner/apply path
   for the `packages/db` manifest, with PR CI verification and post-merge
   `stage`/`prod` apply behavior routed through Orun-controlled jobs.
 - Scope boundary: no domain schema beyond the existing baseline migration, no
   Hyperdrive wiring, no Worker repository adapter, and no `dev` Supabase
   project.
-- PR: #35 (`feat: add database migration runner and Orun apply path`)
-- Branch: `codex/task-0008-db-migration-apply`
+- PR: #35 (`feat: add database migration runner and Orun apply path`), merged
+  at `aee7d25`
 - Implementer report: `ai/reports/task-0008-implementer.md`
-- Verifier prompt: `ai/tasks/task-0008-verifier.md`
-- Current verification note: PR CI run `26222938898` failed
-  `db-migrate.stage.migrate` at `Migration Plan` because the job tried
-  `cd packages/db` from the `infra/db-migrate` workdir. The prod migrate job
-  failed because it depends on stage.
+- Verifier report: `ai/reports/task-0008-verifier.md`
+- Durable outcome: `SupabaseApiAdapter` uses the Supabase Management API
+  (HTTPS/IPv4) to apply migrations from CI — bypassing the IPv6-only direct
+  connection and the Supavisor "tenant not found" issue. Plan mode is fully
+  offline (no DB connection). Post-merge CI run `26229865114` applied
+  `000_control_baseline` to both `stage` and `prod`. The `_migrations.applied`
+  table is bootstrapped in both environments.
 
 ## Historical Notes
 

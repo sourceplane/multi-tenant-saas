@@ -12,14 +12,11 @@ Last updated: 2026-05-21
 - Cloudflare Hyperdrive is not yet wired to the new Supabase `stage` and `prod`
   projects. Workers must not invent direct connection strings or bypass the
   planned Hyperdrive adapter seam.
-- The `packages/db` migration harness has landed, but no live migration runner
-  or apply path exists yet. Identity, membership, projects, events, and other
-  bounded contexts should not add live schema expectations until Task 0008 or a
-  successor lands the apply path.
-- PR #35 implements the live migration runner/apply path but is not mergeable
-  yet. CI run `26222938898` failed `db-migrate.stage.migrate` because the job
-  tried `cd packages/db` from the `infra/db-migrate` workdir; prod failed due
-  to the stage dependency.
+- The `_migrations.applied` table is bootstrapped in both `stage` and `prod`.
+  Future domain migrations must be idempotent because the `SupabaseApiAdapter`
+  sends statements in autocommit mode without true per-migration rollback.
+  Advisory locks are a no-op in the adapter; concurrent runs are safe via
+  `ON CONFLICT DO NOTHING` only.
 - Orun does not currently express environment-scoped `dependsOn` edges. The
   `db` component cannot safely depend on `db-tests` while `db` subscribes to
   `dev`/`stage`/`prod` and `db-tests` subscribes only to `dev`; proposal
@@ -43,24 +40,9 @@ Last updated: 2026-05-21
 
 ## Resolved Risks
 
-- Task 0006 post-merge Supabase apply failure is resolved. PR #31 removed the
-  free-plan-incompatible Supabase `instance_size` attribute, `aws-admin` PR #26
-  added the missing Secrets Manager lifecycle access, and PR #33 changed
-  credential writes to use `aws_secretsmanager_secret_version`.
-- Main CI run `26209010693` passed with
-  `supabase.stage.terraform` and `supabase.prod.terraform` apply jobs.
-- PR #34 and latest main CI run `26221338775` passed, landing the offline DB
-  migration harness and verifier suite.
-- Task 0007.1 resolved the local Task 0007 draft/PR gap by opening and merging
-  PR #34.
-- Supabase `stage` and `prod` projects now exist under organization
-  `sourceplane` (`dwazxcrywsdbxpuouifa`) with refs `thielrrsejwhjkdluwqm` and
-  `npbvrxkrlyrpnhrqucxa`.
-- The repo-level AWS S3 Terraform seam was resolved by Task 0005/PR #27.
-- Legacy R2/core Terraform component source was removed by Task 0003.1/PR #26
-  without mutating live resources.
-- Orun runtime/CI/composition drift was resolved for this repo by following the
-  Task 0005/0006 verified `v2.2.1` runtime path.
+- Task 0008 is complete. The migration runner is operational. The
+  `_migrations.applied` table is bootstrapped in `stage` and `prod` via
+  post-merge CI run `26229865114`.
 
 ## Watch Items
 

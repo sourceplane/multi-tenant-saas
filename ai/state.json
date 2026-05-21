@@ -1,6 +1,6 @@
 {
   "goal": "Supabase/Postgres-backed multi-organization Orun SaaS control plane",
-  "current_task": "0008",
+  "current_task": null,
   "completed": [
     "0001",
     "0001.1",
@@ -12,24 +12,21 @@
     "0006",
     "0006.1",
     "0007",
-    "0007.1"
+    "0007.1",
+    "0008"
   ],
-  "repo_health": "yellow",
-  "next_focus": "task-0008-verification",
+  "repo_health": "green",
+  "next_focus": "awaiting-next-task",
   "last_verified": "2026-05-21",
   "waiting_for_input": "false",
-  "task_agent": "ai/tasks/task-0008-verifier.md",
+  "task_agent": null,
   "notes": [
-    "main is synced with origin/main at cc40ff0750880b0c34a3b487bec447937968952c.",
-    "Main CI run 26209010693 passed with supabase.stage.terraform and supabase.prod.terraform apply jobs.",
-    "Supabase stage project ref is thielrrsejwhjkdluwqm; prod project ref is npbvrxkrlyrpnhrqucxa; dev remains unprovisioned.",
-    "PR #34 merged Task 0007/0007.1 and landed packages/db plus tests/db as the offline database migration harness.",
-    "Latest main CI run 26221338775 passed after PR #34 with db dev/stage/prod verify jobs and db-tests dev verify.",
-    "agents/orchestrator.md now requires generated implementer tasks to enforce PR creation; PR Number: TBD is not an acceptable completed report value.",
-    "Task 0008 verifier is active at ai/tasks/task-0008-verifier.md and should independently verify PR #35 before merge.",
-    "Task 0008 implementation is open as PR #35 on codex/task-0008-db-migration-apply; verifier prompt is ai/tasks/task-0008-verifier.md.",
-    "PR #35 CI run 26222938898 is currently failing db-migrate stage/prod jobs; stage fails because the migration job runs from infra/db-migrate and tries to cd packages/db.",
+    "main is synced with origin/main at dffdc4a.",
+    "Task 0008 complete. PR #35 merged and post-merge CI run 26229865114 passed.",
+    "000_control_baseline applied to stage and prod. _migrations.applied table bootstrapped.",
+    "Migration runner uses SupabaseApiAdapter (Supabase Management API, HTTPS/IPv4). Plan mode is offline.",
+    "Supabase stage ref: thielrrsejwhjkdluwqm, prod ref: npbvrxkrlyrpnhrqucxa. dev remains unprovisioned.",
     "The missing db -> db-tests dependsOn edge is a deferred Orun/spec limitation recorded in ai/proposals/task-0007.1-spec-update.md.",
-    "Ignored generated outputs are present locally under packages/db/dist, packages/db/node_modules, tests/db/node_modules, TypeScript build info, .orun, node_modules, Terraform working dirs, and plan.json; they must not be committed."
+    "Ignored generated outputs must not be staged or committed: dist, node_modules, .orun, Terraform dirs, plan.json."
   ]
 }
