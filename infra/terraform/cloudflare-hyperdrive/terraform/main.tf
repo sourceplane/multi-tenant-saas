@@ -143,7 +143,8 @@ resource "cloudflare_hyperdrive_config" "postgres" {
   account_id = var.cloudflareAccountId
   name       = local.hyperdrive_name
 
-  origin {
+  origin = {
+    scheme   = "postgres"
     host     = local.database_host
     port     = local.database_port
     database = local.database_name
@@ -151,7 +152,7 @@ resource "cloudflare_hyperdrive_config" "postgres" {
     password = local.supabase_secret.database_password
   }
 
-  caching {
+  caching = {
     disabled = false
   }
 }
