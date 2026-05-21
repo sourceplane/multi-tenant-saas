@@ -29,9 +29,14 @@ s3://sourceplane-<env>/env/<env>/multi-tenant-saas/supabase/terraform.tfstate
 
 Credentials are stored at:
 ```
-sourceplane/multi-tenant-saas/supabase/stage
-sourceplane/multi-tenant-saas/supabase/prod
+sourceplane/multi-tenant-saas/supabase/stage-<version>
+sourceplane/multi-tenant-saas/supabase/prod-<version>
 ```
+
+> **Note**: Secret names include a version suffix (e.g., `v2`) to allow safe
+> rotation without conflicts with secrets scheduled for deletion in AWS Secrets
+> Manager. The version can be set via `TF_VAR_secret_version` or defaults to a
+> timestamp-based suffix.
 
 ### Secret JSON Shape
 

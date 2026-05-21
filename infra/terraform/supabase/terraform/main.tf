@@ -93,6 +93,12 @@ variable "stackName" {
   default = "supabase"
 }
 
+variable "secret_version" {
+  description = "Optional version suffix for secret name (e.g., 'v2'). If empty, uses timestamp."
+  type        = string
+  default     = ""
+}
+
 variable "terraformDir" {
   type    = string
   default = "terraform"
@@ -109,7 +115,8 @@ locals {
   supabase_org_id = "dwazxcrywsdbxpuouifa"
   supabase_region = "ap-southeast-1"
   project_name    = "multi-tenant-saas-${var.environment}"
-  secret_name     = "${var.orgName}/multi-tenant-saas/supabase/${var.environment}"
+  secret_version  = var.secret_version != "" ? var.secret_version : "v${timestamp()}"
+  secret_name     = "${var.orgName}/multi-tenant-saas/supabase/${var.environment}-${local.secret_version}"
 }
 
 # --- Generate database password ---
