@@ -4,89 +4,79 @@ Last updated: 2026-05-21
 
 ## Repo Reality
 
-- `main` is synced with `origin/main` at `fc795e4d974ae57d3e262084c393c04e18076f90`.
-- Tasks 0001, 0001.1, 0002, 0003, 0003.1, 0004, and 0005 are verified and
-  merged.
-- Task 0005 merged as PR #27:
-  https://github.com/sourceplane/multi-tenant-saas/pull/27
-- PR #27 head after verifier fixes was `4c343b22a1f4d5bebfda251595f68c90f9029164`;
-  merge commit on `main` is `0af75d05bb3660c58d9f991924f2f821c2522d0f`.
-- PR #28 (`[codex] Prepare Task 0006 Supabase target`) merged at
-  `9982aaeecbc78c6adde3edf4fae436e299b79515` and updated the active Task 0006
-  prompt, compact context, and specs for the chosen Supabase org and the Orun
-  `v2.2.1` runtime reference.
-- PR #28 post-merge `main` CI run `26179180475` failed because `main` still
-  planned unchanged verify jobs and remote Orun execution timed out/failed to
-  authenticate.
-- PR #29 (`chore: update orun-plan-changed`) merged at
-  `024f8fe99c0b646acd0d7da36178cce5499ea41d` and changed `.github/workflows/ci.yml`
-  so `orun plan --changed` runs on both pull requests and pushes to `main`.
-- Post-merge `main` CI run `26180142027` passed; its matrix was empty because no
-  changed components were selected on that merge commit.
-- The repo now uses Orun `v2.2.1` with `sourceplane/orun-action@v1.2.0`.
-- `intent.yaml` discovers `apps/`, `infra/`, `packages/`, and `tests/`, and the
-  repo continues to use `dev`, `stage`, and `prod` environments with
-  `parameterDefaults.terraform` aligned to the `aws-admin` shape.
-- Terraform components are discovered under `infra/terraform/**` and currently
-  include `infra/terraform/bootstrap/`, which proves the S3 backend and AWS role
-  seam for this repo.
-- The active Terraform job path still uses
-  `aws-actions/configure-aws-credentials@v4`; Task 0005 verification confirmed
-  the earlier native-shell claim was report drift, not shipped code.
-- `.github/workflows/ci.yml` currently exports both `SUPABASE_API_KEY` and
-  `SUPABASE_ACCESS_TOKEN` into Orun run jobs.
-- `gh api repos/sourceplane/multi-tenant-saas/environments` still returns no
-  configured GitHub environments, so the deploy-role trust subject requiring
-  environment `production` is still not exercised end-to-end.
-- Historical Task 0002 artifacts remain outside active source: the orphaned R2
-  bucket cleanup question and Hyperdrive adoption scaffold were intentionally not
-  revisited by Task 0003.1 or Task 0005.
-- Human input for Task 0006 is resolved. Supabase provisioning target is
-  organization `sourceplane` with slug/id `dwazxcrywsdbxpuouifa`, `stage` and
-  `prod` only, with separate projects/databases named
-  `multi-tenant-saas-stage` and `multi-tenant-saas-prod`. `dev` stays
-  unprovisioned for now.
-- Local read-only Supabase CLI check confirmed the `sourceplane` org id/slug.
-  `supabase projects list` did not reveal a reusable existing project target in
-  this checkout.
-- Local worktree note: untracked `agents/agent-loop.sh` is present in this
-  checkout but is now also part of merged `main` via PR #29.
+- `main` is synced with `origin/main` at
+  `29cd21c125423adfd7a17b1a1b12707d63f7982d`.
+- Tasks 0001, 0001.1, 0002, 0003, 0003.1, 0004, 0005, 0006, and 0006.1 have
+  landed. Task 0006/0006.1 did not leave a formal verifier report, but the
+  live Supabase path is now operationally verified by post-merge CI and
+  read-only Supabase inspection.
 - PR #30 (`chore: update supabase-infra`) merged at
-  `fc795e4d974ae57d3e262084c393c04e18076f90` and landed the first
-  `infra/terraform/supabase/` component plus CI mapping of `SUPABASE_API_KEY`
-  to `SUPABASE_ACCESS_TOKEN`.
-- PR #30 PR CI run `26185038583` passed, including `supabase · stage · Terraform`
-  and `supabase · prod · Terraform` in plan-only mode.
-- Post-merge `main` CI run `26185145757` failed in live apply for both
-  `supabase.stage.terraform` and `supabase.prod.terraform`.
-- The `stage` apply failure exposed two concrete gaps:
-  - the Supabase provider call still sent `instance_size`, which the current
-    free-plan `sourceplane` organization rejects with HTTP 402;
-  - the repo-scoped AWS role lacks Secrets Manager create/write permissions for
-    `sourceplane/multi-tenant-saas/supabase/<env>`.
-- Local worktree currently includes Task 0006.1 remediation artifacts on `main`:
-  modified `infra/terraform/supabase/terraform/main.tf` plus untracked
-  `ai/tasks/task-0006.1-supabase-merge-fix.md` and
-  `ai/reports/task-0006.1-implementer.md`.
+  `fc795e4d974ae57d3e262084c393c04e18076f90` and added
+  `infra/terraform/supabase/`.
+- PR #31 (`fix: remove instance_size from supabase project for free-plan org`)
+  merged at `a5a9cd2c4ae2bbba7cde32914c7f6b88623b4103` and removed the
+  free-plan-incompatible `instance_size` attribute from Supabase project
+  creation.
+- `aws-admin` PR #26 (`Add Supabase secrets access to plan role`) merged at
+  `aacca43ba4c629a327ce6cd3b55fc21a6b405242`; its post-merge CI run
+  `26204953054` passed and added Secrets Manager lifecycle access for
+  `sourceplane/multi-tenant-saas/*`.
+- PR #33 (`fix: preserve Supabase Secrets Manager container`) merged at
+  `29cd21c125423adfd7a17b1a1b12707d63f7982d` and changed the Supabase
+  Terraform component to keep the named AWS Secrets Manager secret stable while
+  writing credential changes through `aws_secretsmanager_secret_version`.
+- Latest `multi-tenant-saas` main CI run `26209010693` passed. The plan selected
+  only `supabase.stage.terraform` and `supabase.prod.terraform`; both apply
+  jobs succeeded.
+- CI run `26209010693` observed:
+  - stage: project `multi-tenant-saas-stage`, ref `thielrrsejwhjkdluwqm`,
+    secret ARN
+    `arn:aws:secretsmanager:us-east-1:306024784101:secret:sourceplane/multi-tenant-saas/supabase/stage-7vy19S`.
+  - prod: project `multi-tenant-saas-prod`, ref `npbvrxkrlyrpnhrqucxa`, secret
+    ARN
+    `arn:aws:secretsmanager:us-east-1:306024784101:secret:sourceplane/multi-tenant-saas/supabase/prod-ICcSqq`.
+- Local read-only `supabase projects list` confirms both projects exist in
+  organization `sourceplane` (`dwazxcrywsdbxpuouifa`) in Southeast Asia
+  (Singapore). `dev` remains intentionally unprovisioned.
+- Local AWS CLI verification was not available in this checkout because local
+  AWS credentials are absent. The live apply evidence comes from GitHub Actions
+  logs and Supabase CLI read-only inspection.
+- Local Orun validation passes:
+  `/Users/irinelinson/.local/bin/kiox -- orun validate --intent intent.yaml`.
+- Local changed plan on clean `main` produces zero jobs:
+  `/Users/irinelinson/.local/bin/kiox -- orun plan --changed --intent intent.yaml --output plan.json`.
+- `pnpm typecheck` could not run locally because workspace dependencies are not
+  installed in this checkout (`turbo: command not found`).
+- No open pull requests are currently listed for `sourceplane/multi-tenant-saas`.
+- The merged root `README.md` is stale: it still describes live Supabase/Terraform
+  provisioning as deferred and references deleted R2/core Terraform paths. The
+  local Task 0007 draft includes README updates that Task 0007.1 must finish and
+  PR.
 
 ## Current Roadmap Position
 
 - Active spec pack: reusable SaaS starter under `specs/**`.
-- Current phase: Week 0 / operations foundation remains active, but the AWS S3
-  backend, Terraform credential seam, and first Supabase component are now
-  landed.
-- Immediate focus: remediate the Task 0006 post-merge apply failure with Task
-  0006.1, keeping the repo-local fix in `multi-tenant-saas` and recording the
-  exact `aws-admin` IAM delta required for Secrets Manager writes.
+- `specs-v2/**` remains out of scope unless the task is product-specific Git
+  catalog or CI intelligence work.
+- Week 0 operations foundation is functionally complete for AWS S3 backend and
+  Supabase `stage`/`prod` provisioning.
+- The next high-leverage foundation gap is the Supabase Postgres migration and
+  repository-adapter convention layer. No `packages/db` package or migration
+  ownership harness has landed yet; a local Task 0007 draft exists and must be
+  completed through Task 0007.1.
+- Cloudflare Hyperdrive wiring is still missing for the new Supabase projects
+  and should follow after the database migration conventions are established or
+  when an app/runtime task needs the binding.
 
 ## Current Task
 
-- Next implementer task: `ai/tasks/task-0006.1-supabase-merge-fix.md`.
-- Task 0006 shipped in PR #30, but verification is not complete because merged
-  `main` apply failed. Task 0006.1 is the active remediation task; do not
-  generate Task 0007 until the Supabase apply path is stabilized and verified.
-- Human input is no longer blocking; `ai/waiting_for_input.md` has been
-  replaced with a no-input-requested note.
-- The Orun `v2.2.1` spec alignment proposal has been accepted into
-  `specs/orun-golden-path.md`; follow this repo's verified runtime and
-  `aws-admin`'s Terraform component/backend structure.
+- Next implementer task: `ai/tasks/task-0007.1.md`.
+- Human input resolved the Task 0007 blocker: continue from the existing local
+  Task 0007 work and drive it toward a PR.
+- Local Task 0007 draft artifacts exist on `main` in `README.md`,
+  `pnpm-lock.yaml`, `ai/tasks/task-0007.md`,
+  `ai/reports/task-0007-implementer.md`, `packages/db/`, and `tests/db/`.
+- Task 0007.1 must finish verification, create a task branch, push it, open a
+  GitHub PR, and update the implementer report with the real PR number.
+- `agents/orchestrator.md` now requires implementer task prompts to enforce PR
+  creation; a completed implementer report may not leave `PR Number` as `TBD`.
