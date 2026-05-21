@@ -13,7 +13,7 @@
     "db-migrate": "./dist/runner/cli.js"
   },
   "scripts": {
-    "build": "tsc --project tsconfig.build.json",
+    "build": "tsc --project tsconfig.build.json && cp -r src/migrations dist/",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src",
     "migrate:plan": "node --loader ts-node/esm src/runner/cli.ts plan",

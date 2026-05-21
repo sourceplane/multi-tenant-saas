@@ -63,8 +63,7 @@ spec:
       shell: bash
       run: |
         set -euo pipefail
-        cd packages/db
-        MIGRATION_ENV="{{ .orun.environment.name }}" node dist/runner/cli.js plan --env "{{ .orun.environment.name }}"
+        MIGRATION_ENV="{{ .orun.environment.name }}" node ../../packages/db/dist/runner/cli.js plan --env "{{ .orun.environment.name }}"
       onFailure: stop
 
     - id: migrate-apply
@@ -73,6 +72,5 @@ spec:
       shell: bash
       run: |
         set -euo pipefail
-        cd packages/db
-        MIGRATION_ENV="{{ .orun.environment.name }}" node dist/runner/cli.js apply --env "{{ .orun.environment.name }}"
+        MIGRATION_ENV="{{ .orun.environment.name }}" node ../../packages/db/dist/runner/cli.js apply --env "{{ .orun.environment.name }}"
       onFailure: stop
