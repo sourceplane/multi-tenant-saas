@@ -20,6 +20,7 @@ compositions:
       - stack-tectonic
     bindings:
       terraform: stack-tectonic
+      db-migrate: stack-tectonic
 
 discovery:
   roots:

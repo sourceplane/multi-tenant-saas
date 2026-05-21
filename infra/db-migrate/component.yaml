@@ -1,0 +1,38 @@
+apiVersion: sourceplane.io/v1
+kind: Component
+metadata:
+  name: db-migrate
+  description: Applies database migrations to stage and prod Supabase instances
+  labels:
+    domain: infra
+    scope: database
+    team: platform
+    layer: data
+
+spec:
+  type: db-migrate
+  domain: infra
+
+  parameters:
+    nodeVersion: "20"
+    pnpmVersion: "10.12.1"
+    awsRegion: us-east-1
+    secretName: sourceplane/multi-tenant-saas/supabase
+    owner: sourceplane
+    repo: multi-tenant-saas
+
+  subscribe:
+    environments:
+      - name: stage
+        profile: plan
+        profileRules:
+          - profile: apply
+            when:
+              triggerRef: github-push-main
+
+      - name: prod
+        profile: plan
+        profileRules:
+          - profile: apply
+            when:
+              triggerRef: github-push-main
