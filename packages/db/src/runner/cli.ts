@@ -3,8 +3,8 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { manifest } from "../manifest.js";
 import { runMigrations } from "./runner.js";
-import { PgAdapter } from "./pg-adapter.js";
-import { loadConnectionUri } from "./secrets.js";
+import { loadSecret } from "./secrets.js";
+import { SupabaseApiAdapter } from "./supabase-api-adapter.js";
 import type { MigrationAdapter, RunMode } from "./types.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -12,7 +12,7 @@ const MIGRATIONS_DIR = resolve(__dirname, "../migrations");
 
 const SECRET_PREFIX = "sourceplane/multi-tenant-saas/supabase";
 const AWS_REGION = process.env["AWS_REGION"] ?? "us-east-1";
-const SUPABASE_POOLER_REGION = process.env["SUPABASE_POOLER_REGION"];
+const SUPABASE_ACCESS_TOKEN = process.env["SUPABASE_ACCESS_TOKEN"];
 
 function usage(): never {
   process.stderr.write(
@@ -24,11 +24,10 @@ function usage(): never {
     `\n` +
     `Options:\n` +
     `  --env <stage|prod>       target environment (required)\n` +
-    `  --connection-uri <uri>   direct connection URI (skips Secrets Manager)\n` +
     `\n` +
     `Environment:\n` +
     `  AWS_REGION               AWS region for Secrets Manager (default: us-east-1)\n` +
-    `  DATABASE_URL             connection URI override (same as --connection-uri)\n`,
+    `  SUPABASE_ACCESS_TOKEN    Supabase management API token (required for apply)\n`,
   );
   process.exit(1);
 }
@@ -36,7 +35,6 @@ function usage(): never {
 interface ParsedArgs {
   mode: RunMode;
   env: string;
-  connectionUri: string | undefined;
 }
 
 function parseArgs(argv: string[]): ParsedArgs {
@@ -48,13 +46,10 @@ function parseArgs(argv: string[]): ParsedArgs {
   }
 
   let env: string | undefined;
-  let connectionUri: string | undefined;
 
   for (let i = 1; i < args.length; i++) {
     if (args[i] === "--env" && args[i + 1]) {
       env = args[++i];
-    } else if (args[i] === "--connection-uri" && args[i + 1]) {
-      connectionUri = args[++i];
     }
   }
 
@@ -70,41 +65,34 @@ function parseArgs(argv: string[]): ParsedArgs {
     process.exit(1);
   }
 
-  if (!connectionUri) {
-    connectionUri = process.env["DATABASE_URL"];
-  }
-
-  return { mode, env, connectionUri };
+  return { mode, env };
 }
 
 async function resolveAdapter(
   mode: RunMode,
   env: string,
-  connectionUri?: string,
 ): Promise<MigrationAdapter | null> {
   if (mode === "plan") {
     return null;
   }
 
-  let uri: string;
-
-  if (connectionUri) {
-    uri = connectionUri;
-  } else {
-    const secretName = `${SECRET_PREFIX}/${env}`;
-    process.stderr.write(`Loading credentials from Secrets Manager: ${secretName}\n`);
-    uri = await loadConnectionUri(secretName, AWS_REGION, SUPABASE_POOLER_REGION);
+  if (!SUPABASE_ACCESS_TOKEN) {
+    throw new Error("SUPABASE_ACCESS_TOKEN is required for apply mode");
   }
 
-  return new PgAdapter(uri);
+  const secretName = `${SECRET_PREFIX}/${env}`;
+  process.stderr.write(`Loading credentials from Secrets Manager: ${secretName}\n`);
+  const secret = await loadSecret(secretName, AWS_REGION);
+
+  return new SupabaseApiAdapter(secret.project_ref, SUPABASE_ACCESS_TOKEN);
 }
 
 async function main(): Promise<void> {
-  const { mode, env, connectionUri } = parseArgs(process.argv);
+  const { mode, env } = parseArgs(process.argv);
 
   process.stderr.write(`db-migrate: mode=${mode} env=${env}\n`);
 
-  const adapter = await resolveAdapter(mode, env, connectionUri);
+  const adapter = await resolveAdapter(mode, env);
 
   const result = await runMigrations(manifest, {
     mode,

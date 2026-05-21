@@ -9,11 +9,10 @@ export interface SupabaseSecret {
   connection_uri: string;
 }
 
-export async function loadConnectionUri(
+async function fetchSecret(
   secretName: string,
   region: string,
-  poolerRegion?: string,
-): Promise<string> {
+): Promise<SupabaseSecret> {
   const {
     SecretsManagerClient,
     GetSecretValueCommand,
@@ -28,7 +27,26 @@ export async function loadConnectionUri(
     throw new Error(`Secret ${secretName} has no string value`);
   }
 
-  const parsed: SupabaseSecret = JSON.parse(response.SecretString);
+  return JSON.parse(response.SecretString) as SupabaseSecret;
+}
+
+export async function loadSecret(
+  secretName: string,
+  region: string,
+): Promise<SupabaseSecret> {
+  const parsed = await fetchSecret(secretName, region);
+  if (!parsed.project_ref) {
+    throw new Error(`Secret ${secretName} missing project_ref field`);
+  }
+  return parsed;
+}
+
+export async function loadConnectionUri(
+  secretName: string,
+  region: string,
+  poolerRegion?: string,
+): Promise<string> {
+  const parsed = await fetchSecret(secretName, region);
 
   if (!parsed.connection_uri) {
     throw new Error(
