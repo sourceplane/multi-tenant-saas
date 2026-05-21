@@ -25,7 +25,7 @@ export type RunMode = "plan" | "apply";
 export interface RunnerConfig {
   mode: RunMode;
   migrationsDir: string;
-  adapter: MigrationAdapter;
+  adapter: MigrationAdapter | null;
 }
 
 export interface MigrationPlan {

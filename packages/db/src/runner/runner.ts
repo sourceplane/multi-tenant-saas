@@ -56,6 +56,25 @@ export async function runMigrations(
   const { adapter, mode, migrationsDir } = config;
   const result: MigrationResult = { applied: [], skipped: [], failed: null };
 
+  // Offline plan: verify checksums then report all migrations as pending.
+  if (mode === "plan" && adapter === null) {
+    for (const entry of manifest.migrations) {
+      const filePath = resolve(migrationsDir, entry.path);
+      const fileChecksum = computeChecksum(filePath);
+      if (fileChecksum !== entry.checksum) {
+        throw new Error(
+          `Checksum mismatch for ${entry.id}: manifest says ${entry.checksum}, file has ${fileChecksum}`,
+        );
+      }
+    }
+    result.applied = manifest.migrations.map((m) => m.id);
+    return result;
+  }
+
+  if (!adapter) {
+    throw new Error("adapter is required for apply mode");
+  }
+
   await adapter.connect();
 
   try {
