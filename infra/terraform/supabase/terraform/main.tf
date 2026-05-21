@@ -128,7 +128,6 @@ resource "supabase_project" "this" {
   name              = local.project_name
   database_password = random_password.db_password.result
   region            = local.supabase_region
-  instance_size     = "micro"
 }
 
 # --- Store credentials in AWS Secrets Manager ---
