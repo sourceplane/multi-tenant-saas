@@ -43,7 +43,7 @@ export async function loadConnectionUri(
     const poolerHost = `aws-0-${poolerRegion}.pooler.supabase.com`;
     const user = `postgres.${parsed.project_ref}`;
     const db = parsed.database_name ?? "postgres";
-    return `postgresql://${encodeURIComponent(user)}:${encodeURIComponent(parsed.database_password)}@${poolerHost}:5432/${db}?sslmode=require`;
+    return `postgresql://${encodeURIComponent(user)}:${encodeURIComponent(parsed.database_password)}@${poolerHost}:5432/${db}`;
   }
 
   return parsed.connection_uri;

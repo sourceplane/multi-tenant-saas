@@ -11,7 +11,10 @@ export class PgAdapter implements MigrationAdapter {
 
   async connect(): Promise<void> {
     const { Client } = await import("pg");
-    this.client = new Client({ connectionString: this.connectionUri });
+    this.client = new Client({
+      connectionString: this.connectionUri,
+      ssl: { rejectUnauthorized: false },
+    });
     await this.client.connect();
   }
 
