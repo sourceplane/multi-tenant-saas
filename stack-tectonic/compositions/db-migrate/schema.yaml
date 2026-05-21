@@ -33,6 +33,8 @@ spec:
             type: string
           secretName:
             type: string
+          supabasePoolerRegion:
+            type: string
           owner:
             type: string
           repo:

@@ -12,6 +12,7 @@ export interface SupabaseSecret {
 export async function loadConnectionUri(
   secretName: string,
   region: string,
+  poolerRegion?: string,
 ): Promise<string> {
   const {
     SecretsManagerClient,
@@ -33,6 +34,16 @@ export async function loadConnectionUri(
     throw new Error(
       `Secret ${secretName} missing connection_uri field`,
     );
+  }
+
+  // When a pooler region is provided, use the Supabase session pooler to avoid
+  // IPv6 connectivity issues with the direct database host. The pooler has IPv4
+  // addresses and supports session-level advisory locks and transactions.
+  if (poolerRegion && parsed.project_ref && parsed.database_password) {
+    const poolerHost = `aws-0-${poolerRegion}.pooler.supabase.com`;
+    const user = `postgres.${parsed.project_ref}`;
+    const db = parsed.database_name ?? "postgres";
+    return `postgresql://${encodeURIComponent(user)}:${encodeURIComponent(parsed.database_password)}@${poolerHost}:5432/${db}?sslmode=require`;
   }
 
   return parsed.connection_uri;

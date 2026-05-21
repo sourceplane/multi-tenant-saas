@@ -18,6 +18,7 @@ spec:
     pnpmVersion: "10.12.1"
     awsRegion: us-east-1
     secretName: sourceplane/multi-tenant-saas/supabase
+    supabasePoolerRegion: ap-southeast-1
     owner: sourceplane
     repo: multi-tenant-saas
 

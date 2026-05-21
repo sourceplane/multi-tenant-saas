@@ -12,6 +12,7 @@ const MIGRATIONS_DIR = resolve(__dirname, "../migrations");
 
 const SECRET_PREFIX = "sourceplane/multi-tenant-saas/supabase";
 const AWS_REGION = process.env["AWS_REGION"] ?? "us-east-1";
+const SUPABASE_POOLER_REGION = process.env["SUPABASE_POOLER_REGION"];
 
 function usage(): never {
   process.stderr.write(
@@ -87,7 +88,7 @@ async function resolveAdapter(
   } else {
     const secretName = `${SECRET_PREFIX}/${env}`;
     process.stderr.write(`Loading credentials from Secrets Manager: ${secretName}\n`);
-    uri = await loadConnectionUri(secretName, AWS_REGION);
+    uri = await loadConnectionUri(secretName, AWS_REGION, SUPABASE_POOLER_REGION);
   }
 
   return new PgAdapter(uri);
