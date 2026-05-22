@@ -23,8 +23,6 @@ spec:
   env:
     AWS_EC2_METADATA_DISABLED: "true"
 
-  dependsOn:
-    - component: supabase
 
   subscribe:
     environments:
