@@ -1,0 +1,11 @@
+{
+  "name": "worker-package",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "esbuild src/worker.js --format=esm --target=node18"
+  },
+  "dependencies": {
+    "@cloudflare/hyperdrive": "^1.0.0"
+  }
+}
