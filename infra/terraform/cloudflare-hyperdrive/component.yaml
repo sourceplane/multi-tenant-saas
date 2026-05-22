@@ -26,12 +26,27 @@ spec:
 
   subscribe:
     environments:
+      - name: dev
+        profile: plan-only
+        profileRules:
+          - profile: local
+            when:
+              triggerRef: local-development
+        env:
+          AWS_EC2_METADATA_DISABLED: "true"
+          TF_VAR_cloudflare_api_token: "${CLOUDFLARE_API_TOKEN:-}"
+          TF_VAR_cloudflare_account_id: "${CLOUDFLARE_ACCOUNT_ID:-}"
+
       - name: stage
         profile: plan-only
         profileRules:
           - profile: apply
             when:
               triggerRef: github-push-main
+        env:
+          AWS_EC2_METADATA_DISABLED: "true"
+          TF_VAR_cloudflare_api_token: "${CLOUDFLARE_API_TOKEN:-}"
+          TF_VAR_cloudflare_account_id: "${CLOUDFLARE_ACCOUNT_ID:-}"
 
       - name: prod
         profile: plan-only
@@ -39,3 +54,7 @@ spec:
           - profile: apply
             when:
               triggerRef: github-push-main
+        env:
+          AWS_EC2_METADATA_DISABLED: "true"
+          TF_VAR_cloudflare_api_token: "${CLOUDFLARE_API_TOKEN:-}"
+          TF_VAR_cloudflare_account_id: "${CLOUDFLARE_ACCOUNT_ID:-}"
