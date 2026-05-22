@@ -1,6 +1,6 @@
 {
   "goal": "Supabase/Postgres-backed multi-organization Orun SaaS control plane",
-  "current_task": null,
+  "current_task": 10,
   "completed": [
     "0001",
     "0001.1",
@@ -13,13 +13,14 @@
     "0006.1",
     "0007",
     "0007.1",
-    "0008"
+    "0008",
+    "0009"
   ],
   "repo_health": "green",
-  "next_focus": "awaiting-next-task",
-  "last_verified": "2026-05-21",
+  "next_focus": "worker-binding-setup",
+  "last_verified": "2026-05-22",
   "waiting_for_input": "false",
-  "task_agent": null,
+  "task_agent": "/ai/tasks/task-0009-verifier.md",
   "notes": [
     "main is synced with origin/main at dffdc4a.",
     "Task 0008 complete. PR #35 merged and post-merge CI run 26229865114 passed.",

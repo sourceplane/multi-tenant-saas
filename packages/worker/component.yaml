@@ -1,0 +1,13 @@
+type: terraform
+domain: infra
+component: worker
+environments:
+  stage:
+    profile: plan-only
+    apply_on: github-push-main
+  prod:
+    profile: plan-only
+    apply_on: github-push-main
+dependencies:
+  - cloudflare-hyperdrive
+dev: false

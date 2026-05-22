@@ -1,0 +1,17 @@
+{
+  "bindings": [
+    {
+      "name": "default",
+      "type": "http"
+    },
+    {
+      "name": "hyperdrive",
+      "type": "cloudflare-hyperdrive",
+      "config": {
+        "origin": "supabase",
+        "connection_pooling": true,
+        "caching": true
+      }
+    }
+  ]
+}
