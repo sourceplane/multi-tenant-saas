@@ -1,6 +1,6 @@
 {
   "goal": "Supabase/Postgres-backed multi-organization Orun SaaS control plane",
-  "current_task": 11,
+  "current_task": 12,
   "completed": [
     "0001",
     "0001.1",
@@ -15,10 +15,11 @@
     "0007.1",
     "0008",
     "0009",
-    "0010"
+    "0010",
+    "0011"
   ],
   "repo_health": "green",
-  "next_focus": "ai/tasks/task-0011.md",
+  "next_focus": "ai/tasks/task-0012.md",
   "last_verified": "2026-05-22",
   "waiting_for_input": "false",
   "task_agent": "/ai/tasks/task-0009-verifier.md",
