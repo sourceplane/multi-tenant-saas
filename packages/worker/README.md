@@ -1,36 +1,77 @@
-# Worker Package
+# Worker Binding Setup
 
-This package contains the worker application infrastructure and binding configuration.
+This component provides the infrastructure for running Cloudflare Workers in the multi-tenant SaaS environment.
 
 ## Overview
-The worker package establishes the runtime environment for Cloudflare Workers. It includes:
-- Terraform infrastructure for worker resources
-- Binding configuration for Hyperdrive connections
-- Initial worker code structure
 
-## Architecture
-Workers → Hyperdrive → Supabase Postgres
+The worker package includes:
+- **Infrastructure**: Terraform configuration for provisioning worker resources
+- **Code**: Initial worker implementation structure
+- **Configuration**: Wrangler config and bindings
 
 ## Components
-- **Terraform module**: Provisions worker resources
-- **Binding configuration**: Configures Hyperdrive connections
-- **Worker code**: Application logic (implemented in Task 0011)
 
-## Dependencies
-- Task 0009: Cloudflare Hyperdrive infrastructure (provides Hyperdrive IDs)
-- Task 0006: Supabase provisioning (provides database credentials)
+### 1. Infrastructure (Terraform)
 
-## Configuration
-- Cloudflare API token (from GitHub Actions secret CLOUDFLARE_API_TOKEN)
-- Cloudflare account ID (from GitHub Actions secret CLOUDFLARE_ACCOUNT_ID)
+The terraform directory contains:
+- `main.tf` - Worker resource definition
+- `variables.tf` - Configuration variables
+- `outputs.tf` - Output values
+
+### 2. Worker Code
+
+The `src/worker.js` file contains the main worker implementation.
+
+### 3. Configuration
+
+- `wrangler.config.js` - Wrangler configuration
+- `bindings.json` - Worker bindings configuration
 
 ## Usage
-1. Set Cloudflare credentials in GitHub Actions
-2. Run Orun plan to generate infrastructure plan
-3. Review plan and apply
-4. Worker code can then be deployed
 
-## Local Development
-- Run `kiox -- orun validate --intent intent.yaml` to validate
-- Run `orun plan --intent intent.yaml` to generate plan
-- Run `orun run --plan plan.json --dry-run` to simulate execution
+### Local Development
+
+1. Install dependencies:
+   ```bash
+   npm install
+   ```
+
+2. Start the worker locally:
+   ```bash
+   npx wrangler dev
+   ```
+
+3. Access endpoints at http://localhost:8787
+
+### Environment Variables
+
+The worker uses these environment variables:
+
+- `DB_CONNECTION_STRING`: Hyperdrive connection string
+- `JWT_SECRET`: Secret for JWT validation
+
+These are provided by the Supabase component and injected via Orun.
+
+## API
+
+The worker implements these endpoints:
+
+- `GET /api/items?id=:id` - Get item by ID
+- `POST /api/items` - Create new item
+- `PUT /api/items?id=:id` - Update item
+- `DELETE /api/items?id=:id` - Delete item
+
+All endpoints require a valid JWT token in the `Authorization` header.
+
+## Database Schema
+
+The worker expects a table named `items`:
+
+```sql
+CREATE TABLE items (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  value TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+```
