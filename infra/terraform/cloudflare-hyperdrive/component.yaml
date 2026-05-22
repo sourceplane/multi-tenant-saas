@@ -17,8 +17,8 @@ spec:
     stackName: cloudflare-hyperdrive
     terraformDir: terraform
     terraformVersion: "1.15.3"
-    cloudflare_api_token: ${CLOUDFLARE_API_TOKEN:-}
-    cloudflare_account_id: ${CLOUDFLARE_ACCOUNT_ID:-}
+    cloudflare_api_token: "${CLOUDFLARE_API_TOKEN:-}"
+    cloudflare_account_id: "${CLOUDFLARE_ACCOUNT_ID:-}"
 
   env:
     AWS_EC2_METADATA_DISABLED: "true"
