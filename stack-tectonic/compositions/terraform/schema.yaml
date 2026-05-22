@@ -45,5 +45,5 @@ spec:
             type: string
           terraformVersion:
             type: string
-        additionalProperties: false
+        additionalProperties: true
     additionalProperties: true
