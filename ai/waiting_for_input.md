@@ -9,4 +9,4 @@ The user answered the Task 0007 blocker: continue from the existing local Task
 verified the result.
 
 ## Needed To Continue
-None. Task 0008 is ready for verification.
+None. Task 0009.1 prompt is ready at `ai/tasks/task-0009.1.md`.

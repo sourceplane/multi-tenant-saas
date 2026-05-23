@@ -1,6 +1,6 @@
 # Proposal
 
-Status: Pending Task 0009 verification.
+Status: Accepted by the Orchestrator after Task 0009 verification.
 
 Update the reusable Orun runtime reference from `v2.2.1` to `v2.3.0` for this
 repo, or explicitly reject the Task 0009 runtime bump and schedule a rollback.
@@ -74,7 +74,6 @@ CI, Orun plans, and Terraform job behavior.
 
 # Recommendation
 
-Let Task 0009 verification decide from current code, PR #36 logs, PR #44 logs,
-and main CI evidence. If verification passes, accept the proposal and update
-the specs in the next small spec-alignment task or alongside the verifier
-context update if the workflow allows.
+Accepted. Task 0009 verification passed and confirmed Orun `v2.3.0` as current
+repo reality. Implement the spec/context alignment in Task 0009.1 before
+resuming downstream Worker binding or runtime work.
