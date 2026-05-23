@@ -44,7 +44,6 @@ spec:
       name: install-workspace-dependencies
       capability: cloudflare-pages-turbo-terraform.install
       shell: bash
-      working-directory: "{{ .parameters.workspaceDir }}"
       run: "{{ .parameters.installCommand }}"
       onFailure: stop
 
@@ -52,7 +51,6 @@ spec:
       name: verify-pages-app-structure
       capability: cloudflare-pages-turbo-terraform.verify-structure
       shell: bash
-      working-directory: "{{ .parameters.appDir }}"
       run: test -f package.json
       onFailure: stop
 
@@ -60,7 +58,6 @@ spec:
       name: build-pages-app
       capability: cloudflare-pages-turbo-terraform.build
       shell: bash
-      working-directory: "{{ .parameters.appDir }}"
       run: "{{ .parameters.buildCommand }}"
       onFailure: stop
 
@@ -68,7 +65,6 @@ spec:
       name: verify-build-output
       capability: cloudflare-pages-turbo-terraform.verify-output
       shell: bash
-      working-directory: "{{ .parameters.appDir }}"
       run: |
         test -d "{{ .parameters.outputDir }}"
         find "{{ .parameters.outputDir }}" -maxdepth 2 -type f | head -n 20

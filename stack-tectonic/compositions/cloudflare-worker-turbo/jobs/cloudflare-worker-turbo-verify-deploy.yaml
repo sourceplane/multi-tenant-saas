@@ -43,7 +43,6 @@ spec:
       name: install-workspace-dependencies
       capability: cloudflare-worker-turbo.install
       shell: bash
-      working-directory: "{{ .parameters.workspaceDir }}"
       run: "{{ .parameters.installCommand }}"
       onFailure: stop
 
@@ -51,7 +50,6 @@ spec:
       name: verify-worker-structure
       capability: cloudflare-worker-turbo.verify-structure
       shell: bash
-      working-directory: "{{ .parameters.appDir }}"
       run: |
         test -f package.json
         test -f "{{ .parameters.wranglerConfig }}"
@@ -61,7 +59,6 @@ spec:
       name: build-worker
       capability: cloudflare-worker-turbo.build
       shell: bash
-      working-directory: "{{ .parameters.appDir }}"
       run: "{{ .parameters.buildCommand }}"
       onFailure: stop
 
@@ -69,7 +66,6 @@ spec:
       name: typecheck-worker
       capability: cloudflare-worker-turbo.typecheck
       shell: bash
-      working-directory: "{{ .parameters.appDir }}"
       run: "{{ .parameters.typecheckCommand }}"
       onFailure: stop
 
@@ -77,7 +73,6 @@ spec:
       name: deploy-dry-run
       capability: cloudflare-worker-turbo.deploy-dry-run
       shell: bash
-      working-directory: "{{ .parameters.appDir }}"
       run: "{{ .parameters.dryRunCommand }}"
       onFailure: stop
 
@@ -85,7 +80,6 @@ spec:
       name: pre-deploy
       capability: cloudflare-worker-turbo.pre-deploy
       shell: bash
-      working-directory: "{{ .parameters.appDir }}"
       run: "{{ .parameters.preDeployCommand }}"
       onFailure: stop
 
@@ -93,7 +87,6 @@ spec:
       name: migrate
       capability: cloudflare-worker-turbo.migrate
       shell: bash
-      working-directory: "{{ .parameters.appDir }}"
       run: "{{ .parameters.migrationCommand }}"
       onFailure: stop
 
@@ -101,7 +94,6 @@ spec:
       name: deploy
       capability: cloudflare-worker-turbo.deploy
       shell: bash
-      working-directory: "{{ .parameters.appDir }}"
       run: |
         : "${CLOUDFLARE_ACCOUNT_ID:?CLOUDFLARE_ACCOUNT_ID is required}"
         : "${CLOUDFLARE_API_TOKEN:?CLOUDFLARE_API_TOKEN is required}"
@@ -112,6 +104,5 @@ spec:
       name: smoke
       capability: cloudflare-worker-turbo.smoke
       shell: bash
-      working-directory: "{{ .parameters.appDir }}"
       run: "{{ .parameters.smokeCommand }}"
       onFailure: stop

@@ -41,7 +41,6 @@ spec:
       name: install-workspace-dependencies
       capability: cloudflare-pages-turbo.install
       shell: bash
-      working-directory: "{{ .parameters.workspaceDir }}"
       run: "{{ .parameters.installCommand }}"
       onFailure: stop
 
@@ -49,7 +48,6 @@ spec:
       name: verify-pages-app-structure
       capability: cloudflare-pages-turbo.verify-structure
       shell: bash
-      working-directory: "{{ .parameters.appDir }}"
       run: test -f package.json
       onFailure: stop
 
@@ -57,7 +55,6 @@ spec:
       name: build-pages-app
       capability: cloudflare-pages-turbo.build
       shell: bash
-      working-directory: "{{ .parameters.appDir }}"
       run: "{{ .parameters.buildCommand }}"
       onFailure: stop
 
@@ -65,7 +62,6 @@ spec:
       name: verify-build-output
       capability: cloudflare-pages-turbo.verify-output
       shell: bash
-      working-directory: "{{ .parameters.appDir }}"
       run: |
         test -d "{{ .parameters.outputDir }}"
         find "{{ .parameters.outputDir }}" -maxdepth 2 -type f | head -n 20
@@ -111,7 +107,6 @@ spec:
       name: deploy-pages-artifact
       capability: cloudflare-pages-turbo.deploy
       shell: bash
-      working-directory: "{{ .parameters.appDir }}"
       run: |
         : "${CLOUDFLARE_ACCOUNT_ID:?CLOUDFLARE_ACCOUNT_ID is required}"
         : "${CLOUDFLARE_API_TOKEN:?CLOUDFLARE_API_TOKEN is required}"
@@ -125,6 +120,5 @@ spec:
       name: smoke
       capability: cloudflare-pages-turbo.smoke
       shell: bash
-      working-directory: "{{ .parameters.appDir }}"
       run: "{{ .parameters.smokeCommand }}"
       onFailure: stop
