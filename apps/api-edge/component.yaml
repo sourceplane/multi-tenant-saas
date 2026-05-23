@@ -22,12 +22,12 @@ spec:
     workspaceDir: ../..
     appDir: .
 
-    turboFilter: "@sourceplane/api-edge"
+    turboFilter: "@saas/api-edge"
     wranglerConfig: wrangler.jsonc
 
     installCommand: pnpm install --frozen-lockfile
-    buildCommand: pnpm exec turbo run build --filter=@sourceplane/api-edge
-    typecheckCommand: pnpm exec turbo run typecheck --filter=@sourceplane/api-edge
+    buildCommand: pnpm exec turbo run build --filter=@saas/api-edge
+    typecheckCommand: pnpm exec turbo run typecheck --filter=@saas/api-edge
 
     dryRunCommand: pnpm exec wrangler deploy --dry-run --config wrangler.jsonc
     deployCommand: pnpm exec wrangler deploy --config wrangler.jsonc

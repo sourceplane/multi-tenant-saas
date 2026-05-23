@@ -22,13 +22,13 @@ spec:
     workspaceDir: ../..
     appDir: .
 
-    turboFilter: "@sourceplane/web-console"
+    turboFilter: "@saas/web-console"
     outputDir: dist
     projectName: sourceplane-web-console
     deployBranch: main
 
     installCommand: pnpm install --frozen-lockfile
-    buildCommand: pnpm exec turbo run build --filter=@sourceplane/web-console
+    buildCommand: pnpm exec turbo run build --filter=@saas/web-console
 
     smokeCommand: "echo 'No smoke test configured.'"
   labels:
