@@ -60,7 +60,7 @@ spec:
       name: build-pages-app
       capability: cloudflare-pages-turbo-terraform.build
       shell: bash
-      working-directory: "{{ .parameters.workspaceDir }}"
+      working-directory: "{{ .parameters.appDir }}"
       run: "{{ .parameters.buildCommand }}"
       onFailure: stop
 
