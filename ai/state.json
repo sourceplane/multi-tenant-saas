@@ -1,6 +1,6 @@
 {
   "goal": "Supabase/Postgres-backed multi-organization Orun SaaS control plane",
-  "current_task": "0011",
+  "current_task": null,
   "completed": [
     "0001",
     "0001.1",
@@ -16,26 +16,25 @@
     "0008",
     "0009",
     "0009.1",
-    "0010"
+    "0010",
+    "0011"
   ],
   "repo_health": "green",
-  "next_focus": "worker-runtime-adapter",
+  "next_focus": "domain-repository-adapters",
   "last_verified": "2026-05-23",
   "waiting_for_input": "false",
-  "task_agent": "ai/tasks/task-0011.md",
+  "task_agent": null,
   "notes": [
-    "main is synced with origin/main at 67bf5cf after PR #50 setup-node v6 maintenance; latest main CI run 26330474474 passed.",
-    "Task 0010 verified PASS: api-edge Worker deployed to prod with SOURCEPLANE_DB Hyperdrive binding.",
-    "api-edge prod Worker version: 005882d7-3a88-4056-bb61-6a98e1ad4ce7, deployment: 3f8f08ec.",
-    "Hyperdrive stage ID: 08f7c6055f544a3890a585d88fd92348, prod ID: ab2c21c2db6245a59c91588fcac7107a (bound and deployed).",
-    "web-console Pages deployed from merge commit d996a84 (deployment 0e0680e0).",
-    "Stage Worker (api-edge-stage) was not present in Task 0010 verifier evidence; current component profile is verify by default with deploy promotion rules on github-push-main.",
-    "Cloudflare compositions refactored: correct turbo filters, appDir-based execution, atomic capability steps.",
-    "Deploy commands use --env prod explicitly; environment isolation confirmed.",
-    "Migration runner uses SupabaseApiAdapter (Supabase Management API, HTTPS/IPv4). Plan mode is offline.",
+    "main is synced at f02db20 after PR #52 merge; main CI run 26333981779 all green.",
+    "Task 0011 verified PASS: Worker-safe Hyperdrive adapter deployed; live health confirms DB reachable.",
+    "api-edge prod Worker version: be63b646-ac84-4b6c-bfc2-76a8ff2002fa, deployed 2026-05-23T13:32:15Z.",
+    "api-edge stage Worker version: 5fb3de43-81f4-4043-908e-8341e795b4d9, deployed 2026-05-23T13:31:29Z.",
+    "Hyperdrive stage ID: 08f7c6055f544a3890a585d88fd92348, prod ID: ab2c21c2db6245a59c91588fcac7107a.",
+    "Composition cloudflare-worker-turbo uses --env {{ .orun.environment.name }} for environment-aware deploys.",
+    "wrangler.jsonc has dev/stage/prod environments; dev has no Hyperdrive binding (verify-only).",
+    "Live URLs: prod https://api-edge-prod.rahulvarghesepullely.workers.dev, stage https://api-edge-stage.rahulvarghesepullely.workers.dev.",
     "Supabase stage ref: thielrrsejwhjkdluwqm, prod ref: npbvrxkrlyrpnhrqucxa. dev remains unprovisioned.",
-    "No components declare dependsOn (consistent pattern); Hyperdrive → Supabase dependency is implicit.",
-    "Ignored generated outputs must not be staged or committed: dist, node_modules, .orun, Terraform dirs, plan.json.",
-    "Task 0011 is queued: add a Worker-safe Hyperdrive/Postgres runtime adapter and read-only api-edge database smoke path."
+    "Dead parameters (dryRunCommand, deployCommand) remain in api-edge component.yaml; recommend cleanup.",
+    "Ignored generated outputs must not be staged or committed: dist, node_modules, .orun, Terraform dirs, plan.json."
   ]
 }
