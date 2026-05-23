@@ -8,16 +8,25 @@ function randomHex(bytes: number): string {
   return hex;
 }
 
+function uuidToHex(uuid: string): string {
+  return uuid.replace(/-/g, "");
+}
+
+function hexToUuid(hex: string): string | null {
+  if (hex.length !== 32 || !/^[0-9a-f]+$/i.test(hex)) return null;
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
 export function generateUserId(): string {
-  return `usr_${randomHex(16)}`;
+  return crypto.randomUUID();
 }
 
 export function generateSessionId(): string {
-  return `ses_${randomHex(16)}`;
+  return crypto.randomUUID();
 }
 
 export function generateChallengeId(): string {
-  return `chl_${randomHex(16)}`;
+  return crypto.randomUUID();
 }
 
 export function generateRequestId(): string {
@@ -25,7 +34,7 @@ export function generateRequestId(): string {
 }
 
 export function generateAuthIdentityId(): string {
-  return `aid_${randomHex(16)}`;
+  return crypto.randomUUID();
 }
 
 export function generateCode(): string {
@@ -39,18 +48,36 @@ export function generateTokenSecret(): string {
   return randomHex(32);
 }
 
+export function userPublicId(uuid: string): string {
+  return `usr_${uuidToHex(uuid)}`;
+}
+
+export function sessionPublicId(uuid: string): string {
+  return `ses_${uuidToHex(uuid)}`;
+}
+
+export function challengePublicId(uuid: string): string {
+  return `chl_${uuidToHex(uuid)}`;
+}
+
+export function parseChallengePublicId(publicId: string): string | null {
+  if (!publicId.startsWith("chl_")) return null;
+  return hexToUuid(publicId.slice(4));
+}
+
 export function parseSessionToken(token: string): { sessionId: string; secret: string } | null {
   if (!token.startsWith("sps_ses_")) return null;
   const payload = token.slice(8);
   const dotIndex = payload.indexOf(".");
   if (dotIndex < 1) return null;
-  const id = payload.slice(0, dotIndex);
+  const hexId = payload.slice(0, dotIndex);
   const secret = payload.slice(dotIndex + 1);
-  if (!id || !secret) return null;
-  return { sessionId: `ses_${id}`, secret };
+  if (!hexId || !secret) return null;
+  const uuid = hexToUuid(hexId);
+  if (!uuid) return null;
+  return { sessionId: uuid, secret };
 }
 
-export function buildSessionToken(sessionId: string, secret: string): string {
-  const rawId = sessionId.startsWith("ses_") ? sessionId.slice(4) : sessionId;
-  return `sps_ses_${rawId}.${secret}`;
+export function buildSessionToken(sessionUuid: string, secret: string): string {
+  return `sps_ses_${uuidToHex(sessionUuid)}.${secret}`;
 }

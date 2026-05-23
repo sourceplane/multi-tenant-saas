@@ -9,6 +9,10 @@ import {
   generateTokenSecret,
   buildSessionToken,
   parseSessionToken,
+  userPublicId,
+  sessionPublicId,
+  challengePublicId,
+  parseChallengePublicId,
 } from "../ids.js";
 
 export interface AuthServiceDeps {
@@ -105,12 +109,12 @@ export function createAuthService(deps: AuthServiceDeps) {
 
       const code = generateCode();
       const codeHash = await hashSha256(code);
-      const challengeId = generateChallengeId();
+      const challengeUuid = generateChallengeId();
       const currentTime = now();
       const expiresAt = new Date(currentTime.getTime() + CHALLENGE_TTL_MS);
 
       const challengeResult = await repo.createLoginChallenge({
-        id: challengeId,
+        id: challengeUuid,
         userId: userResult.value.id,
         method: "email_code",
         codeHash,
@@ -123,7 +127,7 @@ export function createAuthService(deps: AuthServiceDeps) {
       }
 
       return {
-        challengeId,
+        challengeId: challengePublicId(challengeUuid),
         expiresAt,
         emailHint: emailHint(emailLower),
         rawCode: code,
@@ -131,8 +135,13 @@ export function createAuthService(deps: AuthServiceDeps) {
     },
 
     async completeLogin(challengeId: string, code: string): Promise<CompleteLoginResult | CompleteLoginError> {
+      const challengeUuid = parseChallengePublicId(challengeId);
+      if (!challengeUuid) {
+        return { error: "not_found", message: "Challenge not found or code is invalid" };
+      }
+
       const codeHash = await hashSha256(code);
-      const consumeResult = await repo.consumeLoginChallenge(challengeId, codeHash, now());
+      const consumeResult = await repo.consumeLoginChallenge(challengeUuid, codeHash, now());
 
       if (!consumeResult.ok) {
         switch (consumeResult.error.kind) {
@@ -153,14 +162,14 @@ export function createAuthService(deps: AuthServiceDeps) {
         return { error: "internal_error", message: "Failed to resolve user" };
       }
 
-      const sessionId = generateSessionId();
+      const sessionUuid = generateSessionId();
       const secret = generateTokenSecret();
       const tokenHash = await hashSha256(secret);
       const currentTime = now();
       const expiresAt = new Date(currentTime.getTime() + SESSION_TTL_MS);
 
       const sessionResult = await repo.createSession({
-        id: sessionId,
+        id: sessionUuid,
         userId: challenge.userId,
         tokenHash,
         expiresAt,
@@ -173,9 +182,9 @@ export function createAuthService(deps: AuthServiceDeps) {
 
       const user = userResult.value;
       return {
-        token: buildSessionToken(sessionId, secret),
+        token: buildSessionToken(sessionUuid, secret),
         expiresAt,
-        user: { id: user.id, email: user.email, displayName: user.displayName },
+        user: { id: userPublicId(user.id), email: user.email, displayName: user.displayName },
       };
     },
 
@@ -207,8 +216,8 @@ export function createAuthService(deps: AuthServiceDeps) {
 
       const user = userResult.value;
       return {
-        session: { id: session.id, expiresAt: session.expiresAt, createdAt: session.createdAt },
-        user: { id: user.id, email: user.email, displayName: user.displayName },
+        session: { id: sessionPublicId(session.id), expiresAt: session.expiresAt, createdAt: session.createdAt },
+        user: { id: userPublicId(user.id), email: user.email, displayName: user.displayName },
       };
     },
 

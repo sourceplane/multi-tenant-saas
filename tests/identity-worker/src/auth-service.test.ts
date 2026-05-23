@@ -6,9 +6,10 @@ import crypto from "node:crypto";
 if (!globalThis.crypto?.subtle) {
   Object.defineProperty(globalThis, "crypto", { value: crypto.webcrypto });
 }
+if (typeof globalThis.crypto.randomUUID !== "function") {
+  (globalThis.crypto as unknown as { randomUUID: () => string }).randomUUID = () => crypto.randomUUID();
+}
 
-// Import auth service source (inline since it's in a different package)
-// We re-implement the same logic here to test the service contract
 async function hashSha256(input: string): Promise<string> {
   const data = new TextEncoder().encode(input);
   const buffer = await crypto.subtle.digest("SHA-256", data);
@@ -20,10 +21,14 @@ async function hashSha256(input: string): Promise<string> {
   return hex;
 }
 
-// Minimal auth service factory matching the worker's createAuthService
-interface AuthServiceDeps {
-  repo: IdentityRepository;
-  now: () => Date;
+// UUID/public-ID mapping — mirrors apps/identity-worker/src/ids.ts
+function uuidToHex(uuid: string): string {
+  return uuid.replace(/-/g, "");
+}
+
+function hexToUuid(hex: string): string | null {
+  if (hex.length !== 32 || !/^[0-9a-f]+$/i.test(hex)) return null;
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
 function randomHex(bytes: number): string {
@@ -34,6 +39,14 @@ function randomHex(bytes: number): string {
     hex += buf[i]!.toString(16).padStart(2, "0");
   }
   return hex;
+}
+
+function userPublicId(uuid: string): string { return `usr_${uuidToHex(uuid)}`; }
+function sessionPublicId(uuid: string): string { return `ses_${uuidToHex(uuid)}`; }
+function challengePublicId(uuid: string): string { return `chl_${uuidToHex(uuid)}`; }
+function parseChallengePublicId(id: string): string | null {
+  if (!id.startsWith("chl_")) return null;
+  return hexToUuid(id.slice(4));
 }
 
 function generateCode(): string {
@@ -54,19 +67,25 @@ function parseSessionToken(token: string): { sessionId: string; secret: string }
   const payload = token.slice(8);
   const dotIndex = payload.indexOf(".");
   if (dotIndex < 1) return null;
-  const id = payload.slice(0, dotIndex);
+  const hexId = payload.slice(0, dotIndex);
   const secret = payload.slice(dotIndex + 1);
-  if (!id || !secret) return null;
-  return { sessionId: `ses_${id}`, secret };
+  if (!hexId || !secret) return null;
+  const uuid = hexToUuid(hexId);
+  if (!uuid) return null;
+  return { sessionId: uuid, secret };
 }
 
-function buildSessionToken(sessionId: string, secret: string): string {
-  const rawId = sessionId.startsWith("ses_") ? sessionId.slice(4) : sessionId;
-  return `sps_ses_${rawId}.${secret}`;
+function buildSessionToken(sessionUuid: string, secret: string): string {
+  return `sps_ses_${uuidToHex(sessionUuid)}.${secret}`;
 }
 
 const CHALLENGE_TTL_MS = 10 * 60 * 1000;
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+interface AuthServiceDeps {
+  repo: IdentityRepository;
+  now: () => Date;
+}
 
 function createAuthService(deps: AuthServiceDeps) {
   const { repo, now } = deps;
@@ -74,13 +93,13 @@ function createAuthService(deps: AuthServiceDeps) {
   async function resolveOrCreateUser(email: string, emailLower: string) {
     const existing = await repo.getUserByEmail(emailLower);
     if (existing.ok) return existing;
-    const userId = `usr_${randomHex(16)}`;
+    const userId = crypto.randomUUID();
     const createResult = await repo.createUser({ id: userId, email, emailLower, createdAt: now() });
     if (!createResult.ok && createResult.error.kind === "conflict") {
       return repo.getUserByEmail(emailLower);
     }
     if (createResult.ok) {
-      await repo.createAuthIdentity({ id: `aid_${randomHex(16)}`, userId, provider: "email", subject: emailLower, createdAt: now() });
+      await repo.createAuthIdentity({ id: crypto.randomUUID(), userId, provider: "email", subject: emailLower, createdAt: now() });
     }
     return createResult;
   }
@@ -92,17 +111,19 @@ function createAuthService(deps: AuthServiceDeps) {
       if (!userResult.ok) return { error: "internal_error" as const, message: "Failed to resolve user" };
       const code = generateCode();
       const codeHash = await hashSha256(code);
-      const challengeId = `chl_${randomHex(16)}`;
+      const challengeUuid = crypto.randomUUID();
       const currentTime = now();
       const expiresAt = new Date(currentTime.getTime() + CHALLENGE_TTL_MS);
-      const challengeResult = await repo.createLoginChallenge({ id: challengeId, userId: userResult.value.id, method: "email_code", codeHash, expiresAt, createdAt: currentTime });
+      const challengeResult = await repo.createLoginChallenge({ id: challengeUuid, userId: userResult.value.id, method: "email_code", codeHash, expiresAt, createdAt: currentTime });
       if (!challengeResult.ok) return { error: "internal_error" as const, message: "Failed to create login challenge" };
-      return { challengeId, expiresAt, emailHint: emailHint(emailLower), rawCode: code };
+      return { challengeId: challengePublicId(challengeUuid), expiresAt, emailHint: emailHint(emailLower), rawCode: code };
     },
 
     async completeLogin(challengeId: string, code: string) {
+      const challengeUuid = parseChallengePublicId(challengeId);
+      if (!challengeUuid) return { error: "not_found" as const, message: "Challenge not found or code is invalid" };
       const codeHash = await hashSha256(code);
-      const consumeResult = await repo.consumeLoginChallenge(challengeId, codeHash, now());
+      const consumeResult = await repo.consumeLoginChallenge(challengeUuid, codeHash, now());
       if (!consumeResult.ok) {
         switch (consumeResult.error.kind) {
           case "not_found": return { error: "not_found" as const, message: "Challenge not found or code is invalid" };
@@ -114,15 +135,15 @@ function createAuthService(deps: AuthServiceDeps) {
       const challenge = consumeResult.value;
       const userResult = await repo.getUserById(challenge.userId);
       if (!userResult.ok) return { error: "internal_error" as const, message: "Failed to resolve user" };
-      const sessionId = `ses_${randomHex(16)}`;
+      const sessionUuid = crypto.randomUUID();
       const secret = randomHex(32);
       const tokenHash = await hashSha256(secret);
       const currentTime = now();
       const expiresAt = new Date(currentTime.getTime() + SESSION_TTL_MS);
-      const sessionResult = await repo.createSession({ id: sessionId, userId: challenge.userId, tokenHash, expiresAt, createdAt: currentTime });
+      const sessionResult = await repo.createSession({ id: sessionUuid, userId: challenge.userId, tokenHash, expiresAt, createdAt: currentTime });
       if (!sessionResult.ok) return { error: "internal_error" as const, message: "Failed to create session" };
       const user = userResult.value;
-      return { token: buildSessionToken(sessionId, secret), expiresAt, user: { id: user.id, email: user.email, displayName: user.displayName } };
+      return { token: buildSessionToken(sessionUuid, secret), expiresAt, user: { id: userPublicId(user.id), email: user.email, displayName: user.displayName } };
     },
 
     async getSession(token: string) {
@@ -137,7 +158,7 @@ function createAuthService(deps: AuthServiceDeps) {
       const userResult = await repo.getUserById(session.userId);
       if (!userResult.ok) return { error: "unauthenticated" as const, message: "User not found" };
       const user = userResult.value;
-      return { session: { id: session.id, expiresAt: session.expiresAt, createdAt: session.createdAt }, user: { id: user.id, email: user.email, displayName: user.displayName } };
+      return { session: { id: sessionPublicId(session.id), expiresAt: session.expiresAt, createdAt: session.createdAt }, user: { id: userPublicId(user.id), email: user.email, displayName: user.displayName } };
     },
 
     async logout(token: string) {
@@ -164,12 +185,24 @@ describe("Auth Service", () => {
 
       expect("error" in result).toBe(false);
       if ("error" in result) return;
-      expect(result.challengeId).toMatch(/^chl_/);
+      expect(result.challengeId).toMatch(/^chl_[0-9a-f]{32}$/);
       expect(result.rawCode).toMatch(/^\d{6}$/);
       expect(result.emailHint).toBe("t***@example.com");
       expect(result.expiresAt.getTime()).toBe(fixedNow.getTime() + 10 * 60 * 1000);
       expect(repo._users.size).toBe(1);
       expect(repo._authIdentities.size).toBe(1);
+    });
+
+    it("stores UUID in repository, not prefixed public ID", async () => {
+      const repo = createFakeRepository();
+      const auth = createAuthService({ repo, now: () => fixedNow });
+      await auth.startLogin("user@test.com");
+
+      const userId = [...repo._users.keys()][0]!;
+      expect(userId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+
+      const challengeId = [...repo._challenges.keys()][0]!;
+      expect(challengeId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
     });
 
     it("reuses existing user for known email", async () => {
@@ -198,7 +231,8 @@ describe("Auth Service", () => {
       const result = await auth.startLogin("x@y.com");
       if ("error" in result) return;
 
-      const stored = repo._challenges.get(result.challengeId);
+      const challengeUuid = parseChallengePublicId(result.challengeId)!;
+      const stored = repo._challenges.get(challengeUuid);
       expect(stored).toBeDefined();
       expect(stored!.codeHash).not.toBe(result.rawCode);
       expect(stored!.codeHash.length).toBe(64);
@@ -217,9 +251,22 @@ describe("Auth Service", () => {
       expect("error" in result).toBe(false);
       if ("error" in result) return;
 
-      expect(result.token).toMatch(/^sps_ses_.+\..+$/);
+      expect(result.token).toMatch(/^sps_ses_[0-9a-f]{32}\..+$/);
+      expect(result.user.id).toMatch(/^usr_[0-9a-f]{32}$/);
       expect(result.user.email).toBe("user@example.com");
       expect(result.expiresAt.getTime()).toBe(fixedNow.getTime() + 30 * 24 * 60 * 60 * 1000);
+    });
+
+    it("stores UUID session in repository", async () => {
+      const repo = createFakeRepository();
+      const auth = createAuthService({ repo, now: () => fixedNow });
+
+      const start = await auth.startLogin("user@example.com");
+      if ("error" in start) throw new Error("startLogin failed");
+      await auth.completeLogin(start.challengeId, start.rawCode);
+
+      const sessionId = [...repo._sessions.keys()][0]!;
+      expect(sessionId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
     });
 
     it("returns error for wrong code", async () => {
@@ -271,7 +318,17 @@ describe("Auth Service", () => {
       const repo = createFakeRepository();
       const auth = createAuthService({ repo, now: () => fixedNow });
 
-      const result = await auth.completeLogin("chl_nonexistent", "123456");
+      const result = await auth.completeLogin("chl_00000000000000000000000000000000", "123456");
+      expect("error" in result).toBe(true);
+      if (!("error" in result)) return;
+      expect(result.error).toBe("not_found");
+    });
+
+    it("returns error for invalid challenge ID format", async () => {
+      const repo = createFakeRepository();
+      const auth = createAuthService({ repo, now: () => fixedNow });
+
+      const result = await auth.completeLogin("invalid_id", "123456");
       expect("error" in result).toBe(true);
       if (!("error" in result)) return;
       expect(result.error).toBe("not_found");
@@ -310,7 +367,8 @@ describe("Auth Service", () => {
       expect("error" in result).toBe(false);
       if ("error" in result) return;
       expect(result.user.email).toBe("user@example.com");
-      expect(result.session.id).toMatch(/^ses_/);
+      expect(result.user.id).toMatch(/^usr_[0-9a-f]{32}$/);
+      expect(result.session.id).toMatch(/^ses_[0-9a-f]{32}$/);
     });
 
     it("returns unauthenticated for malformed token", async () => {
@@ -327,7 +385,7 @@ describe("Auth Service", () => {
       const repo = createFakeRepository();
       const auth = createAuthService({ repo, now: () => fixedNow });
 
-      const result = await auth.getSession("sps_ses_abc123.deadbeef");
+      const result = await auth.getSession("sps_ses_00000000000000000000000000000000.deadbeef");
       expect("error" in result).toBe(true);
       if (!("error" in result)) return;
       expect(result.error).toBe("unauthenticated");
@@ -410,33 +468,45 @@ describe("Auth Service", () => {
   });
 });
 
-describe("parseSessionToken", () => {
-  it("parses valid token", () => {
-    const result = parseSessionToken("sps_ses_abc123def456.secrethex");
-    expect(result).toEqual({ sessionId: "ses_abc123def456", secret: "secrethex" });
+describe("UUID/public-ID mapping", () => {
+  it("parseSessionToken extracts UUID from token", () => {
+    const uuid = "550e8400-e29b-41d4-a716-446655440000";
+    const token = buildSessionToken(uuid, "secrethex");
+    const result = parseSessionToken(token);
+    expect(result).toEqual({ sessionId: uuid, secret: "secrethex" });
   });
 
-  it("returns null for missing prefix", () => {
+  it("parseSessionToken returns null for invalid hex length", () => {
+    expect(parseSessionToken("sps_ses_tooshort.secret")).toBeNull();
+  });
+
+  it("parseSessionToken returns null for missing prefix", () => {
     expect(parseSessionToken("ses_abc.secret")).toBeNull();
   });
 
-  it("returns null for missing dot", () => {
-    expect(parseSessionToken("sps_ses_nodot")).toBeNull();
+  it("parseSessionToken returns null for missing dot", () => {
+    expect(parseSessionToken("sps_ses_00000000000000000000000000000000")).toBeNull();
   });
 
-  it("returns null for empty secret", () => {
-    expect(parseSessionToken("sps_ses_abc.")).toBeNull();
+  it("parseChallengePublicId converts to UUID", () => {
+    const uuid = "550e8400-e29b-41d4-a716-446655440000";
+    const publicId = challengePublicId(uuid);
+    expect(publicId).toBe("chl_550e8400e29b41d4a716446655440000");
+    expect(parseChallengePublicId(publicId)).toBe(uuid);
+  });
+
+  it("parseChallengePublicId returns null for wrong prefix", () => {
+    expect(parseChallengePublicId("usr_550e8400e29b41d4a716446655440000")).toBeNull();
+  });
+
+  it("parseChallengePublicId returns null for invalid hex", () => {
+    expect(parseChallengePublicId("chl_notvalidhex")).toBeNull();
   });
 });
 
 describe("buildSessionToken", () => {
-  it("builds correct format", () => {
-    const token = buildSessionToken("ses_abc123", "mysecret");
-    expect(token).toBe("sps_ses_abc123.mysecret");
-  });
-
-  it("handles raw id without prefix", () => {
-    const token = buildSessionToken("rawid", "sec");
-    expect(token).toBe("sps_ses_rawid.sec");
+  it("builds correct format from UUID", () => {
+    const token = buildSessionToken("550e8400-e29b-41d4-a716-446655440000", "mysecret");
+    expect(token).toBe("sps_ses_550e8400e29b41d4a716446655440000.mysecret");
   });
 });
