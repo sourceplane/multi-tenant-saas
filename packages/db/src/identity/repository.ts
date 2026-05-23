@@ -41,7 +41,6 @@ function mapLoginChallenge(row: Record<string, unknown>): LoginChallenge {
     id: row.id as string,
     userId: row.user_id as string,
     method: row.method as string,
-    codeHash: row.code_hash as string,
     expiresAt: new Date(row.expires_at as string),
     consumedAt: row.consumed_at ? new Date(row.consumed_at as string) : null,
     createdAt: new Date(row.created_at as string),
@@ -52,7 +51,6 @@ function mapSession(row: Record<string, unknown>): Session {
   return {
     id: row.id as string,
     userId: row.user_id as string,
-    tokenHash: row.token_hash as string,
     expiresAt: new Date(row.expires_at as string),
     revokedAt: row.revoked_at ? new Date(row.revoked_at as string) : null,
     createdAt: new Date(row.created_at as string),
@@ -186,7 +184,7 @@ export function createIdentityRepository(executor: SqlExecutor): IdentityReposit
     async getLoginChallengeById(id: string): Promise<IdentityResult<LoginChallenge>> {
       try {
         const result = await executor.execute<Record<string, unknown>>(
-          `SELECT * FROM identity.login_challenges WHERE id = $1`,
+          `SELECT id, user_id, method, expires_at, consumed_at, created_at FROM identity.login_challenges WHERE id = $1`,
           [id],
         );
         if (result.rowCount === 0) {
@@ -205,14 +203,14 @@ export function createIdentityRepository(executor: SqlExecutor): IdentityReposit
       }
     },
 
-    async consumeLoginChallenge(id: string, consumedAt: Date): Promise<IdentityResult<LoginChallenge>> {
+    async consumeLoginChallenge(id: string, codeHash: string, consumedAt: Date): Promise<IdentityResult<LoginChallenge>> {
       try {
         const result = await executor.execute<Record<string, unknown>>(
           `UPDATE identity.login_challenges
-           SET consumed_at = $2
-           WHERE id = $1 AND consumed_at IS NULL
+           SET consumed_at = $3
+           WHERE id = $1 AND code_hash = $2 AND consumed_at IS NULL
            RETURNING *`,
-          [id, consumedAt.toISOString()],
+          [id, codeHash, consumedAt.toISOString()],
         );
         if (result.rowCount === 0) {
           return { ok: false, error: { kind: "already_consumed" } };
@@ -247,7 +245,7 @@ export function createIdentityRepository(executor: SqlExecutor): IdentityReposit
     async getSessionByTokenHash(tokenHash: string): Promise<IdentityResult<Session>> {
       try {
         const result = await executor.execute<Record<string, unknown>>(
-          `SELECT * FROM identity.sessions WHERE token_hash = $1 AND revoked_at IS NULL`,
+          `SELECT id, user_id, expires_at, revoked_at, created_at, last_seen_at FROM identity.sessions WHERE token_hash = $1 AND revoked_at IS NULL`,
           [tokenHash],
         );
         if (result.rowCount === 0) {

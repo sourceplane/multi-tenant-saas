@@ -35,7 +35,6 @@ export interface LoginChallenge {
   id: string;
   userId: string;
   method: string;
-  codeHash: string;
   expiresAt: Date;
   consumedAt: Date | null;
   createdAt: Date;
@@ -44,7 +43,6 @@ export interface LoginChallenge {
 export interface Session {
   id: string;
   userId: string;
-  tokenHash: string;
   expiresAt: Date;
   revokedAt: Date | null;
   createdAt: Date;
@@ -95,7 +93,7 @@ export interface IdentityRepository {
 
   createLoginChallenge(input: CreateLoginChallengeInput): Promise<IdentityResult<LoginChallenge>>;
   getLoginChallengeById(id: string): Promise<IdentityResult<LoginChallenge>>;
-  consumeLoginChallenge(id: string, consumedAt: Date): Promise<IdentityResult<LoginChallenge>>;
+  consumeLoginChallenge(id: string, codeHash: string, consumedAt: Date): Promise<IdentityResult<LoginChallenge>>;
 
   createSession(input: CreateSessionInput): Promise<IdentityResult<Session>>;
   getSessionByTokenHash(tokenHash: string): Promise<IdentityResult<Session>>;

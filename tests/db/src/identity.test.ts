@@ -55,7 +55,6 @@ const SAMPLE_CHALLENGE_ROW = {
   id: "ch-001",
   user_id: "u-001",
   method: "email_code",
-  code_hash: "sha256-hashed-code",
   expires_at: FUTURE.toISOString(),
   consumed_at: null,
   created_at: NOW.toISOString(),
@@ -64,7 +63,6 @@ const SAMPLE_CHALLENGE_ROW = {
 const SAMPLE_SESSION_ROW = {
   id: "sess-001",
   user_id: "u-001",
-  token_hash: "sha256-hashed-token",
   expires_at: FUTURE.toISOString(),
   revoked_at: null,
   created_at: NOW.toISOString(),
@@ -308,7 +306,7 @@ describe("IdentityRepository", () => {
       expect(result.ok).toBe(true);
       if (result.ok) {
         expect(result.value.id).toBe("ch-001");
-        expect(result.value.codeHash).toBe("sha256-hashed-code");
+        expect(result.value).not.toHaveProperty("codeHash");
       }
     });
 
@@ -348,26 +346,41 @@ describe("IdentityRepository", () => {
   });
 
   describe("consumeLoginChallenge", () => {
-    it("uses parameterized update with consumed_at IS NULL guard", async () => {
+    it("uses parameterized update with code_hash and consumed_at IS NULL guard", async () => {
       const { executor, queries } = createFakeExecutor({
         rows: [{ ...SAMPLE_CHALLENGE_ROW, consumed_at: NOW.toISOString() }],
       });
       const repo = createIdentityRepository(executor);
 
-      await repo.consumeLoginChallenge("ch-001", NOW);
+      await repo.consumeLoginChallenge("ch-001", "sha256-hashed-code", NOW);
 
+      expect(queries[0]!.text).toContain("code_hash = $2");
       expect(queries[0]!.text).toContain("consumed_at IS NULL");
-      expect(queries[0]!.params).toEqual(["ch-001", NOW.toISOString()]);
+      expect(queries[0]!.params).toEqual(["ch-001", "sha256-hashed-code", NOW.toISOString()]);
     });
 
     it("returns already_consumed when no rows affected", async () => {
       const { executor } = createFakeExecutor({ rows: [], rowCount: 0 });
       const repo = createIdentityRepository(executor);
 
-      const result = await repo.consumeLoginChallenge("ch-001", NOW);
+      const result = await repo.consumeLoginChallenge("ch-001", "sha256-hashed-code", NOW);
 
       expect(result.ok).toBe(false);
       if (!result.ok) expect(result.error.kind).toBe("already_consumed");
+    });
+
+    it("does not expose codeHash in returned challenge", async () => {
+      const { executor } = createFakeExecutor({
+        rows: [{ ...SAMPLE_CHALLENGE_ROW, consumed_at: NOW.toISOString() }],
+      });
+      const repo = createIdentityRepository(executor);
+
+      const result = await repo.consumeLoginChallenge("ch-001", "sha256-hashed-code", NOW);
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value).not.toHaveProperty("codeHash");
+      }
     });
   });
 
@@ -438,6 +451,18 @@ describe("IdentityRepository", () => {
 
       expect(result.ok).toBe(false);
       if (!result.ok) expect(result.error.kind).toBe("expired");
+    });
+
+    it("does not expose tokenHash in returned session", async () => {
+      const { executor } = createFakeExecutor({ rows: [SAMPLE_SESSION_ROW] });
+      const repo = createIdentityRepository(executor);
+
+      const result = await repo.getSessionByTokenHash("sha256-hashed-token");
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value).not.toHaveProperty("tokenHash");
+      }
     });
   });
 
