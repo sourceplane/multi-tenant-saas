@@ -125,4 +125,8 @@ git diff --check: clean
 
 ## PR
 
-See below — opened after commit.
+- **Number**: #54
+- **URL**: https://github.com/sourceplane/multi-tenant-saas/pull/54
+- **Branch**: `codex/task-0013-identity-worker-auth-runtime`
+- **Base**: `main`
+- **Mergeable**: yes
