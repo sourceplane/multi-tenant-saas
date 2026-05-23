@@ -60,8 +60,10 @@ Last updated: 2026-05-23
   `26229865114` applied the baseline migration to both stage and prod.
 - Task 0009 Hyperdrive implementation is verified PASS after PR #36 and
   rollback PR #44. Stage and prod Hyperdrive resources are stable.
-- Proposal `ai/proposals/task-0009-spec-update.md` is accepted; implement it
-  through Task 0009.1 before Worker binding/runtime work.
+- Task 0009.1 spec/context alignment completed. Active specs reference Orun
+  `v2.3.0` as the verified runtime baseline. Proposal
+  `ai/proposals/task-0009-spec-update.md` is implemented.
+- Downstream Worker binding and runtime tasks are now unblocked.
 
 ## Pending Decisions
 
@@ -69,8 +71,8 @@ Last updated: 2026-05-23
   deferred. The missing `cloudflare-hyperdrive` -> `supabase` dependency was
   documented as non-blocking by Task 0009 verification because current CI
   behavior and live state are stable.
-- Downstream Worker binding/runtime work is deferred until Task 0009.1 aligns
-  the active specs with Orun `v2.3.0`.
+- Orun spec alignment (v2.3.0) is complete. Downstream Worker binding/runtime
+  work is now unblocked.
 - `dev` Supabase provisioning remains deferred until a later task explicitly
   changes that decision.
 

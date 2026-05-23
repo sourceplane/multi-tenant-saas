@@ -14,13 +14,14 @@
     "0007",
     "0007.1",
     "0008",
-    "0009"
+    "0009",
+    "0009.1"
   ],
-  "repo_health": "yellow",
-  "next_focus": "spec-align-orun-v2.3.0",
+  "repo_health": "green",
+  "next_focus": "worker-binding-and-runtime",
   "last_verified": "2026-05-23",
   "waiting_for_input": "false",
-  "task_agent": "ai/tasks/task-0009.1.md",
+  "task_agent": "ai/reports/task-0009.1-implementer.md",
   "notes": [
     "main is synced with origin/main at d9404ab after Task 0009 verification PASS.",
     "Task 0009 verified PASS: Hyperdrive infrastructure confirmed stable, all checks passed.",
@@ -28,7 +29,8 @@
     "Migration runner uses SupabaseApiAdapter (Supabase Management API, HTTPS/IPv4). Plan mode is offline.",
     "Supabase stage ref: thielrrsejwhjkdluwqm, prod ref: npbvrxkrlyrpnhrqucxa. dev remains unprovisioned.",
     "Hyperdrive stage ID: 08f7c6055f544a3890a585d88fd92348, prod ID: ab2c21c2db6245a59c91588fcac7107a (applied and verified).",
-    "Code and CI use Orun v2.3.0; Task 0009 accepted ai/proposals/task-0009-spec-update.md. Task 0009.1 should align active specs/context.",
+    "Task 0009.1 spec/context alignment complete: specs reference Orun v2.3.0, proposal implemented, context updated.",
+    "Downstream Worker binding and runtime tasks (0010+) are now unblocked.",
     "No components declare dependsOn (consistent pattern); Hyperdrive → Supabase dependency is implicit.",
     "Ignored generated outputs must not be staged or committed: dist, node_modules, .orun, Terraform dirs, plan.json."
   ]

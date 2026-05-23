@@ -39,6 +39,8 @@ Last updated: 2026-05-23
 - Task 0009 verifier report passed. It accepted Orun `v2.3.0` as repo reality
   and recommended the small spec/context alignment captured in
   `ai/tasks/task-0009.1.md`.
+- Task 0009.1 spec/context alignment completed. Active specs now reference Orun
+  `v2.3.0` as the verified runtime baseline.
 - `dev` Supabase remains intentionally unprovisioned.
 - Local Orun validation passes:
   `/Users/irinelinson/.local/bin/kiox -- orun validate --intent intent.yaml`.
@@ -50,13 +52,11 @@ Last updated: 2026-05-23
   catalog or CI intelligence work.
 - Week 0 operations foundation is complete: AWS S3 backend, Supabase
   `stage`/`prod` provisioning, offline migration ownership conventions, live
-  migration runner with apply path, and Task 0009 Hyperdrive infrastructure in
-  current code.
-- The next high-leverage gap is **Task 0009.1 spec alignment**: update the
-  active specs/context from Orun `v2.2.1` wording to the Task 0009-verified
-  `v2.3.0` baseline before resuming downstream Worker binding/runtime tasks.
+  migration runner with apply path, Hyperdrive infrastructure, and Orun `v2.3.0`
+  spec alignment.
+- Downstream Worker binding and runtime tasks are now unblocked.
 
 ## Current Task
 
-- Task 0009.1 prompt: `ai/tasks/task-0009.1.md`.
-- Awaiting implementer result.
+- Task 0009.1 is complete: PR #46 aligns specs/context with Orun `v2.3.0`.
+- Downstream Worker binding and runtime tasks (0010+) are now unblocked.
