@@ -252,14 +252,67 @@ Last updated: 2026-05-23
 
 ## Task 0011
 
-- Agent: Implementer
+- Agent: Implementer → Verifier
 - Prompt: `ai/tasks/task-0011.md`
-- Status: queued
+- Verifier prompt: `ai/tasks/task-0011-verifier.md`
+- Status: verified PASS
+- PR: #52 (`feat: Worker-safe Hyperdrive adapter and database health check`),
+  squash-merged at `f02db20`
 - Objective: add a Worker-safe Hyperdrive/Postgres runtime adapter and a
   read-only `api-edge` operational smoke path that proves deployed Worker
   connectivity through `SOURCEPLANE_DB`.
 - Scope boundary: no domain schema, no database writes, no identity/org/project
   behavior, no new Worker app, and no Terraform/resource provisioning.
+- Durable outcome: `@saas/db/hyperdrive` exists, `api-edge` `/health` reports
+  database reachability, stage and prod Workers are deployed with correct
+  Hyperdrive bindings, and live health checks returned `reachable: true`.
+- Reports: `ai/reports/task-0011-implementer.md`,
+  `ai/reports/task-0011-verifier.md`
+
+## Task 0012
+
+- Agent: Implementer → Verifier
+- Prompt: `ai/tasks/task-0012.md`
+- Verifier prompt: `ai/tasks/task-0012-verifier.md`
+- Status: verified PASS
+- PR: #53 (`feat: add identity persistence foundation`), squash-merged at
+  `088a7bd`
+- Objective: add the first identity persistence foundation: identity-owned
+  schema migration plus Worker-safe typed repository adapters built on the
+  Hyperdrive SQL seam.
+- Durable outcome: `@saas/db/identity` repository adapter exists,
+  `@saas/db/hyperdrive` has a parameterized SQL executor, migration
+  `010_identity_core` is applied to both stage and prod. 85 tests pass.
+- Main CI run: `26338527094` — all green.
+- Reports: `ai/reports/task-0012-implementer.md`,
+  `ai/reports/task-0012-verifier.md`
+
+## Task 0013
+
+- Agent: Implementer → Verifier
+- Prompt: `ai/tasks/task-0013.md`
+- Verifier prompt: `ai/tasks/task-0013-verifier.md`
+- Status: verified PASS
+- PR: #54 (`feat: add identity-worker auth runtime with passwordless login
+  (#task-0013)`), squash-merged at `8477658`
+- Objective: create the first deployable Identity Worker auth runtime slice in
+  `apps/identity-worker`, with passwordless email-code routes for
+  `/v1/auth/login/start`, `/v1/auth/login/complete`, `/v1/auth/session`,
+  `/v1/auth/logout`, plus `/health`.
+- Verifier fix: UUID/public-ID mismatch — Worker was generating prefixed hex
+  IDs but DB requires UUIDs. Fixed by generating UUIDs via
+  `crypto.randomUUID()` for persistence with bijective public prefix mapping
+  at the API boundary. Tests updated and expanded (37 tests).
+- Durable outcome: `apps/identity-worker` deployed to stage and prod with
+  live end-to-end auth flow proven. Prod debug delivery disabled. Auth contract
+  types in `@saas/contracts/auth`. Stage debug delivery enables verifier
+  end-to-end flow without an email provider.
+- Main CI run: `26345454739` — all green.
+- Deployed Workers:
+  - stage: `identity-worker-stage`, version `678702b2`, deployed `2026-05-23T22:41:37Z`
+  - prod: `identity-worker-prod`, version `57b47417`, deployed `2026-05-23T22:42:20Z`
+- Reports: `ai/reports/task-0013-implementer.md`,
+  `ai/reports/task-0013-verifier.md`
 
 ## Historical Notes
 

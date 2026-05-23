@@ -1,6 +1,6 @@
 # Open Risks
 
-Last updated: 2026-05-23
+Last updated: 2026-05-24
 
 ## Active Risks
 
@@ -38,6 +38,15 @@ Last updated: 2026-05-23
 - The orphaned R2 bucket `sourceplane-tf-state` and historical Hyperdrive
   adoption scaffold from Task 0002 remain live historical resources and are not
   owned by current repo source.
+- Dead `dryRunCommand` and `deployCommand` parameters in
+  `apps/identity-worker/component.yaml` point to `--env prod` but are
+  overridden by the composition template. Non-blocking; recommend cleanup.
+- Tests in `tests/identity-worker` re-implement auth service logic rather than
+  importing from Worker source. Low risk since live deployment proves behavior,
+  but a future maintenance task should improve import structure.
+- Until the follow-up api-edge facade task lands, `api-edge` still does not
+  route `/v1/auth/*`. The identity-worker is reachable directly at its own URL
+  but not through the edge gateway.
 
 ## Resolved Risks
 
@@ -48,6 +57,11 @@ Last updated: 2026-05-23
   `stage` and `prod`.
 - Orun `v2.3.0` spec drift is resolved. Active specs now reference `v2.3.0` as
   the verified runtime baseline via Task 0009.1.
+- Task 0013 UUID/public-ID mismatch is resolved. The Worker generates proper
+  UUIDs for database storage and maps to/from prefixed public IDs at the API
+  boundary. Live stage auth flow confirmed correct UUID persistence.
+- Task 0013 prod debug-delivery boundary is verified. Prod `DEBUG_DELIVERY=false`
+  is enforced; live prod `/v1/auth/login/start` returns no raw code.
 
 ## Watch Items
 
