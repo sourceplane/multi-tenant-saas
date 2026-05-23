@@ -235,9 +235,31 @@ Last updated: 2026-05-23
 - Deployed resources:
   - api-edge prod Worker (version `005882d7`, deployment `3f8f08ec`)
   - web-console Pages (deployment `0e0680e0`)
-- Stage Worker intentionally not deployed (verify-only profile).
+- Stage Worker was intentionally not deployed in Task 0010 verifier evidence.
 - Verifier fixes: removed `combined.md`, added `--env prod` to deploy commands.
 - Reports: `ai/reports/task-0010-implementer.md`, `ai/reports/task-0010-verifier.md`
+
+## Task 0010.1 / PR #50 Maintenance
+
+- Agent: external maintenance
+- Status: merged
+- PR: #50 (`chore: bump actions/setup-node from v4 to v6 across all compositions`),
+  merged at `67bf5cf`
+- Durable outcome: Cloudflare, Terraform/Pages, turbo-package, and db-migrate
+  composition job templates now use `actions/setup-node@v6`; `api-edge` and
+  `web-console` component Node versions are `22`. Main CI run `26330474474`
+  passed after merge.
+
+## Task 0011
+
+- Agent: Implementer
+- Prompt: `ai/tasks/task-0011.md`
+- Status: queued
+- Objective: add a Worker-safe Hyperdrive/Postgres runtime adapter and a
+  read-only `api-edge` operational smoke path that proves deployed Worker
+  connectivity through `SOURCEPLANE_DB`.
+- Scope boundary: no domain schema, no database writes, no identity/org/project
+  behavior, no new Worker app, and no Terraform/resource provisioning.
 
 ## Historical Notes
 

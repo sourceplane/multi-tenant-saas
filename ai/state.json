@@ -1,6 +1,6 @@
 {
   "goal": "Supabase/Postgres-backed multi-organization Orun SaaS control plane",
-  "current_task": null,
+  "current_task": "0011",
   "completed": [
     "0001",
     "0001.1",
@@ -22,19 +22,20 @@
   "next_focus": "worker-runtime-adapter",
   "last_verified": "2026-05-23",
   "waiting_for_input": "false",
-  "task_agent": null,
+  "task_agent": "ai/tasks/task-0011.md",
   "notes": [
-    "main is synced with origin/main at d996a84 after Task 0010 merged via PR #47.",
+    "main is synced with origin/main at 67bf5cf after PR #50 setup-node v6 maintenance; latest main CI run 26330474474 passed.",
     "Task 0010 verified PASS: api-edge Worker deployed to prod with SOURCEPLANE_DB Hyperdrive binding.",
     "api-edge prod Worker version: 005882d7-3a88-4056-bb61-6a98e1ad4ce7, deployment: 3f8f08ec.",
     "Hyperdrive stage ID: 08f7c6055f544a3890a585d88fd92348, prod ID: ab2c21c2db6245a59c91588fcac7107a (bound and deployed).",
     "web-console Pages deployed from merge commit d996a84 (deployment 0e0680e0).",
-    "Stage Worker (api-edge-stage) not deployed — stage profile is verify-only.",
+    "Stage Worker (api-edge-stage) was not present in Task 0010 verifier evidence; current component profile is verify by default with deploy promotion rules on github-push-main.",
     "Cloudflare compositions refactored: correct turbo filters, appDir-based execution, atomic capability steps.",
     "Deploy commands use --env prod explicitly; environment isolation confirmed.",
     "Migration runner uses SupabaseApiAdapter (Supabase Management API, HTTPS/IPv4). Plan mode is offline.",
     "Supabase stage ref: thielrrsejwhjkdluwqm, prod ref: npbvrxkrlyrpnhrqucxa. dev remains unprovisioned.",
     "No components declare dependsOn (consistent pattern); Hyperdrive → Supabase dependency is implicit.",
-    "Ignored generated outputs must not be staged or committed: dist, node_modules, .orun, Terraform dirs, plan.json."
+    "Ignored generated outputs must not be staged or committed: dist, node_modules, .orun, Terraform dirs, plan.json.",
+    "Task 0011 is queued: add a Worker-safe Hyperdrive/Postgres runtime adapter and read-only api-edge database smoke path."
   ]
 }
