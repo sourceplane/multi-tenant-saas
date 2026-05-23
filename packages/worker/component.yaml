@@ -1,5 +1,4 @@
 type: terraform
-kind: Component
 domain: infra
 component: worker
 environments:
@@ -12,4 +11,3 @@ environments:
 dependencies:
   - cloudflare-hyperdrive
 dev: false
-
