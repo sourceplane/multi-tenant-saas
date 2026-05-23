@@ -50,7 +50,11 @@ export function createHyperdriveAdapter(
     },
 
     async dispose(): Promise<void> {
-      await client.end();
+      try {
+        await client.end();
+      } catch {
+        // Disposal failure must never mask a health response or leak errors.
+      }
     },
   };
 }
