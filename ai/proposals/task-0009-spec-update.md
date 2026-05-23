@@ -1,6 +1,6 @@
 # Proposal
 
-Status: Accepted by the Orchestrator after Task 0009 verification.
+Status: Accepted and implemented by Task 0009.1 spec alignment.
 
 Update the reusable Orun runtime reference from `v2.2.1` to `v2.3.0` for this
 repo, or explicitly reject the Task 0009 runtime bump and schedule a rollback.

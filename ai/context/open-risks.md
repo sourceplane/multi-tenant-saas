@@ -9,10 +9,6 @@ Last updated: 2026-05-23
   names, and non-secret ARNs only.
 - `dev` Supabase remains intentionally unprovisioned. Tasks must not add a dev
   database/project unless a later prompt explicitly changes scope.
-- Code and CI now use Orun `v2.3.0`, while `specs/orun-golden-path.md` and
-  `specs/access-and-infra.md` still name `v2.2.1`. Proposal
-  `ai/proposals/task-0009-spec-update.md` is accepted; Task 0009.1 must align
-  the active specs/context before downstream Worker binding/runtime work.
 - `infra/terraform/cloudflare-hyperdrive/component.yaml` does not currently
   declare an explicit `dependsOn` edge to `supabase`; Task 0009 verification
   treated this as non-blocking because current Orun behavior and live state are
@@ -50,6 +46,8 @@ Last updated: 2026-05-23
   post-merge CI run `26229865114`.
 - Task 0009 is complete. Hyperdrive infrastructure is applied and stable in
   `stage` and `prod`.
+- Orun `v2.3.0` spec drift is resolved. Active specs now reference `v2.3.0` as
+  the verified runtime baseline via Task 0009.1.
 
 ## Watch Items
 

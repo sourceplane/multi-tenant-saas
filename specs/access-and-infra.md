@@ -196,7 +196,7 @@ environment promotion or cross-component dependency behavior.
 ## Acceptance Criteria
 
 - `multi-tenant-saas` uses the repo's current verified Orun runtime
-  (`v2.2.1` at the time of Task 0005/0006) while continuing to follow
+  (`v2.3.0`, verified by Task 0009) while continuing to follow
   `aws-admin` for Terraform component and backend structure.
 - `intent.yaml` uses the `dev`, `stage`, `prod` environment shape and
   Terraform parameter defaults from the AWS-admin pattern.

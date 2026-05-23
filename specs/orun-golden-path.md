@@ -38,10 +38,10 @@ execution contracts; Orun compiles those inputs into an explicit plan DAG.
 Use the `aws-admin` repo as the strongest current reference for Orun-shaped
 Terraform component structure, S3 backend shape, environment defaults, and
 README/component style. For runtime version, this repo currently leads with the
-Task 0005-verified Orun `v2.2.1` path:
+Task 0009-verified Orun `v2.3.0` path:
 
-- `kiox.yaml` pins `ghcr.io/sourceplane/orun:v2.2.1`.
-- GitHub Actions uses `sourceplane/orun-action@v1.2.0` with `version: v2.2.1`.
+- `kiox.yaml` pins `ghcr.io/sourceplane/orun:v2.3.0`.
+- GitHub Actions uses `sourceplane/orun-action@v1.2.0` with `version: v2.3.0`.
 - `intent.yaml` declares composition sources and type bindings centrally.
 - Environments are `dev`, `stage`, and `prod`; `stage` promotes from `dev`,
   and `prod` promotes from `stage`.
@@ -52,7 +52,7 @@ Task 0005-verified Orun `v2.2.1` path:
 
 If `aws-admin` still pins an older Orun runtime, treat that as temporary
 reference-repo drift. Follow `aws-admin` for structure and this repo's verified
-`v2.2.1` runtime for new local work until a separate `aws-admin` alignment task
+`v2.3.0` runtime for new local work until a separate `aws-admin` alignment task
 lands.
 
 ## Component Manifest Rules
