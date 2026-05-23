@@ -8,6 +8,11 @@
     "ENVIRONMENT": "local"
   },
   "env": {
+    "dev": {
+      "vars": {
+        "ENVIRONMENT": "dev"
+      }
+    },
     "stage": {
       "vars": {
         "ENVIRONMENT": "stage"
