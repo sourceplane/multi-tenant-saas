@@ -29,8 +29,8 @@ spec:
     buildCommand: pnpm exec turbo run build --filter=@saas/api-edge
     typecheckCommand: pnpm exec turbo run typecheck --filter=@saas/api-edge
 
-    dryRunCommand: pnpm exec wrangler deploy --dry-run --config wrangler.jsonc
-    deployCommand: pnpm exec wrangler deploy --config wrangler.jsonc
+    dryRunCommand: pnpm exec wrangler deploy --dry-run --config wrangler.jsonc --env prod
+    deployCommand: pnpm exec wrangler deploy --config wrangler.jsonc --env prod
 
     preDeployCommand: "echo 'No pre-deploy step configured.'"
     migrationCommand: "echo 'No migrations configured.'"
