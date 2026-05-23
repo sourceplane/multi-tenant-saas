@@ -2,7 +2,7 @@ apiVersion: sourceplane.io/v1
 kind: Component
 metadata:
   name: api-edge
-  description: Cloudflare Worker for the API edge runtime
+  description: Cloudflare Worker for the API edge Runtime
 spec:
   type: cloudflare-worker-turbo
   domain: starter-runtime

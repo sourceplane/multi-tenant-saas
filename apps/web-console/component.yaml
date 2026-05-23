@@ -2,7 +2,7 @@ apiVersion: sourceplane.io/v1
 kind: Component
 metadata:
   name: web-console
-  description: Cloudflare Pages app for the Sourceplane web console
+  description: Cloudflare Pages App for the Sourceplane web console
 spec:
   type: cloudflare-pages-turbo
   domain: starter-ui
