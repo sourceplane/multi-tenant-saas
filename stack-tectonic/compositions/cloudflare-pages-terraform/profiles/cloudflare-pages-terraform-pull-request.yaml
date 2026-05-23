@@ -3,7 +3,7 @@ kind: ExecutionProfile
 metadata:
   name: cloudflare-pages-terraform-pull-request
 spec:
-  description: PR validation with site build and Terraform format checking
+  description: Fast PR validation with site build and Terraform format check
 
   jobs:
     verify-reconcile:
@@ -11,7 +11,6 @@ spec:
         - cloudflare-pages-terraform.setup-node
         - cloudflare-pages-terraform.install
         - cloudflare-pages-terraform.build
-        - cloudflare-pages-terraform.verify
+        - cloudflare-pages-terraform.verify-output
         - cloudflare-pages-terraform.setup-terraform
-        - cloudflare-pages-terraform.terraform-context
         - cloudflare-pages-terraform.terraform-fmt

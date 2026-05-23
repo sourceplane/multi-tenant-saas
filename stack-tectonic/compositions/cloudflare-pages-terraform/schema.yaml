@@ -21,42 +21,59 @@ spec:
       parameters:
         type: object
         required:
-          - siteDir
+          - nodeVersion
+          - appDir
           - installCommand
           - buildCommand
-          - cloudflareBuildCommand
           - outputDir
-          - rootDir
-          - nodeVersion
           - terraformDir
           - terraformVersion
           - projectName
-          - productionBranch
           - repoOwner
           - repoName
+          - cloudflareBuildCommand
+          - rootDir
         properties:
-          siteDir:
+          nodeVersion:
             type: string
+
+          appDir:
+            type: string
+            description: Path from the component job path to the site directory
+
           installCommand:
             type: string
           buildCommand:
             type: string
+
           cloudflareBuildCommand:
             type: string
+            description: Build command configured in the Cloudflare Pages project
+
           outputDir:
             type: string
+            description: Build output directory relative to appDir
+
           rootDir:
             type: string
-          nodeVersion:
-            type: string
+            description: Root directory for Pages project
+
           terraformDir:
             type: string
+            description: Path to the Terraform module directory
+
           terraformVersion:
             type: string
+
           projectName:
             type: string
-          productionBranch:
+            description: Cloudflare Pages project name
+
+          deployBranch:
             type: string
+            description: Production branch for the Pages project
+            default: main
+
           repoOwner:
             type: string
           repoName:

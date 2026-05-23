@@ -7,6 +7,7 @@ metadata:
 spec:
   type: cloudflare-pages-turbo
   domain: platform-ui
+  path: apps/web-console
   subscribe:
     environments:
       - name: preview
@@ -15,12 +16,17 @@ spec:
         profile: verify
       - name: production
         profile: deploy
-  inputs:
-    outputDir: dist
-    projectName: example-platform-web-console
+  parameters:
     nodeVersion: "20"
     pnpmVersion: "10.12.1"
-    productionBranch: main
+    workspaceDir: ../..
+    appDir: .
+    turboFilter: "@example/web-console"
+    outputDir: dist
+    projectName: example-platform-web-console
+    deployBranch: main
+    installCommand: pnpm install --frozen-lockfile
+    buildCommand: pnpm exec turbo run build --filter=@example/web-console
   labels:
     team: platform
     layer: delivery

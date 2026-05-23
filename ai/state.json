@@ -1,6 +1,6 @@
 {
   "goal": "Supabase/Postgres-backed multi-organization Orun SaaS control plane",
-  "current_task": "0009.1",
+  "current_task": "0010",
   "completed": [
     "0001",
     "0001.1",
@@ -21,9 +21,9 @@
   "next_focus": "worker-binding-and-runtime",
   "last_verified": "2026-05-23",
   "waiting_for_input": "false",
-  "task_agent": "ai/reports/task-0009.1-implementer.md",
+  "task_agent": "ai/tasks/task-0010.md",
   "notes": [
-    "main is synced with origin/main at d9404ab after Task 0009 verification PASS.",
+    "main is synced with origin/main at 0c585fc after Task 0009.1 merged.",
     "Task 0009 verified PASS: Hyperdrive infrastructure confirmed stable, all checks passed.",
     "000_control_baseline applied to stage and prod. _migrations.applied table bootstrapped.",
     "Migration runner uses SupabaseApiAdapter (Supabase Management API, HTTPS/IPv4). Plan mode is offline.",
@@ -31,6 +31,7 @@
     "Hyperdrive stage ID: 08f7c6055f544a3890a585d88fd92348, prod ID: ab2c21c2db6245a59c91588fcac7107a (applied and verified).",
     "Task 0009.1 spec/context alignment complete: specs reference Orun v2.3.0, proposal implemented, context updated.",
     "Downstream Worker binding and runtime tasks (0010+) are now unblocked.",
+    "Task 0010 is queued: wire apps/api-edge to the verified stage/prod Hyperdrive IDs as a non-mutating Worker binding setup PR.",
     "No components declare dependsOn (consistent pattern); Hyperdrive → Supabase dependency is implicit.",
     "Ignored generated outputs must not be staged or committed: dist, node_modules, .orun, Terraform dirs, plan.json."
   ]

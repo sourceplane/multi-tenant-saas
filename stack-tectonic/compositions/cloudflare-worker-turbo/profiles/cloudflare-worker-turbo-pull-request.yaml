@@ -3,7 +3,7 @@ kind: ExecutionProfile
 metadata:
   name: cloudflare-worker-turbo-pull-request
 spec:
-  description: PR validation with Turborepo build and typecheck
+  description: Fast PR validation for a Cloudflare Worker package
 
   jobs:
     verify-deploy:
@@ -11,7 +11,6 @@ spec:
         - cloudflare-worker-turbo.setup-node
         - cloudflare-worker-turbo.setup-pnpm
         - cloudflare-worker-turbo.install
-        - cloudflare-worker-turbo.pre-build
         - cloudflare-worker-turbo.verify-structure
         - cloudflare-worker-turbo.build
         - cloudflare-worker-turbo.typecheck

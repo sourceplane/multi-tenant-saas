@@ -4,8 +4,8 @@ Last updated: 2026-05-23
 
 ## Repo Reality
 
-- `main` is synced with `origin/main` at `d9404ab` after Task 0009 verification
-  PASS.
+- `main` is synced with `origin/main` at `0c585fc` after Task 0009.1 merged in
+  PR #46.
 - PR #44 restored the repo tree to the Task 0009 baseline from PR #36 and
   reverted later Worker binding/deployment work from PRs #37, #38, and #39,
   plus CI-check metadata PRs #40/#42.
@@ -54,9 +54,13 @@ Last updated: 2026-05-23
   `stage`/`prod` provisioning, offline migration ownership conventions, live
   migration runner with apply path, Hyperdrive infrastructure, and Orun `v2.3.0`
   spec alignment.
-- Downstream Worker binding and runtime tasks are now unblocked.
+- Downstream Worker binding and runtime tasks are now unblocked. Task 0010 is
+  queued to wire the existing `apps/api-edge` Worker to the verified stage/prod
+  Hyperdrive IDs without live Worker deployment or domain runtime behavior.
 
 ## Current Task
 
-- Task 0009.1 is complete: PR #46 aligns specs/context with Orun `v2.3.0`.
-- Downstream Worker binding and runtime tasks (0010+) are now unblocked.
+- Task 0010 prompt is ready at `ai/tasks/task-0010.md`.
+- Objective: configure and verify the `apps/api-edge` stage/prod Hyperdrive
+  binding seam using the Task 0009 resource IDs, while keeping the PR
+  non-mutating.

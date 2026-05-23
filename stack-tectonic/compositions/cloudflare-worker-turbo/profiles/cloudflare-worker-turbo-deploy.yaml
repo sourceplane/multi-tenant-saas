@@ -3,7 +3,11 @@ kind: ExecutionProfile
 metadata:
   name: cloudflare-worker-turbo-deploy
 spec:
-  description: Full build, typecheck, and deploy pipeline for Cloudflare Worker with Turborepo
+  description: Build, validate, migrate, deploy, and smoke test a Cloudflare Worker
+
+  policies:
+    requireApproval: true
+    requireCleanGitTree: true
 
   jobs:
     verify-deploy:
@@ -11,8 +15,10 @@ spec:
         - cloudflare-worker-turbo.setup-node
         - cloudflare-worker-turbo.setup-pnpm
         - cloudflare-worker-turbo.install
-        - cloudflare-worker-turbo.pre-build
         - cloudflare-worker-turbo.verify-structure
         - cloudflare-worker-turbo.build
         - cloudflare-worker-turbo.typecheck
+        - cloudflare-worker-turbo.pre-deploy
+        - cloudflare-worker-turbo.migrate
         - cloudflare-worker-turbo.deploy
+        - cloudflare-worker-turbo.smoke

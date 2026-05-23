@@ -5,18 +5,20 @@ metadata:
 spec:
   description: Full pipeline including Terraform apply for production releases
 
+  policies:
+    requireApproval: true
+    requireCleanGitTree: true
+
   jobs:
     verify-reconcile:
       includeCapabilities:
         - cloudflare-pages-turbo-terraform.setup-node
         - cloudflare-pages-turbo-terraform.setup-pnpm
         - cloudflare-pages-turbo-terraform.install
-        - cloudflare-pages-turbo-terraform.pre-build
         - cloudflare-pages-turbo-terraform.verify-structure
         - cloudflare-pages-turbo-terraform.build
         - cloudflare-pages-turbo-terraform.verify-output
         - cloudflare-pages-turbo-terraform.setup-terraform
-        - cloudflare-pages-turbo-terraform.terraform-context
         - cloudflare-pages-turbo-terraform.terraform-fmt
         - cloudflare-pages-turbo-terraform.terraform-init
         - cloudflare-pages-turbo-terraform.terraform-validate

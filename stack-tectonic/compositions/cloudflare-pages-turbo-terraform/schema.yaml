@@ -21,45 +21,79 @@ spec:
       parameters:
         type: object
         required:
-          - cloudflareBuildCommand
-          - outputDir
-          - destinationDir
-          - rootDir
           - nodeVersion
           - pnpmVersion
+          - workspaceDir
+          - appDir
+          - turboFilter
+          - outputDir
           - terraformDir
           - terraformVersion
           - projectName
-          - productionBranch
           - repoOwner
           - repoName
+          - cloudflareBuildCommand
+          - destinationDir
+          - rootDir
         properties:
-          cloudflareBuildCommand:
-            type: string
-          outputDir:
-            type: string
-          destinationDir:
-            type: string
-          rootDir:
-            type: string
           nodeVersion:
             type: string
           pnpmVersion:
             type: string
+
+          workspaceDir:
+            type: string
+            description: Path from the component job path to the monorepo root
+
+          appDir:
+            type: string
+            description: Path from the component job path to the Pages app directory
+
+          turboFilter:
+            type: string
+            description: Turborepo filter for this Pages package
+
+          outputDir:
+            type: string
+            description: Build output directory relative to appDir
+
+          destinationDir:
+            type: string
+            description: Cloudflare Pages destination directory
+
+          rootDir:
+            type: string
+            description: Root directory for Pages project
+
           terraformDir:
             type: string
+            description: Path to the Terraform module directory
+
           terraformVersion:
             type: string
+
           projectName:
             type: string
-          productionBranch:
+            description: Cloudflare Pages project name
+
+          deployBranch:
             type: string
+            description: Production branch for the Pages project
+            default: main
+
           repoOwner:
             type: string
           repoName:
             type: string
-          preBuildCommand:
+
+          cloudflareBuildCommand:
             type: string
+            description: Build command configured in the Cloudflare Pages project
+
+          installCommand:
+            type: string
+            default: pnpm install --frozen-lockfile
+
           buildCommand:
             type: string
         additionalProperties: false

@@ -3,12 +3,12 @@ kind: ExecutionProfile
 metadata:
   name: cloudflare-pages-verify
 spec:
-  description: Full non-mutating verification of Cloudflare Pages site
+  description: Full non-mutating verification of Pages site build
 
   jobs:
     verify-deploy:
       includeCapabilities:
-        - cloudflare-pages.setup
+        - cloudflare-pages.setup-node
         - cloudflare-pages.install
         - cloudflare-pages.build
-        - cloudflare-pages.verify
+        - cloudflare-pages.verify-output

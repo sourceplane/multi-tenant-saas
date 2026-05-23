@@ -3,7 +3,11 @@ kind: ExecutionProfile
 metadata:
   name: cloudflare-pages-turbo-deploy
 spec:
-  description: Full pipeline including provisioning and deployment
+  description: Full pipeline including provisioning, deployment, and smoke test
+
+  policies:
+    requireApproval: true
+    requireCleanGitTree: true
 
   jobs:
     verify-deploy:
@@ -11,9 +15,9 @@ spec:
         - cloudflare-pages-turbo.setup-node
         - cloudflare-pages-turbo.setup-pnpm
         - cloudflare-pages-turbo.install
-        - cloudflare-pages-turbo.pre-build
         - cloudflare-pages-turbo.verify-structure
         - cloudflare-pages-turbo.build
         - cloudflare-pages-turbo.verify-output
         - cloudflare-pages-turbo.provision
         - cloudflare-pages-turbo.deploy
+        - cloudflare-pages-turbo.smoke
