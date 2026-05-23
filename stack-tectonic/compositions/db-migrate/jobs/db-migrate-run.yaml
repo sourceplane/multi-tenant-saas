@@ -24,7 +24,7 @@ spec:
     - id: setup-node
       name: setup-node
       capability: db-migrate.setup-node
-      use: actions/setup-node@v4
+      use: actions/setup-node@v6
       with:
         node-version: "{{.parameters.nodeVersion}}"
 
