@@ -1,6 +1,6 @@
 {
   "goal": "Supabase/Postgres-backed multi-organization Orun SaaS control plane",
-  "current_task": null,
+  "current_task": "spec-update-v2.3.0",
   "completed": [
     "0001",
     "0001.1",
@@ -13,20 +13,23 @@
     "0006.1",
     "0007",
     "0007.1",
-    "0008"
+    "0008",
+    "0009"
   ],
   "repo_health": "green",
-  "next_focus": "awaiting-next-task",
-  "last_verified": "2026-05-21",
+  "next_focus": "update-specs-orun-v2.3.0",
+  "last_verified": "2026-05-23",
   "waiting_for_input": "false",
-  "task_agent": null,
+  "task_agent": "ai/proposals/task-0009-spec-update.md",
   "notes": [
-    "main is synced with origin/main at dffdc4a.",
-    "Task 0008 complete. PR #35 merged and post-merge CI run 26229865114 passed.",
+    "main is synced with origin/main at 3e6e5d0 after PR #44 restored the tree to the Task 0009 baseline.",
+    "Task 0009 verified PASS: Hyperdrive infrastructure confirmed stable, all checks passed.",
     "000_control_baseline applied to stage and prod. _migrations.applied table bootstrapped.",
     "Migration runner uses SupabaseApiAdapter (Supabase Management API, HTTPS/IPv4). Plan mode is offline.",
     "Supabase stage ref: thielrrsejwhjkdluwqm, prod ref: npbvrxkrlyrpnhrqucxa. dev remains unprovisioned.",
-    "The missing db -> db-tests dependsOn edge is a deferred Orun/spec limitation recorded in ai/proposals/task-0007.1-spec-update.md.",
+    "Hyperdrive stage ID: 08f7c6055f544a3890a585d88fd92348, prod ID: ab2c21c2db6245a59c91588fcac7107a (applied and verified).",
+    "Code and CI use Orun v2.3.0; specs still name v2.2.1. Spec update proposal pending acceptance.",
+    "No components declare dependsOn (consistent pattern); Hyperdrive → Supabase dependency is implicit.",
     "Ignored generated outputs must not be staged or committed: dist, node_modules, .orun, Terraform dirs, plan.json."
   ]
 }
