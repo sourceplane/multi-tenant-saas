@@ -1,0 +1,51 @@
+import type { Env } from "./env.js";
+import { handleHealth } from "./handlers/health.js";
+import { handleLoginStart } from "./handlers/login-start.js";
+import { handleLoginComplete } from "./handlers/login-complete.js";
+import { handleSession } from "./handlers/session.js";
+import { handleLogout } from "./handlers/logout.js";
+import { errorResponse, notFound, methodNotAllowed } from "./http.js";
+import { generateRequestId } from "./ids.js";
+
+const REQUEST_ID_RE = /^[\w-]{1,128}$/;
+
+function resolveRequestId(request: Request): string {
+  const header = request.headers.get("x-request-id");
+  if (header && REQUEST_ID_RE.test(header)) return header;
+  return generateRequestId();
+}
+
+export async function route(request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url);
+  const requestId = resolveRequestId(request);
+
+  try {
+    if (url.pathname === "/health" && request.method === "GET") {
+      return handleHealth(env, requestId);
+    }
+
+    if (url.pathname === "/v1/auth/login/start") {
+      if (request.method !== "POST") return methodNotAllowed(requestId);
+      return handleLoginStart(request, env, requestId);
+    }
+
+    if (url.pathname === "/v1/auth/login/complete") {
+      if (request.method !== "POST") return methodNotAllowed(requestId);
+      return handleLoginComplete(request, env, requestId);
+    }
+
+    if (url.pathname === "/v1/auth/session") {
+      if (request.method !== "GET") return methodNotAllowed(requestId);
+      return handleSession(request, env, requestId);
+    }
+
+    if (url.pathname === "/v1/auth/logout") {
+      if (request.method !== "POST") return methodNotAllowed(requestId);
+      return handleLogout(request, env, requestId);
+    }
+
+    return notFound(requestId, url.pathname);
+  } catch {
+    return errorResponse("internal_error", "An unexpected error occurred", 500, requestId);
+  }
+}
