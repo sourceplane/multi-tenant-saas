@@ -223,17 +223,21 @@ Last updated: 2026-05-23
 
 ## Task 0010
 
-- Agent: Implementer
+- Agent: Implementer → Verifier
 - Prompt: `ai/tasks/task-0010.md`
-- Status: queued
+- Status: verified PASS
+- PR: #47 (`codex/task-0010-api-edge-hyperdrive-binding`), squash-merged at `d996a84`
 - Objective: wire the existing `apps/api-edge` Worker to the verified
-  stage/prod Hyperdrive IDs at the Wrangler config and TypeScript env seam,
-  with focused non-mutating verification.
-- Scope boundary: no new `packages/worker`, no domain SQL/runtime adapter, no
-  live Worker deploy, no Terraform or provider mutation.
-- Related rollback: PRs #37, #38, and #39 attempted Worker
-  binding/runtime/deployment work and were reverted by PR #44. Task 0010
-  intentionally restarts the Worker binding path from current `main`.
+  stage/prod Hyperdrive IDs at the Wrangler config and TypeScript env seam.
+- Scope: Hyperdrive binding in wrangler.jsonc/env.ts, verify-bindings script,
+  composition bugfixes (turbo filter names, working directories, Node.js 22),
+  explicit `--env prod` deploy command.
+- Deployed resources:
+  - api-edge prod Worker (version `005882d7`, deployment `3f8f08ec`)
+  - web-console Pages (deployment `0e0680e0`)
+- Stage Worker intentionally not deployed (verify-only profile).
+- Verifier fixes: removed `combined.md`, added `--env prod` to deploy commands.
+- Reports: `ai/reports/task-0010-implementer.md`, `ai/reports/task-0010-verifier.md`
 
 ## Historical Notes
 
