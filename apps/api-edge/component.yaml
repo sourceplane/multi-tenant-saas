@@ -12,7 +12,7 @@ spec:
       - name: dev
         profile: pull-request
       - name: stage
-        profile: verify
+        profile: apply
       - name: prod
         profile: deploy
   parameters:
