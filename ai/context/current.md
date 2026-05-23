@@ -58,5 +58,5 @@ Last updated: 2026-05-23
 
 ## Current Task
 
-- Task 0009.1 is complete: PR #[PR] aligns specs/context with Orun `v2.3.0`.
+- Task 0009.1 is complete: PR #46 aligns specs/context with Orun `v2.3.0`.
 - Downstream Worker binding and runtime tasks (0010+) are now unblocked.
