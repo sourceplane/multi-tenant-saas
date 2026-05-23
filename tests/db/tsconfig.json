@@ -2,7 +2,20 @@
   "extends": "../../tooling/tsconfig/base.json",
   "compilerOptions": {
     "types": ["jest", "node"],
-    "allowSyntheticDefaultImports": true
+    "allowSyntheticDefaultImports": true,
+    "composite": false,
+    "incremental": false,
+    "declaration": false,
+    "declarationMap": false,
+    "baseUrl": ".",
+    "paths": {
+      "@saas/db": ["../../packages/db/src/index.ts"],
+      "@saas/db/hyperdrive": ["../../packages/db/src/hyperdrive/index.ts"],
+      "@saas/db/identity": ["../../packages/db/src/identity/index.ts"],
+      "@saas/db/runner": ["../../packages/db/src/runner/index.ts"],
+      "@saas/db/manifest": ["../../packages/db/src/manifest.ts"],
+      "@saas/db/types": ["../../packages/db/src/types.ts"]
+    }
   },
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "dist"]

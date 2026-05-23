@@ -8,6 +8,7 @@
     "./manifest": "./src/manifest.ts",
     "./types": "./src/types.ts",
     "./hyperdrive": "./src/hyperdrive/index.ts",
+    "./identity": "./src/identity/index.ts",
     "./runner": "./src/runner/index.ts"
   },
   "bin": {
