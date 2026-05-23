@@ -28,6 +28,7 @@
       "^(\\.{1,2}/.*)\\.js$": "$1",
       "^@saas/db$": "<rootDir>/../../packages/db/src/index.ts",
       "^@saas/db/runner$": "<rootDir>/../../packages/db/src/runner/index.ts",
+      "^@saas/db/hyperdrive$": "<rootDir>/../../packages/db/src/hyperdrive/index.ts",
       "^@saas/db/(.*)$": "<rootDir>/../../packages/db/src/$1.ts"
     },
     "transform": {
