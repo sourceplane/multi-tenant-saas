@@ -1,6 +1,6 @@
 # Decisions
 
-Last updated: 2026-05-21
+Last updated: 2026-05-23
 
 ## Active Decisions
 
@@ -14,8 +14,9 @@ Last updated: 2026-05-21
 - Use `specs/orun-golden-path.md` as the short shared Orun context for all
   implementer and verifier agents.
 - Treat `../aws-admin` as the reference repo for Terraform-oriented Orun
-  structure and backend behavior, while this repo currently uses Orun `v2.2.1`
-  with `sourceplane/orun-action@v1.2.0`.
+  structure and backend behavior. Current code now uses Orun `v2.3.0` with
+  `sourceplane/orun-action@v1.2.0`; Task 0009 verification accepted this as
+  repo reality. Task 0009.1 must align the active specs/context.
 - AWS IAM roles and shared Terraform state buckets are owned by `aws-admin`.
   `multi-tenant-saas` consumes the repo-scoped roles created there.
 - Terraform state for `multi-tenant-saas` uses the shared S3 buckets
@@ -55,20 +56,21 @@ Last updated: 2026-05-21
   non-blocking Orun/spec limitation for now because the components subscribe to
   different environments. Proposal `ai/proposals/task-0007.1-spec-update.md`
   records the deferred follow-up.
-- Task 0008 has moved from implementation to verification. PR #35 must not be
-  merged until the `db-migrate` PR CI failures are fixed and replacement CI is
-  green.
+- Task 0008 is complete and verified. PR #35 merged and post-merge CI run
+  `26229865114` applied the baseline migration to both stage and prod.
+- Task 0009 Hyperdrive implementation is verified PASS after PR #36 and
+  rollback PR #44. Stage and prod Hyperdrive resources are stable.
+- Proposal `ai/proposals/task-0009-spec-update.md` is accepted; implement it
+  through Task 0009.1 before Worker binding/runtime work.
 
 ## Pending Decisions
 
-- Database migration ownership conventions are established, but the live
-  migration runner/apply path is not yet verified. Task 0008 PR #35 should
-  define the runner and Orun-controlled `stage`/`prod` apply path without
-  adding new domain schemas beyond the existing baseline migration.
-- Cloudflare Hyperdrive wiring for the new Supabase `stage` and `prod` projects
-  is still pending. The historical Cloudflare account from Task 0002 is
-  `f9270f828799775bebf9315248fdf717`, but any new Hyperdrive task must verify
-  current Cloudflare account/credential scope before mutating resources.
+- Whether to add first-class or environment-scoped `dependsOn` support remains
+  deferred. The missing `cloudflare-hyperdrive` -> `supabase` dependency was
+  documented as non-blocking by Task 0009 verification because current CI
+  behavior and live state are stable.
+- Downstream Worker binding/runtime work is deferred until Task 0009.1 aligns
+  the active specs with Orun `v2.3.0`.
 - `dev` Supabase provisioning remains deferred until a later task explicitly
   changes that decision.
 

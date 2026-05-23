@@ -198,10 +198,23 @@ Last updated: 2026-05-23
 - Durable outcome: `infra/terraform/cloudflare-hyperdrive/` validated and applied;
   main CI run `26293764021` applied stage Hyperdrive `08f7c6055f544a3890a585d88fd92348`
   and prod Hyperdrive `ab2c21c2db6245a59c91588fcac7107a`. Post-rollback CI run
-  `26322419196` confirmed no drift. Orun v2.3.0 accepted as repo runtime (spec update pending).
+  `26322419196` confirmed no drift. Orun v2.3.0 accepted as repo runtime; Task
+  0009.1 is queued to align active specs/context.
 - Rollback note: PR #44 restored repo to Task 0009 baseline, removing later
   Worker package/deployment changes (PRs #37-#39).
 - Verifier result: PASS (all checks passed, minor spec drift and missing `dependsOn` documented).
+
+## Task 0009.1
+
+- Agent: Implementer
+- Prompt: `ai/tasks/task-0009.1.md`
+- Status: queued
+- Objective: align active specs and compact context with the Task 0009-verified
+  Orun `v2.3.0` runtime baseline.
+- Scope boundary: documentation/spec/context only; no runtime, CI, Terraform,
+  component manifest, Worker, or live infrastructure changes.
+- Related proposal: `ai/proposals/task-0009-spec-update.md`, accepted after
+  Task 0009 verification.
 
 ## Historical Notes
 

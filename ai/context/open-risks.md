@@ -1,6 +1,6 @@
 # Open Risks
 
-Last updated: 2026-05-21
+Last updated: 2026-05-23
 
 ## Active Risks
 
@@ -9,9 +9,14 @@ Last updated: 2026-05-21
   names, and non-secret ARNs only.
 - `dev` Supabase remains intentionally unprovisioned. Tasks must not add a dev
   database/project unless a later prompt explicitly changes scope.
-- Cloudflare Hyperdrive is not yet wired to the new Supabase `stage` and `prod`
-  projects. Workers must not invent direct connection strings or bypass the
-  planned Hyperdrive adapter seam.
+- Code and CI now use Orun `v2.3.0`, while `specs/orun-golden-path.md` and
+  `specs/access-and-infra.md` still name `v2.2.1`. Proposal
+  `ai/proposals/task-0009-spec-update.md` is accepted; Task 0009.1 must align
+  the active specs/context before downstream Worker binding/runtime work.
+- `infra/terraform/cloudflare-hyperdrive/component.yaml` does not currently
+  declare an explicit `dependsOn` edge to `supabase`; Task 0009 verification
+  treated this as non-blocking because current Orun behavior and live state are
+  stable. Revisit if future dependency ordering issues appear.
 - The `_migrations.applied` table is bootstrapped in both `stage` and `prod`.
   Future domain migrations must be idempotent because the `SupabaseApiAdapter`
   sends statements in autocommit mode without true per-migration rollback.
@@ -43,6 +48,8 @@ Last updated: 2026-05-21
 - Task 0008 is complete. The migration runner is operational. The
   `_migrations.applied` table is bootstrapped in `stage` and `prod` via
   post-merge CI run `26229865114`.
+- Task 0009 is complete. Hyperdrive infrastructure is applied and stable in
+  `stage` and `prod`.
 
 ## Watch Items
 
