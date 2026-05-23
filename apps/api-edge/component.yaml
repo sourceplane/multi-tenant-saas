@@ -17,6 +17,12 @@ spec:
           - profile: deploy
             when:
               triggerRef: github-push-main
+      - name: prod
+        profile: verify
+        profileRules:
+          - profile: deploy
+            when:
+              triggerRef: github-push-main
   parameters:
     nodeVersion: "22"
     pnpmVersion: "10.12.1"
