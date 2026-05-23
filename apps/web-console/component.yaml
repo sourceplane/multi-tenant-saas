@@ -2,24 +2,35 @@ apiVersion: sourceplane.io/v1
 kind: Component
 metadata:
   name: web-console
+  description: Cloudflare Pages app for the Sourceplane web console
 spec:
   type: cloudflare-pages-turbo
   domain: starter-ui
+  path: apps/web-console
   subscribe:
     environments:
       - name: dev
         profile: pull-request
       - name: stage
-        profile: pull-request
+        profile: verify
       - name: prod
-        profile: pull-request
+        profile: deploy
   parameters:
-    nodeVersion: "20"
+    nodeVersion: "22"
     pnpmVersion: "10.12.1"
+
+    workspaceDir: ../..
+    appDir: .
+
+    turboFilter: "@saas/web-console"
     outputDir: dist
     projectName: sourceplane-web-console
-    productionBranch: main
-    buildCommand: pnpm exec turbo run build --filter=./
+    deployBranch: main
+
+    installCommand: pnpm install --frozen-lockfile
+    buildCommand: pnpm exec turbo run build --filter=@saas/web-console
+
+    smokeCommand: "echo 'No smoke test configured.'"
   labels:
     team: platform
     layer: delivery

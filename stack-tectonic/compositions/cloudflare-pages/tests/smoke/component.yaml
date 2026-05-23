@@ -7,18 +7,19 @@ metadata:
 spec:
   type: cloudflare-pages
   domain: platform-docs
+  path: website
   subscribe:
     environments:
       - name: production
         profile: deploy
-  inputs:
-    siteDir: .
+  parameters:
+    nodeVersion: "20"
+    appDir: .
     installCommand: npm ci
     buildCommand: npm run docs:build
     outputDir: docs-build
     projectName: example-platform-docs-wrangler
-    nodeVersion: "20"
-    productionBranch: main
+    deployBranch: main
   labels:
     team: platform
     layer: delivery

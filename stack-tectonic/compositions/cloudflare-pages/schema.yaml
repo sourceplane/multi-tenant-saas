@@ -21,27 +21,39 @@ spec:
       parameters:
         type: object
         required:
-          - siteDir
+          - nodeVersion
+          - appDir
           - installCommand
           - buildCommand
           - outputDir
           - projectName
-          - nodeVersion
-          - productionBranch
         properties:
-          siteDir:
+          nodeVersion:
             type: string
+
+          appDir:
+            type: string
+            description: Path from the component job path to the Pages app directory
+
+          outputDir:
+            type: string
+            description: Build output directory relative to appDir
+
+          projectName:
+            type: string
+            description: Cloudflare Pages project name
+
+          deployBranch:
+            type: string
+            description: Branch name passed to wrangler pages deploy
+            default: main
+
           installCommand:
             type: string
           buildCommand:
             type: string
-          outputDir:
+          smokeCommand:
             type: string
-          projectName:
-            type: string
-          nodeVersion:
-            type: string
-          productionBranch:
-            type: string
+            default: "echo 'No smoke test configured.'"
         additionalProperties: false
     additionalProperties: true

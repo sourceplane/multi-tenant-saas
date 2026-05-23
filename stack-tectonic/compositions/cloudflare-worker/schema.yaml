@@ -21,33 +21,45 @@ spec:
       parameters:
         type: object
         required:
+          - nodeVersion
           - installCommand
           - buildCommand
           - deployCommand
-          - nodeVersion
-          - productionBranch
+          - wranglerConfig
         properties:
+          nodeVersion:
+            type: string
+          pnpmVersion:
+            type: string
+
+          appDir:
+            type: string
+            description: Path from the component job path to the Worker app directory
+            default: "."
+
+          wranglerConfig:
+            type: string
+            default: wrangler.jsonc
+
           installCommand:
             type: string
           buildCommand:
             type: string
           typecheckCommand:
             type: string
-          deployCommand:
-            type: string
-          nodeVersion:
-            type: string
-          pnpmVersion:
-            type: string
-          productionBranch:
-            type: string
-          wranglerConfig:
+            default: "echo 'No typecheck configured.'"
+          dryRunCommand:
             type: string
           preDeployCommand:
             type: string
+            default: "echo 'No pre-deploy step configured.'"
           migrationCommand:
+            type: string
+            default: "echo 'No migrations configured.'"
+          deployCommand:
             type: string
           smokeCommand:
             type: string
+            default: "echo 'No smoke test configured.'"
         additionalProperties: false
     additionalProperties: true

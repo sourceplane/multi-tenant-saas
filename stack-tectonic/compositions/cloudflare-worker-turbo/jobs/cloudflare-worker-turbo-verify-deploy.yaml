@@ -3,7 +3,7 @@ kind: JobTemplate
 metadata:
   name: cloudflare-worker-turbo-verify-deploy
 spec:
-  description: Verify a Cloudflare Worker app and deploy it from the production branch
+  description: Capability-tagged atomic steps for Cloudflare Worker with Turborepo
   runsOn: ubuntu-22.04
   timeout: 30m
   retries: 0
@@ -15,11 +15,14 @@ spec:
     - cloudflare-worker-turbo.setup-node
     - cloudflare-worker-turbo.setup-pnpm
     - cloudflare-worker-turbo.install
-    - cloudflare-worker-turbo.pre-build
     - cloudflare-worker-turbo.verify-structure
     - cloudflare-worker-turbo.build
     - cloudflare-worker-turbo.typecheck
+    - cloudflare-worker-turbo.deploy-dry-run
+    - cloudflare-worker-turbo.pre-deploy
+    - cloudflare-worker-turbo.migrate
     - cloudflare-worker-turbo.deploy
+    - cloudflare-worker-turbo.smoke
 
   steps:
     - id: setup-node
@@ -27,31 +30,20 @@ spec:
       capability: cloudflare-worker-turbo.setup-node
       use: actions/setup-node@v4
       with:
-        node-version: "{{.parameters.nodeVersion}}"
+        node-version: "{{ .parameters.nodeVersion }}"
 
     - id: setup-pnpm
       name: setup-pnpm
       capability: cloudflare-worker-turbo.setup-pnpm
       use: pnpm/action-setup@v4
       with:
-        version: "{{.parameters.pnpmVersion}}"
+        version: "{{ .parameters.pnpmVersion }}"
 
     - id: install-workspace-dependencies
       name: install-workspace-dependencies
       capability: cloudflare-worker-turbo.install
-      run: pnpm install --no-frozen-lockfile
-      onFailure: stop
-
-    - id: pre-build
-      name: pre-build
-      capability: cloudflare-worker-turbo.pre-build
       shell: bash
-      run: |
-        {{if .preBuildCommand}}
-        {{.parameters.preBuildCommand}}
-        {{else}}
-        echo "Skipping pre-build."
-        {{end}}
+      run: "{{ .parameters.installCommand }}"
       onFailure: stop
 
     - id: verify-worker-structure
@@ -60,64 +52,57 @@ spec:
       shell: bash
       run: |
         test -f package.json
-        {{if .wranglerConfig}}
-        test -f "{{.parameters.wranglerConfig}}"
-        {{else}}
-        test -f wrangler.jsonc || test -f wrangler.toml
-        {{end}}
+        test -f "{{ .parameters.wranglerConfig }}"
       onFailure: stop
 
     - id: build-worker
       name: build-worker
       capability: cloudflare-worker-turbo.build
-      run: "{{if .buildCommand}}{{.parameters.buildCommand}}{{else}}pnpm exec turbo run build --filter=./{{end}}"
+      shell: bash
+      run: "{{ .parameters.buildCommand }}"
       onFailure: stop
 
     - id: typecheck-worker
       name: typecheck-worker
       capability: cloudflare-worker-turbo.typecheck
-      run: "{{if .typecheckCommand}}{{.parameters.typecheckCommand}}{{else}}pnpm exec turbo run typecheck --filter=./{{end}}"
+      shell: bash
+      run: "{{ .parameters.typecheckCommand }}"
       onFailure: stop
 
-    - id: deploy-worker
-      name: deploy-worker
+    - id: deploy-dry-run
+      name: deploy-dry-run
+      capability: cloudflare-worker-turbo.deploy-dry-run
+      shell: bash
+      run: "{{ .parameters.dryRunCommand }}"
+      onFailure: stop
+
+    - id: pre-deploy
+      name: pre-deploy
+      capability: cloudflare-worker-turbo.pre-deploy
+      shell: bash
+      run: "{{ .parameters.preDeployCommand }}"
+      onFailure: stop
+
+    - id: migrate
+      name: migrate
+      capability: cloudflare-worker-turbo.migrate
+      shell: bash
+      run: "{{ .parameters.migrationCommand }}"
+      onFailure: stop
+
+    - id: deploy
+      name: deploy
       capability: cloudflare-worker-turbo.deploy
       shell: bash
       run: |
-        if [ "{{.orun.environment.name}}" = "dev" ]; then
-          echo "::notice::DRY-RUN: Running wrangler deploy --dry-run for {{.orun.component.name}} in dev environment."
-          pnpm exec wrangler deploy --dry-run
-          exit 0
-        fi
+        : "${CLOUDFLARE_ACCOUNT_ID:?CLOUDFLARE_ACCOUNT_ID is required}"
+        : "${CLOUDFLARE_API_TOKEN:?CLOUDFLARE_API_TOKEN is required}"
+        {{ .parameters.deployCommand }}
+      onFailure: stop
 
-        if [ "{{.orun.environment.name}}" != "production" ] || [ "${GITHUB_REF:-}" != "refs/heads/{{.parameters.productionBranch}}" ]; then
-          echo "::notice::SKIPPED: Cloudflare Worker deploy for {{.orun.component.name}} in {{.orun.environment.name}} on ${GITHUB_REF:-local} (not production branch)."
-          exit 0
-        fi
-
-        : "${CLOUDFLARE_ACCOUNT_ID:?CLOUDFLARE_ACCOUNT_ID is required for deploy}"
-        : "${CLOUDFLARE_API_TOKEN:?CLOUDFLARE_API_TOKEN is required for deploy}"
-
-        {{if .preDeployCommand}}
-        echo "::group::Pre-deploy"
-        {{.parameters.preDeployCommand}}
-        echo "::endgroup::"
-        {{end}}
-
-        {{if .migrationCommand}}
-        echo "::group::Run migrations"
-        {{.parameters.migrationCommand}}
-        echo "::endgroup::"
-        {{end}}
-
-        echo "::notice::LIVE DEPLOY: Deploying {{.orun.component.name}} to Cloudflare from ${GITHUB_REF:-}."
-        {{if .deployCommand}}{{.parameters.deployCommand}}{{else}}pnpm run deploy{{end}}
-
-        {{if .smokeCommand}}
-        echo "::group::Post-deploy smoke test"
-        {{.parameters.smokeCommand}}
-        echo "::endgroup::"
-        {{end}}
-
-        echo "::notice::DEPLOY SUCCESS: {{.orun.component.name}} deployed to Cloudflare."
+    - id: smoke
+      name: smoke
+      capability: cloudflare-worker-turbo.smoke
+      shell: bash
+      run: "{{ .parameters.smokeCommand }}"
       onFailure: stop

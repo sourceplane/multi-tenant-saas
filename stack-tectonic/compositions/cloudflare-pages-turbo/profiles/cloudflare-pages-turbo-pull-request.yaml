@@ -3,7 +3,7 @@ kind: ExecutionProfile
 metadata:
   name: cloudflare-pages-turbo-pull-request
 spec:
-  description: PR validation without provisioning or deployment
+  description: Fast PR validation without provisioning or deployment
 
   jobs:
     verify-deploy:
@@ -11,7 +11,6 @@ spec:
         - cloudflare-pages-turbo.setup-node
         - cloudflare-pages-turbo.setup-pnpm
         - cloudflare-pages-turbo.install
-        - cloudflare-pages-turbo.pre-build
         - cloudflare-pages-turbo.verify-structure
         - cloudflare-pages-turbo.build
         - cloudflare-pages-turbo.verify-output

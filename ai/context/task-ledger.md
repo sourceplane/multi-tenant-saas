@@ -208,13 +208,32 @@ Last updated: 2026-05-23
 
 - Agent: Implementer
 - Prompt: `ai/tasks/task-0009.1.md`
-- Status: queued
+- Status: complete and merged
 - Objective: align active specs and compact context with the Task 0009-verified
   Orun `v2.3.0` runtime baseline.
 - Scope boundary: documentation/spec/context only; no runtime, CI, Terraform,
   component manifest, Worker, or live infrastructure changes.
 - Related proposal: `ai/proposals/task-0009-spec-update.md`, accepted after
   Task 0009 verification.
+- PR: #46 (`task-0009.1-spec-align`), merged into `main` at `0c585fc`
+- Report: `ai/reports/task-0009.1-implementer.md`
+- Durable outcome: active specs and compact context now reference Orun
+  `v2.3.0` as the verified runtime baseline. Downstream Worker binding/runtime
+  work is unblocked.
+
+## Task 0010
+
+- Agent: Implementer
+- Prompt: `ai/tasks/task-0010.md`
+- Status: queued
+- Objective: wire the existing `apps/api-edge` Worker to the verified
+  stage/prod Hyperdrive IDs at the Wrangler config and TypeScript env seam,
+  with focused non-mutating verification.
+- Scope boundary: no new `packages/worker`, no domain SQL/runtime adapter, no
+  live Worker deploy, no Terraform or provider mutation.
+- Related rollback: PRs #37, #38, and #39 attempted Worker
+  binding/runtime/deployment work and were reverted by PR #44. Task 0010
+  intentionally restarts the Worker binding path from current `main`.
 
 ## Historical Notes
 

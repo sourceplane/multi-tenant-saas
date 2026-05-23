@@ -3,14 +3,21 @@ kind: ExecutionProfile
 metadata:
   name: cloudflare-worker-deploy
 spec:
-  description: Full build, typecheck, and deploy pipeline for Cloudflare Worker
+  description: Build, validate, migrate, deploy, and smoke test a Cloudflare Worker
+
+  policies:
+    requireApproval: true
+    requireCleanGitTree: true
 
   jobs:
     verify-deploy:
       includeCapabilities:
-        - cloudflare-worker.setup
+        - cloudflare-worker.setup-node
         - cloudflare-worker.install
         - cloudflare-worker.verify-structure
         - cloudflare-worker.build
         - cloudflare-worker.typecheck
+        - cloudflare-worker.pre-deploy
+        - cloudflare-worker.migrate
         - cloudflare-worker.deploy
+        - cloudflare-worker.smoke

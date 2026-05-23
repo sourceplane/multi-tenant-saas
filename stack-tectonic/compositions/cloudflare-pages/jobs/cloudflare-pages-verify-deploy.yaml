@@ -3,7 +3,7 @@ kind: JobTemplate
 metadata:
   name: cloudflare-pages-verify-deploy
 spec:
-  description: Build static assets everywhere and deploy them to Cloudflare Pages from the production branch
+  description: Capability-tagged atomic steps for a standalone Cloudflare Pages site
   runsOn: ubuntu-22.04
   timeout: 25m
   retries: 0
@@ -12,47 +12,46 @@ spec:
     scope: delivery
 
   capabilities:
-    - cloudflare-pages.setup
+    - cloudflare-pages.setup-node
     - cloudflare-pages.install
     - cloudflare-pages.build
-    - cloudflare-pages.verify
+    - cloudflare-pages.verify-output
     - cloudflare-pages.provision
     - cloudflare-pages.deploy
+    - cloudflare-pages.smoke
 
   steps:
     - id: setup-node
       name: setup-node
-      capability: cloudflare-pages.setup
+      capability: cloudflare-pages.setup-node
       use: actions/setup-node@v4
       with:
-        node-version: "{{.parameters.nodeVersion}}"
+        node-version: "{{ .parameters.nodeVersion }}"
 
     - id: install-site-dependencies
       name: install-site-dependencies
       capability: cloudflare-pages.install
       shell: bash
-      run: |
-        cd "{{.parameters.siteDir}}"
-        {{.parameters.installCommand}}
+      working-directory: "{{ .parameters.appDir }}"
+      run: "{{ .parameters.installCommand }}"
       onFailure: stop
 
     - id: build-site
       name: build-site
       capability: cloudflare-pages.build
       shell: bash
-      run: |
-        cd "{{.parameters.siteDir}}"
-        {{.parameters.buildCommand}}
+      working-directory: "{{ .parameters.appDir }}"
+      run: "{{ .parameters.buildCommand }}"
       onFailure: stop
 
     - id: verify-build-output
       name: verify-build-output
-      capability: cloudflare-pages.verify
+      capability: cloudflare-pages.verify-output
       shell: bash
+      working-directory: "{{ .parameters.appDir }}"
       run: |
-        cd "{{.parameters.siteDir}}"
-        test -d "{{.parameters.outputDir}}"
-        find "{{.parameters.outputDir}}" -maxdepth 2 -type f | head -n 20
+        test -d "{{ .parameters.outputDir }}"
+        find "{{ .parameters.outputDir }}" -maxdepth 2 -type f | head -n 20
       onFailure: stop
 
     - id: ensure-pages-project
@@ -60,30 +59,25 @@ spec:
       capability: cloudflare-pages.provision
       shell: bash
       run: |
-        if [ "{{.orun.environment.name}}" != "production" ] || [ "${GITHUB_REF:-}" != "refs/heads/{{.parameters.productionBranch}}" ]; then
-          echo "Skipping Cloudflare Pages project reconciliation for {{.orun.environment.name}} on ${GITHUB_REF:-local}."
-          exit 0
-        fi
-
-        : "${CLOUDFLARE_ACCOUNT_ID:?CLOUDFLARE_ACCOUNT_ID is required for deployment}"
-        : "${CLOUDFLARE_API_TOKEN:?CLOUDFLARE_API_TOKEN is required for deployment}"
+        : "${CLOUDFLARE_ACCOUNT_ID:?CLOUDFLARE_ACCOUNT_ID is required}"
+        : "${CLOUDFLARE_API_TOKEN:?CLOUDFLARE_API_TOKEN is required}"
 
         api_root="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects"
         response_file="${RUNNER_TEMP:-/tmp}/cloudflare-pages-project.json"
         status="$(curl -sS -o "${response_file}" -w "%{http_code}" \
           -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
           -H "Content-Type: application/json" \
-          "${api_root}/{{.parameters.projectName}}")"
+          "${api_root}/{{ .parameters.projectName }}")"
 
         if [ "${status}" = "200" ]; then
-          echo "Pages project {{.parameters.projectName}} already exists."
+          echo "Pages project {{ .parameters.projectName }} already exists."
         elif [ "${status}" = "404" ]; then
           curl -sS --fail -X POST \
             -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
             -H "Content-Type: application/json" \
-            --data '{"name":"{{.parameters.projectName}}","production_branch":"{{.parameters.productionBranch}}"}' \
+            --data '{"name":"{{ .parameters.projectName }}","production_branch":"{{ .parameters.deployBranch }}"}' \
             "${api_root}" >/dev/null
-          echo "Created Pages project {{.parameters.projectName}}."
+          echo "Created Pages project {{ .parameters.projectName }}."
         else
           cat "${response_file}"
           exit 1
@@ -92,25 +86,28 @@ spec:
         curl -sS --fail -X PATCH \
           -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
           -H "Content-Type: application/json" \
-          --data '{"production_branch":"{{.parameters.productionBranch}}"}' \
-          "${api_root}/{{.parameters.projectName}}" >/dev/null
+          --data '{"production_branch":"{{ .parameters.deployBranch }}"}' \
+          "${api_root}/{{ .parameters.projectName }}" >/dev/null
       onFailure: stop
 
     - id: deploy-pages-artifact
       name: deploy-pages-artifact
       capability: cloudflare-pages.deploy
       shell: bash
+      working-directory: "{{ .parameters.appDir }}"
       run: |
-        if [ "{{.orun.environment.name}}" != "production" ] || [ "${GITHUB_REF:-}" != "refs/heads/{{.parameters.productionBranch}}" ]; then
-          echo "Skipping Cloudflare Pages deploy for {{.orun.environment.name}} on ${GITHUB_REF:-local}."
-          exit 0
-        fi
+        : "${CLOUDFLARE_ACCOUNT_ID:?CLOUDFLARE_ACCOUNT_ID is required}"
+        : "${CLOUDFLARE_API_TOKEN:?CLOUDFLARE_API_TOKEN is required}"
 
-        : "${CLOUDFLARE_ACCOUNT_ID:?CLOUDFLARE_ACCOUNT_ID is required for deployment}"
-        : "${CLOUDFLARE_API_TOKEN:?CLOUDFLARE_API_TOKEN is required for deployment}"
+        npx wrangler pages deploy "{{ .parameters.outputDir }}" \
+          --project-name "{{ .parameters.projectName }}" \
+          --branch "{{ .parameters.deployBranch }}"
+      onFailure: stop
 
-        cd "{{.parameters.siteDir}}"
-        npx wrangler pages deploy "{{.parameters.outputDir}}" \
-          --project-name "{{.parameters.projectName}}" \
-          --branch "{{.parameters.productionBranch}}"
+    - id: smoke
+      name: smoke
+      capability: cloudflare-pages.smoke
+      shell: bash
+      working-directory: "{{ .parameters.appDir }}"
+      run: "{{ .parameters.smokeCommand }}"
       onFailure: stop

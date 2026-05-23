@@ -23,29 +23,52 @@ spec:
         required:
           - nodeVersion
           - pnpmVersion
-          - productionBranch
+          - workspaceDir
+          - appDir
+          - turboFilter
+          - wranglerConfig
         properties:
           nodeVersion:
             type: string
           pnpmVersion:
             type: string
-          productionBranch:
+
+          workspaceDir:
             type: string
+            description: Path from the component job path to the monorepo root
+
+          appDir:
+            type: string
+            description: Path from the component job path to the Worker app directory
+
+          turboFilter:
+            type: string
+            description: Turborepo filter for this Worker package
+
           wranglerConfig:
             type: string
-          preBuildCommand:
+            default: wrangler.jsonc
+
+          installCommand:
             type: string
+            default: pnpm install --frozen-lockfile
+
           buildCommand:
             type: string
           typecheckCommand:
             type: string
+          dryRunCommand:
+            type: string
           preDeployCommand:
             type: string
+            default: "echo 'No pre-deploy step configured.'"
           migrationCommand:
             type: string
+            default: "echo 'No migrations configured.'"
           deployCommand:
             type: string
           smokeCommand:
             type: string
+            default: "echo 'No smoke test configured.'"
         additionalProperties: false
     additionalProperties: true
