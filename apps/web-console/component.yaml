@@ -16,7 +16,7 @@ spec:
       - name: prod
         profile: deploy
   parameters:
-    nodeVersion: "20"
+    nodeVersion: "22"
     pnpmVersion: "10.12.1"
 
     workspaceDir: ../..
