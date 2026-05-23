@@ -14,7 +14,8 @@
     "@saas/eslint-config": "workspace:*",
     "@saas/tsconfig": "workspace:*",
     "typescript": "^5.8.3",
-    "vite": "^6.3.5"
+    "vite": "^6.3.5",
+    "wrangler": "^4.14.4"
   },
   "dependencies": {
     "@saas/contracts": "workspace:*"
