@@ -73,7 +73,7 @@ spec:
       name: deploy-dry-run
       capability: cloudflare-worker-turbo.deploy-dry-run
       shell: bash
-      run: "{{ .parameters.dryRunCommand }}"
+      run: "pnpm exec wrangler deploy --dry-run --config {{ .parameters.wranglerConfig }} --env {{ .orun.environment.name }}"
       onFailure: stop
 
     - id: pre-deploy
@@ -97,7 +97,7 @@ spec:
       run: |
         : "${CLOUDFLARE_ACCOUNT_ID:?CLOUDFLARE_ACCOUNT_ID is required}"
         : "${CLOUDFLARE_API_TOKEN:?CLOUDFLARE_API_TOKEN is required}"
-        {{ .parameters.deployCommand }}
+        pnpm exec wrangler deploy --config {{ .parameters.wranglerConfig }} --env {{ .orun.environment.name }}
       onFailure: stop
 
     - id: smoke
