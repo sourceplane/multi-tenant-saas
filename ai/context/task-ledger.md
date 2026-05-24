@@ -456,6 +456,62 @@ Last updated: 2026-05-24
 - Reports: `ai/reports/task-0018-implementer.md`,
   `ai/reports/task-0018-verifier.md`
 
+## Task 0019
+
+- Agent: Implementer → Verifier
+- Prompt: `ai/tasks/task-0019.md`
+- Verifier prompt: `ai/tasks/task-0019-verifier.md`
+- Status: verified PASS
+- PR: #60 (`feat: add policy-gated member-list endpoint`), squash-merged at
+  `71c9549`
+- Objective: add the first policy-gated member administration read endpoint:
+  `GET /v1/organizations/{orgId}/members` through `membership-worker` and the
+  public `api-edge` facade.
+- Verifier fix:
+  - Added an optional dependency-injection seam to `handleListMembers` and 10
+    focused handler integration tests because the implementer tests covered
+    helpers/snippets but not actual handler behavior.
+- Durable outcome: `GET /v1/organizations/{orgId}/members` authorizes through
+  policy-worker action `organization.member.list`, returns `mem_` public member
+  IDs with safe role summaries, does not expose raw member UUIDs,
+  role-assignment IDs, project `scopeRef` values, or identity profile fields,
+  and is forwarded by api-edge after auth resolution without forwarding bearer
+  tokens. 53 membership-worker tests and 60 api-edge tests pass.
+- Main CI run: `26362528343` — all green (15/15 jobs).
+- PR CI run (final head): `26362460057` — all green (15/15 jobs).
+- Reports: `ai/reports/task-0019-implementer.md`,
+  `ai/reports/task-0019-verifier.md`
+
+## Task 0020
+
+- Agent: Implementer → Verifier
+- Prompt: `ai/tasks/task-0020.md`
+- Verifier prompt: `ai/tasks/task-0020-verifier.md`
+- Status: verified PASS
+- PR: #61 (`feat: add cursor pagination for membership list endpoints`),
+  squash-merged at `dc9b191`
+- Objective: add cursor-based pagination for existing membership list routes
+  (`GET /v1/organizations` and `GET /v1/organizations/{orgId}/members`) to
+  prepare the API pattern before adding more list surfaces.
+- Verifier fix:
+  - Hardened `decodeCursor` to validate ISO timestamp format and UUID format
+    before passing values to SQL (rejects invalid payloads as 422
+    `validation_failed` instead of letting them cause a 500 database error).
+  - Added 2 focused tests for invalid-timestamp and invalid-UUID cursor payloads.
+  - Committed `ai/reports/task-0020-implementer.md` to the PR branch.
+- Durable outcome: Both list endpoints accept `limit` (default 50, max 100) and
+  `cursor` (opaque, versioned v:1, base64-encoded). Cursor uses
+  `(created_at DESC, id DESC)` ordering with `limit+1` detection. Invalid params
+  return `validation_failed`. Response `meta.cursor` carries next cursor or null.
+  Existing unpaginated repository methods preserved. Member-list still authorizes
+  through policy-worker before page query. Api-edge forwards pagination query
+  params and still redacts bearer tokens. 65 membership-worker tests, 177 db
+  tests, 64 api-edge tests pass.
+- Main CI run: `26366468768` — all green (13/13 jobs).
+- PR CI run (final head): `26366391926` — all green (13/13 jobs).
+- Reports: `ai/reports/task-0020-implementer.md`,
+  `ai/reports/task-0020-verifier.md`
+
 ## Historical Notes
 
 - PR #1 split product-specific V2 Git catalog work away from the reusable SaaS

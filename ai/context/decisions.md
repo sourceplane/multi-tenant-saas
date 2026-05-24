@@ -72,6 +72,11 @@ Last updated: 2026-05-24
 - Stage/prod policy-worker deployments must stay private: `workers_dev: false`
   with no direct public route. Future callers should use same-environment
   service bindings or an equivalent internal route, not a public policy facade.
+- Task 0019 establishes the first member-administration read surface.
+  `GET /v1/organizations/{orgId}/members` uses the verified
+  `membership-worker` → `policy-worker` service-binding seam with action
+  `organization.member.list`, and `api-edge` forwards the route only after
+  identity-backed bearer-token resolution.
 
 ## Pending Decisions
 
@@ -82,8 +87,12 @@ Last updated: 2026-05-24
 - `dev` Supabase provisioning remains deferred until a later task explicitly
   changes that decision.
 - Wiring policy authorization into membership-worker mutating routes is pending.
-  This should happen before adding invitation or member-administration mutation
-  surfaces.
+  Invitation creation/revocation, member removal, and role updates must use the
+  verified policy authorization seam before shipping.
+- Cursor pagination pattern established (Task 0020): list endpoints use
+  `limit`/`cursor` query params, default limit 50, max 100, opaque versioned
+  cursors, `meta.cursor` for next page or null. New list endpoints should follow
+  this pattern from day one.
 
 ## Verified Inputs
 

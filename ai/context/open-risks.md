@@ -58,12 +58,18 @@ Last updated: 2026-05-24
   One-time issue; future deploys are safe because the named Worker now exists.
   For future new service binding targets, consider an Orun `dependsOn` edge or
   accept the one-time retry pattern.
-- Task 0017 deployed policy-worker but did not wire any callers. Membership
-  mutations still need an explicit policy authorization call before invitation
-  management or member administration expands the mutation surface.
 - policy-worker intentionally has no public route, so post-deploy verification
   is limited to Cloudflare deployment metadata and workers.dev-disabled checks
   until a same-environment service-binding caller exists.
+- Membership mutations still need explicit policy authorization before
+  invitation creation/revocation, member removal, or role updates ship.
+- Cursor pagination uses standard base64 (`btoa`). The JSON payload structure
+  does not produce `+` or `/` for valid timestamps and UUIDs, but a future task
+  could switch to base64url for extra URL-safety robustness.
+- No composite index on `(created_at, id)` for membership tables. Acceptable at
+  current data volumes; add before high-cardinality organizations.
+- Per-member role lookup in member-list is still N+1 within a page (max 100).
+  Acceptable at current scale; batch/join optimization deferred.
 
 ## Resolved Risks
 
@@ -91,6 +97,9 @@ Last updated: 2026-05-24
 - Task 0017 policy-worker public exposure risk resolved before merge and
   verified after deployment: stage/prod use `workers_dev: false`, have no public
   deploy target, and direct workers.dev access returns Cloudflare error 1042.
+- Task 0017/0018 policy-caller gap resolved for current read paths:
+  organization read and member list now authorize through policy-worker via
+  same-environment service bindings.
 
 ## Watch Items
 
