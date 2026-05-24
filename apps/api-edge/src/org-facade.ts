@@ -6,6 +6,7 @@ const ORG_ROUTES: Record<string, string> = {
 };
 
 const ORG_ID_RE = /^\/v1\/organizations\/[^/]+$/;
+const ORG_MEMBERS_RE = /^\/v1\/organizations\/[^/]+\/members$/;
 
 const FORWARDED_HEADERS = [
   "content-type",
@@ -15,7 +16,7 @@ const FORWARDED_HEADERS = [
 ];
 
 export function isOrgRoute(pathname: string): boolean {
-  return pathname in ORG_ROUTES || ORG_ID_RE.test(pathname);
+  return pathname in ORG_ROUTES || ORG_ID_RE.test(pathname) || ORG_MEMBERS_RE.test(pathname);
 }
 
 export async function handleOrgRoute(
@@ -26,6 +27,10 @@ export async function handleOrgRoute(
 ): Promise<Response> {
   const allowedMethods = ORG_ROUTES[pathname];
   if (allowedMethods && !allowedMethods.includes(request.method)) {
+    return errorResponse("unsupported", "Method not allowed", 405, requestId);
+  }
+
+  if (ORG_MEMBERS_RE.test(pathname) && request.method !== "GET") {
     return errorResponse("unsupported", "Method not allowed", 405, requestId);
   }
 

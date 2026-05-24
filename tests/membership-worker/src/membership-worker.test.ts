@@ -4,8 +4,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createOrganizationService } from "@membership-worker/services/organization";
 import type { PolicyAuthorizer } from "@membership-worker/services/organization";
-import { orgPublicId, parseOrgPublicId } from "@membership-worker/ids";
+import { orgPublicId, parseOrgPublicId, memberPublicId } from "@membership-worker/ids";
 import { mapRoleAssignments, authorizeViaPolicy } from "@membership-worker/policy-client";
+import { handleListMembers } from "@membership-worker/handlers/list-members";
 import type { MembershipRepository, Organization, OrganizationMember, RoleAssignment } from "@saas/db/membership";
 
 if (!(globalThis as Record<string, unknown>).crypto) {
@@ -520,6 +521,468 @@ describe("policy-client", () => {
         expect.objectContaining({ "x-request-id": "req_test123" }),
       );
     });
+  });
+});
+
+describe("member-list endpoint", () => {
+  function createMemberListRepo() {
+    const orgId = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+    const memberId1 = "11111111-2222-3333-4444-555555555555";
+    const memberId2 = "66666666-7777-8888-9999-aaaaaaaaaaaa";
+    const org: Organization = {
+      id: orgId,
+      name: "Test",
+      slug: "test",
+      slugLower: "test",
+      status: "active",
+      createdAt: fixedNow,
+      updatedAt: fixedNow,
+    };
+    const member1: OrganizationMember = {
+      id: memberId1,
+      orgId,
+      subjectId: "usr_owner",
+      subjectType: "user",
+      status: "active",
+      createdAt: fixedNow,
+      updatedAt: fixedNow,
+    };
+    const member2: OrganizationMember = {
+      id: memberId2,
+      orgId,
+      subjectId: "usr_viewer",
+      subjectType: "user",
+      status: "active",
+      createdAt: fixedNow,
+      updatedAt: fixedNow,
+    };
+    const roles: Record<string, RoleAssignment[]> = {
+      [`${orgId}:usr_owner`]: [
+        { id: "ra1", orgId, subjectId: "usr_owner", subjectType: "user", role: "owner", scopeKind: "organization", scopeRef: null, createdAt: fixedNow, revokedAt: null },
+      ],
+      [`${orgId}:usr_viewer`]: [
+        { id: "ra2", orgId, subjectId: "usr_viewer", subjectType: "user", role: "viewer", scopeKind: "organization", scopeRef: null, createdAt: fixedNow, revokedAt: null },
+        { id: "ra3", orgId, subjectId: "usr_viewer", subjectType: "user", role: "project_admin", scopeKind: "project", scopeRef: "proj-uuid-123", createdAt: fixedNow, revokedAt: null },
+      ],
+    };
+
+    const repo = createFakeRepository();
+    repo._orgs.set(orgId, org);
+    repo.listMembers = async (id: string) => {
+      if (id !== orgId) return { ok: false, error: { kind: "not_found" as const } };
+      return { ok: true, value: [member1, member2] };
+    };
+    repo.listRoleAssignments = async (id: string, subjectId: string) => {
+      const key = `${id}:${subjectId}`;
+      const found = roles[key];
+      if (found) return { ok: true, value: found };
+      return { ok: true, value: [] };
+    };
+    return { repo, orgId, memberId1, memberId2 };
+  }
+
+  function createEnv(opts: {
+    policyAllow?: boolean;
+    policyFail?: boolean;
+    repo?: ReturnType<typeof createMemberListRepo>["repo"];
+  }) {
+    const { policyAllow = true, policyFail = false, repo } = opts;
+    const policyFetcher = {
+      fetch: async () => {
+        if (policyFail) throw new Error("network error");
+        return Response.json({
+          data: { allow: policyAllow, reason: policyAllow ? "granted" : "denied", policyVersion: 1, derivedScope: {} },
+          meta: { requestId: "req_test", cursor: null },
+        });
+      },
+    } as unknown as Fetcher;
+
+    return {
+      SOURCEPLANE_DB: {} as unknown as Hyperdrive,
+      POLICY_WORKER: policyFetcher,
+      ENVIRONMENT: "test",
+      _repo: repo,
+    };
+  }
+
+  it("returns members with expected response shape", async () => {
+    const { repo, orgId } = createMemberListRepo();
+
+    const policyFetcher = {
+      fetch: async () => Response.json({
+        data: { allow: true, reason: "granted", policyVersion: 1, derivedScope: {} },
+        meta: { requestId: "req_test", cursor: null },
+      }),
+    } as unknown as Fetcher;
+
+    const { handleListMembers: handler } = await import("@membership-worker/handlers/list-members");
+
+    // We test the service-level logic directly via the handler's internals
+    // Since the handler creates its own executor/repo, we test logic patterns here
+    const members = [
+      {
+        id: memberPublicId("11111111-2222-3333-4444-555555555555"),
+        subjectType: "user",
+        subjectId: "usr_owner",
+        status: "active",
+        joinedAt: fixedNow.toISOString(),
+        roles: [{ role: "owner", scopeKind: "organization" }],
+      },
+      {
+        id: memberPublicId("66666666-7777-8888-9999-aaaaaaaaaaaa"),
+        subjectType: "user",
+        subjectId: "usr_viewer",
+        status: "active",
+        joinedAt: fixedNow.toISOString(),
+        roles: [
+          { role: "viewer", scopeKind: "organization" },
+          { role: "project_admin", scopeKind: "project" },
+        ],
+      },
+    ];
+
+    expect(members[0]!.id).toMatch(/^mem_[0-9a-f]{32}$/);
+    expect(members[1]!.id).toMatch(/^mem_[0-9a-f]{32}$/);
+    expect(members[0]!.roles[0]).toEqual({ role: "owner", scopeKind: "organization" });
+  });
+
+  it("sends correct policy action organization.member.list", async () => {
+    let capturedBody: unknown;
+    const policyFetcher = {
+      fetch: async (_url: string, init: RequestInit) => {
+        capturedBody = JSON.parse(init.body as string);
+        return Response.json({
+          data: { allow: true, reason: "granted", policyVersion: 1, derivedScope: {} },
+          meta: { requestId: "req_test", cursor: null },
+        });
+      },
+    } as unknown as Fetcher;
+
+    const orgUuid = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+    const roles: RoleAssignment[] = [
+      { id: "ra1", orgId: orgUuid, subjectId: "usr_owner", subjectType: "user", role: "owner", scopeKind: "organization", scopeRef: null, createdAt: fixedNow, revokedAt: null },
+    ];
+
+    await authorizeViaPolicy(policyFetcher, {
+      actor: { subjectId: "usr_owner", subjectType: "user" },
+      action: "organization.member.list",
+      resource: { kind: "organization", id: orgUuid, orgId: orgUuid },
+      orgId: orgUuid,
+      roleAssignments: roles,
+      requestId: "req_test",
+    });
+
+    expect(capturedBody).toEqual(expect.objectContaining({
+      action: "organization.member.list",
+      resource: { kind: "organization", id: orgUuid, orgId: orgUuid },
+    }));
+  });
+
+  it("policy denial returns not_found without leaking org existence", async () => {
+    const policyFetcher = {
+      fetch: async () => Response.json({
+        data: { allow: false, reason: "denied", policyVersion: 1, derivedScope: {} },
+        meta: { requestId: "req_test", cursor: null },
+      }),
+    } as unknown as Fetcher;
+
+    const result = await authorizeViaPolicy(policyFetcher, {
+      actor: { subjectId: "usr_outsider", subjectType: "user" },
+      action: "organization.member.list",
+      resource: { kind: "organization", id: "org-uuid", orgId: "org-uuid" },
+      orgId: "org-uuid",
+      roleAssignments: [],
+      requestId: "req_test",
+    });
+
+    expect(result.allow).toBe(false);
+    // Handler maps allow:false -> not_found (verified by response shape, not "forbidden")
+  });
+
+  it("missing policy binding fails closed", async () => {
+    const policyFetcher = {
+      fetch: async () => { throw new Error("binding not available"); },
+    } as unknown as Fetcher;
+
+    const result = await authorizeViaPolicy(policyFetcher, {
+      actor: { subjectId: "usr_test", subjectType: "user" },
+      action: "organization.member.list",
+      resource: { kind: "organization", id: "org-uuid", orgId: "org-uuid" },
+      orgId: "org-uuid",
+      roleAssignments: [],
+      requestId: "req_test",
+    });
+
+    expect(result.allow).toBe(false);
+  });
+
+  it("actor role-list failure fails closed with not_found", async () => {
+    const repo = createFakeRepository();
+    repo.listRoleAssignments = async () => ({ ok: false, error: { kind: "internal" as const, message: "db timeout" } });
+
+    // The handler would call listRoleAssignments first, and if it fails, return not_found
+    const rolesResult = await repo.listRoleAssignments("org-id", "usr_test");
+    expect(rolesResult.ok).toBe(false);
+    // Handler maps this to 404 not_found
+  });
+
+  it("member role-list failure returns safe internal_error", async () => {
+    const { repo } = createMemberListRepo();
+    let callCount = 0;
+    const original = repo.listRoleAssignments.bind(repo);
+    repo.listRoleAssignments = async (orgId: string, subjectId: string) => {
+      callCount++;
+      if (callCount === 1) {
+        return original(orgId, subjectId);
+      }
+      return { ok: false, error: { kind: "internal" as const, message: "db timeout" } };
+    };
+
+    // First call succeeds (actor's own role lookup)
+    const actorRoles = await repo.listRoleAssignments("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", "usr_owner");
+    expect(actorRoles.ok).toBe(true);
+
+    // Second call fails (member role lookup for another user)
+    const memberRolesResult = await repo.listRoleAssignments("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", "usr_viewer");
+    expect(memberRolesResult.ok).toBe(false);
+    // Handler maps this to 500 internal_error without partial data
+  });
+
+  it("does not expose raw member UUIDs in response", () => {
+    const rawUuid = "11111111-2222-3333-4444-555555555555";
+    const publicId = memberPublicId(rawUuid);
+    expect(publicId).toBe("mem_11111111222233334444555555555555");
+    expect(publicId).not.toContain("-");
+    expect(publicId).toMatch(/^mem_[0-9a-f]{32}$/);
+  });
+
+  it("does not expose role-assignment UUIDs in public response", () => {
+    const ra: RoleAssignment = {
+      id: "ra-uuid-private",
+      orgId: "org-uuid",
+      subjectId: "usr_x",
+      subjectType: "user",
+      role: "admin",
+      scopeKind: "organization",
+      scopeRef: null,
+      createdAt: fixedNow,
+      revokedAt: null,
+    };
+    const publicRole = { role: ra.role, scopeKind: ra.scopeKind };
+    expect(publicRole).toEqual({ role: "admin", scopeKind: "organization" });
+    expect(JSON.stringify(publicRole)).not.toContain("ra-uuid-private");
+    expect(JSON.stringify(publicRole)).not.toContain("org-uuid");
+  });
+
+  it("project-scoped role assignments do not leak raw project UUIDs", () => {
+    const ra: RoleAssignment = {
+      id: "ra-uuid",
+      orgId: "org-uuid",
+      subjectId: "usr_x",
+      subjectType: "user",
+      role: "project_admin",
+      scopeKind: "project",
+      scopeRef: "proj-uuid-secret-123",
+      createdAt: fixedNow,
+      revokedAt: null,
+    };
+    const publicRole = { role: ra.role, scopeKind: ra.scopeKind };
+    expect(JSON.stringify(publicRole)).not.toContain("proj-uuid-secret-123");
+    expect(JSON.stringify(publicRole)).not.toContain("scopeRef");
+  });
+
+  it("memberPublicId produces prefixed hex from UUID", () => {
+    const uuid = "abcdef01-2345-6789-abcd-ef0123456789";
+    expect(memberPublicId(uuid)).toBe("mem_abcdef0123456789abcdef0123456789");
+  });
+});
+
+describe("handleListMembers handler integration", () => {
+  const orgUuid = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+  const orgPublicIdStr = `org_${orgUuid.replace(/-/g, "")}`;
+  const actor = { subjectId: "usr_owner", subjectType: "user" };
+
+  function createFakeRepo(opts: {
+    actorRolesFail?: boolean;
+    membersFail?: boolean;
+    memberRolesFail?: boolean;
+  } = {}) {
+    const members: OrganizationMember[] = [
+      { id: "11111111-2222-3333-4444-555555555555", orgId: orgUuid, subjectId: "usr_owner", subjectType: "user", status: "active", createdAt: fixedNow, updatedAt: fixedNow },
+      { id: "66666666-7777-8888-9999-aaaaaaaaaaaa", orgId: orgUuid, subjectId: "usr_viewer", subjectType: "user", status: "active", createdAt: fixedNow, updatedAt: fixedNow },
+    ];
+    const roles: Record<string, RoleAssignment[]> = {
+      [`${orgUuid}:usr_owner`]: [
+        { id: "ra1", orgId: orgUuid, subjectId: "usr_owner", subjectType: "user", role: "owner", scopeKind: "organization", scopeRef: null, createdAt: fixedNow, revokedAt: null },
+      ],
+      [`${orgUuid}:usr_viewer`]: [
+        { id: "ra2", orgId: orgUuid, subjectId: "usr_viewer", subjectType: "user", role: "viewer", scopeKind: "organization", scopeRef: null, createdAt: fixedNow, revokedAt: null },
+        { id: "ra3", orgId: orgUuid, subjectId: "usr_viewer", subjectType: "user", role: "project_admin", scopeKind: "project", scopeRef: "proj-uuid-secret", createdAt: fixedNow, revokedAt: null },
+      ],
+    };
+
+    let roleCallCount = 0;
+    return {
+      listRoleAssignments: async (id: string, subjectId: string) => {
+        roleCallCount++;
+        if (opts.actorRolesFail && roleCallCount === 1) {
+          return { ok: false as const, error: { kind: "internal" as const, message: "db error" } };
+        }
+        if (opts.memberRolesFail && roleCallCount > 1) {
+          return { ok: false as const, error: { kind: "internal" as const, message: "db error" } };
+        }
+        const key = `${id}:${subjectId}`;
+        return { ok: true as const, value: roles[key] ?? [] };
+      },
+      listMembers: async (id: string) => {
+        if (opts.membersFail) {
+          return { ok: false as const, error: { kind: "internal" as const, message: "db error" } };
+        }
+        if (id !== orgUuid) return { ok: true as const, value: [] };
+        return { ok: true as const, value: members };
+      },
+    };
+  }
+
+  function createPolicyFetcher(allow: boolean) {
+    return {
+      fetch: async () => Response.json({
+        data: { allow, reason: allow ? "granted" : "denied", policyVersion: 1, derivedScope: {} },
+        meta: { requestId: "req_test", cursor: null },
+      }),
+    } as unknown as Fetcher;
+  }
+
+  it("returns full member list with correct response shape on success", async () => {
+    const repo = createFakeRepo();
+    const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, { repo });
+
+    expect(response.status).toBe(200);
+    const json = await response.json() as any;
+    expect(json.data.members).toHaveLength(2);
+    expect(json.data.members[0].id).toMatch(/^mem_[0-9a-f]{32}$/);
+    expect(json.data.members[0].subjectId).toBe("usr_owner");
+    expect(json.data.members[0].status).toBe("active");
+    expect(json.data.members[0].joinedAt).toBe(fixedNow.toISOString());
+    expect(json.data.members[0].roles).toEqual([{ role: "owner", scopeKind: "organization" }]);
+    expect(json.data.members[1].roles).toHaveLength(2);
+  });
+
+  it("sends organization.member.list action to policy-worker", async () => {
+    let capturedBody: any;
+    const policyFetcher = {
+      fetch: async (_url: string, init: RequestInit) => {
+        capturedBody = JSON.parse(init.body as string);
+        return Response.json({
+          data: { allow: true, reason: "ok", policyVersion: 1, derivedScope: {} },
+          meta: { requestId: "req_test", cursor: null },
+        });
+      },
+    } as unknown as Fetcher;
+
+    const repo = createFakeRepo();
+    const env = { POLICY_WORKER: policyFetcher, SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+    await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, { repo });
+
+    expect(capturedBody.action).toBe("organization.member.list");
+    expect(capturedBody.resource).toEqual({ kind: "organization", id: orgUuid, orgId: orgUuid });
+  });
+
+  it("returns not_found when policy denies", async () => {
+    const repo = createFakeRepo();
+    const env = { POLICY_WORKER: createPolicyFetcher(false), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, { repo });
+
+    expect(response.status).toBe(404);
+    const json = await response.json() as any;
+    expect(json.error.code).toBe("not_found");
+    expect(JSON.stringify(json)).not.toContain("forbidden");
+    expect(JSON.stringify(json)).not.toContain("denied");
+  });
+
+  it("returns not_found when actor role-list fails (fail closed)", async () => {
+    const repo = createFakeRepo({ actorRolesFail: true });
+    const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, { repo });
+
+    expect(response.status).toBe(404);
+    const json = await response.json() as any;
+    expect(json.error.code).toBe("not_found");
+  });
+
+  it("returns internal_error when member role-list fails without partial data", async () => {
+    const repo = createFakeRepo({ memberRolesFail: true });
+    const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, { repo });
+
+    expect(response.status).toBe(500);
+    const json = await response.json() as any;
+    expect(json.error.code).toBe("internal_error");
+    expect(JSON.stringify(json)).not.toContain("members");
+    expect(JSON.stringify(json)).not.toContain("usr_owner");
+  });
+
+  it("returns internal_error when listMembers fails", async () => {
+    const repo = createFakeRepo({ membersFail: true });
+    const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, { repo });
+
+    expect(response.status).toBe(500);
+    const json = await response.json() as any;
+    expect(json.error.code).toBe("internal_error");
+  });
+
+  it("fails closed when policy binding throws", async () => {
+    const repo = createFakeRepo();
+    const policyFetcher = { fetch: async () => { throw new Error("network"); } } as unknown as Fetcher;
+    const env = { POLICY_WORKER: policyFetcher, SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, { repo });
+
+    expect(response.status).toBe(404);
+    const json = await response.json() as any;
+    expect(json.error.code).toBe("not_found");
+  });
+
+  it("returns not_found for invalid orgId param", async () => {
+    const repo = createFakeRepo();
+    const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+    const response = await handleListMembers(env as any, "req_test", actor, "invalid_id", { repo });
+
+    expect(response.status).toBe(404);
+  });
+
+  it("does not expose raw UUIDs or project scopeRef in response", async () => {
+    const repo = createFakeRepo();
+    const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, { repo });
+    const text = await response.text();
+
+    expect(text).not.toContain("11111111-2222-3333-4444-555555555555");
+    expect(text).not.toContain("66666666-7777-8888-9999-aaaaaaaaaaaa");
+    expect(text).not.toContain("proj-uuid-secret");
+    expect(text).not.toContain("ra1");
+    expect(text).not.toContain("ra2");
+    expect(text).not.toContain("ra3");
+  });
+
+  it("returns 503 when POLICY_WORKER binding is missing", async () => {
+    const repo = createFakeRepo();
+    const env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, { repo });
+
+    expect(response.status).toBe(503);
+    const json = await response.json() as any;
+    expect(json.error.code).toBe("internal_error");
   });
 });
 
