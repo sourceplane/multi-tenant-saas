@@ -7,6 +7,7 @@ export type {
   CreateOrganizationMemberInput,
   CreateInvitationInput,
   CreateRoleAssignmentInput,
+  AcceptInvitationInput,
   BootstrapOrganizationInput,
   MembershipRepository,
   MembershipResult,

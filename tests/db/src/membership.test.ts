@@ -717,31 +717,41 @@ describe("MembershipRepository", () => {
   });
 
   describe("acceptInvitation", () => {
-    it("validates invitation state before atomic accept+member CTE", async () => {
+    it("validates invitation state and creates member + role assignment atomically", async () => {
       const { executor, queries } = createFakeExecutor({
         callResponses: [
           { rows: [SAMPLE_INVITATION_ROW], rowCount: 1 },
-          { rows: [{ invitation: { ...SAMPLE_INVITATION_ROW, accepted_at: NOW.toISOString(), status: "accepted" }, member: SAMPLE_MEMBER_ROW }], rowCount: 1 },
+          { rows: [{ invitation: { ...SAMPLE_INVITATION_ROW, accepted_at: NOW.toISOString(), status: "accepted" }, member: SAMPLE_MEMBER_ROW, role_assignment: SAMPLE_ROLE_ASSIGNMENT_ROW }], rowCount: 1 },
         ],
       });
       const repo = createMembershipRepository(executor);
 
-      const result = await repo.acceptInvitation(
-        "sha256-hashed-token",
-        "mem-002",
-        { id: "mem-002", orgId: "org-001", subjectId: "usr-002", subjectType: "user", createdAt: NOW },
-        NOW,
-      );
+      const result = await repo.acceptInvitation({
+        tokenHash: "sha256-hashed-token",
+        orgId: "org-001",
+        emailLower: "invite@example.com",
+        memberId: "mem-002",
+        roleAssignmentId: "ra-002",
+        subjectId: "usr-002",
+        subjectType: "user",
+        acceptedAt: NOW,
+      });
 
       expect(queries).toHaveLength(2);
       expect(queries[0]!.text).toContain("token_hash = $1");
       expect(queries[1]!.text).toContain("WITH accepted_inv AS");
+      expect(queries[1]!.text).toContain("org_id = $3");
+      expect(queries[1]!.text).toContain("email_lower = $4");
       expect(queries[1]!.text).toContain("expires_at > $2");
+      expect(queries[1]!.text).toContain("new_role AS");
+      expect(queries[1]!.text).toContain("scope_kind");
       expect(queries[1]!.text).toContain("CROSS JOIN");
       expect(result.ok).toBe(true);
       if (result.ok) {
         expect(result.value.invitation.status).toBe("accepted");
         expect(result.value.member.subjectId).toBe("usr-001");
+        expect(result.value.roleAssignment.role).toBe("owner");
+        expect(result.value.roleAssignment.scopeKind).toBe("organization");
       }
     });
 
@@ -753,15 +763,67 @@ describe("MembershipRepository", () => {
       });
       const repo = createMembershipRepository(executor);
 
-      const result = await repo.acceptInvitation(
-        "sha256-unknown-token",
-        "mem-002",
-        { id: "mem-002", orgId: "org-001", subjectId: "usr-002", subjectType: "user", createdAt: NOW },
-        NOW,
-      );
+      const result = await repo.acceptInvitation({
+        tokenHash: "sha256-unknown-token",
+        orgId: "org-001",
+        emailLower: "invite@example.com",
+        memberId: "mem-002",
+        roleAssignmentId: "ra-002",
+        subjectId: "usr-002",
+        subjectType: "user",
+        acceptedAt: NOW,
+      });
 
       expect(result.ok).toBe(false);
       if (!result.ok) expect(result.error.kind).toBe("not_found");
+    });
+
+    it("returns not_found when invitation belongs to a different organization", async () => {
+      const { executor, queries } = createFakeExecutor({
+        callResponses: [
+          { rows: [SAMPLE_INVITATION_ROW], rowCount: 1 },
+        ],
+      });
+      const repo = createMembershipRepository(executor);
+
+      const result = await repo.acceptInvitation({
+        tokenHash: "sha256-hashed-token",
+        orgId: "org-999",
+        emailLower: "invite@example.com",
+        memberId: "mem-002",
+        roleAssignmentId: "ra-002",
+        subjectId: "usr-002",
+        subjectType: "user",
+        acceptedAt: NOW,
+      });
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.kind).toBe("not_found");
+      expect(queries).toHaveLength(1);
+    });
+
+    it("returns not_found when email does not match", async () => {
+      const { executor, queries } = createFakeExecutor({
+        callResponses: [
+          { rows: [SAMPLE_INVITATION_ROW], rowCount: 1 },
+        ],
+      });
+      const repo = createMembershipRepository(executor);
+
+      const result = await repo.acceptInvitation({
+        tokenHash: "sha256-hashed-token",
+        orgId: "org-001",
+        emailLower: "wrong@example.com",
+        memberId: "mem-002",
+        roleAssignmentId: "ra-002",
+        subjectId: "usr-002",
+        subjectType: "user",
+        acceptedAt: NOW,
+      });
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.kind).toBe("not_found");
+      expect(queries).toHaveLength(1);
     });
 
     it("returns expired when invitation past expiry without marking it accepted", async () => {
@@ -772,12 +834,16 @@ describe("MembershipRepository", () => {
       });
       const repo = createMembershipRepository(executor);
 
-      const result = await repo.acceptInvitation(
-        "sha256-hashed-token",
-        "mem-002",
-        { id: "mem-002", orgId: "org-001", subjectId: "usr-002", subjectType: "user", createdAt: NOW },
-        NOW,
-      );
+      const result = await repo.acceptInvitation({
+        tokenHash: "sha256-hashed-token",
+        orgId: "org-001",
+        emailLower: "invite@example.com",
+        memberId: "mem-002",
+        roleAssignmentId: "ra-002",
+        subjectId: "usr-002",
+        subjectType: "user",
+        acceptedAt: NOW,
+      });
 
       expect(result.ok).toBe(false);
       if (!result.ok) expect(result.error.kind).toBe("expired");
@@ -792,12 +858,16 @@ describe("MembershipRepository", () => {
       });
       const repo = createMembershipRepository(executor);
 
-      const result = await repo.acceptInvitation(
-        "sha256-hashed-token",
-        "mem-002",
-        { id: "mem-002", orgId: "org-001", subjectId: "usr-002", subjectType: "user", createdAt: NOW },
-        NOW,
-      );
+      const result = await repo.acceptInvitation({
+        tokenHash: "sha256-hashed-token",
+        orgId: "org-001",
+        emailLower: "invite@example.com",
+        memberId: "mem-002",
+        roleAssignmentId: "ra-002",
+        subjectId: "usr-002",
+        subjectType: "user",
+        acceptedAt: NOW,
+      });
 
       expect(result.ok).toBe(false);
       if (!result.ok) expect(result.error.kind).toBe("revoked");
@@ -812,38 +882,122 @@ describe("MembershipRepository", () => {
       });
       const repo = createMembershipRepository(executor);
 
-      const result = await repo.acceptInvitation(
-        "sha256-hashed-token",
-        "mem-002",
-        { id: "mem-002", orgId: "org-001", subjectId: "usr-002", subjectType: "user", createdAt: NOW },
-        NOW,
-      );
+      const result = await repo.acceptInvitation({
+        tokenHash: "sha256-hashed-token",
+        orgId: "org-001",
+        emailLower: "invite@example.com",
+        memberId: "mem-002",
+        roleAssignmentId: "ra-002",
+        subjectId: "usr-002",
+        subjectType: "user",
+        acceptedAt: NOW,
+      });
 
       expect(result.ok).toBe(false);
       if (!result.ok) expect(result.error.kind).toBe("already_accepted");
       expect(queries).toHaveLength(1);
     });
 
-    it("does not expose token hash in invitation output", async () => {
+    it("returns conflict when member uniqueness constraint fails", async () => {
       const { executor } = createFakeExecutor({
         callResponses: [
           { rows: [SAMPLE_INVITATION_ROW], rowCount: 1 },
-          { rows: [{ invitation: { ...SAMPLE_INVITATION_ROW, accepted_at: NOW.toISOString(), status: "accepted" }, member: SAMPLE_MEMBER_ROW }], rowCount: 1 },
+          { error: { code: "23505" } },
         ],
       });
       const repo = createMembershipRepository(executor);
 
-      const result = await repo.acceptInvitation(
-        "sha256-hashed-token",
-        "mem-002",
-        { id: "mem-002", orgId: "org-001", subjectId: "usr-002", subjectType: "user", createdAt: NOW },
-        NOW,
-      );
+      const result = await repo.acceptInvitation({
+        tokenHash: "sha256-hashed-token",
+        orgId: "org-001",
+        emailLower: "invite@example.com",
+        memberId: "mem-002",
+        roleAssignmentId: "ra-002",
+        subjectId: "usr-002",
+        subjectType: "user",
+        acceptedAt: NOW,
+      });
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.kind).toBe("conflict");
+    });
+
+    it("does not expose token hash in invitation output", async () => {
+      const { executor } = createFakeExecutor({
+        callResponses: [
+          { rows: [SAMPLE_INVITATION_ROW], rowCount: 1 },
+          { rows: [{ invitation: { ...SAMPLE_INVITATION_ROW, accepted_at: NOW.toISOString(), status: "accepted" }, member: SAMPLE_MEMBER_ROW, role_assignment: SAMPLE_ROLE_ASSIGNMENT_ROW }], rowCount: 1 },
+        ],
+      });
+      const repo = createMembershipRepository(executor);
+
+      const result = await repo.acceptInvitation({
+        tokenHash: "sha256-hashed-token",
+        orgId: "org-001",
+        emailLower: "invite@example.com",
+        memberId: "mem-002",
+        roleAssignmentId: "ra-002",
+        subjectId: "usr-002",
+        subjectType: "user",
+        acceptedAt: NOW,
+      });
 
       expect(result.ok).toBe(true);
       if (result.ok) {
         expect(result.value.invitation).not.toHaveProperty("tokenHash");
         expect(result.value.invitation).not.toHaveProperty("token_hash");
+      }
+    });
+
+    it("raw token is never part of repository input parameters", async () => {
+      const { executor, queries } = createFakeExecutor({
+        callResponses: [
+          { rows: [SAMPLE_INVITATION_ROW], rowCount: 1 },
+          { rows: [{ invitation: { ...SAMPLE_INVITATION_ROW, accepted_at: NOW.toISOString(), status: "accepted" }, member: SAMPLE_MEMBER_ROW, role_assignment: SAMPLE_ROLE_ASSIGNMENT_ROW }], rowCount: 1 },
+        ],
+      });
+      const repo = createMembershipRepository(executor);
+
+      await repo.acceptInvitation({
+        tokenHash: "sha256-hashed-token",
+        orgId: "org-001",
+        emailLower: "invite@example.com",
+        memberId: "mem-002",
+        roleAssignmentId: "ra-002",
+        subjectId: "usr-002",
+        subjectType: "user",
+        acceptedAt: NOW,
+      });
+
+      const allParams = queries.flatMap((q) => q.params);
+      expect(allParams).not.toContain("raw_token_value");
+      expect(allParams[0]).toBe("sha256-hashed-token");
+    });
+
+    it("returned role assignment is organization-scoped", async () => {
+      const { executor } = createFakeExecutor({
+        callResponses: [
+          { rows: [SAMPLE_INVITATION_ROW], rowCount: 1 },
+          { rows: [{ invitation: { ...SAMPLE_INVITATION_ROW, accepted_at: NOW.toISOString(), status: "accepted" }, member: SAMPLE_MEMBER_ROW, role_assignment: { ...SAMPLE_ROLE_ASSIGNMENT_ROW, scope_kind: "organization", scope_ref: null } }], rowCount: 1 },
+        ],
+      });
+      const repo = createMembershipRepository(executor);
+
+      const result = await repo.acceptInvitation({
+        tokenHash: "sha256-hashed-token",
+        orgId: "org-001",
+        emailLower: "invite@example.com",
+        memberId: "mem-002",
+        roleAssignmentId: "ra-002",
+        subjectId: "usr-002",
+        subjectType: "user",
+        acceptedAt: NOW,
+      });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value.roleAssignment.scopeKind).toBe("organization");
+        expect(result.value.roleAssignment.scopeRef).toBeNull();
       }
     });
   });

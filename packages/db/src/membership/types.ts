@@ -119,6 +119,17 @@ export interface PagedResult<T> {
   nextCursor: CursorPosition | null;
 }
 
+export interface AcceptInvitationInput {
+  tokenHash: string;
+  orgId: string;
+  emailLower: string;
+  memberId: string;
+  roleAssignmentId: string;
+  subjectId: string;
+  subjectType: string;
+  acceptedAt: Date;
+}
+
 export interface MembershipRepository {
   createOrganization(input: CreateOrganizationInput): Promise<MembershipResult<Organization>>;
   getOrganizationById(id: string): Promise<MembershipResult<Organization>>;
@@ -140,7 +151,7 @@ export interface MembershipRepository {
   listInvitations(orgId: string): Promise<MembershipResult<OrganizationInvitation[]>>;
   listInvitationsPaged(orgId: string, params: PageQueryParams): Promise<MembershipResult<PagedResult<OrganizationInvitation>>>;
   revokeInvitation(orgId: string, invitationId: string, revokedAt: Date): Promise<MembershipResult<OrganizationInvitation>>;
-  acceptInvitation(tokenHash: string, memberId: string, memberInput: CreateOrganizationMemberInput, acceptedAt: Date): Promise<MembershipResult<{ invitation: OrganizationInvitation; member: OrganizationMember }>>;
+  acceptInvitation(input: AcceptInvitationInput): Promise<MembershipResult<{ invitation: OrganizationInvitation; member: OrganizationMember; roleAssignment: RoleAssignment }>>;
 
   createRoleAssignment(input: CreateRoleAssignmentInput): Promise<MembershipResult<RoleAssignment>>;
   listRoleAssignments(orgId: string, subjectId: string): Promise<MembershipResult<RoleAssignment[]>>;

@@ -7,6 +7,7 @@ const ORG_ROUTES: Record<string, string> = {
 
 const ORG_ID_RE = /^\/v1\/organizations\/[^/]+$/;
 const ORG_MEMBERS_RE = /^\/v1\/organizations\/[^/]+\/members$/;
+const ORG_INVITATIONS_ACCEPT_RE = /^\/v1\/organizations\/[^/]+\/invitations\/accept$/;
 const ORG_INVITATIONS_RE = /^\/v1\/organizations\/[^/]+\/invitations$/;
 const ORG_INVITATION_ID_RE = /^\/v1\/organizations\/[^/]+\/invitations\/[^/]+$/;
 
@@ -18,7 +19,7 @@ const FORWARDED_HEADERS = [
 ];
 
 export function isOrgRoute(pathname: string): boolean {
-  return pathname in ORG_ROUTES || ORG_ID_RE.test(pathname) || ORG_MEMBERS_RE.test(pathname) || ORG_INVITATIONS_RE.test(pathname) || ORG_INVITATION_ID_RE.test(pathname);
+  return pathname in ORG_ROUTES || ORG_ID_RE.test(pathname) || ORG_MEMBERS_RE.test(pathname) || ORG_INVITATIONS_ACCEPT_RE.test(pathname) || ORG_INVITATIONS_RE.test(pathname) || ORG_INVITATION_ID_RE.test(pathname);
 }
 
 export async function handleOrgRoute(
@@ -32,6 +33,10 @@ export async function handleOrgRoute(
     return errorResponse("unsupported", "Method not allowed", 405, requestId);
   }
 
+  if (ORG_INVITATIONS_ACCEPT_RE.test(pathname) && request.method !== "POST") {
+    return errorResponse("unsupported", "Method not allowed", 405, requestId);
+  }
+
   if (ORG_MEMBERS_RE.test(pathname) && request.method !== "GET") {
     return errorResponse("unsupported", "Method not allowed", 405, requestId);
   }
@@ -40,7 +45,7 @@ export async function handleOrgRoute(
     return errorResponse("unsupported", "Method not allowed", 405, requestId);
   }
 
-  if (ORG_INVITATION_ID_RE.test(pathname) && request.method !== "DELETE") {
+  if (ORG_INVITATION_ID_RE.test(pathname) && !ORG_INVITATIONS_ACCEPT_RE.test(pathname) && request.method !== "DELETE") {
     return errorResponse("unsupported", "Method not allowed", 405, requestId);
   }
 
@@ -75,6 +80,7 @@ export async function handleOrgRoute(
   headers.set("x-request-id", requestId);
   headers.set("x-actor-subject-id", sessionResult.subjectId);
   headers.set("x-actor-subject-type", sessionResult.subjectType);
+  headers.set("x-actor-email", sessionResult.email);
   for (const name of FORWARDED_HEADERS) {
     if (name === "x-request-id") continue;
     const value = request.headers.get(name);
@@ -112,6 +118,7 @@ export async function handleOrgRoute(
 interface SessionSuccess {
   subjectId: string;
   subjectType: string;
+  email: string;
 }
 
 interface SessionFailure {
@@ -148,15 +155,16 @@ async function resolveSession(
       };
     }
 
-    const json = (await response.json()) as { data?: { user?: { id?: string } } };
+    const json = (await response.json()) as { data?: { user?: { id?: string; email?: string } } };
     const userId = json?.data?.user?.id;
-    if (!userId) {
+    const userEmail = json?.data?.user?.email;
+    if (!userId || !userEmail) {
       return {
         error: errorResponse("unauthenticated", "Authentication failed", 401, requestId),
       };
     }
 
-    return { subjectId: userId, subjectType: "user" };
+    return { subjectId: userId, subjectType: "user", email: userEmail };
   } catch {
     return {
       error: errorResponse("internal_error", "Authentication service unavailable", 503, requestId),
