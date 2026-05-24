@@ -67,6 +67,11 @@ function mapRoleAssignment(row: Record<string, unknown>): RoleAssignment {
   };
 }
 
+function parseJsonColumn(value: unknown): Record<string, unknown> {
+  if (typeof value === "string") return JSON.parse(value) as Record<string, unknown>;
+  return value as Record<string, unknown>;
+}
+
 function safeError(message: string): MembershipResult<never> {
   return { ok: false, error: { kind: "internal", message } };
 }
@@ -149,54 +154,50 @@ export function createMembershipRepository(executor: SqlExecutor): MembershipRep
 
     async bootstrapOrganization(input: BootstrapOrganizationInput): Promise<MembershipResult<{ org: Organization; member: OrganizationMember; roleAssignment: RoleAssignment }>> {
       try {
-        const orgResult = await executor.execute<Record<string, unknown>>(
-          `INSERT INTO membership.organizations (id, name, slug, slug_lower, created_at, updated_at)
-           VALUES ($1, $2, $3, $4, $5, $5)
-           ON CONFLICT (id) DO NOTHING
-           RETURNING *`,
-          [input.org.id, input.org.name, input.org.slug, input.org.slugLower, input.org.createdAt.toISOString()],
-        );
-        if (orgResult.rowCount === 0) {
-          return { ok: false, error: { kind: "conflict", entity: "organization" } };
-        }
-
-        const memberResult = await executor.execute<Record<string, unknown>>(
-          `INSERT INTO membership.organization_members (id, org_id, subject_id, subject_type, created_at, updated_at)
-           VALUES ($1, $2, $3, $4, $5, $5)
-           ON CONFLICT (id) DO NOTHING
-           RETURNING *`,
-          [input.member.id, input.member.orgId, input.member.subjectId, input.member.subjectType, input.member.createdAt.toISOString()],
-        );
-        if (memberResult.rowCount === 0) {
-          return { ok: false, error: { kind: "conflict", entity: "organization_member" } };
-        }
-
-        const roleResult = await executor.execute<Record<string, unknown>>(
-          `INSERT INTO membership.role_assignments (id, org_id, subject_id, subject_type, role, scope_kind, scope_ref, created_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-           ON CONFLICT (id) DO NOTHING
-           RETURNING *`,
+        const result = await executor.execute<Record<string, unknown>>(
+          `WITH new_org AS (
+            INSERT INTO membership.organizations (id, name, slug, slug_lower, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $5)
+            ON CONFLICT (id) DO NOTHING
+            RETURNING *
+          ),
+          new_member AS (
+            INSERT INTO membership.organization_members (id, org_id, subject_id, subject_type, created_at, updated_at)
+            SELECT $6, $7, $8, $9, $10, $10
+            FROM new_org
+            ON CONFLICT (id) DO NOTHING
+            RETURNING *
+          ),
+          new_role AS (
+            INSERT INTO membership.role_assignments (id, org_id, subject_id, subject_type, role, scope_kind, scope_ref, created_at)
+            SELECT $11, $12, $13, $14, $15, $16, $17, $18
+            FROM new_member
+            ON CONFLICT (id) DO NOTHING
+            RETURNING *
+          )
+          SELECT
+            row_to_json(o.*) as org,
+            row_to_json(m.*) as member,
+            row_to_json(r.*) as role_assignment
+          FROM new_org o
+          CROSS JOIN new_member m
+          CROSS JOIN new_role r`,
           [
-            input.roleAssignment.id,
-            input.roleAssignment.orgId,
-            input.roleAssignment.subjectId,
-            input.roleAssignment.subjectType,
-            input.roleAssignment.role,
-            input.roleAssignment.scopeKind,
-            input.roleAssignment.scopeRef ?? null,
-            input.roleAssignment.createdAt.toISOString(),
+            input.org.id, input.org.name, input.org.slug, input.org.slugLower, input.org.createdAt.toISOString(),
+            input.member.id, input.member.orgId, input.member.subjectId, input.member.subjectType, input.member.createdAt.toISOString(),
+            input.roleAssignment.id, input.roleAssignment.orgId, input.roleAssignment.subjectId, input.roleAssignment.subjectType, input.roleAssignment.role, input.roleAssignment.scopeKind, input.roleAssignment.scopeRef ?? null, input.roleAssignment.createdAt.toISOString(),
           ],
         );
-        if (roleResult.rowCount === 0) {
-          return { ok: false, error: { kind: "conflict", entity: "role_assignment" } };
+        if (result.rowCount === 0) {
+          return { ok: false, error: { kind: "conflict", entity: "organization" } };
         }
-
+        const row = result.rows[0]!;
         return {
           ok: true,
           value: {
-            org: mapOrganization(orgResult.rows[0]!),
-            member: mapMember(memberResult.rows[0]!),
-            roleAssignment: mapRoleAssignment(roleResult.rows[0]!),
+            org: mapOrganization(parseJsonColumn(row.org)),
+            member: mapMember(parseJsonColumn(row.member)),
+            roleAssignment: mapRoleAssignment(parseJsonColumn(row.role_assignment)),
           },
         };
       } catch (err: unknown) {
@@ -383,37 +384,55 @@ export function createMembershipRepository(executor: SqlExecutor): MembershipRep
 
     async acceptInvitation(tokenHash: string, memberId: string, memberInput: CreateOrganizationMemberInput, acceptedAt: Date): Promise<MembershipResult<{ invitation: OrganizationInvitation; member: OrganizationMember }>> {
       try {
-        const invResult = await executor.execute<Record<string, unknown>>(
-          `UPDATE membership.organization_invitations
-           SET status = 'accepted', accepted_at = $2
-           WHERE token_hash = $1 AND status = 'pending' AND revoked_at IS NULL AND accepted_at IS NULL
-           RETURNING id, org_id, email, email_lower, role, status, invited_by, expires_at, accepted_at, revoked_at, created_at`,
-          [tokenHash, acceptedAt.toISOString()],
+        const checkResult = await executor.execute<Record<string, unknown>>(
+          `SELECT id, org_id, email, email_lower, role, status, invited_by, expires_at, accepted_at, revoked_at, created_at
+           FROM membership.organization_invitations WHERE token_hash = $1`,
+          [tokenHash],
         );
-        if (invResult.rowCount === 0) {
+        if (checkResult.rowCount === 0) {
           return { ok: false, error: { kind: "not_found" } };
         }
-        const invitation = mapInvitation(invResult.rows[0]!);
-        if (invitation.expiresAt < acceptedAt) {
+        const inv = mapInvitation(checkResult.rows[0]!);
+        if (inv.revokedAt !== null) {
+          return { ok: false, error: { kind: "revoked" } };
+        }
+        if (inv.acceptedAt !== null) {
+          return { ok: false, error: { kind: "already_accepted" } };
+        }
+        if (inv.expiresAt < acceptedAt) {
           return { ok: false, error: { kind: "expired" } };
         }
 
-        const memberResult = await executor.execute<Record<string, unknown>>(
-          `INSERT INTO membership.organization_members (id, org_id, subject_id, subject_type, created_at, updated_at)
-           VALUES ($1, $2, $3, $4, $5, $5)
-           ON CONFLICT (id) DO NOTHING
-           RETURNING *`,
-          [memberId, memberInput.orgId, memberInput.subjectId, memberInput.subjectType, memberInput.createdAt.toISOString()],
+        const result = await executor.execute<Record<string, unknown>>(
+          `WITH accepted_inv AS (
+            UPDATE membership.organization_invitations
+            SET status = 'accepted', accepted_at = $2
+            WHERE token_hash = $1 AND status = 'pending' AND revoked_at IS NULL AND accepted_at IS NULL AND expires_at > $2
+            RETURNING id, org_id, email, email_lower, role, status, invited_by, expires_at, accepted_at, revoked_at, created_at
+          ),
+          new_member AS (
+            INSERT INTO membership.organization_members (id, org_id, subject_id, subject_type, created_at, updated_at)
+            SELECT $3, $4, $5, $6, $7, $7
+            FROM accepted_inv
+            ON CONFLICT (id) DO NOTHING
+            RETURNING *
+          )
+          SELECT
+            row_to_json(ai.*) as invitation,
+            row_to_json(nm.*) as member
+          FROM accepted_inv ai
+          CROSS JOIN new_member nm`,
+          [tokenHash, acceptedAt.toISOString(), memberId, memberInput.orgId, memberInput.subjectId, memberInput.subjectType, memberInput.createdAt.toISOString()],
         );
-        if (memberResult.rowCount === 0) {
-          return { ok: false, error: { kind: "conflict", entity: "organization_member" } };
+        if (result.rowCount === 0) {
+          return { ok: false, error: { kind: "not_found" } };
         }
-
+        const row = result.rows[0]!;
         return {
           ok: true,
           value: {
-            invitation,
-            member: mapMember(memberResult.rows[0]!),
+            invitation: mapInvitation(parseJsonColumn(row.invitation)),
+            member: mapMember(parseJsonColumn(row.member)),
           },
         };
       } catch (err: unknown) {

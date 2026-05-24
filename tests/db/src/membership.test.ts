@@ -269,13 +269,13 @@ describe("MembershipRepository", () => {
   });
 
   describe("bootstrapOrganization", () => {
-    it("creates org, member, and role assignment atomically", async () => {
+    it("creates org, member, and role assignment atomically in a single CTE statement", async () => {
       const { executor, queries } = createFakeExecutor({
-        callResponses: [
-          { rows: [SAMPLE_ORG_ROW], rowCount: 1 },
-          { rows: [SAMPLE_MEMBER_ROW], rowCount: 1 },
-          { rows: [SAMPLE_ROLE_ASSIGNMENT_ROW], rowCount: 1 },
-        ],
+        rows: [{
+          org: SAMPLE_ORG_ROW,
+          member: SAMPLE_MEMBER_ROW,
+          role_assignment: SAMPLE_ROLE_ASSIGNMENT_ROW,
+        }],
       });
       const repo = createMembershipRepository(executor);
 
@@ -285,7 +285,11 @@ describe("MembershipRepository", () => {
         roleAssignment: { id: "ra-001", orgId: "org-001", subjectId: "usr-001", subjectType: "user", role: "owner", scopeKind: "organization", createdAt: NOW },
       });
 
-      expect(queries).toHaveLength(3);
+      expect(queries).toHaveLength(1);
+      expect(queries[0]!.text).toContain("WITH new_org AS");
+      expect(queries[0]!.text).toContain("new_member AS");
+      expect(queries[0]!.text).toContain("new_role AS");
+      expect(queries[0]!.text).toContain("CROSS JOIN");
       expect(result.ok).toBe(true);
       if (result.ok) {
         expect(result.value.org.id).toBe("org-001");
@@ -294,13 +298,13 @@ describe("MembershipRepository", () => {
       }
     });
 
-    it("uses parameterized queries for all three inserts", async () => {
+    it("uses parameterized query with all 18 parameters", async () => {
       const { executor, queries } = createFakeExecutor({
-        callResponses: [
-          { rows: [SAMPLE_ORG_ROW], rowCount: 1 },
-          { rows: [SAMPLE_MEMBER_ROW], rowCount: 1 },
-          { rows: [SAMPLE_ROLE_ASSIGNMENT_ROW], rowCount: 1 },
-        ],
+        rows: [{
+          org: SAMPLE_ORG_ROW,
+          member: SAMPLE_MEMBER_ROW,
+          role_assignment: SAMPLE_ROLE_ASSIGNMENT_ROW,
+        }],
       });
       const repo = createMembershipRepository(executor);
 
@@ -310,18 +314,13 @@ describe("MembershipRepository", () => {
         roleAssignment: { id: "ra-001", orgId: "org-001", subjectId: "usr-001", subjectType: "user", role: "owner", scopeKind: "organization", createdAt: NOW },
       });
 
-      for (const q of queries) {
-        expect(q.text).toContain("$1");
-        expect(q.params.length).toBeGreaterThan(0);
-      }
+      expect(queries[0]!.text).toContain("$1");
+      expect(queries[0]!.text).toContain("$18");
+      expect(queries[0]!.params.length).toBe(18);
     });
 
     it("returns conflict if organization already exists", async () => {
-      const { executor } = createFakeExecutor({
-        callResponses: [
-          { rows: [], rowCount: 0 },
-        ],
-      });
+      const { executor } = createFakeExecutor({ rows: [], rowCount: 0 });
       const repo = createMembershipRepository(executor);
 
       const result = await repo.bootstrapOrganization({
@@ -332,6 +331,26 @@ describe("MembershipRepository", () => {
 
       expect(result.ok).toBe(false);
       if (!result.ok) expect(result.error.kind).toBe("conflict");
+    });
+
+    it("all-or-nothing: member and role depend on org via CTE chain", async () => {
+      const { executor, queries } = createFakeExecutor({
+        rows: [{
+          org: SAMPLE_ORG_ROW,
+          member: SAMPLE_MEMBER_ROW,
+          role_assignment: SAMPLE_ROLE_ASSIGNMENT_ROW,
+        }],
+      });
+      const repo = createMembershipRepository(executor);
+
+      await repo.bootstrapOrganization({
+        org: { id: "org-001", name: "Acme Corp", slug: "acme-corp", slugLower: "acme-corp", createdAt: NOW },
+        member: { id: "mem-001", orgId: "org-001", subjectId: "usr-001", subjectType: "user", createdAt: NOW },
+        roleAssignment: { id: "ra-001", orgId: "org-001", subjectId: "usr-001", subjectType: "user", role: "owner", scopeKind: "organization", createdAt: NOW },
+      });
+
+      expect(queries[0]!.text).toContain("FROM new_org");
+      expect(queries[0]!.text).toContain("FROM new_member");
     });
   });
 
@@ -698,11 +717,11 @@ describe("MembershipRepository", () => {
   });
 
   describe("acceptInvitation", () => {
-    it("marks invitation accepted and creates member", async () => {
+    it("validates invitation state before atomic accept+member CTE", async () => {
       const { executor, queries } = createFakeExecutor({
         callResponses: [
-          { rows: [{ ...SAMPLE_INVITATION_ROW, accepted_at: NOW.toISOString(), status: "accepted" }], rowCount: 1 },
-          { rows: [SAMPLE_MEMBER_ROW], rowCount: 1 },
+          { rows: [SAMPLE_INVITATION_ROW], rowCount: 1 },
+          { rows: [{ invitation: { ...SAMPLE_INVITATION_ROW, accepted_at: NOW.toISOString(), status: "accepted" }, member: SAMPLE_MEMBER_ROW }], rowCount: 1 },
         ],
       });
       const repo = createMembershipRepository(executor);
@@ -716,7 +735,9 @@ describe("MembershipRepository", () => {
 
       expect(queries).toHaveLength(2);
       expect(queries[0]!.text).toContain("token_hash = $1");
-      expect(queries[0]!.text).toContain("status = 'pending'");
+      expect(queries[1]!.text).toContain("WITH accepted_inv AS");
+      expect(queries[1]!.text).toContain("expires_at > $2");
+      expect(queries[1]!.text).toContain("CROSS JOIN");
       expect(result.ok).toBe(true);
       if (result.ok) {
         expect(result.value.invitation.status).toBe("accepted");
@@ -724,7 +745,7 @@ describe("MembershipRepository", () => {
       }
     });
 
-    it("returns not_found when invitation not pending", async () => {
+    it("returns not_found when invitation not found by token hash", async () => {
       const { executor } = createFakeExecutor({
         callResponses: [
           { rows: [], rowCount: 0 },
@@ -743,10 +764,10 @@ describe("MembershipRepository", () => {
       if (!result.ok) expect(result.error.kind).toBe("not_found");
     });
 
-    it("returns expired when invitation past expiry", async () => {
-      const { executor } = createFakeExecutor({
+    it("returns expired when invitation past expiry without marking it accepted", async () => {
+      const { executor, queries } = createFakeExecutor({
         callResponses: [
-          { rows: [{ ...SAMPLE_INVITATION_ROW, expires_at: PAST.toISOString(), accepted_at: NOW.toISOString(), status: "accepted" }], rowCount: 1 },
+          { rows: [{ ...SAMPLE_INVITATION_ROW, expires_at: PAST.toISOString() }], rowCount: 1 },
         ],
       });
       const repo = createMembershipRepository(executor);
@@ -760,13 +781,54 @@ describe("MembershipRepository", () => {
 
       expect(result.ok).toBe(false);
       if (!result.ok) expect(result.error.kind).toBe("expired");
+      expect(queries).toHaveLength(1);
+    });
+
+    it("returns revoked when invitation is revoked", async () => {
+      const { executor, queries } = createFakeExecutor({
+        callResponses: [
+          { rows: [{ ...SAMPLE_INVITATION_ROW, revoked_at: NOW.toISOString(), status: "revoked" }], rowCount: 1 },
+        ],
+      });
+      const repo = createMembershipRepository(executor);
+
+      const result = await repo.acceptInvitation(
+        "sha256-hashed-token",
+        "mem-002",
+        { id: "mem-002", orgId: "org-001", subjectId: "usr-002", subjectType: "user", createdAt: NOW },
+        NOW,
+      );
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.kind).toBe("revoked");
+      expect(queries).toHaveLength(1);
+    });
+
+    it("returns already_accepted when invitation was already accepted", async () => {
+      const { executor, queries } = createFakeExecutor({
+        callResponses: [
+          { rows: [{ ...SAMPLE_INVITATION_ROW, accepted_at: NOW.toISOString(), status: "accepted" }], rowCount: 1 },
+        ],
+      });
+      const repo = createMembershipRepository(executor);
+
+      const result = await repo.acceptInvitation(
+        "sha256-hashed-token",
+        "mem-002",
+        { id: "mem-002", orgId: "org-001", subjectId: "usr-002", subjectType: "user", createdAt: NOW },
+        NOW,
+      );
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.kind).toBe("already_accepted");
+      expect(queries).toHaveLength(1);
     });
 
     it("does not expose token hash in invitation output", async () => {
       const { executor } = createFakeExecutor({
         callResponses: [
-          { rows: [{ ...SAMPLE_INVITATION_ROW, accepted_at: NOW.toISOString(), status: "accepted" }], rowCount: 1 },
-          { rows: [SAMPLE_MEMBER_ROW], rowCount: 1 },
+          { rows: [SAMPLE_INVITATION_ROW], rowCount: 1 },
+          { rows: [{ invitation: { ...SAMPLE_INVITATION_ROW, accepted_at: NOW.toISOString(), status: "accepted" }, member: SAMPLE_MEMBER_ROW }], rowCount: 1 },
         ],
       });
       const repo = createMembershipRepository(executor);
