@@ -312,6 +312,29 @@ describe("membership-worker organization service", () => {
       expect(capturedRoles![0]!.role).toBe("owner");
       expect(capturedRoles![0]!.scopeKind).toBe("organization");
     });
+
+    it("fails closed when repository role-list fails", async () => {
+      const repo = createFakeRepository();
+      const service = createOrganizationService({ repo, now: () => fixedNow });
+
+      const createResult = await service.createOrganization(
+        { subjectId: "usr_owner", subjectType: "user" },
+        { name: "RoleFail", slug: "role-fail", slugLower: "role-fail" },
+      );
+      expect(createResult.ok).toBe(true);
+      if (!createResult.ok) return;
+
+      const orgUuid = parseOrgPublicId(createResult.value.organization.id)!;
+
+      // Override listRoleAssignments to simulate DB failure
+      repo.listRoleAssignments = async () => ({ ok: false, error: { kind: "internal" as const, message: "db timeout" } });
+
+      const result = await service.getOrganization({ subjectId: "usr_owner", subjectType: "user" }, orgUuid, allowAuthorizer);
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.code).toBe("not_found");
+    });
   });
 
   describe("ID utilities", () => {
@@ -392,18 +415,18 @@ describe("policy-client", () => {
       requestId: "req_test123",
     };
 
-    it("returns allow:true when policy-worker returns allow:true", async () => {
+    it("returns allow:true when policy-worker returns allow:true in envelope", async () => {
       const fakeFetcher = {
-        fetch: async () => Response.json({ allow: true, reason: "granted", policyVersion: 1, derivedScope: { orgId: "org-uuid" } }),
+        fetch: async () => Response.json({ data: { allow: true, reason: "granted", policyVersion: 1, derivedScope: { orgId: "org-uuid" } }, meta: { requestId: "req_test123", cursor: null } }),
       } as unknown as Fetcher;
 
       const result = await authorizeViaPolicy(fakeFetcher, baseParams);
       expect(result.allow).toBe(true);
     });
 
-    it("returns allow:false when policy-worker returns allow:false", async () => {
+    it("returns allow:false when policy-worker returns allow:false in envelope", async () => {
       const fakeFetcher = {
-        fetch: async () => Response.json({ allow: false, reason: "denied", policyVersion: 1, derivedScope: { orgId: "org-uuid" } }),
+        fetch: async () => Response.json({ data: { allow: false, reason: "denied", policyVersion: 1, derivedScope: { orgId: "org-uuid" } }, meta: { requestId: "req_test123", cursor: null } }),
       } as unknown as Fetcher;
 
       const result = await authorizeViaPolicy(fakeFetcher, baseParams);
@@ -437,9 +460,18 @@ describe("policy-client", () => {
       expect(result.allow).toBe(false);
     });
 
-    it("fails closed when response has no allow field", async () => {
+    it("fails closed when envelope has no data field", async () => {
       const fakeFetcher = {
         fetch: async () => Response.json({ something: "else" }),
+      } as unknown as Fetcher;
+
+      const result = await authorizeViaPolicy(fakeFetcher, baseParams);
+      expect(result.allow).toBe(false);
+    });
+
+    it("fails closed when data has no allow field", async () => {
+      const fakeFetcher = {
+        fetch: async () => Response.json({ data: { reason: "ok" }, meta: { requestId: "r", cursor: null } }),
       } as unknown as Fetcher;
 
       const result = await authorizeViaPolicy(fakeFetcher, baseParams);
@@ -451,7 +483,7 @@ describe("policy-client", () => {
       const fakeFetcher = {
         fetch: async (_url: string, init: RequestInit) => {
           capturedBody = JSON.parse(init.body as string);
-          return Response.json({ allow: true, reason: "ok", policyVersion: 1, derivedScope: { orgId: "org-uuid" } });
+          return Response.json({ data: { allow: true, reason: "ok", policyVersion: 1, derivedScope: { orgId: "org-uuid" } }, meta: { requestId: "req_test123", cursor: null } });
         },
       } as unknown as Fetcher;
 
@@ -478,7 +510,7 @@ describe("policy-client", () => {
       const fakeFetcher = {
         fetch: async (_url: string, init: RequestInit) => {
           capturedHeaders = init.headers;
-          return Response.json({ allow: true, reason: "ok", policyVersion: 1, derivedScope: { orgId: "org-uuid" } });
+          return Response.json({ data: { allow: true, reason: "ok", policyVersion: 1, derivedScope: { orgId: "org-uuid" } }, meta: { requestId: "req_test123", cursor: null } });
         },
       } as unknown as Fetcher;
 

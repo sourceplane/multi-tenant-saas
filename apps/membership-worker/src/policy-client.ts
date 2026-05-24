@@ -68,11 +68,16 @@ export async function authorizeViaPolicy(
     return { allow: false };
   }
 
-  if (!parsed || typeof parsed !== "object" || !("allow" in parsed) || typeof (parsed as AuthorizationResponse).allow !== "boolean") {
+  if (!parsed || typeof parsed !== "object" || !("data" in parsed)) {
     return { allow: false };
   }
 
-  return { allow: (parsed as AuthorizationResponse).allow };
+  const data = (parsed as { data: unknown }).data;
+  if (!data || typeof data !== "object" || !("allow" in data) || typeof (data as AuthorizationResponse).allow !== "boolean") {
+    return { allow: false };
+  }
+
+  return { allow: (data as AuthorizationResponse).allow };
 }
 
 export { mapRoleAssignments };
