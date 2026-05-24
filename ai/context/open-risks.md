@@ -62,7 +62,17 @@ Last updated: 2026-05-24
   is limited to Cloudflare deployment metadata and workers.dev-disabled checks
   until a same-environment service-binding caller exists.
 - Membership mutations still need explicit policy authorization before
-  invitation creation/revocation, member removal, or role updates ship.
+  member removal or role updates ship. (Invitation create/list/revoke are now
+  policy-gated via Task 0021.)
+- Durable idempotency for invitation creation is not implemented. `idempotency-key`
+  is forwarded by api-edge but not stored; duplicate POST requests may produce
+  multiple pending invitations to the same email.
+- `acceptInvitation` creates the membership record but does not create the
+  accepted member's role assignment. Do not expose an accept route until this is
+  fixed.
+- Duplicate pending invitations to the same email are allowed by the current
+  schema (no uniqueness constraint on email_lower + org_id + status). Consider
+  adding uniqueness enforcement in a future task if this causes user confusion.
 - Cursor pagination uses standard base64 (`btoa`). The JSON payload structure
   does not produce `+` or `/` for valid timestamps and UUIDs, but a future task
   could switch to base64url for extra URL-safety robustness.

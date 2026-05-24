@@ -1,24 +1,30 @@
 # Current Context
 
-Last updated: 2026-05-24
+Last updated: 2026-05-25
 
 ## Repo Reality
 
-- Task 0020 squash-merged at `dc9b191` via PR #61.
-- Tasks 0001–0020 are verified.
-- Task 0020 added cursor-based pagination for existing membership list endpoints:
-  - `GET /v1/organizations` and `GET /v1/organizations/{orgId}/members` now accept
-    `limit` and `cursor` query parameters.
-  - Default limit 50, max 100. Opaque versioned cursors with (created_at, id) DESC
-    ordering.
-  - Invalid pagination params return `validation_failed` (422).
-  - Response `meta.cursor` carries next cursor or null.
-  - Verifier hardened cursor decode to validate ISO timestamp format and UUID format
-    before database access.
-  - 65 membership-worker tests, 177 db tests, 64 api-edge tests.
+- Task 0021 squash-merged at `324ca36` via PR #62.
+- Tasks 0001–0021 are verified.
+- Task 0021 added policy-gated invitation administration endpoints:
+  - `POST /v1/organizations/{orgId}/invitations` — create invitation
+  - `GET /v1/organizations/{orgId}/invitations` — list with cursor pagination
+  - `DELETE /v1/organizations/{orgId}/invitations/{invitationId}` — revoke
+  - Invitation tokens: 32 random bytes via Web Crypto, SHA-256 hash stored in DB.
+  - Raw tokens only returned when `DEBUG_DELIVERY=true` (local/dev/stage); prod
+    is `DEBUG_DELIVERY=false`.
+  - Public IDs: `inv_` prefix + UUID hex (no dashes), matching `org_`/`mem_`.
+  - Pagination: `(created_at DESC, id DESC)` ordering, reuses Task 0020 cursor
+    contract (limit/cursor, default 50, max 100).
+  - Authorization: fail-closed, policy denial returns 404 (no enumeration).
+  - Status derivation: `expired` computed from `expiresAt < now` without DB
+    mutation.
+  - Role allowlist: `owner`, `admin`, `builder`, `viewer`, `billing_admin`.
+  - 104 membership-worker tests, 183 db tests, 78 api-edge tests.
+  - Verifier committed the implementer report to the PR branch before merge.
 - Previous infrastructure unchanged:
   - membership-worker stage/prod deployed with `POLICY_WORKER`, `SOURCEPLANE_DB`,
-    and `workers_dev: false`.
+    `DEBUG_DELIVERY`, and `workers_dev: false`.
   - api-edge stage/prod deployed with `IDENTITY_WORKER` and `MEMBERSHIP_WORKER`
     service bindings.
   - policy-worker stage/prod deployed with no public route.
@@ -29,7 +35,7 @@ Last updated: 2026-05-24
 - Supabase stage ref: `thielrrsejwhjkdluwqm`, prod ref: `npbvrxkrlyrpnhrqucxa`.
   dev remains unprovisioned.
 - Local Orun validation passes.
-- Post-merge Task 0020 main CI run `26366468768` passed (13/13 jobs).
+- Post-merge Task 0021 main CI run `26369638914` passed (19/19 jobs).
 
 ## Current Roadmap Position
 
@@ -38,18 +44,18 @@ Last updated: 2026-05-24
 - Week 0 operations foundation, Worker binding seam, identity persistence,
   identity Worker auth runtime, api-edge auth facade, membership persistence
   foundation, membership Worker organization runtime, policy authorization seam,
-  membership-to-policy binding, member-list read surface, and cursor pagination
-  are complete.
+  membership-to-policy binding, member-list read surface, cursor pagination, and
+  invitation administration are complete.
 - The full auth flow is accessible through the public `api-edge` gateway.
-- Organization create/list/read and member-list routes are accessible through
-  the public `api-edge` gateway with bearer token authentication and pagination.
-- Organization read and member list are policy-gated through the internal
-  policy-worker.
-- Next focus: invitation endpoints and member-administration mutations.
+- Organization create/list/read, member-list, and invitation create/list/revoke
+  routes are accessible through the public `api-edge` gateway with bearer token
+  authentication and pagination.
+- Organization read, member list, and invitation create/list/revoke are
+  policy-gated through the internal policy-worker.
+- Next focus: invitation acceptance, member-admin mutations, or audit/events
+  (depends on next task prompt).
 
 ## Current Task
 
-- Task 0020 verified PASS and merged at `dc9b191`.
-- PR CI run `26366391926`, post-merge main CI run `26366468768` were green.
-- Verifier report: `ai/reports/task-0020-verifier.md`.
-- No active task. Awaiting orchestrator for next task assignment.
+- Task 0021 verified PASS and merged.
+- No current task is active. Awaiting next task prompt.

@@ -512,6 +512,36 @@ Last updated: 2026-05-24
 - Reports: `ai/reports/task-0020-implementer.md`,
   `ai/reports/task-0020-verifier.md`
 
+## Task 0021
+
+- Agent: Implementer → Verifier
+- Prompt: `ai/tasks/task-0021.md`
+- Verifier prompt: `ai/tasks/task-0021-verifier.md`
+- Status: verified PASS
+- PR: #62 (`feat: add policy-gated invitation administration API endpoints`),
+  squash-merged at `324ca36`
+- Objective: add the first policy-gated invitation administration endpoints:
+  `POST /v1/organizations/{orgId}/invitations` (create),
+  `GET /v1/organizations/{orgId}/invitations` (list with cursor pagination),
+  `DELETE /v1/organizations/{orgId}/invitations/{invitationId}` (revoke).
+- Verifier fix:
+  - Committed `ai/reports/task-0021-implementer.md` to the PR branch (it existed
+    locally untracked but was absent from the PR changed-file list).
+- Durable outcome: Three policy-gated invitation routes accessible through
+  `api-edge`. Invitation tokens use 32-byte Web Crypto randomness with SHA-256
+  hash stored; raw tokens only exposed via `DEBUG_DELIVERY=true` (local/dev/stage).
+  Prod `DEBUG_DELIVERY=false`. Public IDs use `inv_` prefix. Pagination reuses
+  Task 0020 cursor contract. V1 role allowlist restricted to organization roles
+  (`owner`, `admin`, `builder`, `viewer`, `billing_admin`). Status derivation
+  computes `expired` from `expiresAt < now` without DB mutation. Authorization
+  fail-closed; policy denial returns 404. 104 membership-worker tests, 183 db
+  tests, 78 api-edge tests pass.
+- Main CI run: `26369638914` — all green (19/19 jobs).
+- PR CI run (final head with implementer report): `26369562767` — all green
+  (19/19 jobs).
+- Reports: `ai/reports/task-0021-implementer.md`,
+  `ai/reports/task-0021-verifier.md`
+
 ## Historical Notes
 
 - PR #1 split product-specific V2 Git catalog work away from the reusable SaaS

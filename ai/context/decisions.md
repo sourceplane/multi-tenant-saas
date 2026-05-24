@@ -78,6 +78,21 @@ Last updated: 2026-05-24
   `organization.member.list`, and `api-edge` forwards the route only after
   identity-backed bearer-token resolution.
 
+- Task 0021 establishes the first invitation administration surface. Invitation
+  create/list/revoke use policy actions `organization.invitation.{create,list,
+  revoke}` through the verified membership-worker → policy-worker service-binding
+  seam. Policy denial returns 404 to prevent organization enumeration.
+- Invitation tokens use 32 random bytes via Worker-safe Web Crypto. Only the
+  SHA-256 hash is stored. Raw tokens are exposed only when `DEBUG_DELIVERY=true`
+  (local/dev/stage). Prod `DEBUG_DELIVERY=false` is enforced in wrangler.jsonc.
+- V1 invitation roles are restricted to organization roles only: `owner`, `admin`,
+  `builder`, `viewer`, `billing_admin`. Project roles require project scope and
+  are rejected with `validation_failed`.
+- Invitation expiration is derived without DB mutation: `expiresAt < now` computes
+  `expired` status at read time. No background job or sweep is needed for V1.
+- Invitation acceptance route must not be exposed until `acceptInvitation` creates
+  the accepted member's role assignment in addition to the membership record.
+
 ## Pending Decisions
 
 - Whether to add first-class or environment-scoped `dependsOn` support remains
@@ -86,13 +101,13 @@ Last updated: 2026-05-24
   behavior and live state are stable.
 - `dev` Supabase provisioning remains deferred until a later task explicitly
   changes that decision.
-- Wiring policy authorization into membership-worker mutating routes is pending.
-  Invitation creation/revocation, member removal, and role updates must use the
-  verified policy authorization seam before shipping.
 - Cursor pagination pattern established (Task 0020): list endpoints use
   `limit`/`cursor` query params, default limit 50, max 100, opaque versioned
   cursors, `meta.cursor` for next page or null. New list endpoints should follow
   this pattern from day one.
+- Durable idempotency for invitation creation is deferred. `idempotency-key` is
+  forwarded by api-edge but not stored; duplicate creates may produce duplicate
+  pending invitations to the same email.
 
 ## Verified Inputs
 
