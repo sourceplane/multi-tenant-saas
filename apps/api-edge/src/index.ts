@@ -3,6 +3,7 @@ import type { HealthStatus } from "@saas/contracts/health";
 import type { Env } from "./env";
 import { resolveRequestId, notFound } from "./http";
 import { isAuthRoute, handleAuthRoute } from "./auth-facade";
+import { isOrgRoute, handleOrgRoute } from "./org-facade";
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -17,6 +18,10 @@ export default {
       return handleAuthRoute(request, env, requestId, url.pathname);
     }
 
+    if (isOrgRoute(url.pathname)) {
+      return handleOrgRoute(request, env, requestId, url.pathname);
+    }
+
     return notFound(requestId, url.pathname);
   },
 } satisfies ExportedHandler<Env>;
@@ -24,6 +29,7 @@ export default {
 async function handleHealth(env: Env): Promise<Response> {
   const db = await checkDatabase(env);
   const identity = checkIdentityBinding(env);
+  const membership = checkMembershipBinding(env);
 
   const status: HealthStatus = !db.configured
     ? "ok"
@@ -39,7 +45,7 @@ async function handleHealth(env: Env): Promise<Response> {
       service: "api-edge",
       environment: env.ENVIRONMENT ?? "local",
       timestamp: new Date().toISOString(),
-      checks: { database: db, identity },
+      checks: { database: db, identity, membership },
     },
     { status: code },
   );
@@ -47,6 +53,10 @@ async function handleHealth(env: Env): Promise<Response> {
 
 function checkIdentityBinding(env: Env): { configured: boolean } {
   return { configured: !!env.IDENTITY_WORKER };
+}
+
+function checkMembershipBinding(env: Env): { configured: boolean } {
+  return { configured: !!env.MEMBERSHIP_WORKER };
 }
 
 async function checkDatabase(

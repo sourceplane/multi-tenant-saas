@@ -20,14 +20,26 @@ const EXPECTED_HYPERDRIVE = {
 };
 
 const EXPECTED_SERVICES = {
-  stage: {
-    binding: "IDENTITY_WORKER",
-    service: "identity-worker-stage",
-  },
-  prod: {
-    binding: "IDENTITY_WORKER",
-    service: "identity-worker-prod",
-  },
+  stage: [
+    {
+      binding: "IDENTITY_WORKER",
+      service: "identity-worker-stage",
+    },
+    {
+      binding: "MEMBERSHIP_WORKER",
+      service: "membership-worker-stage",
+    },
+  ],
+  prod: [
+    {
+      binding: "IDENTITY_WORKER",
+      service: "identity-worker-prod",
+    },
+    {
+      binding: "MEMBERSHIP_WORKER",
+      service: "membership-worker-prod",
+    },
+  ],
 };
 
 const configPath = resolve(__dirname, "../wrangler.jsonc");
@@ -73,7 +85,7 @@ for (const [envName, expected] of Object.entries(EXPECTED_HYPERDRIVE)) {
   console.log(`OK: [${envName}] SOURCEPLANE_DB → ${hd.id}`);
 }
 
-for (const [envName, expected] of Object.entries(EXPECTED_SERVICES)) {
+for (const [envName, expectedList] of Object.entries(EXPECTED_SERVICES)) {
   const envBlock = config.env?.[envName];
   if (!envBlock) {
     console.error(`FAIL: environment "${envName}" not found in wrangler.jsonc`);
@@ -81,40 +93,42 @@ for (const [envName, expected] of Object.entries(EXPECTED_SERVICES)) {
     continue;
   }
 
-  const svc = envBlock.services?.find((s) => s.binding === expected.binding);
-  if (!svc) {
-    console.error(
-      `FAIL: [${envName}] missing service binding "${expected.binding}"`
-    );
-    failures++;
-    continue;
-  }
+  for (const expected of expectedList) {
+    const svc = envBlock.services?.find((s) => s.binding === expected.binding);
+    if (!svc) {
+      console.error(
+        `FAIL: [${envName}] missing service binding "${expected.binding}"`
+      );
+      failures++;
+      continue;
+    }
 
-  if (svc.service !== expected.service) {
-    console.error(
-      `FAIL: [${envName}] service binding "${expected.binding}" target mismatch: got "${svc.service}", want "${expected.service}"`
-    );
-    failures++;
-    continue;
-  }
+    if (svc.service !== expected.service) {
+      console.error(
+        `FAIL: [${envName}] service binding "${expected.binding}" target mismatch: got "${svc.service}", want "${expected.service}"`
+      );
+      failures++;
+      continue;
+    }
 
-  if (svc.service.includes("prod") && envName !== "prod") {
-    console.error(
-      `FAIL: [${envName}] cross-environment binding detected: "${svc.service}" bound in "${envName}"`
-    );
-    failures++;
-    continue;
-  }
+    if (svc.service.includes("prod") && envName !== "prod") {
+      console.error(
+        `FAIL: [${envName}] cross-environment binding detected: "${svc.service}" bound in "${envName}"`
+      );
+      failures++;
+      continue;
+    }
 
-  if (svc.service.includes("stage") && envName !== "stage") {
-    console.error(
-      `FAIL: [${envName}] cross-environment binding detected: "${svc.service}" bound in "${envName}"`
-    );
-    failures++;
-    continue;
-  }
+    if (svc.service.includes("stage") && envName !== "stage") {
+      console.error(
+        `FAIL: [${envName}] cross-environment binding detected: "${svc.service}" bound in "${envName}"`
+      );
+      failures++;
+      continue;
+    }
 
-  console.log(`OK: [${envName}] IDENTITY_WORKER → ${svc.service}`);
+    console.log(`OK: [${envName}] ${expected.binding} → ${svc.service}`);
+  }
 }
 
 if (failures > 0) {
