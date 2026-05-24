@@ -1,28 +1,29 @@
 import { createHyperdriveAdapter } from "@saas/db/hyperdrive";
 import type { HealthStatus } from "@saas/contracts/health";
 import type { Env } from "./env";
+import { resolveRequestId, notFound } from "./http";
+import { isAuthRoute, handleAuthRoute } from "./auth-facade";
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+    const requestId = resolveRequestId(request);
 
     if (url.pathname === "/health") {
       return handleHealth(env);
     }
 
-    return Response.json(
-      {
-        error: "not_found",
-        message: "Resource not found",
-        path: url.pathname,
-      },
-      { status: 404 },
-    );
+    if (isAuthRoute(url.pathname)) {
+      return handleAuthRoute(request, env, requestId, url.pathname);
+    }
+
+    return notFound(requestId, url.pathname);
   },
 } satisfies ExportedHandler<Env>;
 
 async function handleHealth(env: Env): Promise<Response> {
   const db = await checkDatabase(env);
+  const identity = checkIdentityBinding(env);
 
   const status: HealthStatus = !db.configured
     ? "ok"
@@ -38,10 +39,14 @@ async function handleHealth(env: Env): Promise<Response> {
       service: "api-edge",
       environment: env.ENVIRONMENT ?? "local",
       timestamp: new Date().toISOString(),
-      checks: { database: db },
+      checks: { database: db, identity },
     },
     { status: code },
   );
+}
+
+function checkIdentityBinding(env: Env): { configured: boolean } {
+  return { configured: !!env.IDENTITY_WORKER };
 }
 
 async function checkDatabase(
