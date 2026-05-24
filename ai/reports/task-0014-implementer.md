@@ -120,4 +120,7 @@ Idempotency-Key) without reading or logging credentials.
 
 ## PR
 
-PR number and URL will be added after opening.
+- **PR #55**: https://github.com/sourceplane/multi-tenant-saas/pull/55
+- Branch: `codex/task-0014-api-edge-auth-facade`
+- Base: `main`
+- Status: Mergeable
