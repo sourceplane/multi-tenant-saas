@@ -21,5 +21,14 @@ export const manifest: MigrationManifest = {
       description:
         "Identity persistence foundation — users, auth identities, login challenges, sessions",
     },
+    {
+      id: "020_membership_core",
+      context: "membership",
+      path: "020_membership_core/up.sql",
+      checksum:
+        "50da482998db74431866aa5285737026239a28618017019320ee7bb20e49381d",
+      description:
+        "Membership persistence foundation — organizations, members, invitations, role assignments",
+    },
   ],
 };
