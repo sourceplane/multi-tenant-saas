@@ -43,13 +43,7 @@ export function parseInvitationPublicId(publicId: string): string | null {
   return hexToUuid(publicId.slice(4));
 }
 
-export async function generateInvitationToken(): Promise<{ raw: string; hash: string }> {
-  const buf = new Uint8Array(32);
-  crypto.getRandomValues(buf);
-  let raw = "";
-  for (let i = 0; i < buf.length; i++) {
-    raw += buf[i]!.toString(16).padStart(2, "0");
-  }
+export async function hashToken(raw: string): Promise<string> {
   const encoded = new TextEncoder().encode(raw);
   const hashBuffer = await crypto.subtle.digest("SHA-256", encoded);
   const hashArray = new Uint8Array(hashBuffer);
@@ -57,5 +51,16 @@ export async function generateInvitationToken(): Promise<{ raw: string; hash: st
   for (let i = 0; i < hashArray.length; i++) {
     hash += hashArray[i]!.toString(16).padStart(2, "0");
   }
+  return hash;
+}
+
+export async function generateInvitationToken(): Promise<{ raw: string; hash: string }> {
+  const buf = new Uint8Array(32);
+  crypto.getRandomValues(buf);
+  let raw = "";
+  for (let i = 0; i < buf.length; i++) {
+    raw += buf[i]!.toString(16).padStart(2, "0");
+  }
+  const hash = await hashToken(raw);
   return { raw, hash };
 }

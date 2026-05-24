@@ -10,6 +10,7 @@ import { handleListMembers } from "@membership-worker/handlers/list-members";
 import { handleCreateInvitation } from "@membership-worker/handlers/create-invitation";
 import { handleListInvitations } from "@membership-worker/handlers/list-invitations";
 import { handleRevokeInvitation } from "@membership-worker/handlers/revoke-invitation";
+import { handleAcceptInvitation } from "@membership-worker/handlers/accept-invitation";
 import type { MembershipRepository, Organization, OrganizationMember, RoleAssignment } from "@saas/db/membership";
 
 if (!(globalThis as Record<string, unknown>).crypto) {
@@ -1804,6 +1805,277 @@ describe("invitation administration", () => {
 
       const text = await response.text();
       expect(text).not.toContain(invUuid);
+    });
+  });
+
+  describe("handleAcceptInvitation", () => {
+    const acceptActor = { subjectId: "usr_acceptor", subjectType: "user", email: "invite@example.com" };
+    const validToken = "a".repeat(64);
+
+    function createAcceptRepo(opts: { result?: any; fail?: boolean } = {}) {
+      let capturedInput: any = null;
+      const invUuid = "11111111-2222-3333-4444-555555555555";
+      const memUuid = "66666666-7777-8888-9999-aaaaaaaaaaaa";
+      return {
+        acceptInvitation: async (input: any) => {
+          capturedInput = input;
+          if (opts.fail) return { ok: false as const, error: { kind: "internal" as const, message: "db error" } };
+          if (opts.result) return opts.result;
+          return {
+            ok: true as const,
+            value: {
+              invitation: {
+                id: invUuid, orgId: orgUuid, email: "invite@example.com", emailLower: "invite@example.com",
+                role: "builder", status: "accepted", invitedBy: "usr_admin",
+                expiresAt: new Date("2026-02-15T10:00:00Z"), acceptedAt: fixedNowLocal,
+                revokedAt: null, createdAt: fixedNowLocal,
+              },
+              member: {
+                id: memUuid, orgId: orgUuid, subjectId: "usr_acceptor", subjectType: "user",
+                status: "active", createdAt: fixedNowLocal, updatedAt: fixedNowLocal,
+              },
+              roleAssignment: {
+                id: "ra-new-uuid", orgId: orgUuid, subjectId: "usr_acceptor", subjectType: "user",
+                role: "builder", scopeKind: "organization", scopeRef: null,
+                createdAt: fixedNowLocal, revokedAt: null,
+              },
+            },
+          };
+        },
+        get _capturedInput() { return capturedInput; },
+      };
+    }
+
+    function makeAcceptRequest(body: unknown): Request {
+      return new Request("https://test.local/v1/organizations/" + orgPublicIdStr + "/invitations/accept", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+    }
+
+    it("returns 200 with correct response shape on success", async () => {
+      const repo = createAcceptRepo();
+      const env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+      const response = await handleAcceptInvitation(
+        makeAcceptRequest({ token: validToken }),
+        env as any, "req_test", acceptActor, orgPublicIdStr,
+        { repo, hashToken: async (t: string) => "hashed_" + t, now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(200);
+      const json = await response.json() as any;
+      expect(json.data.invitation.id).toMatch(/^inv_[0-9a-f]{32}$/);
+      expect(json.data.invitation.email).toBe("invite@example.com");
+      expect(json.data.invitation.role).toBe("builder");
+      expect(json.data.invitation.status).toBe("accepted");
+      expect(json.data.membership.id).toMatch(/^mem_/);
+      expect(json.data.membership.role).toBe("builder");
+      expect(json.data.membership.status).toBe("active");
+      expect(json.data.membership.joinedAt).toBeDefined();
+    });
+
+    it("returns validation_failed for malformed JSON", async () => {
+      const repo = createAcceptRepo();
+      const env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+      const request = new Request("https://test.local/v1/organizations/" + orgPublicIdStr + "/invitations/accept", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "not json",
+      });
+
+      const response = await handleAcceptInvitation(
+        request, env as any, "req_test", acceptActor, orgPublicIdStr,
+        { repo, hashToken: async (t: string) => "hashed_" + t, now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(400);
+      const json = await response.json() as any;
+      expect(json.error.code).toBe("bad_request");
+    });
+
+    it("returns validation_failed for non-hex token", async () => {
+      const repo = createAcceptRepo();
+      const env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+      const response = await handleAcceptInvitation(
+        makeAcceptRequest({ token: "not-a-valid-token" }),
+        env as any, "req_test", acceptActor, orgPublicIdStr,
+        { repo, hashToken: async (t: string) => "hashed_" + t, now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(422);
+      const json = await response.json() as any;
+      expect(json.error.code).toBe("validation_failed");
+      expect(json.error.details.fields.token).toBeDefined();
+    });
+
+    it("returns validation_failed for missing token field", async () => {
+      const repo = createAcceptRepo();
+      const env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+      const response = await handleAcceptInvitation(
+        makeAcceptRequest({}),
+        env as any, "req_test", acceptActor, orgPublicIdStr,
+        { repo, hashToken: async (t: string) => "hashed_" + t, now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(422);
+      const json = await response.json() as any;
+      expect(json.error.code).toBe("validation_failed");
+    });
+
+    it("returns validation_failed for too-short token", async () => {
+      const repo = createAcceptRepo();
+      const env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+      const response = await handleAcceptInvitation(
+        makeAcceptRequest({ token: "abc123" }),
+        env as any, "req_test", acceptActor, orgPublicIdStr,
+        { repo, hashToken: async (t: string) => "hashed_" + t, now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(422);
+    });
+
+    it("returns not_found for invalid public org ID", async () => {
+      const repo = createAcceptRepo();
+      const env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+      const response = await handleAcceptInvitation(
+        makeAcceptRequest({ token: validToken }),
+        env as any, "req_test", acceptActor, "org_invalid",
+        { repo, hashToken: async (t: string) => "hashed_" + t, now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(404);
+    });
+
+    it("passes token hash to repository, not raw token", async () => {
+      const repo = createAcceptRepo();
+      const env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+      let hashInput: string | null = null;
+
+      await handleAcceptInvitation(
+        makeAcceptRequest({ token: validToken }),
+        env as any, "req_test", acceptActor, orgPublicIdStr,
+        { repo, hashToken: async (t: string) => { hashInput = t; return "hashed_value"; }, now: () => fixedNowLocal },
+      );
+
+      expect(hashInput).toBe(validToken);
+      expect(repo._capturedInput.tokenHash).toBe("hashed_value");
+      expect(JSON.stringify(repo._capturedInput)).not.toContain(validToken);
+    });
+
+    it("maps not_found repository error to 404", async () => {
+      const repo = createAcceptRepo({ result: { ok: false, error: { kind: "not_found" } } });
+      const env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+      const response = await handleAcceptInvitation(
+        makeAcceptRequest({ token: validToken }),
+        env as any, "req_test", acceptActor, orgPublicIdStr,
+        { repo, hashToken: async () => "hash", now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(404);
+    });
+
+    it("maps expired repository error to 404", async () => {
+      const repo = createAcceptRepo({ result: { ok: false, error: { kind: "expired" } } });
+      const env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+      const response = await handleAcceptInvitation(
+        makeAcceptRequest({ token: validToken }),
+        env as any, "req_test", acceptActor, orgPublicIdStr,
+        { repo, hashToken: async () => "hash", now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(404);
+    });
+
+    it("maps revoked repository error to 404", async () => {
+      const repo = createAcceptRepo({ result: { ok: false, error: { kind: "revoked" } } });
+      const env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+      const response = await handleAcceptInvitation(
+        makeAcceptRequest({ token: validToken }),
+        env as any, "req_test", acceptActor, orgPublicIdStr,
+        { repo, hashToken: async () => "hash", now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(404);
+    });
+
+    it("maps already_accepted repository error to 404", async () => {
+      const repo = createAcceptRepo({ result: { ok: false, error: { kind: "already_accepted" } } });
+      const env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+      const response = await handleAcceptInvitation(
+        makeAcceptRequest({ token: validToken }),
+        env as any, "req_test", acceptActor, orgPublicIdStr,
+        { repo, hashToken: async () => "hash", now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(404);
+    });
+
+    it("maps conflict repository error to 409", async () => {
+      const repo = createAcceptRepo({ result: { ok: false, error: { kind: "conflict", entity: "organization_member" } } });
+      const env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+      const response = await handleAcceptInvitation(
+        makeAcceptRequest({ token: validToken }),
+        env as any, "req_test", acceptActor, orgPublicIdStr,
+        { repo, hashToken: async () => "hash", now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(409);
+      const json = await response.json() as any;
+      expect(json.error.code).toBe("conflict");
+    });
+
+    it("maps internal repository error to 500", async () => {
+      const repo = createAcceptRepo({ fail: true });
+      const env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+      const response = await handleAcceptInvitation(
+        makeAcceptRequest({ token: validToken }),
+        env as any, "req_test", acceptActor, orgPublicIdStr,
+        { repo, hashToken: async () => "hash", now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(500);
+    });
+
+    it("does not call policy-worker for acceptance", async () => {
+      const repo = createAcceptRepo();
+      const env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", POLICY_WORKER: undefined };
+
+      const response = await handleAcceptInvitation(
+        makeAcceptRequest({ token: validToken }),
+        env as any, "req_test", acceptActor, orgPublicIdStr,
+        { repo, hashToken: async () => "hash", now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(200);
+    });
+
+    it("does not expose raw token, token hash, or raw UUIDs in response", async () => {
+      const repo = createAcceptRepo();
+      const env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+      const response = await handleAcceptInvitation(
+        makeAcceptRequest({ token: validToken }),
+        env as any, "req_test", acceptActor, orgPublicIdStr,
+        { repo, hashToken: async () => "hashed_value", now: () => fixedNowLocal },
+      );
+
+      const text = await response.text();
+      expect(text).not.toContain(validToken);
+      expect(text).not.toContain("hashed_value");
+      expect(text).not.toContain("11111111-2222-3333-4444-555555555555");
+      expect(text).not.toContain("66666666-7777-8888-9999-aaaaaaaaaaaa");
     });
   });
 

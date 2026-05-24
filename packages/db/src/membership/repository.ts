@@ -1,5 +1,6 @@
 import type { SqlExecutor } from "../hyperdrive/executor.js";
 import type {
+  AcceptInvitationInput,
   BootstrapOrganizationInput,
   CreateInvitationInput,
   CreateOrganizationInput,
@@ -488,24 +489,30 @@ export function createMembershipRepository(executor: SqlExecutor): MembershipRep
       }
     },
 
-    async acceptInvitation(tokenHash: string, memberId: string, memberInput: CreateOrganizationMemberInput, acceptedAt: Date): Promise<MembershipResult<{ invitation: OrganizationInvitation; member: OrganizationMember }>> {
+    async acceptInvitation(input: AcceptInvitationInput): Promise<MembershipResult<{ invitation: OrganizationInvitation; member: OrganizationMember; roleAssignment: RoleAssignment }>> {
       try {
         const checkResult = await executor.execute<Record<string, unknown>>(
           `SELECT id, org_id, email, email_lower, role, status, invited_by, expires_at, accepted_at, revoked_at, created_at
            FROM membership.organization_invitations WHERE token_hash = $1`,
-          [tokenHash],
+          [input.tokenHash],
         );
         if (checkResult.rowCount === 0) {
           return { ok: false, error: { kind: "not_found" } };
         }
         const inv = mapInvitation(checkResult.rows[0]!);
+        if (inv.orgId !== input.orgId) {
+          return { ok: false, error: { kind: "not_found" } };
+        }
+        if (inv.emailLower !== input.emailLower) {
+          return { ok: false, error: { kind: "not_found" } };
+        }
         if (inv.revokedAt !== null) {
           return { ok: false, error: { kind: "revoked" } };
         }
         if (inv.acceptedAt !== null) {
           return { ok: false, error: { kind: "already_accepted" } };
         }
-        if (inv.expiresAt < acceptedAt) {
+        if (inv.expiresAt < input.acceptedAt) {
           return { ok: false, error: { kind: "expired" } };
         }
 
@@ -513,22 +520,34 @@ export function createMembershipRepository(executor: SqlExecutor): MembershipRep
           `WITH accepted_inv AS (
             UPDATE membership.organization_invitations
             SET status = 'accepted', accepted_at = $2
-            WHERE token_hash = $1 AND status = 'pending' AND revoked_at IS NULL AND accepted_at IS NULL AND expires_at > $2
+            WHERE token_hash = $1 AND org_id = $3 AND email_lower = $4 AND status = 'pending' AND revoked_at IS NULL AND accepted_at IS NULL AND expires_at > $2
             RETURNING id, org_id, email, email_lower, role, status, invited_by, expires_at, accepted_at, revoked_at, created_at
           ),
           new_member AS (
             INSERT INTO membership.organization_members (id, org_id, subject_id, subject_type, created_at, updated_at)
-            SELECT $3, $4, $5, $6, $7, $7
+            SELECT $5, org_id, $6, $7, $8, $8
             FROM accepted_inv
-            ON CONFLICT (id) DO NOTHING
+            RETURNING *
+          ),
+          new_role AS (
+            INSERT INTO membership.role_assignments (id, org_id, subject_id, subject_type, role, scope_kind, scope_ref, created_at)
+            SELECT $9, org_id, $10, $11, role, 'organization', NULL, $12
+            FROM accepted_inv
             RETURNING *
           )
           SELECT
             row_to_json(ai.*) as invitation,
-            row_to_json(nm.*) as member
+            row_to_json(nm.*) as member,
+            row_to_json(nr.*) as role_assignment
           FROM accepted_inv ai
-          CROSS JOIN new_member nm`,
-          [tokenHash, acceptedAt.toISOString(), memberId, memberInput.orgId, memberInput.subjectId, memberInput.subjectType, memberInput.createdAt.toISOString()],
+          CROSS JOIN new_member nm
+          CROSS JOIN new_role nr`,
+          [
+            input.tokenHash, input.acceptedAt.toISOString(),
+            input.orgId, input.emailLower,
+            input.memberId, input.subjectId, input.subjectType, input.acceptedAt.toISOString(),
+            input.roleAssignmentId, input.subjectId, input.subjectType, input.acceptedAt.toISOString(),
+          ],
         );
         if (result.rowCount === 0) {
           return { ok: false, error: { kind: "not_found" } };
@@ -539,6 +558,7 @@ export function createMembershipRepository(executor: SqlExecutor): MembershipRep
           value: {
             invitation: mapInvitation(parseJsonColumn(row.invitation)),
             member: mapMember(parseJsonColumn(row.member)),
+            roleAssignment: mapRoleAssignment(parseJsonColumn(row.role_assignment)),
           },
         };
       } catch (err: unknown) {

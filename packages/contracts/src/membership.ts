@@ -76,3 +76,17 @@ export interface ListInvitationsResponse {
 export interface RevokeInvitationResponse {
   invitation: PublicInvitation;
 }
+
+export interface AcceptInvitationRequest {
+  token: string;
+}
+
+export interface AcceptInvitationResponse {
+  invitation: PublicInvitation;
+  membership: {
+    id: string;
+    role: string;
+    joinedAt: string;
+    status: string;
+  };
+}

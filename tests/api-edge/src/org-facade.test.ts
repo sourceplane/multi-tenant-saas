@@ -982,5 +982,158 @@ describe("api-edge org facade", () => {
         expect(json).toEqual(envelope);
       });
     });
+
+    describe("POST /v1/organizations/{orgId}/invitations/accept", () => {
+      it("matches isOrgRoute for accept path", () => {
+        expect(isOrgRoute("/v1/organizations/org_abc/invitations/accept")).toBe(true);
+      });
+
+      it("forwards POST with body to MEMBERSHIP_WORKER", async () => {
+        const { fetcher: identityFetcher } = createSessionFetcher("usr_abc123");
+        const { fetcher: membershipFetcher, calls: membershipCalls } = createFakeFetcher();
+
+        const request = new Request("https://api.example.com/v1/organizations/org_abc/invitations/accept", {
+          method: "POST",
+          headers: { authorization: "Bearer sps_ses_abc.secret", "content-type": "application/json" },
+          body: JSON.stringify({ token: "a".repeat(64) }),
+        });
+
+        const response = await handleOrgRoute(
+          request,
+          { IDENTITY_WORKER: identityFetcher, MEMBERSHIP_WORKER: membershipFetcher, ENVIRONMENT: "test" },
+          "req_test",
+          "/v1/organizations/org_abc/invitations/accept",
+        );
+
+        expect(response.status).toBe(200);
+        expect(membershipCalls).toHaveLength(1);
+        expect(membershipCalls[0]!.url).toContain("/v1/organizations/org_abc/invitations/accept");
+        expect(membershipCalls[0]!.init.method).toBe("POST");
+        expect(membershipCalls[0]!.init.body).toBeDefined();
+      });
+
+      it("resolves auth before forwarding", async () => {
+        const { fetcher: identityFetcher, calls: identityCalls } = createSessionFetcher("usr_accept");
+        const { fetcher: membershipFetcher, calls: membershipCalls } = createFakeFetcher();
+
+        const request = new Request("https://api.example.com/v1/organizations/org_abc/invitations/accept", {
+          method: "POST",
+          headers: { authorization: "Bearer sps_ses_abc.secret", "content-type": "application/json" },
+          body: JSON.stringify({ token: "b".repeat(64) }),
+        });
+
+        await handleOrgRoute(
+          request,
+          { IDENTITY_WORKER: identityFetcher, MEMBERSHIP_WORKER: membershipFetcher, ENVIRONMENT: "test" },
+          "req_test",
+          "/v1/organizations/org_abc/invitations/accept",
+        );
+
+        expect(identityCalls).toHaveLength(1);
+        const forwarded = new Headers(membershipCalls[0]!.init.headers as HeadersInit);
+        expect(forwarded.get("x-actor-subject-id")).toBe("usr_accept");
+        expect(forwarded.get("x-actor-subject-type")).toBe("user");
+      });
+
+      it("forwards x-actor-email from identity session response", async () => {
+        const { fetcher: identityFetcher } = createSessionFetcher("usr_accept");
+        const { fetcher: membershipFetcher, calls: membershipCalls } = createFakeFetcher();
+
+        const request = new Request("https://api.example.com/v1/organizations/org_abc/invitations/accept", {
+          method: "POST",
+          headers: { authorization: "Bearer sps_ses_abc.secret", "content-type": "application/json" },
+          body: JSON.stringify({ token: "c".repeat(64) }),
+        });
+
+        await handleOrgRoute(
+          request,
+          { IDENTITY_WORKER: identityFetcher, MEMBERSHIP_WORKER: membershipFetcher, ENVIRONMENT: "test" },
+          "req_test",
+          "/v1/organizations/org_abc/invitations/accept",
+        );
+
+        const forwarded = new Headers(membershipCalls[0]!.init.headers as HeadersInit);
+        expect(forwarded.get("x-actor-email")).toBe("user@test.com");
+      });
+
+      it("fails authentication when identity response has no email", async () => {
+        const noEmailFetcher = {
+          fetch(input: string | Request | URL): Promise<Response> {
+            const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+            if (url.includes("/v1/auth/session")) {
+              return Promise.resolve(
+                Response.json({
+                  data: { session: { id: "ses_abc" }, user: { id: "usr_123" } },
+                  meta: { requestId: "req_inner", cursor: null },
+                }),
+              );
+            }
+            return Promise.resolve(Response.json({ data: {}, meta: { requestId: "req_test", cursor: null } }));
+          },
+          connect() { throw new Error("not implemented"); },
+        } as unknown as Fetcher;
+
+        const { fetcher: membershipFetcher } = createFakeFetcher();
+
+        const request = new Request("https://api.example.com/v1/organizations/org_abc/invitations/accept", {
+          method: "POST",
+          headers: { authorization: "Bearer sps_ses_abc.secret", "content-type": "application/json" },
+          body: JSON.stringify({ token: "d".repeat(64) }),
+        });
+
+        const response = await handleOrgRoute(
+          request,
+          { IDENTITY_WORKER: noEmailFetcher, MEMBERSHIP_WORKER: membershipFetcher, ENVIRONMENT: "test" },
+          "req_test",
+          "/v1/organizations/org_abc/invitations/accept",
+        );
+
+        expect(response.status).toBe(401);
+        const json = await response.json() as any;
+        expect(json.error.code).toBe("unauthenticated");
+      });
+
+      it("returns 405 for non-POST methods", async () => {
+        const { fetcher: identityFetcher } = createSessionFetcher("usr_abc123");
+        const { fetcher: membershipFetcher } = createFakeFetcher();
+
+        const request = new Request("https://api.example.com/v1/organizations/org_abc/invitations/accept", {
+          method: "GET",
+          headers: { authorization: "Bearer sps_ses_abc.secret" },
+        });
+
+        const response = await handleOrgRoute(
+          request,
+          { IDENTITY_WORKER: identityFetcher, MEMBERSHIP_WORKER: membershipFetcher, ENVIRONMENT: "test" },
+          "req_test",
+          "/v1/organizations/org_abc/invitations/accept",
+        );
+
+        expect(response.status).toBe(405);
+      });
+
+      it("does not forward bearer token to MEMBERSHIP_WORKER", async () => {
+        const { fetcher: identityFetcher } = createSessionFetcher("usr_abc123");
+        const { fetcher: membershipFetcher, calls: membershipCalls } = createFakeFetcher();
+
+        const request = new Request("https://api.example.com/v1/organizations/org_abc/invitations/accept", {
+          method: "POST",
+          headers: { authorization: "Bearer sps_ses_secret.bearer", "content-type": "application/json" },
+          body: JSON.stringify({ token: "e".repeat(64) }),
+        });
+
+        await handleOrgRoute(
+          request,
+          { IDENTITY_WORKER: identityFetcher, MEMBERSHIP_WORKER: membershipFetcher, ENVIRONMENT: "test" },
+          "req_test",
+          "/v1/organizations/org_abc/invitations/accept",
+        );
+
+        const forwarded = new Headers(membershipCalls[0]!.init.headers as HeadersInit);
+        expect(forwarded.get("authorization")).toBeNull();
+        const rawCall = JSON.stringify(membershipCalls[0]);
+        expect(rawCall).not.toContain("sps_ses_secret");
+      });
+    });
   });
 });

@@ -7,6 +7,7 @@ import { handleListMembers } from "./handlers/list-members.js";
 import { handleCreateInvitation } from "./handlers/create-invitation.js";
 import { handleListInvitations } from "./handlers/list-invitations.js";
 import { handleRevokeInvitation } from "./handlers/revoke-invitation.js";
+import { handleAcceptInvitation } from "./handlers/accept-invitation.js";
 import { errorResponse, notFound, methodNotAllowed } from "./http.js";
 import { generateRequestId } from "./ids.js";
 
@@ -32,6 +33,7 @@ function resolveActor(request: Request): ActorContext | null {
 
 const ORG_ID_RE = /^\/v1\/organizations\/([^/]+)$/;
 const ORG_MEMBERS_RE = /^\/v1\/organizations\/([^/]+)\/members$/;
+const ORG_INVITATIONS_ACCEPT_RE = /^\/v1\/organizations\/([^/]+)\/invitations\/accept$/;
 const ORG_INVITATIONS_RE = /^\/v1\/organizations\/([^/]+)\/invitations$/;
 const ORG_INVITATION_ID_RE = /^\/v1\/organizations\/([^/]+)\/invitations\/([^/]+)$/;
 
@@ -58,6 +60,22 @@ export async function route(request: Request, env: Env): Promise<Response> {
           return errorResponse("unauthenticated", "Authentication required", 401, requestId);
         }
         return handleListOrganizations(env, requestId, actor, url);
+      }
+      return methodNotAllowed(requestId);
+    }
+
+    const acceptMatch = url.pathname.match(ORG_INVITATIONS_ACCEPT_RE);
+    if (acceptMatch) {
+      if (request.method === "POST") {
+        const actor = resolveActor(request);
+        if (!actor) {
+          return errorResponse("unauthenticated", "Authentication required", 401, requestId);
+        }
+        const actorEmail = request.headers.get("x-actor-email");
+        if (!actorEmail) {
+          return errorResponse("unauthenticated", "Authentication required", 401, requestId);
+        }
+        return handleAcceptInvitation(request, env, requestId, { ...actor, email: actorEmail }, acceptMatch[1]!);
       }
       return methodNotAllowed(requestId);
     }
