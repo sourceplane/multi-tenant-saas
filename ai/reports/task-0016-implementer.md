@@ -184,4 +184,8 @@ and exposed initial organization bootstrap/read routes through `api-edge` via th
 
 ## PR
 
-See PR number and URL below after creation.
+- **Number:** #57
+- **URL:** https://github.com/sourceplane/multi-tenant-saas/pull/57
+- **Branch:** codex/task-0016-membership-worker-org-runtime → main
+- **Mergeable:** MERGEABLE
+- **Draft:** false
