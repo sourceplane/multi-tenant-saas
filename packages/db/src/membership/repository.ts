@@ -435,6 +435,41 @@ export function createMembershipRepository(executor: SqlExecutor): MembershipRep
       }
     },
 
+    async listInvitationsPaged(orgId: string, params: PageQueryParams): Promise<MembershipResult<PagedResult<OrganizationInvitation>>> {
+      try {
+        const fetchLimit = params.limit + 1;
+        let sql: string;
+        let values: unknown[];
+        if (params.cursor) {
+          sql = `SELECT id, org_id, email, email_lower, role, status, invited_by, expires_at, accepted_at, revoked_at, created_at
+           FROM membership.organization_invitations
+           WHERE org_id = $1
+             AND (created_at, id) < ($3, $4)
+           ORDER BY created_at DESC, id DESC
+           LIMIT $2`;
+          values = [orgId, fetchLimit, params.cursor.createdAt, params.cursor.id];
+        } else {
+          sql = `SELECT id, org_id, email, email_lower, role, status, invited_by, expires_at, accepted_at, revoked_at, created_at
+           FROM membership.organization_invitations
+           WHERE org_id = $1
+           ORDER BY created_at DESC, id DESC
+           LIMIT $2`;
+          values = [orgId, fetchLimit];
+        }
+        const result = await executor.execute<Record<string, unknown>>(sql, values);
+        const rows = result.rows.map(mapInvitation);
+        let nextCursor: CursorPosition | null = null;
+        if (rows.length > params.limit) {
+          rows.pop();
+          const last = rows[rows.length - 1]!;
+          nextCursor = { createdAt: last.createdAt.toISOString(), id: last.id };
+        }
+        return { ok: true, value: { items: rows, nextCursor } };
+      } catch {
+        return safeError("Failed to list invitations");
+      }
+    },
+
     async revokeInvitation(orgId: string, invitationId: string, revokedAt: Date): Promise<MembershipResult<OrganizationInvitation>> {
       try {
         const result = await executor.execute<Record<string, unknown>>(

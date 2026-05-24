@@ -138,6 +138,7 @@ export interface MembershipRepository {
   getInvitationById(orgId: string, invitationId: string): Promise<MembershipResult<OrganizationInvitation>>;
   getInvitationByTokenHash(tokenHash: string): Promise<MembershipResult<OrganizationInvitation>>;
   listInvitations(orgId: string): Promise<MembershipResult<OrganizationInvitation[]>>;
+  listInvitationsPaged(orgId: string, params: PageQueryParams): Promise<MembershipResult<PagedResult<OrganizationInvitation>>>;
   revokeInvitation(orgId: string, invitationId: string, revokedAt: Date): Promise<MembershipResult<OrganizationInvitation>>;
   acceptInvitation(tokenHash: string, memberId: string, memberInput: CreateOrganizationMemberInput, acceptedAt: Date): Promise<MembershipResult<{ invitation: OrganizationInvitation; member: OrganizationMember }>>;
 

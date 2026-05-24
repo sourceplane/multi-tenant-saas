@@ -4,9 +4,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createOrganizationService } from "@membership-worker/services/organization";
 import type { PolicyAuthorizer } from "@membership-worker/services/organization";
-import { orgPublicId, parseOrgPublicId, memberPublicId } from "@membership-worker/ids";
+import { orgPublicId, parseOrgPublicId, memberPublicId, invitationPublicId, parseInvitationPublicId } from "@membership-worker/ids";
 import { mapRoleAssignments, authorizeViaPolicy } from "@membership-worker/policy-client";
 import { handleListMembers } from "@membership-worker/handlers/list-members";
+import { handleCreateInvitation } from "@membership-worker/handlers/create-invitation";
+import { handleListInvitations } from "@membership-worker/handlers/list-invitations";
+import { handleRevokeInvitation } from "@membership-worker/handlers/revoke-invitation";
 import type { MembershipRepository, Organization, OrganizationMember, RoleAssignment } from "@saas/db/membership";
 
 if (!(globalThis as Record<string, unknown>).crypto) {
@@ -74,6 +77,7 @@ function createFakeRepository(): MembershipRepository & { _orgs: Map<string, Org
     async getInvitationById() { return { ok: false, error: { kind: "internal" as const, message: "not implemented" } }; },
     async getInvitationByTokenHash() { return { ok: false, error: { kind: "internal" as const, message: "not implemented" } }; },
     async listInvitations() { return { ok: false, error: { kind: "internal" as const, message: "not implemented" } }; },
+    async listInvitationsPaged() { return { ok: false, error: { kind: "internal" as const, message: "not implemented" } }; },
     async revokeInvitation() { return { ok: false, error: { kind: "internal" as const, message: "not implemented" } }; },
     async acceptInvitation() { return { ok: false, error: { kind: "internal" as const, message: "not implemented" } }; },
     async createRoleAssignment() { return { ok: false, error: { kind: "internal" as const, message: "not implemented" } }; },
@@ -1205,5 +1209,624 @@ describe("wrangler config", () => {
     expect(prodService).toContain("prod");
     expect(stageService).not.toContain("prod");
     expect(prodService).not.toContain("stage");
+  });
+
+  it("local/dev/stage set DEBUG_DELIVERY to true", () => {
+    expect(config.vars.DEBUG_DELIVERY).toBe("true");
+    expect(config.env.dev.vars.DEBUG_DELIVERY).toBe("true");
+    expect(config.env.stage.vars.DEBUG_DELIVERY).toBe("true");
+  });
+
+  it("prod sets DEBUG_DELIVERY to false", () => {
+    expect(config.env.prod.vars.DEBUG_DELIVERY).toBe("false");
+  });
+});
+
+describe("invitation administration", () => {
+  const orgUuid = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+  const orgPublicIdStr = `org_${orgUuid.replace(/-/g, "")}`;
+  const actor = { subjectId: "usr_admin", subjectType: "user" };
+  const fixedNowLocal = new Date("2026-01-15T10:00:00.000Z");
+
+  function createPolicyFetcher(allow: boolean, captureBody?: { value: unknown }) {
+    return {
+      fetch: async (_url: string, init: RequestInit) => {
+        if (captureBody) captureBody.value = JSON.parse(init.body as string);
+        return Response.json({
+          data: { allow, reason: allow ? "granted" : "denied", policyVersion: 1, derivedScope: {} },
+          meta: { requestId: "req_test", cursor: null },
+        });
+      },
+    } as unknown as Fetcher;
+  }
+
+  describe("handleCreateInvitation", () => {
+
+    function createRepo(opts: { actorRolesFail?: boolean; createFail?: boolean } = {}) {
+      const roles: RoleAssignment[] = [
+        { id: "ra1", orgId: orgUuid, subjectId: "usr_admin", subjectType: "user", role: "admin", scopeKind: "organization", scopeRef: null, createdAt: fixedNowLocal, revokedAt: null },
+      ];
+      return {
+        listRoleAssignments: async () => {
+          if (opts.actorRolesFail) return { ok: false as const, error: { kind: "internal" as const, message: "db error" } };
+          return { ok: true as const, value: roles };
+        },
+        createInvitation: async (input: any) => {
+          if (opts.createFail) return { ok: false as const, error: { kind: "internal" as const, message: "db error" } };
+          return {
+            ok: true as const,
+            value: {
+              id: input.id,
+              orgId: input.orgId,
+              email: input.email,
+              emailLower: input.emailLower,
+              role: input.role,
+              status: "pending",
+              invitedBy: input.invitedBy,
+              expiresAt: input.expiresAt,
+              acceptedAt: null,
+              revokedAt: null,
+              createdAt: input.createdAt,
+            },
+          };
+        },
+      };
+    }
+
+    function makeRequest(body: unknown): Request {
+      return new Request("https://test.local/v1/organizations/" + orgPublicIdStr + "/invitations", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+    }
+
+    it("creates invitation with expected response shape", async () => {
+      const repo = createRepo();
+      const fakeToken = { raw: "deadbeef".repeat(8), hash: "cafebabe".repeat(8) };
+      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+
+      const response = await handleCreateInvitation(
+        makeRequest({ email: "invite@test.com", role: "builder" }),
+        env as any, "req_test", actor, orgPublicIdStr,
+        { repo, generateToken: async () => fakeToken, now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(201);
+      const json = await response.json() as any;
+      expect(json.data.invitation.id).toMatch(/^inv_[0-9a-f]{32}$/);
+      expect(json.data.invitation.email).toBe("invite@test.com");
+      expect(json.data.invitation.role).toBe("builder");
+      expect(json.data.invitation.status).toBe("pending");
+      expect(json.data.invitation.invitedBy).toBe("usr_admin");
+      expect(json.data.delivery).toBeUndefined();
+    });
+
+    it("includes debug delivery token when DEBUG_DELIVERY is true", async () => {
+      const repo = createRepo();
+      const fakeToken = { raw: "secret_raw_token_hex", hash: "hash_hex" };
+      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "true" };
+
+      const response = await handleCreateInvitation(
+        makeRequest({ email: "invite@test.com", role: "viewer" }),
+        env as any, "req_test", actor, orgPublicIdStr,
+        { repo, generateToken: async () => fakeToken, now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(201);
+      const json = await response.json() as any;
+      expect(json.data.delivery).toEqual({ mode: "local_debug", token: "secret_raw_token_hex" });
+    });
+
+    it("prod delivery never includes raw token", async () => {
+      const repo = createRepo();
+      const fakeToken = { raw: "secret_raw_token", hash: "hash" };
+      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "prod", DEBUG_DELIVERY: "false" };
+
+      const response = await handleCreateInvitation(
+        makeRequest({ email: "invite@test.com", role: "admin" }),
+        env as any, "req_test", actor, orgPublicIdStr,
+        { repo, generateToken: async () => fakeToken, now: () => fixedNowLocal },
+      );
+
+      const text = await response.text();
+      expect(text).not.toContain("secret_raw_token");
+    });
+
+    it("passes token hash to repository and not raw token", async () => {
+      let capturedInput: any;
+      const repo = {
+        ...createRepo(),
+        createInvitation: async (input: any) => {
+          capturedInput = input;
+          return { ok: true as const, value: { ...input, status: "pending", acceptedAt: null, revokedAt: null } };
+        },
+      };
+      const fakeToken = { raw: "raw_secret", hash: "hashed_value_only" };
+      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+
+      await handleCreateInvitation(
+        makeRequest({ email: "test@x.com", role: "viewer" }),
+        env as any, "req_test", actor, orgPublicIdStr,
+        { repo, generateToken: async () => fakeToken, now: () => fixedNowLocal },
+      );
+
+      expect(capturedInput.tokenHash).toBe("hashed_value_only");
+      expect(JSON.stringify(capturedInput)).not.toContain("raw_secret");
+    });
+
+    it("returns validation_failed for bad JSON", async () => {
+      const repo = createRepo();
+      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+      const badReq = new Request("https://test.local/v1/organizations/" + orgPublicIdStr + "/invitations", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "not json",
+      });
+
+      const response = await handleCreateInvitation(
+        badReq, env as any, "req_test", actor, orgPublicIdStr,
+        { repo, generateToken: async () => ({ raw: "x", hash: "y" }), now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(400);
+      const json = await response.json() as any;
+      expect(json.error.code).toBe("bad_request");
+    });
+
+    it("returns validation_failed for invalid email", async () => {
+      const repo = createRepo();
+      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+
+      const response = await handleCreateInvitation(
+        makeRequest({ email: "not-an-email", role: "viewer" }),
+        env as any, "req_test", actor, orgPublicIdStr,
+        { repo, generateToken: async () => ({ raw: "x", hash: "y" }), now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(422);
+      const json = await response.json() as any;
+      expect(json.error.code).toBe("validation_failed");
+      expect(json.error.details.fields.email).toBeDefined();
+    });
+
+    it("returns validation_failed for missing role", async () => {
+      const repo = createRepo();
+      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+
+      const response = await handleCreateInvitation(
+        makeRequest({ email: "user@test.com" }),
+        env as any, "req_test", actor, orgPublicIdStr,
+        { repo, generateToken: async () => ({ raw: "x", hash: "y" }), now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(422);
+      const json = await response.json() as any;
+      expect(json.error.details.fields.role).toBeDefined();
+    });
+
+    it("returns validation_failed for project-scoped role", async () => {
+      const repo = createRepo();
+      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+
+      const response = await handleCreateInvitation(
+        makeRequest({ email: "user@test.com", role: "project_admin" }),
+        env as any, "req_test", actor, orgPublicIdStr,
+        { repo, generateToken: async () => ({ raw: "x", hash: "y" }), now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(422);
+      const json = await response.json() as any;
+      expect(json.error.details.fields.role).toBeDefined();
+    });
+
+    it("returns validation_failed for unknown role", async () => {
+      const repo = createRepo();
+      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+
+      const response = await handleCreateInvitation(
+        makeRequest({ email: "user@test.com", role: "superuser" }),
+        env as any, "req_test", actor, orgPublicIdStr,
+        { repo, generateToken: async () => ({ raw: "x", hash: "y" }), now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(422);
+    });
+
+    it("sends organization.invitation.create action to policy", async () => {
+      const captured: { value: unknown } = { value: null };
+      const repo = createRepo();
+      const env = { POLICY_WORKER: createPolicyFetcher(true, captured), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+
+      await handleCreateInvitation(
+        makeRequest({ email: "user@test.com", role: "viewer" }),
+        env as any, "req_test", actor, orgPublicIdStr,
+        { repo, generateToken: async () => ({ raw: "x", hash: "y" }), now: () => fixedNowLocal },
+      );
+
+      expect((captured.value as any).action).toBe("organization.invitation.create");
+    });
+
+    it("authorizes before creating invitation", async () => {
+      let createCalled = false;
+      const repo = {
+        listRoleAssignments: async () => ({ ok: true as const, value: [] as RoleAssignment[] }),
+        createInvitation: async (input: any) => {
+          createCalled = true;
+          return { ok: true as const, value: { ...input, status: "pending", acceptedAt: null, revokedAt: null } };
+        },
+      };
+      const env = { POLICY_WORKER: createPolicyFetcher(false), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+
+      const response = await handleCreateInvitation(
+        makeRequest({ email: "user@test.com", role: "viewer" }),
+        env as any, "req_test", actor, orgPublicIdStr,
+        { repo, generateToken: async () => ({ raw: "x", hash: "y" }), now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(404);
+      expect(createCalled).toBe(false);
+    });
+
+    it("policy denial returns not_found", async () => {
+      const repo = createRepo();
+      const env = { POLICY_WORKER: createPolicyFetcher(false), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+
+      const response = await handleCreateInvitation(
+        makeRequest({ email: "user@test.com", role: "viewer" }),
+        env as any, "req_test", actor, orgPublicIdStr,
+        { repo, generateToken: async () => ({ raw: "x", hash: "y" }), now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(404);
+      const json = await response.json() as any;
+      expect(json.error.code).toBe("not_found");
+    });
+
+    it("actor role-list failure fails closed", async () => {
+      const repo = createRepo({ actorRolesFail: true });
+      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+
+      const response = await handleCreateInvitation(
+        makeRequest({ email: "user@test.com", role: "viewer" }),
+        env as any, "req_test", actor, orgPublicIdStr,
+        { repo, generateToken: async () => ({ raw: "x", hash: "y" }), now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(404);
+    });
+
+    it("database failure returns safe internal_error", async () => {
+      const repo = createRepo({ createFail: true });
+      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+
+      const response = await handleCreateInvitation(
+        makeRequest({ email: "user@test.com", role: "viewer" }),
+        env as any, "req_test", actor, orgPublicIdStr,
+        { repo, generateToken: async () => ({ raw: "x", hash: "y" }), now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(500);
+      const json = await response.json() as any;
+      expect(json.error.code).toBe("internal_error");
+    });
+
+    it("invalid orgId returns not_found", async () => {
+      const repo = createRepo();
+      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+
+      const response = await handleCreateInvitation(
+        makeRequest({ email: "user@test.com", role: "viewer" }),
+        env as any, "req_test", actor, "bad_id",
+        { repo, generateToken: async () => ({ raw: "x", hash: "y" }), now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(404);
+    });
+  });
+
+  describe("handleListInvitations", () => {
+
+    function createRepo(opts: { actorRolesFail?: boolean; listFail?: boolean; expired?: boolean } = {}) {
+      const roles: RoleAssignment[] = [
+        { id: "ra1", orgId: orgUuid, subjectId: "usr_admin", subjectType: "user", role: "admin", scopeKind: "organization", scopeRef: null, createdAt: fixedNowLocal, revokedAt: null },
+      ];
+      const invitations = [
+        {
+          id: "11111111-aaaa-bbbb-cccc-dddddddddddd",
+          orgId: orgUuid,
+          email: "invited@test.com",
+          emailLower: "invited@test.com",
+          role: "viewer",
+          status: "pending",
+          invitedBy: "usr_admin",
+          expiresAt: opts.expired ? new Date("2020-01-01T00:00:00Z") : new Date("2099-01-01T00:00:00Z"),
+          acceptedAt: null,
+          revokedAt: null,
+          createdAt: fixedNowLocal,
+        },
+      ];
+      return {
+        listRoleAssignments: async () => {
+          if (opts.actorRolesFail) return { ok: false as const, error: { kind: "internal" as const, message: "db error" } };
+          return { ok: true as const, value: roles };
+        },
+        listInvitationsPaged: async () => {
+          if (opts.listFail) return { ok: false as const, error: { kind: "internal" as const, message: "db error" } };
+          return { ok: true as const, value: { items: invitations, nextCursor: null } };
+        },
+      };
+    }
+
+    it("lists invitations with expected response shape", async () => {
+      const repo = createRepo();
+      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+
+      const response = await handleListInvitations(env as any, "req_test", actor, orgPublicIdStr, undefined, { repo });
+
+      expect(response.status).toBe(200);
+      const json = await response.json() as any;
+      expect(json.data.invitations).toHaveLength(1);
+      expect(json.data.invitations[0].id).toMatch(/^inv_[0-9a-f]{32}$/);
+      expect(json.data.invitations[0].email).toBe("invited@test.com");
+      expect(json.data.invitations[0].role).toBe("viewer");
+      expect(json.data.invitations[0].status).toBe("pending");
+      expect(json.meta.cursor).toBeNull();
+    });
+
+    it("derives expired status from expiresAt without DB mutation", async () => {
+      const repo = createRepo({ expired: true });
+      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+
+      const response = await handleListInvitations(env as any, "req_test", actor, orgPublicIdStr, undefined, { repo });
+
+      const json = await response.json() as any;
+      expect(json.data.invitations[0].status).toBe("expired");
+    });
+
+    it("sends organization.invitation.list action to policy", async () => {
+      const captured: { value: unknown } = { value: null };
+      const repo = createRepo();
+      const env = { POLICY_WORKER: createPolicyFetcher(true, captured), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+
+      await handleListInvitations(env as any, "req_test", actor, orgPublicIdStr, undefined, { repo });
+
+      expect((captured.value as any).action).toBe("organization.invitation.list");
+    });
+
+    it("returns meta.cursor when pagination has next page", async () => {
+      const repo = {
+        listRoleAssignments: async () => ({ ok: true as const, value: [{ id: "ra1", orgId: orgUuid, subjectId: "usr_admin", subjectType: "user", role: "admin", scopeKind: "organization", scopeRef: null, createdAt: fixedNowLocal, revokedAt: null }] }),
+        listInvitationsPaged: async () => ({
+          ok: true as const,
+          value: {
+            items: [{ id: "22222222-aaaa-bbbb-cccc-dddddddddddd", orgId: orgUuid, email: "x@y.com", emailLower: "x@y.com", role: "viewer", status: "pending", invitedBy: "usr_admin", expiresAt: new Date("2099-01-01T00:00:00Z"), acceptedAt: null, revokedAt: null, createdAt: fixedNowLocal }],
+            nextCursor: { createdAt: fixedNowLocal.toISOString(), id: "22222222-aaaa-bbbb-cccc-dddddddddddd" },
+          },
+        }),
+      };
+      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+
+      const response = await handleListInvitations(env as any, "req_test", actor, orgPublicIdStr, undefined, { repo });
+
+      const json = await response.json() as any;
+      expect(json.meta.cursor).not.toBeNull();
+      expect(typeof json.meta.cursor).toBe("string");
+    });
+
+    it("policy denial returns not_found", async () => {
+      const repo = createRepo();
+      const env = { POLICY_WORKER: createPolicyFetcher(false), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+
+      const response = await handleListInvitations(env as any, "req_test", actor, orgPublicIdStr, undefined, { repo });
+
+      expect(response.status).toBe(404);
+    });
+
+    it("actor role-list failure fails closed", async () => {
+      const repo = createRepo({ actorRolesFail: true });
+      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+
+      const response = await handleListInvitations(env as any, "req_test", actor, orgPublicIdStr, undefined, { repo });
+
+      expect(response.status).toBe(404);
+    });
+
+    it("database failure returns safe internal_error", async () => {
+      const repo = createRepo({ listFail: true });
+      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+
+      const response = await handleListInvitations(env as any, "req_test", actor, orgPublicIdStr, undefined, { repo });
+
+      expect(response.status).toBe(500);
+      const json = await response.json() as any;
+      expect(json.error.code).toBe("internal_error");
+    });
+
+    it("does not expose raw invitation UUIDs", async () => {
+      const repo = createRepo();
+      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+
+      const response = await handleListInvitations(env as any, "req_test", actor, orgPublicIdStr, undefined, { repo });
+      const text = await response.text();
+
+      expect(text).not.toContain("11111111-aaaa-bbbb-cccc-dddddddddddd");
+    });
+  });
+
+  describe("handleRevokeInvitation", () => {
+    const invUuid = "11111111-2222-3333-4444-555555555555";
+    const invPublicIdStr = invitationPublicId(invUuid);
+
+    function createRepo(opts: { actorRolesFail?: boolean; revokeFail?: boolean; notFound?: boolean } = {}) {
+      const roles: RoleAssignment[] = [
+        { id: "ra1", orgId: orgUuid, subjectId: "usr_admin", subjectType: "user", role: "admin", scopeKind: "organization", scopeRef: null, createdAt: fixedNowLocal, revokedAt: null },
+      ];
+      return {
+        listRoleAssignments: async () => {
+          if (opts.actorRolesFail) return { ok: false as const, error: { kind: "internal" as const, message: "db error" } };
+          return { ok: true as const, value: roles };
+        },
+        revokeInvitation: async (oId: string, iId: string, revokedAt: Date) => {
+          if (opts.revokeFail) return { ok: false as const, error: { kind: "internal" as const, message: "db error" } };
+          if (opts.notFound) return { ok: false as const, error: { kind: "not_found" as const } };
+          return {
+            ok: true as const,
+            value: {
+              id: iId,
+              orgId: oId,
+              email: "revoked@test.com",
+              emailLower: "revoked@test.com",
+              role: "viewer",
+              status: "revoked",
+              invitedBy: "usr_admin",
+              expiresAt: new Date("2099-01-01T00:00:00Z"),
+              acceptedAt: null,
+              revokedAt: revokedAt,
+              createdAt: fixedNowLocal,
+            },
+          };
+        },
+      };
+    }
+
+    it("revokes invitation and returns expected response shape", async () => {
+      const repo = createRepo();
+      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+
+      const response = await handleRevokeInvitation(
+        env as any, "req_test", actor, orgPublicIdStr, invPublicIdStr,
+        { repo, now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(200);
+      const json = await response.json() as any;
+      expect(json.data.invitation.id).toMatch(/^inv_[0-9a-f]{32}$/);
+      expect(json.data.invitation.status).toBe("revoked");
+      expect(json.data.invitation.revokedAt).not.toBeNull();
+    });
+
+    it("sends organization.invitation.revoke action to policy", async () => {
+      const captured: { value: unknown } = { value: null };
+      const repo = createRepo();
+      const env = { POLICY_WORKER: createPolicyFetcher(true, captured), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+
+      await handleRevokeInvitation(
+        env as any, "req_test", actor, orgPublicIdStr, invPublicIdStr,
+        { repo, now: () => fixedNowLocal },
+      );
+
+      expect((captured.value as any).action).toBe("organization.invitation.revoke");
+    });
+
+    it("policy denial returns not_found", async () => {
+      const repo = createRepo();
+      const env = { POLICY_WORKER: createPolicyFetcher(false), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+
+      const response = await handleRevokeInvitation(
+        env as any, "req_test", actor, orgPublicIdStr, invPublicIdStr,
+        { repo, now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(404);
+    });
+
+    it("returns not_found for already revoked/accepted invitation", async () => {
+      const repo = createRepo({ notFound: true });
+      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+
+      const response = await handleRevokeInvitation(
+        env as any, "req_test", actor, orgPublicIdStr, invPublicIdStr,
+        { repo, now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(404);
+    });
+
+    it("invalid invitation ID returns not_found", async () => {
+      const repo = createRepo();
+      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+
+      const response = await handleRevokeInvitation(
+        env as any, "req_test", actor, orgPublicIdStr, "bad_inv_id",
+        { repo, now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(404);
+    });
+
+    it("invalid org ID returns not_found", async () => {
+      const repo = createRepo();
+      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+
+      const response = await handleRevokeInvitation(
+        env as any, "req_test", actor, "bad_org", invPublicIdStr,
+        { repo, now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(404);
+    });
+
+    it("actor role-list failure fails closed", async () => {
+      const repo = createRepo({ actorRolesFail: true });
+      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+
+      const response = await handleRevokeInvitation(
+        env as any, "req_test", actor, orgPublicIdStr, invPublicIdStr,
+        { repo, now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(404);
+    });
+
+    it("database failure returns safe internal_error", async () => {
+      const repo = createRepo({ revokeFail: true });
+      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+
+      const response = await handleRevokeInvitation(
+        env as any, "req_test", actor, orgPublicIdStr, invPublicIdStr,
+        { repo, now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(500);
+      const json = await response.json() as any;
+      expect(json.error.code).toBe("internal_error");
+    });
+
+    it("does not expose raw invitation UUID in response", async () => {
+      const repo = createRepo();
+      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+
+      const response = await handleRevokeInvitation(
+        env as any, "req_test", actor, orgPublicIdStr, invPublicIdStr,
+        { repo, now: () => fixedNowLocal },
+      );
+
+      const text = await response.text();
+      expect(text).not.toContain(invUuid);
+    });
+  });
+
+  describe("invitation ID utilities", () => {
+    it("converts UUID to inv_ prefixed public ID", () => {
+      expect(invitationPublicId("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")).toBe("inv_aaaaaaaabbbbccccddddeeeeeeeeeeee");
+    });
+
+    it("parses inv_ prefixed public ID back to UUID", () => {
+      expect(parseInvitationPublicId("inv_aaaaaaaabbbbccccddddeeeeeeeeeeee")).toBe("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
+    });
+
+    it("returns null for invalid prefix", () => {
+      expect(parseInvitationPublicId("mem_aaaaaaaabbbbccccddddeeeeeeeeeeee")).toBeNull();
+    });
+
+    it("returns null for invalid hex length", () => {
+      expect(parseInvitationPublicId("inv_abc")).toBeNull();
+    });
+
+    it("roundtrips correctly", () => {
+      const uuid = "12345678-abcd-ef01-2345-6789abcdef01";
+      expect(parseInvitationPublicId(invitationPublicId(uuid))).toBe(uuid);
+    });
   });
 });
