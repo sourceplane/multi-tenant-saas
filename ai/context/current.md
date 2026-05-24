@@ -5,7 +5,8 @@ Last updated: 2026-05-25
 ## Repo Reality
 
 - Task 0021 squash-merged at `324ca36` via PR #62.
-- Tasks 0001–0021 are verified.
+- Task 0022 squash-merged at `28dd671` via PR #63.
+- Tasks 0001–0022 are verified.
 - Task 0021 added policy-gated invitation administration endpoints:
   - `POST /v1/organizations/{orgId}/invitations` — create invitation
   - `GET /v1/organizations/{orgId}/invitations` — list with cursor pagination
@@ -57,5 +58,8 @@ Last updated: 2026-05-25
 
 ## Current Task
 
-- Task 0021 verified PASS and merged.
-- No current task is active. Awaiting next task prompt.
+- None. Awaiting next task prompt.
+- Task 0022 verified PASS and merged via PR #63 at `28dd671`.
+- Post-merge main CI run `26371024844` passed (19/19 jobs).
+- Verifier fix: removed `ON CONFLICT (id) DO NOTHING` from acceptance CTE
+  member/role INSERTs to guarantee full atomicity on error.

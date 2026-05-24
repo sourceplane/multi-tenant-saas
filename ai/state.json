@@ -1,6 +1,6 @@
 {
   "goal": "Supabase/Postgres-backed multi-organization Orun SaaS control plane",
-  "current_task": "0021",
+  "current_task": null,
   "completed": [
     "0001",
     "0001.1",
@@ -27,28 +27,23 @@
     "0018",
     "0019",
     "0020",
-    "0021"
+    "0021",
+    "0022"
   ],
   "repo_health": "green",
-  "next_focus": "awaiting-next-task",
+  "next_focus": "member-admin-mutations-or-audit-events",
   "last_verified": "2026-05-25",
-  "waiting_for_input": "false",
+  "waiting_for_input": "true",
   "task_agent": null,
   "notes": [
-    "Task 0021 verified PASS: policy-gated invitation administration API merged via PR #62.",
-    "PR #62 squash-merged at 324ca36; verifier committed implementer report to PR branch before merge.",
-    "Post-merge main CI run 26369638914 passed (19/19 jobs). PR CI run 26369562767 passed (19/19 jobs).",
-    "Invitation create/list/revoke use policy actions organization.invitation.{create,list,revoke}.",
-    "Invitation tokens: 32 random bytes via Web Crypto, SHA-256 hash stored. Raw only in DEBUG_DELIVERY=true.",
-    "Prod DEBUG_DELIVERY=false enforced in wrangler.jsonc. Stage/local/dev DEBUG_DELIVERY=true for testing.",
-    "Public invitation IDs use inv_ prefix + UUID hex (no dashes). token_hash never exposed.",
-    "Pagination reuses Task 0020 cursor contract: limit/cursor, default 50, max 100, (created_at, id) DESC.",
-    "Status derivation: expired computed from expiresAt < now without DB mutation.",
-    "Role allowlist for V1 invitation: owner, admin, builder, viewer, billing_admin (org roles only).",
-    "104 membership-worker tests, 183 db tests, 78 api-edge tests pass.",
-    "Orun plan: 8 components × 3 envs → 18 jobs. All pass.",
-    "Remaining gaps: invitation acceptance, member-admin mutations, audit/events, durable idempotency, batch role-lookup.",
-    "acceptInvitation still lacks accepted member's role assignment creation; do not expose accept route.",
+    "Task 0022 verified PASS: invitation acceptance merged via PR #63 at 28dd671.",
+    "Verifier fix: removed ON CONFLICT (id) DO NOTHING from acceptance CTE member/role INSERTs to guarantee atomicity.",
+    "Post-merge main CI run 26371024844 passed (19/19 jobs).",
+    "POST /v1/organizations/{orgId}/invitations/accept creates member + org-scoped role assignment atomically.",
+    "Acceptance authorized by token possession + authenticated email match (no policy-worker).",
+    "api-edge forwards x-actor-email from identity session for all org routes.",
+    "119 membership-worker tests, 188 db tests, 85 api-edge tests pass.",
+    "Remaining gaps: duplicate-invitation prevention, idempotent acceptance, audit events.",
     "Dead parameters (dryRunCommand, deployCommand) remain in component.yaml files; recommend cleanup.",
     "Ignored generated outputs must not be staged or committed: dist, node_modules, .orun, Terraform dirs, plan.json."
   ]
