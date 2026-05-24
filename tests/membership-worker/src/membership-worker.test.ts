@@ -797,6 +797,195 @@ describe("member-list endpoint", () => {
   });
 });
 
+describe("handleListMembers handler integration", () => {
+  const orgUuid = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+  const orgPublicIdStr = `org_${orgUuid.replace(/-/g, "")}`;
+  const actor = { subjectId: "usr_owner", subjectType: "user" };
+
+  function createFakeRepo(opts: {
+    actorRolesFail?: boolean;
+    membersFail?: boolean;
+    memberRolesFail?: boolean;
+  } = {}) {
+    const members: OrganizationMember[] = [
+      { id: "11111111-2222-3333-4444-555555555555", orgId: orgUuid, subjectId: "usr_owner", subjectType: "user", status: "active", createdAt: fixedNow, updatedAt: fixedNow },
+      { id: "66666666-7777-8888-9999-aaaaaaaaaaaa", orgId: orgUuid, subjectId: "usr_viewer", subjectType: "user", status: "active", createdAt: fixedNow, updatedAt: fixedNow },
+    ];
+    const roles: Record<string, RoleAssignment[]> = {
+      [`${orgUuid}:usr_owner`]: [
+        { id: "ra1", orgId: orgUuid, subjectId: "usr_owner", subjectType: "user", role: "owner", scopeKind: "organization", scopeRef: null, createdAt: fixedNow, revokedAt: null },
+      ],
+      [`${orgUuid}:usr_viewer`]: [
+        { id: "ra2", orgId: orgUuid, subjectId: "usr_viewer", subjectType: "user", role: "viewer", scopeKind: "organization", scopeRef: null, createdAt: fixedNow, revokedAt: null },
+        { id: "ra3", orgId: orgUuid, subjectId: "usr_viewer", subjectType: "user", role: "project_admin", scopeKind: "project", scopeRef: "proj-uuid-secret", createdAt: fixedNow, revokedAt: null },
+      ],
+    };
+
+    let roleCallCount = 0;
+    return {
+      listRoleAssignments: async (id: string, subjectId: string) => {
+        roleCallCount++;
+        if (opts.actorRolesFail && roleCallCount === 1) {
+          return { ok: false as const, error: { kind: "internal" as const, message: "db error" } };
+        }
+        if (opts.memberRolesFail && roleCallCount > 1) {
+          return { ok: false as const, error: { kind: "internal" as const, message: "db error" } };
+        }
+        const key = `${id}:${subjectId}`;
+        return { ok: true as const, value: roles[key] ?? [] };
+      },
+      listMembers: async (id: string) => {
+        if (opts.membersFail) {
+          return { ok: false as const, error: { kind: "internal" as const, message: "db error" } };
+        }
+        if (id !== orgUuid) return { ok: true as const, value: [] };
+        return { ok: true as const, value: members };
+      },
+    };
+  }
+
+  function createPolicyFetcher(allow: boolean) {
+    return {
+      fetch: async () => Response.json({
+        data: { allow, reason: allow ? "granted" : "denied", policyVersion: 1, derivedScope: {} },
+        meta: { requestId: "req_test", cursor: null },
+      }),
+    } as unknown as Fetcher;
+  }
+
+  it("returns full member list with correct response shape on success", async () => {
+    const repo = createFakeRepo();
+    const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, { repo });
+
+    expect(response.status).toBe(200);
+    const json = await response.json() as any;
+    expect(json.data.members).toHaveLength(2);
+    expect(json.data.members[0].id).toMatch(/^mem_[0-9a-f]{32}$/);
+    expect(json.data.members[0].subjectId).toBe("usr_owner");
+    expect(json.data.members[0].status).toBe("active");
+    expect(json.data.members[0].joinedAt).toBe(fixedNow.toISOString());
+    expect(json.data.members[0].roles).toEqual([{ role: "owner", scopeKind: "organization" }]);
+    expect(json.data.members[1].roles).toHaveLength(2);
+  });
+
+  it("sends organization.member.list action to policy-worker", async () => {
+    let capturedBody: any;
+    const policyFetcher = {
+      fetch: async (_url: string, init: RequestInit) => {
+        capturedBody = JSON.parse(init.body as string);
+        return Response.json({
+          data: { allow: true, reason: "ok", policyVersion: 1, derivedScope: {} },
+          meta: { requestId: "req_test", cursor: null },
+        });
+      },
+    } as unknown as Fetcher;
+
+    const repo = createFakeRepo();
+    const env = { POLICY_WORKER: policyFetcher, SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+    await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, { repo });
+
+    expect(capturedBody.action).toBe("organization.member.list");
+    expect(capturedBody.resource).toEqual({ kind: "organization", id: orgUuid, orgId: orgUuid });
+  });
+
+  it("returns not_found when policy denies", async () => {
+    const repo = createFakeRepo();
+    const env = { POLICY_WORKER: createPolicyFetcher(false), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, { repo });
+
+    expect(response.status).toBe(404);
+    const json = await response.json() as any;
+    expect(json.error.code).toBe("not_found");
+    expect(JSON.stringify(json)).not.toContain("forbidden");
+    expect(JSON.stringify(json)).not.toContain("denied");
+  });
+
+  it("returns not_found when actor role-list fails (fail closed)", async () => {
+    const repo = createFakeRepo({ actorRolesFail: true });
+    const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, { repo });
+
+    expect(response.status).toBe(404);
+    const json = await response.json() as any;
+    expect(json.error.code).toBe("not_found");
+  });
+
+  it("returns internal_error when member role-list fails without partial data", async () => {
+    const repo = createFakeRepo({ memberRolesFail: true });
+    const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, { repo });
+
+    expect(response.status).toBe(500);
+    const json = await response.json() as any;
+    expect(json.error.code).toBe("internal_error");
+    expect(JSON.stringify(json)).not.toContain("members");
+    expect(JSON.stringify(json)).not.toContain("usr_owner");
+  });
+
+  it("returns internal_error when listMembers fails", async () => {
+    const repo = createFakeRepo({ membersFail: true });
+    const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, { repo });
+
+    expect(response.status).toBe(500);
+    const json = await response.json() as any;
+    expect(json.error.code).toBe("internal_error");
+  });
+
+  it("fails closed when policy binding throws", async () => {
+    const repo = createFakeRepo();
+    const policyFetcher = { fetch: async () => { throw new Error("network"); } } as unknown as Fetcher;
+    const env = { POLICY_WORKER: policyFetcher, SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, { repo });
+
+    expect(response.status).toBe(404);
+    const json = await response.json() as any;
+    expect(json.error.code).toBe("not_found");
+  });
+
+  it("returns not_found for invalid orgId param", async () => {
+    const repo = createFakeRepo();
+    const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+    const response = await handleListMembers(env as any, "req_test", actor, "invalid_id", { repo });
+
+    expect(response.status).toBe(404);
+  });
+
+  it("does not expose raw UUIDs or project scopeRef in response", async () => {
+    const repo = createFakeRepo();
+    const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, { repo });
+    const text = await response.text();
+
+    expect(text).not.toContain("11111111-2222-3333-4444-555555555555");
+    expect(text).not.toContain("66666666-7777-8888-9999-aaaaaaaaaaaa");
+    expect(text).not.toContain("proj-uuid-secret");
+    expect(text).not.toContain("ra1");
+    expect(text).not.toContain("ra2");
+    expect(text).not.toContain("ra3");
+  });
+
+  it("returns 503 when POLICY_WORKER binding is missing", async () => {
+    const repo = createFakeRepo();
+    const env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, { repo });
+
+    expect(response.status).toBe(503);
+    const json = await response.json() as any;
+    expect(json.error.code).toBe("internal_error");
+  });
+});
+
 describe("wrangler config", () => {
   const __dirname = path.dirname(fileURLToPath(import.meta.url));
   const raw = fs.readFileSync(path.resolve(__dirname, "../../../apps/membership-worker/wrangler.jsonc"), "utf8");

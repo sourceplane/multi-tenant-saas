@@ -1,23 +1,29 @@
 import type { Env } from "../env.js";
 import type { ActorContext } from "../router.js";
+import type { MembershipRepository } from "@saas/db/membership";
 import { createSqlExecutor } from "@saas/db/hyperdrive";
 import { createMembershipRepository } from "@saas/db/membership";
 import { authorizeViaPolicy } from "../policy-client.js";
 import { successResponse, errorResponse } from "../http.js";
 import { parseOrgPublicId, memberPublicId } from "../ids.js";
 
+export interface ListMembersDeps {
+  repo: Pick<MembershipRepository, "listRoleAssignments" | "listMembers">;
+}
+
 export async function handleListMembers(
   env: Env,
   requestId: string,
   actor: ActorContext,
   orgIdParam: string,
+  deps?: ListMembersDeps,
 ): Promise<Response> {
   const orgUuid = parseOrgPublicId(orgIdParam);
   if (!orgUuid) {
     return errorResponse("not_found", "Organization not found", 404, requestId);
   }
 
-  if (!env.SOURCEPLANE_DB) {
+  if (!deps && !env.SOURCEPLANE_DB) {
     return errorResponse("internal_error", "Database not configured", 503, requestId);
   }
 
@@ -26,9 +32,9 @@ export async function handleListMembers(
   }
 
   const policyWorker = env.POLICY_WORKER;
-  const executor = createSqlExecutor(env.SOURCEPLANE_DB);
+  const executor = deps ? null : createSqlExecutor(env.SOURCEPLANE_DB!);
   try {
-    const repo = createMembershipRepository(executor);
+    const repo = deps ? deps.repo : createMembershipRepository(executor!);
 
     const rolesResult = await repo.listRoleAssignments(orgUuid, actor.subjectId);
     if (!rolesResult.ok) {
@@ -77,6 +83,6 @@ export async function handleListMembers(
   } catch {
     return errorResponse("internal_error", "An unexpected error occurred", 500, requestId);
   } finally {
-    await executor.dispose();
+    if (executor) await executor.dispose();
   }
 }
