@@ -1,6 +1,11 @@
 import crypto from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { createOrganizationService } from "@membership-worker/services/organization";
+import type { PolicyAuthorizer } from "@membership-worker/services/organization";
 import { orgPublicId, parseOrgPublicId } from "@membership-worker/ids";
+import { mapRoleAssignments, authorizeViaPolicy } from "@membership-worker/policy-client";
 import type { MembershipRepository, Organization, OrganizationMember, RoleAssignment } from "@saas/db/membership";
 
 if (!(globalThis as Record<string, unknown>).crypto) {
@@ -76,6 +81,11 @@ function createFakeRepository(): MembershipRepository & { _orgs: Map<string, Org
 }
 
 const fixedNow = new Date("2026-01-15T10:00:00.000Z");
+
+/** Policy authorizer that always allows */
+const allowAuthorizer: PolicyAuthorizer = async () => ({ allow: true });
+/** Policy authorizer that always denies */
+const denyAuthorizer: PolicyAuthorizer = async () => ({ allow: false });
 
 describe("membership-worker organization service", () => {
   describe("createOrganization", () => {
@@ -199,7 +209,7 @@ describe("membership-worker organization service", () => {
   });
 
   describe("getOrganization", () => {
-    it("returns organization when user has active role", async () => {
+    it("returns organization when policy allows", async () => {
       const repo = createFakeRepository();
       const service = createOrganizationService({ repo, now: () => fixedNow });
 
@@ -211,7 +221,7 @@ describe("membership-worker organization service", () => {
       if (!createResult.ok) return;
 
       const orgUuid = parseOrgPublicId(createResult.value.organization.id)!;
-      const result = await service.getOrganization({ subjectId: "usr_owner", subjectType: "user" }, orgUuid);
+      const result = await service.getOrganization({ subjectId: "usr_owner", subjectType: "user" }, orgUuid, allowAuthorizer);
 
       expect(result.ok).toBe(true);
       if (!result.ok) return;
@@ -219,7 +229,7 @@ describe("membership-worker organization service", () => {
       expect(result.value.organization.id).toMatch(/^org_[0-9a-f]{32}$/);
     });
 
-    it("returns not_found for inaccessible organization without leaking existence", async () => {
+    it("returns not_found when policy denies without leaking existence", async () => {
       const repo = createFakeRepository();
       const service = createOrganizationService({ repo, now: () => fixedNow });
 
@@ -231,7 +241,7 @@ describe("membership-worker organization service", () => {
       if (!createResult.ok) return;
 
       const orgUuid = parseOrgPublicId(createResult.value.organization.id)!;
-      const result = await service.getOrganization({ subjectId: "usr_outsider", subjectType: "user" }, orgUuid);
+      const result = await service.getOrganization({ subjectId: "usr_outsider", subjectType: "user" }, orgUuid, denyAuthorizer);
 
       expect(result.ok).toBe(false);
       if (result.ok) return;
@@ -247,11 +257,60 @@ describe("membership-worker organization service", () => {
       const result = await service.getOrganization(
         { subjectId: "usr_owner", subjectType: "user" },
         "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+        allowAuthorizer,
       );
 
       expect(result.ok).toBe(false);
       if (result.ok) return;
       expect(result.code).toBe("not_found");
+    });
+
+    it("fails closed when no authorizer is provided", async () => {
+      const repo = createFakeRepository();
+      const service = createOrganizationService({ repo, now: () => fixedNow });
+
+      const createResult = await service.createOrganization(
+        { subjectId: "usr_owner", subjectType: "user" },
+        { name: "Closed", slug: "closed", slugLower: "closed" },
+      );
+      expect(createResult.ok).toBe(true);
+      if (!createResult.ok) return;
+
+      const orgUuid = parseOrgPublicId(createResult.value.organization.id)!;
+      const result = await service.getOrganization({ subjectId: "usr_owner", subjectType: "user" }, orgUuid);
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.code).toBe("not_found");
+    });
+
+    it("passes correct action and role assignments to authorizer", async () => {
+      const repo = createFakeRepository();
+      const service = createOrganizationService({ repo, now: () => fixedNow });
+
+      const createResult = await service.createOrganization(
+        { subjectId: "usr_owner", subjectType: "user" },
+        { name: "Check", slug: "check", slugLower: "check" },
+      );
+      expect(createResult.ok).toBe(true);
+      if (!createResult.ok) return;
+
+      const orgUuid = parseOrgPublicId(createResult.value.organization.id)!;
+      let capturedAction: string | undefined;
+      let capturedRoles: RoleAssignment[] | undefined;
+
+      const capturingAuthorizer: PolicyAuthorizer = async (_actor, action, _orgId, roles) => {
+        capturedAction = action;
+        capturedRoles = roles;
+        return { allow: true };
+      };
+
+      await service.getOrganization({ subjectId: "usr_owner", subjectType: "user" }, orgUuid, capturingAuthorizer);
+
+      expect(capturedAction).toBe("organization.read");
+      expect(capturedRoles).toHaveLength(1);
+      expect(capturedRoles![0]!.role).toBe("owner");
+      expect(capturedRoles![0]!.scopeKind).toBe("organization");
     });
   });
 
@@ -276,5 +335,188 @@ describe("membership-worker organization service", () => {
       const uuid = "12345678-abcd-ef01-2345-6789abcdef01";
       expect(parseOrgPublicId(orgPublicId(uuid))).toBe(uuid);
     });
+  });
+});
+
+describe("policy-client", () => {
+  describe("mapRoleAssignments", () => {
+    it("maps organization-scoped role to membership fact", () => {
+      const assignments: RoleAssignment[] = [
+        { id: "ra1", orgId: "org-uuid", subjectId: "usr1", subjectType: "user", role: "owner", scopeKind: "organization", scopeRef: null, createdAt: fixedNow, revokedAt: null },
+      ];
+
+      const facts = mapRoleAssignments("org-uuid", assignments);
+
+      expect(facts).toHaveLength(1);
+      expect(facts[0]).toEqual({
+        kind: "role_assignment",
+        role: "owner",
+        scope: { kind: "organization", orgId: "org-uuid" },
+      });
+    });
+
+    it("maps project-scoped role to membership fact with projectId", () => {
+      const assignments: RoleAssignment[] = [
+        { id: "ra2", orgId: "org-uuid", subjectId: "usr1", subjectType: "user", role: "project_admin", scopeKind: "project", scopeRef: "proj-uuid", createdAt: fixedNow, revokedAt: null },
+      ];
+
+      const facts = mapRoleAssignments("org-uuid", assignments);
+
+      expect(facts).toHaveLength(1);
+      expect(facts[0]).toEqual({
+        kind: "role_assignment",
+        role: "project_admin",
+        scope: { kind: "project", orgId: "org-uuid", projectId: "proj-uuid" },
+      });
+    });
+
+    it("maps multiple assignments into separate facts", () => {
+      const assignments: RoleAssignment[] = [
+        { id: "ra1", orgId: "org-uuid", subjectId: "usr1", subjectType: "user", role: "owner", scopeKind: "organization", scopeRef: null, createdAt: fixedNow, revokedAt: null },
+        { id: "ra2", orgId: "org-uuid", subjectId: "usr1", subjectType: "user", role: "project_viewer", scopeKind: "project", scopeRef: "p1", createdAt: fixedNow, revokedAt: null },
+      ];
+
+      const facts = mapRoleAssignments("org-uuid", assignments);
+      expect(facts).toHaveLength(2);
+    });
+  });
+
+  describe("authorizeViaPolicy", () => {
+    const actor = { subjectId: "usr_test", subjectType: "user" };
+    const baseParams = {
+      actor,
+      action: "organization.read",
+      resource: { kind: "organization" as const, id: "org-uuid", orgId: "org-uuid" },
+      orgId: "org-uuid",
+      roleAssignments: [] as RoleAssignment[],
+      requestId: "req_test123",
+    };
+
+    it("returns allow:true when policy-worker returns allow:true", async () => {
+      const fakeFetcher = {
+        fetch: async () => Response.json({ allow: true, reason: "granted", policyVersion: 1, derivedScope: { orgId: "org-uuid" } }),
+      } as unknown as Fetcher;
+
+      const result = await authorizeViaPolicy(fakeFetcher, baseParams);
+      expect(result.allow).toBe(true);
+    });
+
+    it("returns allow:false when policy-worker returns allow:false", async () => {
+      const fakeFetcher = {
+        fetch: async () => Response.json({ allow: false, reason: "denied", policyVersion: 1, derivedScope: { orgId: "org-uuid" } }),
+      } as unknown as Fetcher;
+
+      const result = await authorizeViaPolicy(fakeFetcher, baseParams);
+      expect(result.allow).toBe(false);
+    });
+
+    it("fails closed on fetch error", async () => {
+      const fakeFetcher = {
+        fetch: async () => { throw new Error("network failure"); },
+      } as unknown as Fetcher;
+
+      const result = await authorizeViaPolicy(fakeFetcher, baseParams);
+      expect(result.allow).toBe(false);
+    });
+
+    it("fails closed on non-ok response", async () => {
+      const fakeFetcher = {
+        fetch: async () => new Response("Internal Server Error", { status: 500 }),
+      } as unknown as Fetcher;
+
+      const result = await authorizeViaPolicy(fakeFetcher, baseParams);
+      expect(result.allow).toBe(false);
+    });
+
+    it("fails closed on malformed JSON response", async () => {
+      const fakeFetcher = {
+        fetch: async () => new Response("not json", { status: 200, headers: { "content-type": "text/plain" } }),
+      } as unknown as Fetcher;
+
+      const result = await authorizeViaPolicy(fakeFetcher, baseParams);
+      expect(result.allow).toBe(false);
+    });
+
+    it("fails closed when response has no allow field", async () => {
+      const fakeFetcher = {
+        fetch: async () => Response.json({ something: "else" }),
+      } as unknown as Fetcher;
+
+      const result = await authorizeViaPolicy(fakeFetcher, baseParams);
+      expect(result.allow).toBe(false);
+    });
+
+    it("sends correct request body with membership facts", async () => {
+      let capturedBody: unknown;
+      const fakeFetcher = {
+        fetch: async (_url: string, init: RequestInit) => {
+          capturedBody = JSON.parse(init.body as string);
+          return Response.json({ allow: true, reason: "ok", policyVersion: 1, derivedScope: { orgId: "org-uuid" } });
+        },
+      } as unknown as Fetcher;
+
+      const roles: RoleAssignment[] = [
+        { id: "ra1", orgId: "org-uuid", subjectId: "usr_test", subjectType: "user", role: "admin", scopeKind: "organization", scopeRef: null, createdAt: fixedNow, revokedAt: null },
+      ];
+
+      await authorizeViaPolicy(fakeFetcher, { ...baseParams, roleAssignments: roles });
+
+      expect(capturedBody).toEqual({
+        subject: { type: "user", id: "usr_test" },
+        action: "organization.read",
+        resource: { kind: "organization", id: "org-uuid", orgId: "org-uuid" },
+        context: {
+          memberships: [
+            { kind: "role_assignment", role: "admin", scope: { kind: "organization", orgId: "org-uuid" } },
+          ],
+        },
+      });
+    });
+
+    it("sends x-request-id header", async () => {
+      let capturedHeaders: HeadersInit | undefined;
+      const fakeFetcher = {
+        fetch: async (_url: string, init: RequestInit) => {
+          capturedHeaders = init.headers;
+          return Response.json({ allow: true, reason: "ok", policyVersion: 1, derivedScope: { orgId: "org-uuid" } });
+        },
+      } as unknown as Fetcher;
+
+      await authorizeViaPolicy(fakeFetcher, baseParams);
+
+      expect(capturedHeaders).toEqual(
+        expect.objectContaining({ "x-request-id": "req_test123" }),
+      );
+    });
+  });
+});
+
+describe("wrangler config", () => {
+  const __dirname = path.dirname(fileURLToPath(import.meta.url));
+  const raw = fs.readFileSync(path.resolve(__dirname, "../../../apps/membership-worker/wrangler.jsonc"), "utf8");
+  // Strip single-line comments for JSONC parsing
+  const config = JSON.parse(raw.replace(/^\s*\/\/.*$/gm, ""));
+
+  it("stage binds POLICY_WORKER to policy-worker-stage", () => {
+    const stageServices = config.env.stage.services;
+    const policyBinding = stageServices.find((s: { binding: string }) => s.binding === "POLICY_WORKER");
+    expect(policyBinding).toBeDefined();
+    expect(policyBinding.service).toBe("policy-worker-stage");
+  });
+
+  it("prod binds POLICY_WORKER to policy-worker-prod", () => {
+    const prodServices = config.env.prod.services;
+    const policyBinding = prodServices.find((s: { binding: string }) => s.binding === "POLICY_WORKER");
+    expect(policyBinding).toBeDefined();
+    expect(policyBinding.service).toBe("policy-worker-prod");
+  });
+
+  it("stage and prod never cross environments", () => {
+    const stageService = config.env.stage.services.find((s: { binding: string }) => s.binding === "POLICY_WORKER")?.service;
+    const prodService = config.env.prod.services.find((s: { binding: string }) => s.binding === "POLICY_WORKER")?.service;
+    expect(stageService).toContain("stage");
+    expect(prodService).toContain("prod");
+    expect(stageService).not.toContain("prod");
+    expect(prodService).not.toContain("stage");
   });
 });

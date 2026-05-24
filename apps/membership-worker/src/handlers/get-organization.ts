@@ -3,6 +3,7 @@ import type { ActorContext } from "../router.js";
 import { createSqlExecutor } from "@saas/db/hyperdrive";
 import { createMembershipRepository } from "@saas/db/membership";
 import { createOrganizationService } from "../services/organization.js";
+import { authorizeViaPolicy } from "../policy-client.js";
 import { successResponse, errorResponse } from "../http.js";
 import { parseOrgPublicId } from "../ids.js";
 
@@ -21,11 +22,34 @@ export async function handleGetOrganization(
     return errorResponse("internal_error", "Database not configured", 503, requestId);
   }
 
+  if (!env.POLICY_WORKER) {
+    return errorResponse("internal_error", "Service unavailable", 503, requestId);
+  }
+
+  const policyWorker = env.POLICY_WORKER;
+
   const executor = createSqlExecutor(env.SOURCEPLANE_DB);
   try {
     const repo = createMembershipRepository(executor);
     const service = createOrganizationService({ repo, now: () => new Date() });
-    const result = await service.getOrganization(actor, orgUuid);
+
+    const authorize = async (
+      actorCtx: ActorContext,
+      action: string,
+      orgId: string,
+      roleAssignments: Parameters<typeof authorizeViaPolicy>[1]["roleAssignments"],
+    ) => {
+      return authorizeViaPolicy(policyWorker, {
+        actor: actorCtx,
+        action,
+        resource: { kind: "organization", id: orgId, orgId },
+        orgId,
+        roleAssignments,
+        requestId,
+      });
+    };
+
+    const result = await service.getOrganization(actor, orgUuid, authorize);
 
     if (!result.ok) {
       return errorResponse(result.code, result.message, result.status, requestId);

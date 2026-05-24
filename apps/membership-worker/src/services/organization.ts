@@ -1,5 +1,12 @@
-import type { MembershipRepository } from "@saas/db/membership";
+import type { MembershipRepository, RoleAssignment } from "@saas/db/membership";
 import { orgPublicId } from "../ids.js";
+
+export type PolicyAuthorizer = (
+  actor: ActorContext,
+  action: string,
+  orgId: string,
+  roleAssignments: RoleAssignment[],
+) => Promise<{ allow: boolean }>;
 
 export interface ActorContext {
   subjectId: string;
@@ -114,9 +121,21 @@ export function createOrganizationService(deps: OrganizationServiceDeps) {
       };
     },
 
-    async getOrganization(actor: ActorContext, orgUuid: string): Promise<GetOrgResult> {
+    async getOrganization(actor: ActorContext, orgUuid: string, authorize?: PolicyAuthorizer): Promise<GetOrgResult> {
       const rolesResult = await repo.listRoleAssignments(orgUuid, actor.subjectId);
-      if (!rolesResult.ok || rolesResult.value.length === 0) {
+      if (!rolesResult.ok) {
+        return { ok: false, code: "not_found", message: "Organization not found", status: 404 };
+      }
+
+      const roleAssignments = rolesResult.value;
+
+      if (authorize) {
+        const authResult = await authorize(actor, "organization.read", orgUuid, roleAssignments);
+        if (!authResult.allow) {
+          return { ok: false, code: "not_found", message: "Organization not found", status: 404 };
+        }
+      } else {
+        // Fallback: fail closed when no authorizer is available
         return { ok: false, code: "not_found", message: "Organization not found", status: 404 };
       }
 
