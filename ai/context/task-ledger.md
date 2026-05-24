@@ -395,6 +395,38 @@ Last updated: 2026-05-24
 - Reports: `ai/reports/task-0016-implementer.md`,
   `ai/reports/task-0016-verifier.md`
 
+## Task 0017
+
+- Agent: Implementer → Verifier
+- Prompt: `ai/tasks/task-0017.md`
+- Verifier prompt: `ai/tasks/task-0017-verifier.md`
+- Status: verified PASS
+- PR: #58 (`feat: add policy authorization seam`), squash-merged at `674dded`
+- Objective: add the first policy authorization seam before more membership
+  mutations: shared policy contracts, a pure policy engine, a deployable internal
+  policy Worker, and Orun/CI coverage.
+- Verifier fixes:
+  - Required explicit `resource.projectId` for project/environment-scoped
+    actions so org roles cannot authorize project resources without a concrete
+    project scope.
+  - Broadened `PolicyContext.memberships` to tolerate future membership facts
+    while safely ignoring unknown/malformed facts.
+  - Hardened policy-worker request validation for subject, resource, context,
+    and role-assignment scope fields.
+- Durable outcome: `@saas/policy-engine` implements V1 role/permission
+  evaluation for organization, project, and environment actions.
+  `apps/policy-worker` exposes `/health`, `/v1/policy/authorize`,
+  `/v1/policy/effective-permissions`, and
+  `/v1/policy/validate-role-assignment`. Stage/prod policy Workers are deployed
+  with `workers_dev: false` and no public deploy target; direct workers.dev
+  access returns 404 with Cloudflare error code 1042.
+- Main CI run: `26359832583` — all green (11/11 jobs).
+- Deployed Workers:
+  - stage: `policy-worker-stage`, version `124ed276-4352-45c5-a3d6-372e5f3f0a84`
+  - prod: `policy-worker-prod`, version `cda9f484-bdb3-4d72-a67b-e77260e1ee39`
+- Reports: `ai/reports/task-0017-implementer.md`,
+  `ai/reports/task-0017-verifier.md`
+
 ## Historical Notes
 
 - PR #1 split product-specific V2 Git catalog work away from the reusable SaaS

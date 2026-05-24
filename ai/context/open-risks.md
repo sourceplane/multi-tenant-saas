@@ -58,6 +58,12 @@ Last updated: 2026-05-24
   One-time issue; future deploys are safe because the named Worker now exists.
   For future new service binding targets, consider an Orun `dependsOn` edge or
   accept the one-time retry pattern.
+- Task 0017 deployed policy-worker but did not wire any callers. Membership
+  mutations still need an explicit policy authorization call before invitation
+  management or member administration expands the mutation surface.
+- policy-worker intentionally has no public route, so post-deploy verification
+  is limited to Cloudflare deployment metadata and workers.dev-disabled checks
+  until a same-environment service-binding caller exists.
 
 ## Resolved Risks
 
@@ -79,6 +85,12 @@ Last updated: 2026-05-24
 - Task 0015 `bootstrapOrganization` atomicity resolved via CTE-based single
   statement. `acceptInvitation` expiry race resolved via pre-validation + CTE
   with expires_at guard.
+- Task 0017 policy scope escalation risk resolved before merge: project and
+  environment actions now require explicit `resource.projectId`, and malformed
+  or unknown membership facts are ignored safely.
+- Task 0017 policy-worker public exposure risk resolved before merge and
+  verified after deployment: stage/prod use `workers_dev: false`, have no public
+  deploy target, and direct workers.dev access returns Cloudflare error 1042.
 
 ## Watch Items
 

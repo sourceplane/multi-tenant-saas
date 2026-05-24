@@ -1,6 +1,6 @@
 # Decisions
 
-Last updated: 2026-05-23
+Last updated: 2026-05-24
 
 ## Active Decisions
 
@@ -64,6 +64,14 @@ Last updated: 2026-05-23
   `v2.3.0` as the verified runtime baseline. Proposal
   `ai/proposals/task-0009-spec-update.md` is implemented.
 - Downstream Worker binding and runtime tasks are now unblocked.
+- Task 0017 establishes the V1 policy authorization model as code in
+  `@saas/policy-engine` with an internal `apps/policy-worker` wrapper.
+  Organization-scoped actions use `orgId`; project/environment-scoped actions
+  require both `orgId` and explicit `projectId`. Unknown future membership facts
+  must be tolerated and ignored until their shape is implemented.
+- Stage/prod policy-worker deployments must stay private: `workers_dev: false`
+  with no direct public route. Future callers should use same-environment
+  service bindings or an equivalent internal route, not a public policy facade.
 
 ## Pending Decisions
 
@@ -71,10 +79,11 @@ Last updated: 2026-05-23
   deferred. The missing `cloudflare-hyperdrive` -> `supabase` dependency was
   documented as non-blocking by Task 0009 verification because current CI
   behavior and live state are stable.
-- Orun spec alignment (v2.3.0) is complete. Downstream Worker binding/runtime
-  work is now unblocked.
 - `dev` Supabase provisioning remains deferred until a later task explicitly
   changes that decision.
+- Wiring policy authorization into membership-worker mutating routes is pending.
+  This should happen before adding invitation or member-administration mutation
+  surfaces.
 
 ## Verified Inputs
 

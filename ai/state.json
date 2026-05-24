@@ -1,6 +1,6 @@
 {
   "goal": "Supabase/Postgres-backed multi-organization Orun SaaS control plane",
-  "current_task": "0016",
+  "current_task": "0017",
   "completed": [
     "0001",
     "0001.1",
@@ -22,27 +22,29 @@
     "0013",
     "0014",
     "0015",
-    "0016"
+    "0016",
+    "0017"
   ],
   "repo_health": "green",
-  "next_focus": "next-task-generation",
+  "next_focus": "membership-policy-wiring-and-invitations",
   "last_verified": "2026-05-24",
   "waiting_for_input": "false",
-  "task_agent": "ai/reports/task-0016-verifier.md",
+  "task_agent": "ai/reports/task-0017-verifier.md",
   "notes": [
-    "Task 0016 verified PASS: membership Worker organization runtime merged and deployed.",
-    "PR #57 squash-merged at 724e218, main CI run 26354915929 passed (12/12 jobs, after first-deploy retry).",
-    "Verifier fixes: workers_dev: false (security), slug trailing-hyphen (edge case), unused imports (lint).",
+    "Task 0017 verified PASS: policy authorization seam merged and deployed.",
+    "PR #58 squash-merged at 674dded; final PR head c62f1cc included verifier fixes.",
+    "Post-merge main CI run 26359832583 passed (11/11 jobs). PR CI runs 26359077449 and 26359772347 passed.",
+    "Verifier fixes: project/environment scoped actions require resource.projectId, future/unknown membership facts are ignored safely, and policy-worker request validation rejects malformed core fields.",
+    "policy-worker-stage deployed version 124ed276-4352-45c5-a3d6-372e5f3f0a84 with workers_dev false and no public deploy target.",
+    "policy-worker-prod deployed version cda9f484-bdb3-4d72-a67b-e77260e1ee39 with workers_dev false and no public deploy target.",
+    "Direct workers.dev access to policy-worker stage/prod returns 404 with Cloudflare error code 1042.",
+    "108 tests pass across contracts, policy-engine, and policy-worker suites after verifier fixes.",
     "membership-worker-stage and membership-worker-prod deployed with workers_dev: false.",
     "api-edge-stage and api-edge-prod redeployed with IDENTITY_WORKER + MEMBERSHIP_WORKER service bindings.",
-    "Live stage smoke: auth flow → org creation → list → get all verified end-to-end.",
-    "Direct public access to membership-worker returns 404 (workers.dev route disabled).",
-    "First-deployment ordering issue: api-edge-prod failed initial deploy because membership-worker-prod didn't exist. Resolved on retry.",
-    "68 tests pass (15 membership-worker + 53 api-edge). Contracts extended with @saas/contracts/membership.",
     "Existing Hyperdrive bindings preserved: stage 08f7c6055f544a3890a585d88fd92348, prod ab2c21c2db6245a59c91588fcac7107a.",
     "Supabase stage ref: thielrrsejwhjkdluwqm, prod ref: npbvrxkrlyrpnhrqucxa. dev remains unprovisioned.",
     "Identity Worker deployments unchanged: stage version 678702b2, prod version 57b47417.",
-    "Remaining gaps: invitations, member administration, policy Worker, audit/events, durable idempotency.",
+    "Remaining gaps after Task 0017: policy-worker is not wired into membership mutations yet; invitations, member administration, audit/events, and durable idempotency remain.",
     "Dead parameters (dryRunCommand, deployCommand) remain in component.yaml files; recommend cleanup.",
     "Ignored generated outputs must not be staged or committed: dist, node_modules, .orun, Terraform dirs, plan.json."
   ]
