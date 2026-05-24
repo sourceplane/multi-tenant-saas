@@ -52,7 +52,7 @@ export async function route(request: Request, env: Env): Promise<Response> {
         if (!actor) {
           return errorResponse("unauthenticated", "Authentication required", 401, requestId);
         }
-        return handleListOrganizations(env, requestId, actor);
+        return handleListOrganizations(env, requestId, actor, url);
       }
       return methodNotAllowed(requestId);
     }
@@ -64,7 +64,7 @@ export async function route(request: Request, env: Env): Promise<Response> {
         if (!actor) {
           return errorResponse("unauthenticated", "Authentication required", 401, requestId);
         }
-        return handleListMembers(env, requestId, actor, orgMembersMatch[1]!);
+        return handleListMembers(env, requestId, actor, orgMembersMatch[1]!, url);
       }
       return methodNotAllowed(requestId);
     }

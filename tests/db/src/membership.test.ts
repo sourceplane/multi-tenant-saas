@@ -1052,6 +1052,162 @@ describe("MembershipRepository", () => {
     });
   });
 
+  describe("listOrganizationsForSubjectPaged", () => {
+    it("uses parameterized query with deterministic ordering and limit+1", async () => {
+      const { executor, queries } = createFakeExecutor({ rows: [SAMPLE_ORG_ROW] });
+      const repo = createMembershipRepository(executor);
+
+      await repo.listOrganizationsForSubjectPaged("usr-001", { limit: 10, cursor: null });
+
+      expect(queries).toHaveLength(1);
+      expect(queries[0]!.text).toContain("$1");
+      expect(queries[0]!.text).toContain("$2");
+      expect(queries[0]!.text).toContain("ORDER BY");
+      expect(queries[0]!.text).toContain("LIMIT");
+      expect(queries[0]!.params).toEqual(["usr-001", 11]);
+    });
+
+    it("applies cursor filtering with timestamp and id tie-breaker", async () => {
+      const { executor, queries } = createFakeExecutor({ rows: [] });
+      const repo = createMembershipRepository(executor);
+
+      await repo.listOrganizationsForSubjectPaged("usr-001", {
+        limit: 5,
+        cursor: { createdAt: "2026-01-15T10:00:00.000Z", id: "org-001" },
+      });
+
+      expect(queries).toHaveLength(1);
+      expect(queries[0]!.text).toContain("$3");
+      expect(queries[0]!.text).toContain("$4");
+      expect(queries[0]!.params).toEqual(["usr-001", 6, "2026-01-15T10:00:00.000Z", "org-001"]);
+    });
+
+    it("returns nextCursor when more rows exist", async () => {
+      const rows = Array.from({ length: 3 }, (_, i) => ({
+        ...SAMPLE_ORG_ROW,
+        id: `org-${String(i).padStart(3, "0")}`,
+        created_at: new Date(NOW.getTime() - i * 1000).toISOString(),
+        updated_at: new Date(NOW.getTime() - i * 1000).toISOString(),
+      }));
+      const { executor } = createFakeExecutor({ rows });
+      const repo = createMembershipRepository(executor);
+
+      const result = await repo.listOrganizationsForSubjectPaged("usr-001", { limit: 2, cursor: null });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value.items).toHaveLength(2);
+        expect(result.value.nextCursor).not.toBeNull();
+        expect(result.value.nextCursor!.id).toBe("org-001");
+      }
+    });
+
+    it("returns null nextCursor when no more rows", async () => {
+      const rows = [SAMPLE_ORG_ROW];
+      const { executor } = createFakeExecutor({ rows });
+      const repo = createMembershipRepository(executor);
+
+      const result = await repo.listOrganizationsForSubjectPaged("usr-001", { limit: 10, cursor: null });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value.items).toHaveLength(1);
+        expect(result.value.nextCursor).toBeNull();
+      }
+    });
+
+    it("returns empty result safely", async () => {
+      const { executor } = createFakeExecutor({ rows: [] });
+      const repo = createMembershipRepository(executor);
+
+      const result = await repo.listOrganizationsForSubjectPaged("usr-001", { limit: 50, cursor: null });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value.items).toHaveLength(0);
+        expect(result.value.nextCursor).toBeNull();
+      }
+    });
+  });
+
+  describe("listMembersPaged", () => {
+    it("uses parameterized query with deterministic ordering and limit+1", async () => {
+      const { executor, queries } = createFakeExecutor({ rows: [SAMPLE_MEMBER_ROW] });
+      const repo = createMembershipRepository(executor);
+
+      await repo.listMembersPaged("org-001", { limit: 10, cursor: null });
+
+      expect(queries).toHaveLength(1);
+      expect(queries[0]!.text).toContain("$1");
+      expect(queries[0]!.text).toContain("$2");
+      expect(queries[0]!.text).toContain("ORDER BY");
+      expect(queries[0]!.text).toContain("LIMIT");
+      expect(queries[0]!.params).toEqual(["org-001", 11]);
+    });
+
+    it("applies cursor filtering with timestamp and id tie-breaker", async () => {
+      const { executor, queries } = createFakeExecutor({ rows: [] });
+      const repo = createMembershipRepository(executor);
+
+      await repo.listMembersPaged("org-001", {
+        limit: 5,
+        cursor: { createdAt: "2026-01-15T10:00:00.000Z", id: "mem-001" },
+      });
+
+      expect(queries).toHaveLength(1);
+      expect(queries[0]!.text).toContain("$3");
+      expect(queries[0]!.text).toContain("$4");
+      expect(queries[0]!.params).toEqual(["org-001", 6, "2026-01-15T10:00:00.000Z", "mem-001"]);
+    });
+
+    it("returns nextCursor when more rows exist", async () => {
+      const rows = Array.from({ length: 3 }, (_, i) => ({
+        ...SAMPLE_MEMBER_ROW,
+        id: `mem-${String(i).padStart(3, "0")}`,
+        created_at: new Date(NOW.getTime() - i * 1000).toISOString(),
+        updated_at: new Date(NOW.getTime() - i * 1000).toISOString(),
+      }));
+      const { executor } = createFakeExecutor({ rows });
+      const repo = createMembershipRepository(executor);
+
+      const result = await repo.listMembersPaged("org-001", { limit: 2, cursor: null });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value.items).toHaveLength(2);
+        expect(result.value.nextCursor).not.toBeNull();
+        expect(result.value.nextCursor!.id).toBe("mem-001");
+      }
+    });
+
+    it("returns null nextCursor when no more rows", async () => {
+      const rows = [SAMPLE_MEMBER_ROW];
+      const { executor } = createFakeExecutor({ rows });
+      const repo = createMembershipRepository(executor);
+
+      const result = await repo.listMembersPaged("org-001", { limit: 10, cursor: null });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value.items).toHaveLength(1);
+        expect(result.value.nextCursor).toBeNull();
+      }
+    });
+
+    it("returns empty result safely", async () => {
+      const { executor } = createFakeExecutor({ rows: [] });
+      const repo = createMembershipRepository(executor);
+
+      const result = await repo.listMembersPaged("org-001", { limit: 50, cursor: null });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value.items).toHaveLength(0);
+        expect(result.value.nextCursor).toBeNull();
+      }
+    });
+  });
+
   describe("Worker-safe import isolation", () => {
     it("does not import runner-only modules", async () => {
       const mod = await import("@saas/db/membership");

@@ -11,6 +11,9 @@ export type {
   MembershipRepository,
   MembershipResult,
   MembershipRepositoryError,
+  CursorPosition,
+  PageQueryParams,
+  PagedResult,
 } from "./types.js";
 
 export { createMembershipRepository } from "./repository.js";

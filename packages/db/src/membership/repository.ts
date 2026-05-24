@@ -5,11 +5,14 @@ import type {
   CreateOrganizationInput,
   CreateOrganizationMemberInput,
   CreateRoleAssignmentInput,
+  CursorPosition,
   MembershipRepository,
   MembershipResult,
   Organization,
   OrganizationInvitation,
   OrganizationMember,
+  PagedResult,
+  PageQueryParams,
   RoleAssignment,
 } from "./types.js";
 
@@ -152,6 +155,41 @@ export function createMembershipRepository(executor: SqlExecutor): MembershipRep
       }
     },
 
+    async listOrganizationsForSubjectPaged(subjectId: string, params: PageQueryParams): Promise<MembershipResult<PagedResult<Organization>>> {
+      try {
+        const fetchLimit = params.limit + 1;
+        let sql: string;
+        let values: unknown[];
+        if (params.cursor) {
+          sql = `SELECT o.* FROM membership.organizations o
+           INNER JOIN membership.organization_members m ON m.org_id = o.id
+           WHERE m.subject_id = $1 AND m.status = 'active'
+             AND (o.created_at, o.id) < ($3, $4)
+           ORDER BY o.created_at DESC, o.id DESC
+           LIMIT $2`;
+          values = [subjectId, fetchLimit, params.cursor.createdAt, params.cursor.id];
+        } else {
+          sql = `SELECT o.* FROM membership.organizations o
+           INNER JOIN membership.organization_members m ON m.org_id = o.id
+           WHERE m.subject_id = $1 AND m.status = 'active'
+           ORDER BY o.created_at DESC, o.id DESC
+           LIMIT $2`;
+          values = [subjectId, fetchLimit];
+        }
+        const result = await executor.execute<Record<string, unknown>>(sql, values);
+        const rows = result.rows.map(mapOrganization);
+        let nextCursor: CursorPosition | null = null;
+        if (rows.length > params.limit) {
+          rows.pop();
+          const last = rows[rows.length - 1]!;
+          nextCursor = { createdAt: last.createdAt.toISOString(), id: last.id };
+        }
+        return { ok: true, value: { items: rows, nextCursor } };
+      } catch {
+        return safeError("Failed to list organizations for subject");
+      }
+    },
+
     async bootstrapOrganization(input: BootstrapOrganizationInput): Promise<MembershipResult<{ org: Organization; member: OrganizationMember; roleAssignment: RoleAssignment }>> {
       try {
         const result = await executor.execute<Record<string, unknown>>(
@@ -255,6 +293,39 @@ export function createMembershipRepository(executor: SqlExecutor): MembershipRep
           [orgId],
         );
         return { ok: true, value: result.rows.map(mapMember) };
+      } catch {
+        return safeError("Failed to list members");
+      }
+    },
+
+    async listMembersPaged(orgId: string, params: PageQueryParams): Promise<MembershipResult<PagedResult<OrganizationMember>>> {
+      try {
+        const fetchLimit = params.limit + 1;
+        let sql: string;
+        let values: unknown[];
+        if (params.cursor) {
+          sql = `SELECT * FROM membership.organization_members
+           WHERE org_id = $1 AND status = 'active'
+             AND (created_at, id) < ($3, $4)
+           ORDER BY created_at DESC, id DESC
+           LIMIT $2`;
+          values = [orgId, fetchLimit, params.cursor.createdAt, params.cursor.id];
+        } else {
+          sql = `SELECT * FROM membership.organization_members
+           WHERE org_id = $1 AND status = 'active'
+           ORDER BY created_at DESC, id DESC
+           LIMIT $2`;
+          values = [orgId, fetchLimit];
+        }
+        const result = await executor.execute<Record<string, unknown>>(sql, values);
+        const rows = result.rows.map(mapMember);
+        let nextCursor: CursorPosition | null = null;
+        if (rows.length > params.limit) {
+          rows.pop();
+          const last = rows[rows.length - 1]!;
+          nextCursor = { createdAt: last.createdAt.toISOString(), id: last.id };
+        }
+        return { ok: true, value: { items: rows, nextCursor } };
       } catch {
         return safeError("Failed to list members");
       }

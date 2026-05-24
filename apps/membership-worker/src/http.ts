@@ -1,10 +1,10 @@
 import type { ErrorCode } from "@saas/contracts/errors";
 
-export function successResponse<T>(data: T, requestId: string, status = 200): Response {
+export function successResponse<T>(data: T, requestId: string, status = 200, cursor: string | null = null): Response {
   return Response.json(
     {
       data,
-      meta: { requestId, cursor: null },
+      meta: { requestId, cursor },
     },
     { status, headers: { "content-type": "application/json" } },
   );
