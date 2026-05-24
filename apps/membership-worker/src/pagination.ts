@@ -1,6 +1,8 @@
 const CURSOR_VERSION = 1;
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 100;
+const ISO_TS_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{3}Z$/;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 export interface PageParams {
   limit: number;
@@ -56,8 +58,8 @@ export function decodeCursor(raw: string): DecodedCursor | null {
       parsed.v !== CURSOR_VERSION ||
       typeof parsed.t !== "string" ||
       typeof parsed.i !== "string" ||
-      !parsed.t ||
-      !parsed.i
+      !ISO_TS_RE.test(parsed.t) ||
+      !UUID_RE.test(parsed.i)
     ) {
       return null;
     }

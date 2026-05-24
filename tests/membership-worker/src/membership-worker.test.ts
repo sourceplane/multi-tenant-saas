@@ -1086,6 +1086,32 @@ describe("pagination", () => {
     expect(json.error.code).toBe("validation_failed");
   });
 
+  it("returns validation_failed for valid base64 cursor with invalid timestamp", async () => {
+    const repo = createPagedRepo();
+    const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+    const badCursor = btoa(JSON.stringify({ v: 1, t: "not-a-timestamp", i: "aaaaaaaa-1111-2222-3333-444444444444" }));
+    const url = new URL(`http://localhost/v1/organizations/x/members?cursor=${badCursor}`);
+
+    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, url, { repo });
+
+    expect(response.status).toBe(422);
+    const json = await response.json() as any;
+    expect(json.error.code).toBe("validation_failed");
+  });
+
+  it("returns validation_failed for valid base64 cursor with invalid id", async () => {
+    const repo = createPagedRepo();
+    const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+    const badCursor = btoa(JSON.stringify({ v: 1, t: "2026-01-15T10:00:00.000Z", i: "not-a-uuid" }));
+    const url = new URL(`http://localhost/v1/organizations/x/members?cursor=${badCursor}`);
+
+    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, url, { repo });
+
+    expect(response.status).toBe(422);
+    const json = await response.json() as any;
+    expect(json.error.code).toBe("validation_failed");
+  });
+
   it("forwards valid cursor to the repository page call", async () => {
     let receivedParams: unknown;
     const repo = {
@@ -1096,12 +1122,12 @@ describe("pagination", () => {
       },
     };
     const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
-    const cursorPayload = btoa(JSON.stringify({ v: 1, t: "2026-01-15T10:00:00.000Z", i: "some-id" }));
+    const cursorPayload = btoa(JSON.stringify({ v: 1, t: "2026-01-15T10:00:00.000Z", i: "aaaaaaaa-1111-2222-3333-444444444444" }));
     const url = new URL(`http://localhost/v1/organizations/x/members?cursor=${cursorPayload}`);
 
     await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, url, { repo });
 
-    expect(receivedParams).toEqual({ limit: 50, cursor: { createdAt: "2026-01-15T10:00:00.000Z", id: "some-id" } });
+    expect(receivedParams).toEqual({ limit: 50, cursor: { createdAt: "2026-01-15T10:00:00.000Z", id: "aaaaaaaa-1111-2222-3333-444444444444" } });
   });
 
   it("sets meta.cursor when another page exists", async () => {
