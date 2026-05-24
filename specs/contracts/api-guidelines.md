@@ -64,6 +64,16 @@ This document defines the public HTTP contract style and the internal service-bo
 - Use cursor pagination for list endpoints.
 - Cursor names should be opaque to clients.
 
+#### V1 List Pagination Parameters
+
+- Query params: `limit` (integer) and `cursor` (string).
+- Default limit: `50`.
+- Maximum limit: `100`.
+- Cursors are opaque and endpoint-owned; clients must not parse or construct them.
+- Invalid `limit` (non-integer, less than 1, greater than 100) or malformed `cursor` returns error code `validation_failed`.
+- The next cursor is returned in the response at `meta.cursor`; it is `null` when no further pages exist.
+- No total count is required or guaranteed.
+
 ### Idempotency
 
 - `POST` endpoints that create or trigger side effects must accept `Idempotency-Key`.

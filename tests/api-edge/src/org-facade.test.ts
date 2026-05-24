@@ -609,4 +609,94 @@ describe("api-edge org facade", () => {
       expect(json).toEqual(envelope);
     });
   });
+
+  describe("pagination query-string forwarding", () => {
+    it("forwards limit and cursor query params to membership-worker for /v1/organizations", async () => {
+      const { fetcher: identityFetcher } = createSessionFetcher("usr_abc123");
+      const { fetcher: membershipFetcher, calls } = createFakeFetcher();
+
+      const request = new Request("https://api.example.com/v1/organizations?limit=10&cursor=abc123", {
+        method: "GET",
+        headers: { authorization: "Bearer sps_ses_abc.secret" },
+      });
+
+      await handleOrgRoute(
+        request,
+        { IDENTITY_WORKER: identityFetcher, MEMBERSHIP_WORKER: membershipFetcher, ENVIRONMENT: "test" },
+        "req_test",
+        "/v1/organizations",
+      );
+
+      const membershipCall = calls.find((c) => c.url.includes("/v1/organizations"));
+      expect(membershipCall).toBeDefined();
+      expect(membershipCall!.url).toContain("limit=10");
+      expect(membershipCall!.url).toContain("cursor=abc123");
+    });
+
+    it("forwards limit and cursor query params to membership-worker for /v1/organizations/{orgId}/members", async () => {
+      const { fetcher: identityFetcher } = createSessionFetcher("usr_abc123");
+      const { fetcher: membershipFetcher, calls } = createFakeFetcher();
+
+      const request = new Request("https://api.example.com/v1/organizations/org_abc123/members?limit=25&cursor=xyz789", {
+        method: "GET",
+        headers: { authorization: "Bearer sps_ses_abc.secret" },
+      });
+
+      await handleOrgRoute(
+        request,
+        { IDENTITY_WORKER: identityFetcher, MEMBERSHIP_WORKER: membershipFetcher, ENVIRONMENT: "test" },
+        "req_test",
+        "/v1/organizations/org_abc123/members",
+      );
+
+      const membershipCall = calls.find((c) => c.url.includes("/members"));
+      expect(membershipCall).toBeDefined();
+      expect(membershipCall!.url).toContain("limit=25");
+      expect(membershipCall!.url).toContain("cursor=xyz789");
+    });
+
+    it("does not forward authorization header to membership-worker", async () => {
+      const { fetcher: identityFetcher } = createSessionFetcher("usr_abc123");
+      const { fetcher: membershipFetcher, calls } = createFakeFetcher();
+
+      const request = new Request("https://api.example.com/v1/organizations?limit=5", {
+        method: "GET",
+        headers: { authorization: "Bearer sps_ses_abc.secret" },
+      });
+
+      await handleOrgRoute(
+        request,
+        { IDENTITY_WORKER: identityFetcher, MEMBERSHIP_WORKER: membershipFetcher, ENVIRONMENT: "test" },
+        "req_test",
+        "/v1/organizations",
+      );
+
+      const membershipCall = calls.find((c) => c.url.includes("/v1/organizations"));
+      expect(membershipCall).toBeDefined();
+      const headers = membershipCall!.init.headers as Headers;
+      expect(headers.get("authorization")).toBeNull();
+    });
+
+    it("preserves empty query string when no params provided", async () => {
+      const { fetcher: identityFetcher } = createSessionFetcher("usr_abc123");
+      const { fetcher: membershipFetcher, calls } = createFakeFetcher();
+
+      const request = new Request("https://api.example.com/v1/organizations", {
+        method: "GET",
+        headers: { authorization: "Bearer sps_ses_abc.secret" },
+      });
+
+      await handleOrgRoute(
+        request,
+        { IDENTITY_WORKER: identityFetcher, MEMBERSHIP_WORKER: membershipFetcher, ENVIRONMENT: "test" },
+        "req_test",
+        "/v1/organizations",
+      );
+
+      const membershipCall = calls.find((c) => c.url.includes("/v1/organizations"));
+      expect(membershipCall).toBeDefined();
+      const url = new URL(membershipCall!.url);
+      expect(url.pathname).toBe("/v1/organizations");
+    });
+  });
 });

@@ -67,6 +67,8 @@ function createFakeRepository(): MembershipRepository & { _orgs: Map<string, Org
     async createMember() { return { ok: false, error: { kind: "internal" as const, message: "not implemented" } }; },
     async getMemberById() { return { ok: false, error: { kind: "internal" as const, message: "not implemented" } }; },
     async listMembers() { return { ok: false, error: { kind: "internal" as const, message: "not implemented" } }; },
+    async listMembersPaged() { return { ok: false, error: { kind: "internal" as const, message: "not implemented" } }; },
+    async listOrganizationsForSubjectPaged() { return { ok: false, error: { kind: "internal" as const, message: "not implemented" } }; },
     async removeMember() { return { ok: false, error: { kind: "internal" as const, message: "not implemented" } }; },
     async createInvitation() { return { ok: false, error: { kind: "internal" as const, message: "not implemented" } }; },
     async getInvitationById() { return { ok: false, error: { kind: "internal" as const, message: "not implemented" } }; },
@@ -834,12 +836,12 @@ describe("handleListMembers handler integration", () => {
         const key = `${id}:${subjectId}`;
         return { ok: true as const, value: roles[key] ?? [] };
       },
-      listMembers: async (id: string) => {
+      listMembersPaged: async (id: string) => {
         if (opts.membersFail) {
           return { ok: false as const, error: { kind: "internal" as const, message: "db error" } };
         }
-        if (id !== orgUuid) return { ok: true as const, value: [] };
-        return { ok: true as const, value: members };
+        if (id !== orgUuid) return { ok: true as const, value: { items: [], nextCursor: null } };
+        return { ok: true as const, value: { items: members, nextCursor: null } };
       },
     };
   }
@@ -857,7 +859,7 @@ describe("handleListMembers handler integration", () => {
     const repo = createFakeRepo();
     const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
-    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, { repo });
+    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, undefined, { repo });
 
     expect(response.status).toBe(200);
     const json = await response.json() as any;
@@ -884,7 +886,7 @@ describe("handleListMembers handler integration", () => {
 
     const repo = createFakeRepo();
     const env = { POLICY_WORKER: policyFetcher, SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
-    await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, { repo });
+    await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, undefined, { repo });
 
     expect(capturedBody.action).toBe("organization.member.list");
     expect(capturedBody.resource).toEqual({ kind: "organization", id: orgUuid, orgId: orgUuid });
@@ -894,7 +896,7 @@ describe("handleListMembers handler integration", () => {
     const repo = createFakeRepo();
     const env = { POLICY_WORKER: createPolicyFetcher(false), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
-    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, { repo });
+    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, undefined, { repo });
 
     expect(response.status).toBe(404);
     const json = await response.json() as any;
@@ -907,7 +909,7 @@ describe("handleListMembers handler integration", () => {
     const repo = createFakeRepo({ actorRolesFail: true });
     const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
-    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, { repo });
+    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, undefined, { repo });
 
     expect(response.status).toBe(404);
     const json = await response.json() as any;
@@ -918,7 +920,7 @@ describe("handleListMembers handler integration", () => {
     const repo = createFakeRepo({ memberRolesFail: true });
     const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
-    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, { repo });
+    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, undefined, { repo });
 
     expect(response.status).toBe(500);
     const json = await response.json() as any;
@@ -931,7 +933,7 @@ describe("handleListMembers handler integration", () => {
     const repo = createFakeRepo({ membersFail: true });
     const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
-    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, { repo });
+    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, undefined, { repo });
 
     expect(response.status).toBe(500);
     const json = await response.json() as any;
@@ -943,7 +945,7 @@ describe("handleListMembers handler integration", () => {
     const policyFetcher = { fetch: async () => { throw new Error("network"); } } as unknown as Fetcher;
     const env = { POLICY_WORKER: policyFetcher, SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
-    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, { repo });
+    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, undefined, { repo });
 
     expect(response.status).toBe(404);
     const json = await response.json() as any;
@@ -954,7 +956,7 @@ describe("handleListMembers handler integration", () => {
     const repo = createFakeRepo();
     const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
-    const response = await handleListMembers(env as any, "req_test", actor, "invalid_id", { repo });
+    const response = await handleListMembers(env as any, "req_test", actor, "invalid_id", undefined, { repo });
 
     expect(response.status).toBe(404);
   });
@@ -963,7 +965,7 @@ describe("handleListMembers handler integration", () => {
     const repo = createFakeRepo();
     const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
-    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, { repo });
+    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, undefined, { repo });
     const text = await response.text();
 
     expect(text).not.toContain("11111111-2222-3333-4444-555555555555");
@@ -978,11 +980,201 @@ describe("handleListMembers handler integration", () => {
     const repo = createFakeRepo();
     const env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
-    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, { repo });
+    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, undefined, { repo });
 
     expect(response.status).toBe(503);
     const json = await response.json() as any;
     expect(json.error.code).toBe("internal_error");
+  });
+});
+
+describe("pagination", () => {
+  const orgUuid = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+  const orgPublicIdStr = `org_${orgUuid.replace(/-/g, "")}`;
+  const actor = { subjectId: "usr_owner", subjectType: "user" };
+
+  function createPagedRepo(opts: { hasNext?: boolean } = {}) {
+    const members: OrganizationMember[] = [
+      { id: "11111111-2222-3333-4444-555555555555", orgId: orgUuid, subjectId: "usr_owner", subjectType: "user", status: "active", createdAt: fixedNow, updatedAt: fixedNow },
+    ];
+    const roles: Record<string, RoleAssignment[]> = {
+      [`${orgUuid}:usr_owner`]: [
+        { id: "ra1", orgId: orgUuid, subjectId: "usr_owner", subjectType: "user", role: "owner", scopeKind: "organization", scopeRef: null, createdAt: fixedNow, revokedAt: null },
+      ],
+    };
+    return {
+      listRoleAssignments: async (id: string, subjectId: string) => {
+        const key = `${id}:${subjectId}`;
+        return { ok: true as const, value: roles[key] ?? [] };
+      },
+      listMembersPaged: async () => {
+        return {
+          ok: true as const,
+          value: {
+            items: members,
+            nextCursor: opts.hasNext ? { createdAt: fixedNow.toISOString(), id: "11111111-2222-3333-4444-555555555555" } : null,
+          },
+        };
+      },
+    };
+  }
+
+  function createPolicyFetcher(allow: boolean) {
+    return {
+      fetch: async () => Response.json({
+        data: { allow, reason: allow ? "granted" : "denied", policyVersion: 1, derivedScope: {} },
+        meta: { requestId: "req_test", cursor: null },
+      }),
+    } as unknown as Fetcher;
+  }
+
+  it("defaults to limit 50 when no query params provided", async () => {
+    const repo = createPagedRepo();
+    const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, undefined, { repo });
+
+    expect(response.status).toBe(200);
+    const json = await response.json() as any;
+    expect(json.data.members).toHaveLength(1);
+    expect(json.meta.cursor).toBeNull();
+  });
+
+  it("uses explicit limit when provided", async () => {
+    const repo = createPagedRepo();
+    const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+    const url = new URL("http://localhost/v1/organizations/x/members?limit=10");
+
+    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, url, { repo });
+
+    expect(response.status).toBe(200);
+  });
+
+  it("returns validation_failed for invalid limit", async () => {
+    const repo = createPagedRepo();
+    const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+    const url = new URL("http://localhost/v1/organizations/x/members?limit=999");
+
+    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, url, { repo });
+
+    expect(response.status).toBe(422);
+    const json = await response.json() as any;
+    expect(json.error.code).toBe("validation_failed");
+  });
+
+  it("returns validation_failed for non-integer limit", async () => {
+    const repo = createPagedRepo();
+    const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+    const url = new URL("http://localhost/v1/organizations/x/members?limit=abc");
+
+    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, url, { repo });
+
+    expect(response.status).toBe(422);
+    const json = await response.json() as any;
+    expect(json.error.code).toBe("validation_failed");
+  });
+
+  it("returns validation_failed for invalid cursor", async () => {
+    const repo = createPagedRepo();
+    const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+    const url = new URL("http://localhost/v1/organizations/x/members?cursor=not_valid_base64!!!");
+
+    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, url, { repo });
+
+    expect(response.status).toBe(422);
+    const json = await response.json() as any;
+    expect(json.error.code).toBe("validation_failed");
+  });
+
+  it("returns validation_failed for valid base64 cursor with invalid timestamp", async () => {
+    const repo = createPagedRepo();
+    const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+    const badCursor = btoa(JSON.stringify({ v: 1, t: "not-a-timestamp", i: "aaaaaaaa-1111-2222-3333-444444444444" }));
+    const url = new URL(`http://localhost/v1/organizations/x/members?cursor=${badCursor}`);
+
+    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, url, { repo });
+
+    expect(response.status).toBe(422);
+    const json = await response.json() as any;
+    expect(json.error.code).toBe("validation_failed");
+  });
+
+  it("returns validation_failed for valid base64 cursor with invalid id", async () => {
+    const repo = createPagedRepo();
+    const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+    const badCursor = btoa(JSON.stringify({ v: 1, t: "2026-01-15T10:00:00.000Z", i: "not-a-uuid" }));
+    const url = new URL(`http://localhost/v1/organizations/x/members?cursor=${badCursor}`);
+
+    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, url, { repo });
+
+    expect(response.status).toBe(422);
+    const json = await response.json() as any;
+    expect(json.error.code).toBe("validation_failed");
+  });
+
+  it("forwards valid cursor to the repository page call", async () => {
+    let receivedParams: unknown;
+    const repo = {
+      listRoleAssignments: async () => ({ ok: true as const, value: [{ id: "ra1", orgId: orgUuid, subjectId: "usr_owner", subjectType: "user", role: "owner", scopeKind: "organization", scopeRef: null, createdAt: fixedNow, revokedAt: null }] }),
+      listMembersPaged: async (_id: string, params: unknown) => {
+        receivedParams = params;
+        return { ok: true as const, value: { items: [], nextCursor: null } };
+      },
+    };
+    const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+    const cursorPayload = btoa(JSON.stringify({ v: 1, t: "2026-01-15T10:00:00.000Z", i: "aaaaaaaa-1111-2222-3333-444444444444" }));
+    const url = new URL(`http://localhost/v1/organizations/x/members?cursor=${cursorPayload}`);
+
+    await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, url, { repo });
+
+    expect(receivedParams).toEqual({ limit: 50, cursor: { createdAt: "2026-01-15T10:00:00.000Z", id: "aaaaaaaa-1111-2222-3333-444444444444" } });
+  });
+
+  it("sets meta.cursor when another page exists", async () => {
+    const repo = createPagedRepo({ hasNext: true });
+    const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, undefined, { repo });
+
+    expect(response.status).toBe(200);
+    const json = await response.json() as any;
+    expect(json.meta.cursor).not.toBeNull();
+    expect(typeof json.meta.cursor).toBe("string");
+  });
+
+  it("sets meta.cursor to null when no more pages", async () => {
+    const repo = createPagedRepo({ hasNext: false });
+    const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, undefined, { repo });
+
+    expect(response.status).toBe(200);
+    const json = await response.json() as any;
+    expect(json.meta.cursor).toBeNull();
+  });
+
+  it("still authorizes before page query", async () => {
+    const repo = createPagedRepo();
+    const env = { POLICY_WORKER: createPolicyFetcher(false), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, undefined, { repo });
+
+    expect(response.status).toBe(404);
+    const json = await response.json() as any;
+    expect(json.error.code).toBe("not_found");
+  });
+
+  it("does not leak cursor format details in validation error", async () => {
+    const repo = createPagedRepo();
+    const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+    const url = new URL("http://localhost/v1/organizations/x/members?cursor=broken");
+
+    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, url, { repo });
+
+    const text = await response.text();
+    expect(text).not.toContain("JSON");
+    expect(text).not.toContain("base64");
+    expect(text).not.toContain("atob");
   });
 });
 
