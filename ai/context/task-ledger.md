@@ -1,6 +1,6 @@
 # Task Ledger
 
-Last updated: 2026-05-23
+Last updated: 2026-05-24
 
 ## Task 0001
 
@@ -313,6 +313,87 @@ Last updated: 2026-05-23
   - prod: `identity-worker-prod`, version `57b47417`, deployed `2026-05-23T22:42:20Z`
 - Reports: `ai/reports/task-0013-implementer.md`,
   `ai/reports/task-0013-verifier.md`
+
+## Task 0014
+
+- Agent: Implementer → Verifier
+- Prompt: `ai/tasks/task-0014.md`
+- Verifier prompt: `ai/tasks/task-0014-verifier.md`
+- Status: verified PASS
+- PR: #55 (`feat: add api-edge auth facade with identity-worker service binding`),
+  squash-merged at `4268b75`
+- Objective: add the first public `api-edge` service-binding facade for
+  authentication, routing `/v1/auth/*` to `identity-worker` via Cloudflare
+  service bindings (stage→identity-worker-stage, prod→identity-worker-prod).
+- Durable outcome: `api-edge` is now a functioning auth gateway. Facade
+  preserves method, path, query, body, and headers without reading credentials.
+  `/health` reports identity binding status. 30 tests in `@saas/api-edge-tests`.
+  Live stage auth flow proven end-to-end through api-edge. Prod returns
+  `delivery.mode=email` with no raw code through the facade.
+- Main CI run: `26352590956` — all green (5/5 jobs).
+- No verifier fixes required.
+- Reports: `ai/reports/task-0014-implementer.md`,
+  `ai/reports/task-0014-verifier.md`
+
+## Task 0015
+
+- Agent: Implementer → Verifier
+- Prompt: `ai/tasks/task-0015.md`
+- Verifier prompt: `ai/tasks/task-0015-verifier.md`
+- Status: verified PASS
+- PR: #56 (`feat: add membership persistence foundation — schema, repository, and
+  Orun path fix`), squash-merged at `2e56bad`
+- Objective: add the membership persistence foundation: membership-owned database
+  migration plus Worker-safe typed repository adapters for organizations, members,
+  invitations, and role assignments.
+- Verifier fixes:
+  - `bootstrapOrganization` replaced three sequential INSERTs with a single CTE
+    statement (dependent INSERT chain + CROSS JOIN) for all-or-nothing atomicity.
+  - `acceptInvitation` restructured to pre-validate invitation state, then use a
+    single CTE with `expires_at > $2` guard for atomic accept+member creation.
+    Prevents expired invitations from being marked accepted.
+- Durable outcome: `@saas/db/membership` repository adapter exists with atomic
+  bootstrap and safe invitation acceptance. Migration `020_membership_core` applied
+  to both stage and prod. `@saas/contracts` has `OrganizationRole`, `ProjectRole`,
+  `TenancyRole`, `RoleScopeKind`, `RoleAssignmentFact` types. 167 tests pass.
+  `db-migrate` Orun component detects migration file changes via `paths`.
+- Main CI run: `26353527266` — all green (10/10 jobs).
+- Reports: `ai/reports/task-0015-implementer.md`,
+  `ai/reports/task-0015-verifier.md`
+
+## Task 0016
+
+- Agent: Implementer → Verifier
+- Prompt: `ai/tasks/task-0016.md`
+- Verifier prompt: `ai/tasks/task-0016-verifier.md`
+- Status: verified PASS
+- PR: #57 (`feat: add membership-worker org runtime and api-edge facade (#57)`),
+  squash-merged at `724e218`
+- Objective: add the first deployable membership Worker organization runtime
+  and public `api-edge` organization facade for:
+  - `POST /v1/organizations`
+  - `GET /v1/organizations`
+  - `GET /v1/organizations/{orgId}`
+- Verifier fixes:
+  - Added `workers_dev: false` to stage/prod in membership-worker wrangler.jsonc
+    to prevent public access and actor header spoofing.
+  - Fixed trailing-hyphen edge case in generated slugs after truncation.
+  - Removed unused type imports from organization service.
+- Durable outcome: `apps/membership-worker` deployed to stage and prod with
+  `workers_dev: false`. `api-edge` stage/prod redeployed with `MEMBERSHIP_WORKER`
+  service bindings. Live auth flow → org creation → list → get verified end-to-end
+  on stage. Direct public access to membership-worker returns 404 (workers.dev
+  route disabled). 68 tests pass (15 membership-worker + 53 api-edge). Contracts
+  extended with `@saas/contracts/membership` organization types.
+- Main CI run: `26354915929` — all green (12/12 jobs, after one-time first-deploy
+  retry for api-edge-prod).
+- Deployed Workers:
+  - stage: `membership-worker-stage` (workers_dev disabled, SOURCEPLANE_DB Hyperdrive)
+  - prod: `membership-worker-prod` (workers_dev disabled, SOURCEPLANE_DB Hyperdrive)
+  - stage: `api-edge-stage` (IDENTITY_WORKER + MEMBERSHIP_WORKER bindings)
+  - prod: `api-edge-prod` (IDENTITY_WORKER + MEMBERSHIP_WORKER bindings)
+- Reports: `ai/reports/task-0016-implementer.md`,
+  `ai/reports/task-0016-verifier.md`
 
 ## Historical Notes
 

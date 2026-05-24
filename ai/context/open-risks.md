@@ -39,14 +39,25 @@ Last updated: 2026-05-24
   adoption scaffold from Task 0002 remain live historical resources and are not
   owned by current repo source.
 - Dead `dryRunCommand` and `deployCommand` parameters in
-  `apps/identity-worker/component.yaml` point to `--env prod` but are
-  overridden by the composition template. Non-blocking; recommend cleanup.
+  `apps/api-edge/component.yaml` and `apps/identity-worker/component.yaml` point
+  to `--env prod` but are overridden by the composition template. Non-blocking;
+  recommend cleanup.
 - Tests in `tests/identity-worker` re-implement auth service logic rather than
   importing from Worker source. Low risk since live deployment proves behavior,
   but a future maintenance task should improve import structure.
-- Until the follow-up api-edge facade task lands, `api-edge` still does not
-  route `/v1/auth/*`. The identity-worker is reachable directly at its own URL
-  but not through the edge gateway.
+- Membership child tables do not have foreign keys to `membership.organizations`.
+  Referential integrity is enforced at the application layer (CTE dependency chain
+  in bootstrap, repository adapter write ordering). Acceptable for autocommit-safe
+  bounded-context persistence. Revisit if integrity gaps appear.
+- `SqlExecutor` does not expose explicit transaction control (`BEGIN/COMMIT`).
+  CTE-based atomicity solves immediate needs (bootstrap, accept-invitation). A
+  future task may add a transaction-capable executor seam if multi-statement
+  transactions are required.
+- Task 0016 first-deployment ordering: `api-edge-prod` deploy failed initially
+  because `membership-worker-prod` did not exist yet. Resolved on retry.
+  One-time issue; future deploys are safe because the named Worker now exists.
+  For future new service binding targets, consider an Orun `dependsOn` edge or
+  accept the one-time retry pattern.
 
 ## Resolved Risks
 
@@ -62,6 +73,12 @@ Last updated: 2026-05-24
   boundary. Live stage auth flow confirmed correct UUID persistence.
 - Task 0013 prod debug-delivery boundary is verified. Prod `DEBUG_DELIVERY=false`
   is enforced; live prod `/v1/auth/login/start` returns no raw code.
+- Task 0014 api-edge auth facade is deployed. `api-edge` now routes `/v1/auth/*`
+  to identity-worker via service bindings. Live stage/prod auth flow through
+  api-edge proven; prod returns no debug code through the facade.
+- Task 0015 `bootstrapOrganization` atomicity resolved via CTE-based single
+  statement. `acceptInvitation` expiry race resolved via pre-validation + CTE
+  with expires_at guard.
 
 ## Watch Items
 
