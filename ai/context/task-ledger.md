@@ -427,6 +427,35 @@ Last updated: 2026-05-24
 - Reports: `ai/reports/task-0017-implementer.md`,
   `ai/reports/task-0017-verifier.md`
 
+## Task 0018
+
+- Agent: Implementer → Verifier
+- Prompt: `ai/tasks/task-0018.md`
+- Verifier prompt: `ai/tasks/task-0018-verifier.md`
+- Status: verified PASS
+- PR: #59 (`feat: wire membership-worker to policy-worker for org-read
+  authorization`), squash-merged at `43f68c4`
+- Objective: wire membership-worker to policy-worker through a private service
+  binding and policy-gate the existing `GET /v1/organizations/{orgId}` path
+  without expanding the public membership API.
+- Verifier fix:
+  - Policy-client was parsing `allow` at the top level of the JSON response,
+    but policy-worker wraps the result under `{ data: AuthorizationResponse,
+    meta: {...} }`. Fixed to unwrap `data.allow` from the envelope. Updated
+    test fakes to return the real envelope shape and added focused tests for
+    repository role-list failure and missing data field.
+- Durable outcome: `apps/membership-worker` has `POLICY_WORKER` service
+  binding to same-environment policy Workers. `GET /v1/organizations/{orgId}`
+  authorizes through policy-worker using action `organization.read`. Policy
+  denial returns `not_found` (no enumeration). Missing binding, fetch errors,
+  non-OK responses, and malformed envelopes all fail closed. 33 membership-
+  worker tests pass. `component.yaml` has `dependsOn` edge to policy-worker
+  accepted by Orun validation.
+- Main CI run: `26361054065` — all green (8/8 jobs).
+- PR CI run (final head): `26360963260` — all green (8/8 jobs).
+- Reports: `ai/reports/task-0018-implementer.md`,
+  `ai/reports/task-0018-verifier.md`
+
 ## Historical Notes
 
 - PR #1 split product-specific V2 Git catalog work away from the reusable SaaS
