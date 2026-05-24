@@ -1,6 +1,6 @@
 {
   "goal": "Supabase/Postgres-backed multi-organization Orun SaaS control plane",
-  "current_task": "0018",
+  "current_task": null,
   "completed": [
     "0001",
     "0001.1",
@@ -24,24 +24,25 @@
     "0015",
     "0016",
     "0017",
-    "0018"
+    "0018",
+    "0019"
   ],
   "repo_health": "green",
-  "next_focus": "invitation-member-administration",
+  "next_focus": "next-task-generation",
   "last_verified": "2026-05-24",
   "waiting_for_input": "false",
   "task_agent": null,
   "notes": [
-    "Task 0018 verified PASS: membership-worker to policy-worker binding merged and deployed.",
-    "PR #59 squash-merged at 43f68c4; final PR head 312047d included verifier envelope-parsing fix.",
-    "Post-merge main CI run 26361054065 passed (8/8 jobs). PR CI run 26360963260 passed (8/8 jobs).",
-    "Verifier fix: policy-client was checking for allow at the top level of the response instead of under data.allow in the { data, meta } envelope. Fixed to unwrap the envelope correctly.",
-    "membership-worker stage: deployed with POLICY_WORKER → policy-worker-stage, workers_dev: false, SOURCEPLANE_DB Hyperdrive.",
-    "membership-worker prod: deployed with POLICY_WORKER → policy-worker-prod, workers_dev: false, SOURCEPLANE_DB Hyperdrive.",
-    "GET /v1/organizations/{orgId} now authorizes via policy-worker action organization.read instead of local role check.",
-    "33 membership-worker tests pass; 20 policy-worker tests pass.",
-    "Orun validates with dependsOn edge from membership-worker to policy-worker.",
-    "Remaining gaps: invitation/member-admin routes, audit/events, durable idempotency.",
+    "Task 0019 verified PASS: member-list endpoint merged and deployed via PR #60.",
+    "PR #60 squash-merged at 71c9549; final PR head 87787ab included verifier DI seam + handler integration tests.",
+    "Post-merge main CI run 26362528343 passed (15/15 jobs). PR CI run 26362460057 passed (15/15 jobs).",
+    "Verifier fix: added optional deps parameter to handleListMembers for dependency injection, enabling end-to-end handler testing with fake repo.",
+    "GET /v1/organizations/{orgId}/members authorized via policy-worker action organization.member.list.",
+    "membership-worker stage/prod: deployed with POLICY_WORKER binding, workers_dev: false, SOURCEPLANE_DB Hyperdrive.",
+    "api-edge stage/prod: deployed with IDENTITY_WORKER + MEMBERSHIP_WORKER bindings, forwards members route after auth.",
+    "53 membership-worker tests pass (10 new handler integration tests); 60 api-edge tests pass.",
+    "Orun plan: 6 components × 3 envs → 14 jobs. All deploy verify jobs pass.",
+    "Remaining gaps: invitation/member-admin routes, audit/events, durable idempotency, cursor pagination.",
     "Dead parameters (dryRunCommand, deployCommand) remain in component.yaml files; recommend cleanup.",
     "Ignored generated outputs must not be staged or committed: dist, node_modules, .orun, Terraform dirs, plan.json."
   ]
