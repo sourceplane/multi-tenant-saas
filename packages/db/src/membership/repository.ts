@@ -527,14 +527,12 @@ export function createMembershipRepository(executor: SqlExecutor): MembershipRep
             INSERT INTO membership.organization_members (id, org_id, subject_id, subject_type, created_at, updated_at)
             SELECT $5, org_id, $6, $7, $8, $8
             FROM accepted_inv
-            ON CONFLICT (id) DO NOTHING
             RETURNING *
           ),
           new_role AS (
             INSERT INTO membership.role_assignments (id, org_id, subject_id, subject_type, role, scope_kind, scope_ref, created_at)
             SELECT $9, org_id, $10, $11, role, 'organization', NULL, $12
             FROM accepted_inv
-            ON CONFLICT (id) DO NOTHING
             RETURNING *
           )
           SELECT
