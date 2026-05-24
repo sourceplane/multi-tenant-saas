@@ -1,6 +1,4 @@
 export interface Env {
   SOURCEPLANE_DB?: Hyperdrive;
-  IDENTITY_WORKER?: Fetcher;
-  MEMBERSHIP_WORKER?: Fetcher;
   ENVIRONMENT: string;
 }
