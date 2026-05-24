@@ -21,7 +21,8 @@ function generateSlugFromName(name: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
-    .slice(0, SLUG_MAX);
+    .slice(0, SLUG_MAX)
+    .replace(/-+$/, "");
 }
 
 export async function handleCreateOrganization(

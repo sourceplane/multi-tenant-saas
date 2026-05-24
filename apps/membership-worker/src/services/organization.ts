@@ -1,4 +1,4 @@
-import type { MembershipRepository, MembershipResult, Organization, OrganizationMember, RoleAssignment } from "@saas/db/membership";
+import type { MembershipRepository } from "@saas/db/membership";
 import { orgPublicId } from "../ids.js";
 
 export interface ActorContext {
