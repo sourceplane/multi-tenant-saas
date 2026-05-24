@@ -4,6 +4,9 @@ import { handleCreateOrganization } from "./handlers/create-organization.js";
 import { handleListOrganizations } from "./handlers/list-organizations.js";
 import { handleGetOrganization } from "./handlers/get-organization.js";
 import { handleListMembers } from "./handlers/list-members.js";
+import { handleCreateInvitation } from "./handlers/create-invitation.js";
+import { handleListInvitations } from "./handlers/list-invitations.js";
+import { handleRevokeInvitation } from "./handlers/revoke-invitation.js";
 import { errorResponse, notFound, methodNotAllowed } from "./http.js";
 import { generateRequestId } from "./ids.js";
 
@@ -29,6 +32,8 @@ function resolveActor(request: Request): ActorContext | null {
 
 const ORG_ID_RE = /^\/v1\/organizations\/([^/]+)$/;
 const ORG_MEMBERS_RE = /^\/v1\/organizations\/([^/]+)\/members$/;
+const ORG_INVITATIONS_RE = /^\/v1\/organizations\/([^/]+)\/invitations$/;
+const ORG_INVITATION_ID_RE = /^\/v1\/organizations\/([^/]+)\/invitations\/([^/]+)$/;
 
 export async function route(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
@@ -53,6 +58,37 @@ export async function route(request: Request, env: Env): Promise<Response> {
           return errorResponse("unauthenticated", "Authentication required", 401, requestId);
         }
         return handleListOrganizations(env, requestId, actor, url);
+      }
+      return methodNotAllowed(requestId);
+    }
+
+    const invitationIdMatch = url.pathname.match(ORG_INVITATION_ID_RE);
+    if (invitationIdMatch) {
+      if (request.method === "DELETE") {
+        const actor = resolveActor(request);
+        if (!actor) {
+          return errorResponse("unauthenticated", "Authentication required", 401, requestId);
+        }
+        return handleRevokeInvitation(env, requestId, actor, invitationIdMatch[1]!, invitationIdMatch[2]!);
+      }
+      return methodNotAllowed(requestId);
+    }
+
+    const invitationsMatch = url.pathname.match(ORG_INVITATIONS_RE);
+    if (invitationsMatch) {
+      if (request.method === "POST") {
+        const actor = resolveActor(request);
+        if (!actor) {
+          return errorResponse("unauthenticated", "Authentication required", 401, requestId);
+        }
+        return handleCreateInvitation(request, env, requestId, actor, invitationsMatch[1]!);
+      }
+      if (request.method === "GET") {
+        const actor = resolveActor(request);
+        if (!actor) {
+          return errorResponse("unauthenticated", "Authentication required", 401, requestId);
+        }
+        return handleListInvitations(env, requestId, actor, invitationsMatch[1]!, url);
       }
       return methodNotAllowed(requestId);
     }

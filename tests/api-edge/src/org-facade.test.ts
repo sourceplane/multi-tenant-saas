@@ -699,4 +699,288 @@ describe("api-edge org facade", () => {
       expect(url.pathname).toBe("/v1/organizations");
     });
   });
+
+  describe("invitation routes", () => {
+    describe("isOrgRoute for invitation paths", () => {
+      it("matches /v1/organizations/{orgId}/invitations", () => {
+        expect(isOrgRoute("/v1/organizations/org_abc/invitations")).toBe(true);
+      });
+
+      it("matches /v1/organizations/{orgId}/invitations/{invitationId}", () => {
+        expect(isOrgRoute("/v1/organizations/org_abc/invitations/inv_def")).toBe(true);
+      });
+    });
+
+    describe("POST /v1/organizations/{orgId}/invitations", () => {
+      it("forwards POST to MEMBERSHIP_WORKER with body", async () => {
+        const { fetcher: identityFetcher } = createSessionFetcher("usr_abc123");
+        const { fetcher: membershipFetcher, calls: membershipCalls } = createFakeFetcher();
+
+        const request = new Request("https://api.example.com/v1/organizations/org_abc/invitations", {
+          method: "POST",
+          headers: { authorization: "Bearer sps_ses_abc.secret", "content-type": "application/json" },
+          body: JSON.stringify({ email: "test@example.com", role: "viewer" }),
+        });
+
+        const response = await handleOrgRoute(
+          request,
+          { IDENTITY_WORKER: identityFetcher, MEMBERSHIP_WORKER: membershipFetcher, ENVIRONMENT: "test" },
+          "req_test",
+          "/v1/organizations/org_abc/invitations",
+        );
+
+        expect(response.status).toBe(200);
+        expect(membershipCalls).toHaveLength(1);
+        expect(membershipCalls[0]!.url).toContain("/v1/organizations/org_abc/invitations");
+        expect(membershipCalls[0]!.init.method).toBe("POST");
+        expect(membershipCalls[0]!.init.body).toBeDefined();
+      });
+
+      it("resolves auth before forwarding", async () => {
+        const { fetcher: identityFetcher, calls: identityCalls } = createSessionFetcher("usr_admin");
+        const { fetcher: membershipFetcher, calls: membershipCalls } = createFakeFetcher();
+
+        const request = new Request("https://api.example.com/v1/organizations/org_abc/invitations", {
+          method: "POST",
+          headers: { authorization: "Bearer sps_ses_abc.secret", "content-type": "application/json" },
+          body: JSON.stringify({ email: "test@example.com", role: "viewer" }),
+        });
+
+        await handleOrgRoute(
+          request,
+          { IDENTITY_WORKER: identityFetcher, MEMBERSHIP_WORKER: membershipFetcher, ENVIRONMENT: "test" },
+          "req_test",
+          "/v1/organizations/org_abc/invitations",
+        );
+
+        expect(identityCalls).toHaveLength(1);
+        const forwarded = new Headers(membershipCalls[0]!.init.headers as HeadersInit);
+        expect(forwarded.get("x-actor-subject-id")).toBe("usr_admin");
+        expect(forwarded.get("x-actor-subject-type")).toBe("user");
+      });
+
+      it("does not forward bearer token", async () => {
+        const { fetcher: identityFetcher } = createSessionFetcher("usr_abc123");
+        const { fetcher: membershipFetcher, calls: membershipCalls } = createFakeFetcher();
+
+        const request = new Request("https://api.example.com/v1/organizations/org_abc/invitations", {
+          method: "POST",
+          headers: { authorization: "Bearer sps_ses_secret.token", "content-type": "application/json" },
+          body: JSON.stringify({ email: "test@example.com", role: "viewer" }),
+        });
+
+        await handleOrgRoute(
+          request,
+          { IDENTITY_WORKER: identityFetcher, MEMBERSHIP_WORKER: membershipFetcher, ENVIRONMENT: "test" },
+          "req_test",
+          "/v1/organizations/org_abc/invitations",
+        );
+
+        const forwarded = new Headers(membershipCalls[0]!.init.headers as HeadersInit);
+        expect(forwarded.get("authorization")).toBeNull();
+        const rawCall = JSON.stringify(membershipCalls[0]);
+        expect(rawCall).not.toContain("sps_ses_secret");
+      });
+    });
+
+    describe("GET /v1/organizations/{orgId}/invitations", () => {
+      it("forwards GET with query string to MEMBERSHIP_WORKER", async () => {
+        const { fetcher: identityFetcher } = createSessionFetcher("usr_abc123");
+        const { fetcher: membershipFetcher, calls: membershipCalls } = createFakeFetcher();
+
+        const request = new Request("https://api.example.com/v1/organizations/org_abc/invitations?limit=10&cursor=xyz", {
+          method: "GET",
+          headers: { authorization: "Bearer sps_ses_abc.secret" },
+        });
+
+        const response = await handleOrgRoute(
+          request,
+          { IDENTITY_WORKER: identityFetcher, MEMBERSHIP_WORKER: membershipFetcher, ENVIRONMENT: "test" },
+          "req_test",
+          "/v1/organizations/org_abc/invitations",
+        );
+
+        expect(response.status).toBe(200);
+        expect(membershipCalls[0]!.url).toContain("limit=10");
+        expect(membershipCalls[0]!.url).toContain("cursor=xyz");
+      });
+    });
+
+    describe("method restrictions on invitation collection", () => {
+      it("returns 405 for DELETE on collection route", async () => {
+        const { fetcher: identityFetcher } = createSessionFetcher("usr_abc123");
+        const { fetcher: membershipFetcher } = createFakeFetcher();
+
+        const request = new Request("https://api.example.com/v1/organizations/org_abc/invitations", {
+          method: "DELETE",
+          headers: { authorization: "Bearer sps_ses_abc.secret" },
+        });
+
+        const response = await handleOrgRoute(
+          request,
+          { IDENTITY_WORKER: identityFetcher, MEMBERSHIP_WORKER: membershipFetcher, ENVIRONMENT: "test" },
+          "req_test",
+          "/v1/organizations/org_abc/invitations",
+        );
+
+        expect(response.status).toBe(405);
+        const json = await response.json() as any;
+        expect(json.error.code).toBe("unsupported");
+      });
+
+      it("returns 405 for PUT on collection route", async () => {
+        const { fetcher: identityFetcher } = createSessionFetcher("usr_abc123");
+        const { fetcher: membershipFetcher } = createFakeFetcher();
+
+        const request = new Request("https://api.example.com/v1/organizations/org_abc/invitations", {
+          method: "PUT",
+          headers: { authorization: "Bearer sps_ses_abc.secret", "content-type": "application/json" },
+          body: JSON.stringify({}),
+        });
+
+        const response = await handleOrgRoute(
+          request,
+          { IDENTITY_WORKER: identityFetcher, MEMBERSHIP_WORKER: membershipFetcher, ENVIRONMENT: "test" },
+          "req_test",
+          "/v1/organizations/org_abc/invitations",
+        );
+
+        expect(response.status).toBe(405);
+      });
+    });
+
+    describe("DELETE /v1/organizations/{orgId}/invitations/{invitationId}", () => {
+      it("forwards DELETE to MEMBERSHIP_WORKER", async () => {
+        const { fetcher: identityFetcher } = createSessionFetcher("usr_abc123");
+        const { fetcher: membershipFetcher, calls: membershipCalls } = createFakeFetcher();
+
+        const request = new Request("https://api.example.com/v1/organizations/org_abc/invitations/inv_def", {
+          method: "DELETE",
+          headers: { authorization: "Bearer sps_ses_abc.secret" },
+        });
+
+        const response = await handleOrgRoute(
+          request,
+          { IDENTITY_WORKER: identityFetcher, MEMBERSHIP_WORKER: membershipFetcher, ENVIRONMENT: "test" },
+          "req_test",
+          "/v1/organizations/org_abc/invitations/inv_def",
+        );
+
+        expect(response.status).toBe(200);
+        expect(membershipCalls).toHaveLength(1);
+        expect(membershipCalls[0]!.url).toContain("/v1/organizations/org_abc/invitations/inv_def");
+        expect(membershipCalls[0]!.init.method).toBe("DELETE");
+      });
+
+      it("returns 405 for GET on item route", async () => {
+        const { fetcher: identityFetcher } = createSessionFetcher("usr_abc123");
+        const { fetcher: membershipFetcher } = createFakeFetcher();
+
+        const request = new Request("https://api.example.com/v1/organizations/org_abc/invitations/inv_def", {
+          method: "GET",
+          headers: { authorization: "Bearer sps_ses_abc.secret" },
+        });
+
+        const response = await handleOrgRoute(
+          request,
+          { IDENTITY_WORKER: identityFetcher, MEMBERSHIP_WORKER: membershipFetcher, ENVIRONMENT: "test" },
+          "req_test",
+          "/v1/organizations/org_abc/invitations/inv_def",
+        );
+
+        expect(response.status).toBe(405);
+        const json = await response.json() as any;
+        expect(json.error.code).toBe("unsupported");
+      });
+
+      it("returns 405 for POST on item route", async () => {
+        const { fetcher: identityFetcher } = createSessionFetcher("usr_abc123");
+        const { fetcher: membershipFetcher } = createFakeFetcher();
+
+        const request = new Request("https://api.example.com/v1/organizations/org_abc/invitations/inv_def", {
+          method: "POST",
+          headers: { authorization: "Bearer sps_ses_abc.secret", "content-type": "application/json" },
+          body: JSON.stringify({}),
+        });
+
+        const response = await handleOrgRoute(
+          request,
+          { IDENTITY_WORKER: identityFetcher, MEMBERSHIP_WORKER: membershipFetcher, ENVIRONMENT: "test" },
+          "req_test",
+          "/v1/organizations/org_abc/invitations/inv_def",
+        );
+
+        expect(response.status).toBe(405);
+      });
+
+      it("does not forward bearer token for DELETE", async () => {
+        const { fetcher: identityFetcher } = createSessionFetcher("usr_abc123");
+        const { fetcher: membershipFetcher, calls: membershipCalls } = createFakeFetcher();
+
+        const request = new Request("https://api.example.com/v1/organizations/org_abc/invitations/inv_def", {
+          method: "DELETE",
+          headers: { authorization: "Bearer sps_ses_secret.xyz" },
+        });
+
+        await handleOrgRoute(
+          request,
+          { IDENTITY_WORKER: identityFetcher, MEMBERSHIP_WORKER: membershipFetcher, ENVIRONMENT: "test" },
+          "req_test",
+          "/v1/organizations/org_abc/invitations/inv_def",
+        );
+
+        const forwarded = new Headers(membershipCalls[0]!.init.headers as HeadersInit);
+        expect(forwarded.get("authorization")).toBeNull();
+        const rawCall = JSON.stringify(membershipCalls[0]);
+        expect(rawCall).not.toContain("sps_ses_secret");
+      });
+    });
+
+    describe("downstream passthrough for invitation routes", () => {
+      it("passes through success response from membership for create", async () => {
+        const envelope = { data: { invitation: { id: "inv_abc" } }, meta: { requestId: "req_123", cursor: null } };
+        const { fetcher: identityFetcher } = createSessionFetcher("usr_abc123");
+        const { fetcher: membershipFetcher } = createFakeFetcher(Response.json(envelope, { status: 201 }));
+
+        const request = new Request("https://api.example.com/v1/organizations/org_abc/invitations", {
+          method: "POST",
+          headers: { authorization: "Bearer sps_ses_abc.secret", "content-type": "application/json" },
+          body: JSON.stringify({ email: "test@x.com", role: "viewer" }),
+        });
+
+        const response = await handleOrgRoute(
+          request,
+          { IDENTITY_WORKER: identityFetcher, MEMBERSHIP_WORKER: membershipFetcher, ENVIRONMENT: "test" },
+          "req_test",
+          "/v1/organizations/org_abc/invitations",
+        );
+
+        expect(response.status).toBe(201);
+        const json = await response.json();
+        expect(json).toEqual(envelope);
+      });
+
+      it("passes through error response from membership for revoke", async () => {
+        const envelope = { error: { code: "not_found", message: "Invitation not found", details: {}, requestId: "req_123" } };
+        const { fetcher: identityFetcher } = createSessionFetcher("usr_abc123");
+        const { fetcher: membershipFetcher } = createFakeFetcher(Response.json(envelope, { status: 404 }));
+
+        const request = new Request("https://api.example.com/v1/organizations/org_abc/invitations/inv_def", {
+          method: "DELETE",
+          headers: { authorization: "Bearer sps_ses_abc.secret" },
+        });
+
+        const response = await handleOrgRoute(
+          request,
+          { IDENTITY_WORKER: identityFetcher, MEMBERSHIP_WORKER: membershipFetcher, ENVIRONMENT: "test" },
+          "req_test",
+          "/v1/organizations/org_abc/invitations/inv_def",
+        );
+
+        expect(response.status).toBe(404);
+        const json = await response.json();
+        expect(json).toEqual(envelope);
+      });
+    });
+  });
 });

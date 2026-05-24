@@ -5,18 +5,21 @@
   "main": "src/index.ts",
   "minify": false,
   "vars": {
-    "ENVIRONMENT": "local"
+    "ENVIRONMENT": "local",
+    "DEBUG_DELIVERY": "true"
   },
   "env": {
     "dev": {
       "vars": {
-        "ENVIRONMENT": "dev"
+        "ENVIRONMENT": "dev",
+        "DEBUG_DELIVERY": "true"
       }
     },
     "stage": {
       "workers_dev": false,
       "vars": {
-        "ENVIRONMENT": "stage"
+        "ENVIRONMENT": "stage",
+        "DEBUG_DELIVERY": "true"
       },
       "hyperdrive": [
         {
@@ -34,7 +37,8 @@
     "prod": {
       "workers_dev": false,
       "vars": {
-        "ENVIRONMENT": "prod"
+        "ENVIRONMENT": "prod",
+        "DEBUG_DELIVERY": "false"
       },
       "hyperdrive": [
         {

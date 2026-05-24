@@ -1220,4 +1220,94 @@ describe("MembershipRepository", () => {
       expect(exportKeys).not.toContain("SupabaseApiAdapter");
     });
   });
+
+  describe("listInvitationsPaged", () => {
+    it("uses parameterized query with deterministic ordering and limit+1", async () => {
+      const { executor, queries } = createFakeExecutor({ rows: [SAMPLE_INVITATION_ROW] });
+      const repo = createMembershipRepository(executor);
+
+      await repo.listInvitationsPaged("org-001", { limit: 10, cursor: null });
+
+      expect(queries).toHaveLength(1);
+      expect(queries[0]!.text).toContain("$1");
+      expect(queries[0]!.text).toContain("$2");
+      expect(queries[0]!.text).toContain("ORDER BY");
+      expect(queries[0]!.text).toContain("LIMIT");
+      expect(queries[0]!.params).toEqual(["org-001", 11]);
+    });
+
+    it("applies cursor filtering with timestamp and id tie-breaker", async () => {
+      const { executor, queries } = createFakeExecutor({ rows: [] });
+      const repo = createMembershipRepository(executor);
+
+      await repo.listInvitationsPaged("org-001", {
+        limit: 5,
+        cursor: { createdAt: "2026-01-15T10:00:00.000Z", id: "inv-001" },
+      });
+
+      expect(queries).toHaveLength(1);
+      expect(queries[0]!.text).toContain("$3");
+      expect(queries[0]!.text).toContain("$4");
+      expect(queries[0]!.params).toEqual(["org-001", 6, "2026-01-15T10:00:00.000Z", "inv-001"]);
+    });
+
+    it("returns nextCursor when more rows exist", async () => {
+      const rows = Array.from({ length: 3 }, (_, i) => ({
+        ...SAMPLE_INVITATION_ROW,
+        id: `inv-${String(i).padStart(3, "0")}`,
+        created_at: new Date(NOW.getTime() - i * 1000).toISOString(),
+      }));
+      const { executor } = createFakeExecutor({ rows });
+      const repo = createMembershipRepository(executor);
+
+      const result = await repo.listInvitationsPaged("org-001", { limit: 2, cursor: null });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value.items).toHaveLength(2);
+        expect(result.value.nextCursor).not.toBeNull();
+        expect(result.value.nextCursor!.id).toBe("inv-001");
+      }
+    });
+
+    it("returns null nextCursor when no more rows", async () => {
+      const rows = [SAMPLE_INVITATION_ROW];
+      const { executor } = createFakeExecutor({ rows });
+      const repo = createMembershipRepository(executor);
+
+      const result = await repo.listInvitationsPaged("org-001", { limit: 10, cursor: null });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value.items).toHaveLength(1);
+        expect(result.value.nextCursor).toBeNull();
+      }
+    });
+
+    it("returns empty result safely", async () => {
+      const { executor } = createFakeExecutor({ rows: [] });
+      const repo = createMembershipRepository(executor);
+
+      const result = await repo.listInvitationsPaged("org-001", { limit: 50, cursor: null });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value.items).toHaveLength(0);
+        expect(result.value.nextCursor).toBeNull();
+      }
+    });
+
+    it("does not expose token_hash in paginated results", async () => {
+      const { executor } = createFakeExecutor({ rows: [SAMPLE_INVITATION_ROW] });
+      const repo = createMembershipRepository(executor);
+
+      const result = await repo.listInvitationsPaged("org-001", { limit: 10, cursor: null });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value.items[0]).not.toHaveProperty("tokenHash");
+        expect(result.value.items[0]).not.toHaveProperty("token_hash");
+      }
+    });
+  });
 });

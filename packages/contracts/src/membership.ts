@@ -43,3 +43,36 @@ export interface PublicMember {
 export interface ListMembersResponse {
   members: PublicMember[];
 }
+
+export const ORGANIZATION_ROLES = ["owner", "admin", "builder", "viewer", "billing_admin"] as const;
+export type InvitationRole = (typeof ORGANIZATION_ROLES)[number];
+
+export interface CreateInvitationRequest {
+  email: string;
+  role: InvitationRole;
+}
+
+export interface PublicInvitation {
+  id: string;
+  email: string;
+  role: string;
+  status: string;
+  invitedBy: string;
+  expiresAt: string;
+  createdAt: string;
+  acceptedAt: string | null;
+  revokedAt: string | null;
+}
+
+export interface CreateInvitationResponse {
+  invitation: PublicInvitation;
+  delivery?: { mode: string; token: string };
+}
+
+export interface ListInvitationsResponse {
+  invitations: PublicInvitation[];
+}
+
+export interface RevokeInvitationResponse {
+  invitation: PublicInvitation;
+}
