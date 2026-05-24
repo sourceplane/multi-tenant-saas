@@ -138,12 +138,19 @@ function isProjectRole(role: string): role is ProjectRole {
   return VALID_PROJECT_ROLES.has(role);
 }
 
-function isRoleAssignmentFact(fact: MembershipFact): boolean {
-  return fact.kind === "role_assignment" && typeof fact.role === "string" && fact.scope != null;
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value != null && typeof value === "object";
+}
+
+function isRoleAssignmentFact(fact: unknown): fact is MembershipFact {
+  if (!isRecord(fact)) return false;
+  if (fact.kind !== "role_assignment" || typeof fact.role !== "string") return false;
+  if (!isRecord(fact.scope)) return false;
+  return typeof fact.scope.kind === "string" && typeof fact.scope.orgId === "string";
 }
 
 function buildScope(orgId: string, projectId?: string): { orgId: string; projectId?: string } {
-  if (projectId) return { orgId, projectId };
+  if (typeof projectId === "string" && projectId.length > 0) return { orgId, projectId };
   return { orgId };
 }
 
@@ -158,7 +165,7 @@ function allow(reason: string, orgId: string, projectId?: string): Authorization
 export function authorize(input: AuthorizationRequest): AuthorizationResponse {
   const { action, resource, context } = input;
   const orgId = resource.orgId;
-  const projectId = resource.projectId;
+  const projectId = typeof resource.projectId === "string" ? resource.projectId : undefined;
 
   if (!orgId) {
     return deny("invalid_scope", "");
@@ -168,8 +175,12 @@ export function authorize(input: AuthorizationRequest): AuthorizationResponse {
     return deny("unknown_action", orgId, projectId);
   }
 
-  const relevantFacts = context.memberships.filter(
-    (f) => isRoleAssignmentFact(f) && f.scope.orgId === orgId,
+  if (PROJECT_SCOPED_ACTIONS.has(action) && !projectId) {
+    return deny("invalid_scope", orgId);
+  }
+
+  const relevantFacts = context.memberships.filter(isRoleAssignmentFact).filter(
+    (f) => f.scope.orgId === orgId,
   );
 
   if (relevantFacts.length === 0) {
@@ -247,7 +258,7 @@ export function validateRoleAssignment(
 ): RoleAssignmentValidationResponse {
   const { role, scope } = input;
 
-  if (!scope.orgId) {
+  if (typeof scope.orgId !== "string" || scope.orgId.length === 0) {
     return { valid: false, reason: "missing_org_id", policyVersion: POLICY_VERSION };
   }
 
@@ -259,7 +270,7 @@ export function validateRoleAssignment(
   }
 
   if (scope.kind === "project") {
-    if (!scope.projectId) {
+    if (typeof scope.projectId !== "string" || scope.projectId.length === 0) {
       return { valid: false, reason: "missing_project_id", policyVersion: POLICY_VERSION };
     }
     if (!VALID_PROJECT_ROLES.has(role)) {

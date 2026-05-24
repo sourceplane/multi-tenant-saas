@@ -2,6 +2,8 @@ import type { AuthorizationRequest } from "@saas/contracts/policy";
 import { authorize } from "@saas/policy-engine";
 import { successResponse, errorResponse, validationError } from "../http.js";
 
+const SUBJECT_TYPES = new Set(["user", "service_principal", "workflow", "system"]);
+
 export async function handleAuthorize(request: Request, requestId: string): Promise<Response> {
   let body: unknown;
   try {
@@ -33,8 +35,8 @@ function validateAuthorizeBody(body: unknown): Record<string, string[]> | null {
     errors.subject = ["must be an object with type and id"];
   } else {
     const s = b.subject as Record<string, unknown>;
-    if (!s.type || typeof s.type !== "string") {
-      errors["subject.type"] = ["must be a string"];
+    if (!s.type || typeof s.type !== "string" || !SUBJECT_TYPES.has(s.type)) {
+      errors["subject.type"] = ["must be one of user, service_principal, workflow, system"];
     }
     if (!s.id || typeof s.id !== "string") {
       errors["subject.id"] = ["must be a string"];
@@ -55,6 +57,11 @@ function validateAuthorizeBody(body: unknown): Record<string, string[]> | null {
     if (!r.orgId || typeof r.orgId !== "string") {
       errors["resource.orgId"] = ["must be a string"];
     }
+    for (const field of ["id", "projectId", "environmentId"]) {
+      if (r[field] != null && typeof r[field] !== "string") {
+        errors[`resource.${field}`] = ["must be a string"];
+      }
+    }
   }
 
   if (!b.context || typeof b.context !== "object") {
@@ -63,6 +70,9 @@ function validateAuthorizeBody(body: unknown): Record<string, string[]> | null {
     const c = b.context as Record<string, unknown>;
     if (!Array.isArray(c.memberships)) {
       errors["context.memberships"] = ["must be an array"];
+    }
+    if (c.attributes != null && (typeof c.attributes !== "object" || Array.isArray(c.attributes))) {
+      errors["context.attributes"] = ["must be an object"];
     }
   }
 

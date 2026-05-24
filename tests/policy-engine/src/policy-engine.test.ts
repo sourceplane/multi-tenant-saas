@@ -2,11 +2,10 @@ import { authorize, listEffectivePermissions, validateRoleAssignment } from "@sa
 import type {
   AuthorizationRequest,
   EffectivePermissionsRequest,
-  RoleAssignmentValidationRequest,
   MembershipFact,
+  PolicyMembershipFact,
   PolicySubject,
   PolicyResource,
-  PolicyContext,
 } from "@saas/contracts/policy";
 
 const subject: PolicySubject = { type: "user", id: "usr_abc123" };
@@ -26,7 +25,7 @@ function projectFact(role: string, orgId: string, projectId: string): Membership
 function authReq(
   action: string,
   orgId: string,
-  memberships: MembershipFact[],
+  memberships: PolicyMembershipFact[],
   projectId?: string,
 ): AuthorizationRequest {
   const resource: PolicyResource = { kind: "organization", orgId };
@@ -63,6 +62,20 @@ describe("authorize", () => {
       });
       expect(result.allow).toBe(false);
       expect(result.reason).toBe("invalid_scope");
+    });
+
+    it("denies project-scoped actions when projectId is missing", () => {
+      for (const action of [
+        "project.read",
+        "project.update",
+        "project.delete",
+        "environment.read",
+        "environment.update",
+      ]) {
+        const result = authorize(authReq(action, "org_1", [orgFact("owner", "org_1")]));
+        expect(result.allow).toBe(false);
+        expect(result.reason).toBe("invalid_scope");
+      }
     });
   });
 
@@ -394,8 +407,8 @@ describe("authorize", () => {
 
   describe("unknown future facts", () => {
     it("ignores facts with unknown kind values", () => {
-      const facts: MembershipFact[] = [
-        { kind: "entitlement" as any, role: "premium" as any, scope: { kind: "organization", orgId: "org_1" } },
+      const facts: PolicyMembershipFact[] = [
+        { kind: "entitlement", tier: "premium", scope: { kind: "organization", orgId: "org_1" } },
       ];
       const result = authorize(authReq("organization.read", "org_1", facts));
       expect(result.allow).toBe(false);
@@ -408,6 +421,17 @@ describe("authorize", () => {
       ];
       const result = authorize(authReq("organization.read", "org_1", facts));
       expect(result.allow).toBe(false);
+    });
+
+    it("ignores malformed future fact objects without authorizing or throwing", () => {
+      const facts: PolicyMembershipFact[] = [
+        { kind: "quota", limit: 100 },
+        { kind: "role_assignment", role: "owner", scope: "org_1" },
+        null as any,
+      ];
+      const result = authorize(authReq("organization.read", "org_1", facts));
+      expect(result.allow).toBe(false);
+      expect(result.reason).toBe("no_matching_role");
     });
   });
 
@@ -441,7 +465,7 @@ describe("listEffectivePermissions", () => {
     expect(result.derivedScope.orgId).toBe("org_1");
 
     const allowed = result.permissions.filter((p) => p.allow);
-    expect(allowed.length).toBe(16);
+    expect(allowed.length).toBe(11);
   });
 
   it("returns limited permissions for viewer", () => {
@@ -452,11 +476,9 @@ describe("listEffectivePermissions", () => {
     };
     const result = listEffectivePermissions(input);
     const allowed = result.permissions.filter((p) => p.allow);
-    expect(allowed.length).toBe(3);
+    expect(allowed.length).toBe(1);
     expect(allowed.map((p) => p.action).sort()).toEqual([
-      "environment.read",
       "organization.read",
-      "project.read",
     ]);
   });
 

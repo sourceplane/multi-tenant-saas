@@ -108,6 +108,34 @@ describe("policy-worker routes", () => {
       expect(body.error.details.fields.context).toBeDefined();
     });
 
+    it("returns validation_failed for invalid core field types", async () => {
+      const req = makeRequest("POST", "http://localhost/v1/internal/policy/authorize", {
+        ...validBody,
+        subject: { type: "robot", id: "usr_123" },
+        resource: { kind: "project", orgId: "org_1", projectId: 123 },
+      });
+      const res = await route(req, env);
+      expect(res.status).toBe(422);
+
+      const body = await json(res);
+      expect(body.error.code).toBe("validation_failed");
+      expect(body.error.details.fields["subject.type"]).toBeDefined();
+      expect(body.error.details.fields["resource.projectId"]).toBeDefined();
+    });
+
+    it("ignores unknown future membership facts without widening access", async () => {
+      const req = makeRequest("POST", "http://localhost/v1/internal/policy/authorize", {
+        ...validBody,
+        context: { memberships: [{ kind: "quota", limit: 100 }] },
+      });
+      const res = await route(req, env);
+      expect(res.status).toBe(200);
+
+      const body = await json(res);
+      expect(body.data.allow).toBe(false);
+      expect(body.data.reason).toBe("no_matching_role");
+    });
+
     it("does not expose stack traces in error responses", async () => {
       const req = makeRequest("POST", "http://localhost/v1/internal/policy/authorize", { foo: "bar" });
       const res = await route(req, env);
@@ -168,6 +196,20 @@ describe("policy-worker routes", () => {
       const result = await json(res);
       expect(result.data.valid).toBe(false);
       expect(result.data.reason).toBe("invalid_role_for_scope");
+    });
+
+    it("returns validation_failed for invalid projectId field type", async () => {
+      const body = {
+        role: "project_admin",
+        scope: { kind: "project", orgId: "org_1", projectId: 123 },
+      };
+      const req = makeRequest("POST", "http://localhost/v1/internal/policy/role-assignments/validate", body);
+      const res = await route(req, env);
+      expect(res.status).toBe(422);
+
+      const result = await json(res);
+      expect(result.error.code).toBe("validation_failed");
+      expect(result.error.details.fields["scope.projectId"]).toBeDefined();
     });
   });
 

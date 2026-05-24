@@ -46,6 +46,9 @@ function validateBody(body: unknown): Record<string, string[]> | null {
     if (!s.orgId || typeof s.orgId !== "string") {
       errors["scope.orgId"] = ["must be a string"];
     }
+    if (s.projectId != null && typeof s.projectId !== "string") {
+      errors["scope.projectId"] = ["must be a string"];
+    }
   }
 
   return Object.keys(errors).length > 0 ? errors : null;

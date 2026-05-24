@@ -25,8 +25,10 @@ export interface MembershipFact {
   };
 }
 
+export type PolicyMembershipFact = MembershipFact | Record<string, unknown>;
+
 export interface PolicyContext {
-  memberships: MembershipFact[];
+  memberships: PolicyMembershipFact[];
   attributes?: Record<string, unknown>;
 }
 
