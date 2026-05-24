@@ -29,3 +29,7 @@ export function parseOrgPublicId(publicId: string): string | null {
   if (!publicId.startsWith("org_")) return null;
   return hexToUuid(publicId.slice(4));
 }
+
+export function memberPublicId(uuid: string): string {
+  return `mem_${uuidToHex(uuid)}`;
+}

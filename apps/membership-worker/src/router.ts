@@ -3,6 +3,7 @@ import { handleHealth } from "./handlers/health.js";
 import { handleCreateOrganization } from "./handlers/create-organization.js";
 import { handleListOrganizations } from "./handlers/list-organizations.js";
 import { handleGetOrganization } from "./handlers/get-organization.js";
+import { handleListMembers } from "./handlers/list-members.js";
 import { errorResponse, notFound, methodNotAllowed } from "./http.js";
 import { generateRequestId } from "./ids.js";
 
@@ -27,6 +28,7 @@ function resolveActor(request: Request): ActorContext | null {
 }
 
 const ORG_ID_RE = /^\/v1\/organizations\/([^/]+)$/;
+const ORG_MEMBERS_RE = /^\/v1\/organizations\/([^/]+)\/members$/;
 
 export async function route(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
@@ -51,6 +53,18 @@ export async function route(request: Request, env: Env): Promise<Response> {
           return errorResponse("unauthenticated", "Authentication required", 401, requestId);
         }
         return handleListOrganizations(env, requestId, actor);
+      }
+      return methodNotAllowed(requestId);
+    }
+
+    const orgMembersMatch = url.pathname.match(ORG_MEMBERS_RE);
+    if (orgMembersMatch) {
+      if (request.method === "GET") {
+        const actor = resolveActor(request);
+        if (!actor) {
+          return errorResponse("unauthenticated", "Authentication required", 401, requestId);
+        }
+        return handleListMembers(env, requestId, actor, orgMembersMatch[1]!);
       }
       return methodNotAllowed(requestId);
     }
