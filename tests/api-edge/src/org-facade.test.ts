@@ -79,8 +79,12 @@ describe("api-edge org facade", () => {
       expect(isOrgRoute("/v1/organizations/org_abc/members")).toBe(true);
     });
 
+    it("matches /v1/organizations/{orgId}/members/{memberId}", () => {
+      expect(isOrgRoute("/v1/organizations/org_abc/members/mem_abc123")).toBe(true);
+    });
+
     it("does not match deeper nested org routes", () => {
-      expect(isOrgRoute("/v1/organizations/org_abc/members/extra")).toBe(false);
+      expect(isOrgRoute("/v1/organizations/org_abc/members/mem_abc123/extra")).toBe(false);
     });
 
     it("does not match /v1/auth routes", () => {
@@ -607,6 +611,187 @@ describe("api-edge org facade", () => {
       expect(response.status).toBe(404);
       const json = await response.json();
       expect(json).toEqual(envelope);
+    });
+  });
+
+  describe("member item route /v1/organizations/{orgId}/members/{memberId}", () => {
+    it("forwards PATCH to MEMBERSHIP_WORKER", async () => {
+      const { fetcher: identityFetcher } = createSessionFetcher("usr_abc123");
+      const { fetcher: membershipFetcher, calls: membershipCalls } = createFakeFetcher();
+
+      const request = new Request("https://api.example.com/v1/organizations/org_abc/members/mem_xyz", {
+        method: "PATCH",
+        headers: { authorization: "Bearer sps_ses_abc.secret", "content-type": "application/json" },
+        body: JSON.stringify({ role: "admin" }),
+      });
+
+      const response = await handleOrgRoute(
+        request,
+        { IDENTITY_WORKER: identityFetcher, MEMBERSHIP_WORKER: membershipFetcher, ENVIRONMENT: "test" },
+        "req_test",
+        "/v1/organizations/org_abc/members/mem_xyz",
+      );
+
+      expect(response.status).toBe(200);
+      expect(membershipCalls).toHaveLength(1);
+      expect(membershipCalls[0]!.url).toContain("/v1/organizations/org_abc/members/mem_xyz");
+      expect(membershipCalls[0]!.init.method).toBe("PATCH");
+    });
+
+    it("forwards DELETE to MEMBERSHIP_WORKER", async () => {
+      const { fetcher: identityFetcher } = createSessionFetcher("usr_abc123");
+      const { fetcher: membershipFetcher, calls: membershipCalls } = createFakeFetcher();
+
+      const request = new Request("https://api.example.com/v1/organizations/org_abc/members/mem_xyz", {
+        method: "DELETE",
+        headers: { authorization: "Bearer sps_ses_abc.secret" },
+      });
+
+      const response = await handleOrgRoute(
+        request,
+        { IDENTITY_WORKER: identityFetcher, MEMBERSHIP_WORKER: membershipFetcher, ENVIRONMENT: "test" },
+        "req_test",
+        "/v1/organizations/org_abc/members/mem_xyz",
+      );
+
+      expect(response.status).toBe(200);
+      expect(membershipCalls).toHaveLength(1);
+      expect(membershipCalls[0]!.url).toContain("/v1/organizations/org_abc/members/mem_xyz");
+      expect(membershipCalls[0]!.init.method).toBe("DELETE");
+    });
+
+    it("forwards PATCH body to MEMBERSHIP_WORKER", async () => {
+      const { fetcher: identityFetcher } = createSessionFetcher("usr_abc123");
+      const { fetcher: membershipFetcher, calls: membershipCalls } = createFakeFetcher();
+
+      const request = new Request("https://api.example.com/v1/organizations/org_abc/members/mem_xyz", {
+        method: "PATCH",
+        headers: { authorization: "Bearer sps_ses_abc.secret", "content-type": "application/json" },
+        body: JSON.stringify({ role: "editor" }),
+      });
+
+      await handleOrgRoute(
+        request,
+        { IDENTITY_WORKER: identityFetcher, MEMBERSHIP_WORKER: membershipFetcher, ENVIRONMENT: "test" },
+        "req_test",
+        "/v1/organizations/org_abc/members/mem_xyz",
+      );
+
+      expect(membershipCalls[0]!.init.body).toBeDefined();
+    });
+
+    it("returns 405 for GET on member item route", async () => {
+      const { fetcher: identityFetcher } = createSessionFetcher("usr_abc123");
+      const { fetcher: membershipFetcher } = createFakeFetcher();
+
+      const request = new Request("https://api.example.com/v1/organizations/org_abc/members/mem_xyz", {
+        method: "GET",
+        headers: { authorization: "Bearer sps_ses_abc.secret" },
+      });
+
+      const response = await handleOrgRoute(
+        request,
+        { IDENTITY_WORKER: identityFetcher, MEMBERSHIP_WORKER: membershipFetcher, ENVIRONMENT: "test" },
+        "req_test",
+        "/v1/organizations/org_abc/members/mem_xyz",
+      );
+
+      expect(response.status).toBe(405);
+      const json = await response.json() as any;
+      expect(json.error.code).toBe("unsupported");
+    });
+
+    it("returns 405 for POST on member item route", async () => {
+      const { fetcher: identityFetcher } = createSessionFetcher("usr_abc123");
+      const { fetcher: membershipFetcher } = createFakeFetcher();
+
+      const request = new Request("https://api.example.com/v1/organizations/org_abc/members/mem_xyz", {
+        method: "POST",
+        headers: { authorization: "Bearer sps_ses_abc.secret", "content-type": "application/json" },
+        body: JSON.stringify({}),
+      });
+
+      const response = await handleOrgRoute(
+        request,
+        { IDENTITY_WORKER: identityFetcher, MEMBERSHIP_WORKER: membershipFetcher, ENVIRONMENT: "test" },
+        "req_test",
+        "/v1/organizations/org_abc/members/mem_xyz",
+      );
+
+      expect(response.status).toBe(405);
+      const json = await response.json() as any;
+      expect(json.error.code).toBe("unsupported");
+    });
+
+    it("returns 405 for PUT on member item route", async () => {
+      const { fetcher: identityFetcher } = createSessionFetcher("usr_abc123");
+      const { fetcher: membershipFetcher } = createFakeFetcher();
+
+      const request = new Request("https://api.example.com/v1/organizations/org_abc/members/mem_xyz", {
+        method: "PUT",
+        headers: { authorization: "Bearer sps_ses_abc.secret", "content-type": "application/json" },
+        body: JSON.stringify({ role: "admin" }),
+      });
+
+      const response = await handleOrgRoute(
+        request,
+        { IDENTITY_WORKER: identityFetcher, MEMBERSHIP_WORKER: membershipFetcher, ENVIRONMENT: "test" },
+        "req_test",
+        "/v1/organizations/org_abc/members/mem_xyz",
+      );
+
+      expect(response.status).toBe(405);
+      const json = await response.json() as any;
+      expect(json.error.code).toBe("unsupported");
+    });
+
+    it("resolves auth and forwards actor headers", async () => {
+      const { fetcher: identityFetcher, calls: identityCalls } = createSessionFetcher("usr_member_actor");
+      const { fetcher: membershipFetcher, calls: membershipCalls } = createFakeFetcher();
+
+      const request = new Request("https://api.example.com/v1/organizations/org_abc/members/mem_xyz", {
+        method: "PATCH",
+        headers: { authorization: "Bearer sps_ses_abc.secret", "content-type": "application/json" },
+        body: JSON.stringify({ role: "admin" }),
+      });
+
+      await handleOrgRoute(
+        request,
+        { IDENTITY_WORKER: identityFetcher, MEMBERSHIP_WORKER: membershipFetcher, ENVIRONMENT: "test" },
+        "req_test",
+        "/v1/organizations/org_abc/members/mem_xyz",
+      );
+
+      expect(identityCalls).toHaveLength(1);
+      expect(identityCalls[0]!.url).toContain("/v1/auth/session");
+
+      const forwarded = new Headers(membershipCalls[0]!.init.headers as HeadersInit);
+      expect(forwarded.get("x-actor-subject-id")).toBe("usr_member_actor");
+      expect(forwarded.get("x-actor-subject-type")).toBe("user");
+    });
+
+    it("does not forward raw bearer token to MEMBERSHIP_WORKER", async () => {
+      const { fetcher: identityFetcher } = createSessionFetcher("usr_abc123");
+      const { fetcher: membershipFetcher, calls: membershipCalls } = createFakeFetcher();
+
+      const request = new Request("https://api.example.com/v1/organizations/org_abc/members/mem_xyz", {
+        method: "PATCH",
+        headers: { authorization: "Bearer sps_ses_secret_token.xyz", "content-type": "application/json" },
+        body: JSON.stringify({ role: "admin" }),
+      });
+
+      await handleOrgRoute(
+        request,
+        { IDENTITY_WORKER: identityFetcher, MEMBERSHIP_WORKER: membershipFetcher, ENVIRONMENT: "test" },
+        "req_test",
+        "/v1/organizations/org_abc/members/mem_xyz",
+      );
+
+      const forwarded = new Headers(membershipCalls[0]!.init.headers as HeadersInit);
+      expect(forwarded.get("authorization")).toBeNull();
+      const rawCall = JSON.stringify(membershipCalls[0]);
+      expect(rawCall).not.toContain("sps_ses_secret_token");
+      expect(rawCall).not.toContain("Bearer");
     });
   });
 

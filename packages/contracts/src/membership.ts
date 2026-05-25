@@ -77,6 +77,18 @@ export interface RevokeInvitationResponse {
   invitation: PublicInvitation;
 }
 
+export interface UpdateMemberRoleRequest {
+  role: string;
+}
+
+export interface UpdateMemberRoleResponse {
+  member: PublicMember;
+}
+
+export interface RemoveMemberResponse {
+  member: PublicMember;
+}
+
 export interface AcceptInvitationRequest {
   token: string;
 }

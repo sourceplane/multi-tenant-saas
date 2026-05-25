@@ -1464,4 +1464,110 @@ describe("MembershipRepository", () => {
       }
     });
   });
+
+  describe("revokeAllRoleAssignments", () => {
+    it("uses parameterized SQL with org_id and subject_id", async () => {
+      const { executor, queries } = createFakeExecutor({
+        rows: [{ ...SAMPLE_ROLE_ASSIGNMENT_ROW, revoked_at: NOW.toISOString() }],
+      });
+      const repo = createMembershipRepository(executor);
+
+      await repo.revokeAllRoleAssignments("org-001", "usr-001", NOW);
+
+      expect(queries[0]!.text).toContain("$1");
+      expect(queries[0]!.text).toContain("$2");
+      expect(queries[0]!.text).toContain("$3");
+      expect(queries[0]!.text).toContain("revoked_at IS NULL");
+      expect(queries[0]!.params).toEqual(["org-001", "usr-001", NOW.toISOString()]);
+    });
+
+    it("returns all revoked role assignments", async () => {
+      const rows = [
+        { ...SAMPLE_ROLE_ASSIGNMENT_ROW, id: "ra-001", revoked_at: NOW.toISOString() },
+        { ...SAMPLE_ROLE_ASSIGNMENT_ROW, id: "ra-002", role: "admin", revoked_at: NOW.toISOString() },
+      ];
+      const { executor } = createFakeExecutor({ rows });
+      const repo = createMembershipRepository(executor);
+
+      const result = await repo.revokeAllRoleAssignments("org-001", "usr-001", NOW);
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value).toHaveLength(2);
+        expect(result.value[0]!.id).toBe("ra-001");
+        expect(result.value[1]!.id).toBe("ra-002");
+      }
+    });
+
+    it("returns empty array when no active assignments exist", async () => {
+      const { executor } = createFakeExecutor({ rows: [] });
+      const repo = createMembershipRepository(executor);
+
+      const result = await repo.revokeAllRoleAssignments("org-001", "usr-001", NOW);
+
+      expect(result.ok).toBe(true);
+      if (result.ok) expect(result.value).toEqual([]);
+    });
+
+    it("maps generic errors to safe internal error", async () => {
+      const { executor } = createFakeExecutor({ error: new Error("connection refused") });
+      const repo = createMembershipRepository(executor);
+
+      const result = await repo.revokeAllRoleAssignments("org-001", "usr-001", NOW);
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.kind).toBe("internal");
+        expect((result.error as { kind: "internal"; message: string }).message).not.toContain("connection refused");
+      }
+    });
+  });
+
+  describe("countActiveOwners", () => {
+    it("uses parameterized SQL joining members and role_assignments", async () => {
+      const { executor, queries } = createFakeExecutor({ rows: [{ cnt: "2" }] });
+      const repo = createMembershipRepository(executor);
+
+      await repo.countActiveOwners("org-001");
+
+      expect(queries[0]!.text).toContain("$1");
+      expect(queries[0]!.text).toContain("role = 'owner'");
+      expect(queries[0]!.text).toContain("scope_kind = 'organization'");
+      expect(queries[0]!.text).toContain("revoked_at IS NULL");
+      expect(queries[0]!.text).toContain("status = 'active'");
+      expect(queries[0]!.params).toEqual(["org-001"]);
+    });
+
+    it("returns count of active owners", async () => {
+      const { executor } = createFakeExecutor({ rows: [{ cnt: "3" }] });
+      const repo = createMembershipRepository(executor);
+
+      const result = await repo.countActiveOwners("org-001");
+
+      expect(result.ok).toBe(true);
+      if (result.ok) expect(result.value).toBe(3);
+    });
+
+    it("returns 0 when no active owners", async () => {
+      const { executor } = createFakeExecutor({ rows: [{ cnt: "0" }] });
+      const repo = createMembershipRepository(executor);
+
+      const result = await repo.countActiveOwners("org-001");
+
+      expect(result.ok).toBe(true);
+      if (result.ok) expect(result.value).toBe(0);
+    });
+
+    it("maps generic errors to safe internal error", async () => {
+      const { executor } = createFakeExecutor({ error: new Error("timeout") });
+      const repo = createMembershipRepository(executor);
+
+      const result = await repo.countActiveOwners("org-001");
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.kind).toBe("internal");
+      }
+    });
+  });
 });

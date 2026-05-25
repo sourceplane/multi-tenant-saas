@@ -156,4 +156,6 @@ export interface MembershipRepository {
   createRoleAssignment(input: CreateRoleAssignmentInput): Promise<MembershipResult<RoleAssignment>>;
   listRoleAssignments(orgId: string, subjectId: string): Promise<MembershipResult<RoleAssignment[]>>;
   revokeRoleAssignment(orgId: string, assignmentId: string, revokedAt: Date): Promise<MembershipResult<RoleAssignment>>;
+  revokeAllRoleAssignments(orgId: string, subjectId: string, revokedAt: Date): Promise<MembershipResult<RoleAssignment[]>>;
+  countActiveOwners(orgId: string): Promise<MembershipResult<number>>;
 }
