@@ -3,6 +3,7 @@ import { handleHealth } from "./handlers/health.js";
 import { handleCreateProject } from "./handlers/create-project.js";
 import { handleGetProject } from "./handlers/get-project.js";
 import { handleListProjects } from "./handlers/list-projects.js";
+import { handleArchiveProject } from "./handlers/archive-project.js";
 import { errorResponse, notFound, methodNotAllowed } from "./http.js";
 import { generateRequestId, parseOrgPublicId, parseProjectPublicId } from "./ids.js";
 
@@ -79,6 +80,13 @@ export async function route(request: Request, env: Env): Promise<Response> {
           return errorResponse("unauthenticated", "Authentication required", 401, requestId);
         }
         return handleGetProject(env, requestId, actor, orgUuid, projectUuid);
+      }
+      if (request.method === "DELETE") {
+        const actor = resolveActor(request);
+        if (!actor) {
+          return errorResponse("unauthenticated", "Authentication required", 401, requestId);
+        }
+        return handleArchiveProject(env, requestId, actor, orgUuid, projectUuid);
       }
       return methodNotAllowed(requestId);
     }

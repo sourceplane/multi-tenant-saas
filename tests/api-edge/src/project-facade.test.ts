@@ -218,6 +218,98 @@ describe("api-edge project facade", () => {
     });
   });
 
+  describe("DELETE /v1/organizations/{orgId}/projects/{projectId} forwarding", () => {
+    it("forwards DELETE to PROJECTS_WORKER after identity resolution", async () => {
+      const { fetcher: identityFetcher } = createSessionFetcher("usr_abc123");
+      const { fetcher: projectsFetcher, calls: projectsCalls } = createFakeFetcher(
+        Response.json({ data: { project: { id: "prj_abc", status: "archived" } }, meta: { requestId: "req_test", cursor: null } }),
+      );
+
+      const request = new Request("https://api.example.com/v1/organizations/org_abc123/projects/prj_def456", {
+        method: "DELETE",
+        headers: { authorization: "Bearer sps_ses_abc.secret" },
+      });
+
+      const response = await handleProjectRoute(
+        request,
+        { IDENTITY_WORKER: identityFetcher, PROJECTS_WORKER: projectsFetcher, ENVIRONMENT: "test" },
+        "req_test",
+        "/v1/organizations/org_abc123/projects/prj_def456",
+      );
+
+      expect(response.status).toBe(200);
+      expect(projectsCalls).toHaveLength(1);
+      expect(projectsCalls[0]!.url).toContain("/v1/organizations/org_abc123/projects/prj_def456");
+      expect(projectsCalls[0]!.init.method).toBe("DELETE");
+
+      const forwarded = new Headers(projectsCalls[0]!.init.headers as HeadersInit);
+      expect(forwarded.get("x-actor-subject-id")).toBe("usr_abc123");
+      expect(forwarded.get("x-actor-subject-type")).toBe("user");
+    });
+
+    it("does not forward bearer token for DELETE", async () => {
+      const { fetcher: identityFetcher } = createSessionFetcher("usr_abc123");
+      const { fetcher: projectsFetcher, calls: projectsCalls } = createFakeFetcher();
+
+      const request = new Request("https://api.example.com/v1/organizations/org_abc123/projects/prj_def456", {
+        method: "DELETE",
+        headers: { authorization: "Bearer sps_ses_secret.token" },
+      });
+
+      await handleProjectRoute(
+        request,
+        { IDENTITY_WORKER: identityFetcher, PROJECTS_WORKER: projectsFetcher, ENVIRONMENT: "test" },
+        "req_test",
+        "/v1/organizations/org_abc123/projects/prj_def456",
+      );
+
+      const forwarded = new Headers(projectsCalls[0]!.init.headers as HeadersInit);
+      expect(forwarded.get("authorization")).toBeNull();
+      const rawCall = JSON.stringify(projectsCalls[0]);
+      expect(rawCall).not.toContain("sps_ses_secret");
+    });
+
+    it("returns 503 when PROJECTS_WORKER is missing for DELETE", async () => {
+      const { fetcher: identityFetcher } = createSessionFetcher("usr_abc123");
+
+      const request = new Request("https://api.example.com/v1/organizations/org_abc123/projects/prj_def456", {
+        method: "DELETE",
+        headers: { authorization: "Bearer sps_ses_abc.secret" },
+      });
+
+      const response = await handleProjectRoute(
+        request,
+        { IDENTITY_WORKER: identityFetcher, ENVIRONMENT: "test" },
+        "req_test",
+        "/v1/organizations/org_abc123/projects/prj_def456",
+      );
+
+      expect(response.status).toBe(503);
+      const json = await response.json() as any;
+      expect(json.error.message).toBe("Projects service unavailable");
+    });
+
+    it("returns 405 for PATCH on project item", async () => {
+      const { fetcher: identityFetcher } = createSessionFetcher("usr_abc123");
+      const { fetcher: projectsFetcher } = createFakeFetcher();
+
+      const request = new Request("https://api.example.com/v1/organizations/org_abc123/projects/prj_def456", {
+        method: "PATCH",
+        headers: { authorization: "Bearer sps_ses_abc.secret", "content-type": "application/json" },
+        body: JSON.stringify({ name: "Updated" }),
+      });
+
+      const response = await handleProjectRoute(
+        request,
+        { IDENTITY_WORKER: identityFetcher, PROJECTS_WORKER: projectsFetcher, ENVIRONMENT: "test" },
+        "req_test",
+        "/v1/organizations/org_abc123/projects/prj_def456",
+      );
+
+      expect(response.status).toBe(405);
+    });
+  });
+
   describe("error handling", () => {
     it("returns 503 when PROJECTS_WORKER is not configured", async () => {
       const { fetcher: identityFetcher } = createSessionFetcher("usr_abc123");

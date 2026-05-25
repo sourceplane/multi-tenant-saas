@@ -25,7 +25,7 @@ export async function handleProjectRoute(
     return errorResponse("unsupported", "Method not allowed", 405, requestId);
   }
 
-  if (ORG_PROJECT_ID_RE.test(pathname) && request.method !== "GET") {
+  if (ORG_PROJECT_ID_RE.test(pathname) && request.method !== "GET" && request.method !== "DELETE") {
     return errorResponse("unsupported", "Method not allowed", 405, requestId);
   }
 
