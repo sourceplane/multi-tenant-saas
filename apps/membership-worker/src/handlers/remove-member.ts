@@ -111,7 +111,10 @@ export async function handleRemoveMember(
         }
 
         const revokedRoles = await txRepo.revokeAllRoleAssignments(orgUuid, member.subjectId, now);
-        const revokedCount = revokedRoles.ok ? revokedRoles.value.length : 0;
+        if (!revokedRoles.ok) {
+          throw new Error("role_revocation_failed");
+        }
+        const revokedCount = revokedRoles.value.length;
         const previousRoles = targetRoles.value.filter((r) => r.scopeKind === "organization").map((r) => r.role);
 
         const eventResult = await txEventsRepo.appendEventWithAudit({

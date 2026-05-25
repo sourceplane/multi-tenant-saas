@@ -130,7 +130,10 @@ export async function handleUpdateMemberRole(
         }
 
         for (const orgRole of orgRoles) {
-          await txRepo.revokeRoleAssignment(orgUuid, orgRole.id, now);
+          const revokeResult = await txRepo.revokeRoleAssignment(orgUuid, orgRole.id, now);
+          if (!revokeResult.ok) {
+            throw new Error("role_revocation_failed");
+          }
         }
 
         const newAssignment = await txRepo.createRoleAssignment({
