@@ -1,6 +1,6 @@
 {
   "goal": "Supabase/Postgres-backed multi-organization Orun SaaS control plane",
-  "current_task": "none",
+  "current_task": "0034",
   "completed": [
     "0001",
     "0001.1",
@@ -30,18 +30,31 @@
     "0021",
     "0022",
     "0023",
-    "0024"
+    "0024",
+    "0025",
+    "0026",
+    "0027",
+    "0028",
+    "0029",
+    "0030",
+    "0031",
+    "0032",
+    "0033"
   ],
   "repo_health": "green",
-  "next_focus": "wire-additional-membership-events-or-public-audit-api",
+  "next_focus": "next-task-from-roadmap",
   "last_verified": "2026-05-25",
-  "waiting_for_input": "true",
-  "task_agent": "none",
+  "waiting_for_input": "false",
+  "task_agent": "",
   "notes": [
-    "Task 0024 verified PASS. PR #65 merged at be47532. Post-merge CI 26380045214 passed (12/12 jobs).",
-    "TransactionalSqlExecutor established as reusable transaction pattern for atomic mutation+event wiring.",
-    "invite.revoked event/audit wiring is live on stage and prod membership-worker.",
-    "Next: wire event emission for additional mutations, add member removal/role update, or public audit API.",
-    "Ignored generated outputs must not be staged or committed: dist, node_modules, .orun, Terraform dirs, plan.json."
+    "Task 0033 verified PASS. PR #74 merged at 9666308 on main.",
+    "Verifier commit fe4b427 added the missing implementer report ai/reports/task-0033-implementer.md to PR #74 branch before merge.",
+    "PR CI run 26413053582 (post-verifier-fix): 15/15 checks all SUCCESS.",
+    "Post-merge main CI run 26413213117: 15/15 jobs all SUCCESS.",
+    "Verifier report filed at ai/reports/task-0033-verifier.md.",
+    "Feature branch codex/task-0033-project-archive-route deleted locally and remotely.",
+    "Task 0033 scope: DELETE /v1/organizations/{orgId}/projects/{projectId} through projects-worker and api-edge.",
+    "Soft-archive via archiveProject, atomic project.archived event/audit wiring, project.delete authorization.",
+    "Next focus: pending roadmap task."
   ]
 }
