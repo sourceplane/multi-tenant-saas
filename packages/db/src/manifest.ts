@@ -44,7 +44,7 @@ export const manifest: MigrationManifest = {
       context: "projects",
       path: "040_projects_core/up.sql",
       checksum:
-        "d6d5edc165bdae989546c651a21a5c404837b033c3cc7d7ba20a93a605f5a8c0",
+        "d7cb842130856986157629965fd9afba6b36e737e73b125884b64976d2f8b7f6",
       description:
         "Projects persistence foundation — projects and environments tables with tenant isolation",
     },

@@ -27,6 +27,10 @@ COMMENT ON COLUMN projects.projects.slug_lower IS 'Lowercased slug for case-inse
 CREATE UNIQUE INDEX IF NOT EXISTS projects_org_slug_lower_idx
   ON projects.projects (org_id, slug_lower);
 
+-- Composite unique for FK target from environments
+CREATE UNIQUE INDEX IF NOT EXISTS projects_org_id_id_idx
+  ON projects.projects (org_id, id);
+
 -- List projects by org, newest first with id tie-breaker
 CREATE INDEX IF NOT EXISTS projects_org_created_idx
   ON projects.projects (org_id, created_at DESC, id DESC);
@@ -35,14 +39,15 @@ CREATE INDEX IF NOT EXISTS projects_org_created_idx
 CREATE TABLE IF NOT EXISTS projects.environments (
   id          UUID PRIMARY KEY,
   org_id      UUID NOT NULL,
-  project_id  UUID NOT NULL REFERENCES projects.projects (id),
+  project_id  UUID NOT NULL,
   name        TEXT NOT NULL,
   slug        TEXT NOT NULL,
   slug_lower  TEXT NOT NULL,
   status      TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'archived')),
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-  archived_at TIMESTAMPTZ
+  archived_at TIMESTAMPTZ,
+  FOREIGN KEY (org_id, project_id) REFERENCES projects.projects (org_id, id)
 );
 
 COMMENT ON TABLE projects.environments IS 'Environments within a project. Every query must scope by org_id + project_id.';
