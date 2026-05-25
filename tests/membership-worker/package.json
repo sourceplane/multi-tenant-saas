@@ -33,6 +33,7 @@
       "^@saas/db$": "<rootDir>/../../packages/db/src/index.ts",
       "^@saas/db/hyperdrive$": "<rootDir>/../../packages/db/src/hyperdrive/index.ts",
       "^@saas/db/membership$": "<rootDir>/../../packages/db/src/membership/index.ts",
+      "^@saas/db/events$": "<rootDir>/../../packages/db/src/events/index.ts",
       "^@saas/db/(.*)$": "<rootDir>/../../packages/db/src/$1.ts",
       "^@membership-worker/(.*)$": "<rootDir>/../../apps/membership-worker/src/$1.ts"
     },

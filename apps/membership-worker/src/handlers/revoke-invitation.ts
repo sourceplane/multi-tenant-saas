@@ -1,15 +1,29 @@
 import type { Env } from "../env.js";
 import type { ActorContext } from "../router.js";
 import type { MembershipRepository } from "@saas/db/membership";
+import type { EventsRepository } from "@saas/db/events";
 import { createSqlExecutor } from "@saas/db/hyperdrive";
 import { createMembershipRepository } from "@saas/db/membership";
+import { createEventsRepository } from "@saas/db/events";
 import { authorizeViaPolicy } from "../policy-client.js";
 import { successResponse, errorResponse } from "../http.js";
-import { parseOrgPublicId, parseInvitationPublicId, invitationPublicId } from "../ids.js";
+import { parseOrgPublicId, parseInvitationPublicId, invitationPublicId, orgPublicId } from "../ids.js";
 
 export interface RevokeInvitationDeps {
   repo: Pick<MembershipRepository, "listRoleAssignments" | "revokeInvitation">;
+  eventsRepo?: Pick<EventsRepository, "appendEventWithAudit">;
   now?: () => Date;
+  generateId?: () => string;
+}
+
+function randomHex(bytes: number): string {
+  const buf = new Uint8Array(bytes);
+  crypto.getRandomValues(buf);
+  let hex = "";
+  for (let i = 0; i < buf.length; i++) {
+    hex += buf[i]!.toString(16).padStart(2, "0");
+  }
+  return hex;
 }
 
 export async function handleRevokeInvitation(
@@ -62,12 +76,108 @@ export async function handleRevokeInvitation(
     }
 
     const now = deps?.now ? deps.now() : new Date();
+    const genId = deps?.generateId ?? (() => randomHex(16));
+
+    // If we have a transactional executor, use a transaction for atomicity.
+    // Otherwise (unit tests with injected deps), run sequentially.
+    if (executor && "transaction" in executor) {
+      const result = await executor.transaction(async (txExec) => {
+        const txRepo = createMembershipRepository(txExec);
+        const txEventsRepo = createEventsRepository(txExec);
+
+        const revokeResult = await txRepo.revokeInvitation(orgUuid, invUuid, now);
+        if (!revokeResult.ok) {
+          return { revokeResult };
+        }
+
+        const eventResult = await txEventsRepo.appendEventWithAudit({
+          event: {
+            id: genId(),
+            type: "invite.revoked",
+            version: 1,
+            source: "membership-worker",
+            occurredAt: now,
+            actorType: actor.subjectType,
+            actorId: actor.subjectId,
+            orgId: orgPublicId(orgUuid),
+            subjectKind: "invitation",
+            subjectId: invitationPublicId(invUuid),
+            requestId,
+            payload: { role: revokeResult.value.role },
+          },
+          audit: {
+            id: genId(),
+            category: "membership",
+            description: `Invitation ${invitationPublicId(invUuid)} revoked`,
+          },
+        });
+
+        if (!eventResult.ok) {
+          throw new Error("event_append_failed");
+        }
+
+        return { revokeResult };
+      });
+
+      if (!result.revokeResult.ok) {
+        if (result.revokeResult.error.kind === "not_found") {
+          return errorResponse("not_found", "Invitation not found", 404, requestId);
+        }
+        return errorResponse("internal_error", "An unexpected error occurred", 500, requestId);
+      }
+
+      const inv = result.revokeResult.value;
+      const publicInv = {
+        id: invitationPublicId(inv.id),
+        email: inv.email,
+        role: inv.role,
+        status: "revoked",
+        invitedBy: inv.invitedBy,
+        expiresAt: inv.expiresAt.toISOString(),
+        createdAt: inv.createdAt.toISOString(),
+        acceptedAt: inv.acceptedAt ? inv.acceptedAt.toISOString() : null,
+        revokedAt: inv.revokedAt ? inv.revokedAt.toISOString() : null,
+      };
+
+      return successResponse({ invitation: publicInv }, requestId, 200);
+    }
+
+    // Non-transactional path (unit tests with injected deps)
     const revokeResult = await repo.revokeInvitation(orgUuid, invUuid, now);
     if (!revokeResult.ok) {
       if (revokeResult.error.kind === "not_found") {
         return errorResponse("not_found", "Invitation not found", 404, requestId);
       }
       return errorResponse("internal_error", "An unexpected error occurred", 500, requestId);
+    }
+
+    // Append event/audit if eventsRepo is injected (test seam)
+    if (deps?.eventsRepo) {
+      const eventResult = await deps.eventsRepo.appendEventWithAudit({
+        event: {
+          id: genId(),
+          type: "invite.revoked",
+          version: 1,
+          source: "membership-worker",
+          occurredAt: now,
+          actorType: actor.subjectType,
+          actorId: actor.subjectId,
+          orgId: orgPublicId(orgUuid),
+          subjectKind: "invitation",
+          subjectId: invitationPublicId(invUuid),
+          requestId,
+          payload: { role: revokeResult.value.role },
+        },
+        audit: {
+          id: genId(),
+          category: "membership",
+          description: `Invitation ${invitationPublicId(invUuid)} revoked`,
+        },
+      });
+
+      if (!eventResult.ok) {
+        return errorResponse("internal_error", "An unexpected error occurred", 500, requestId);
+      }
     }
 
     const inv = revokeResult.value;
