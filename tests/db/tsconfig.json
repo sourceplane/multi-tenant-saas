@@ -14,7 +14,9 @@
       "@saas/db/identity": ["../../packages/db/src/identity/index.ts"],
       "@saas/db/runner": ["../../packages/db/src/runner/index.ts"],
       "@saas/db/manifest": ["../../packages/db/src/manifest.ts"],
-      "@saas/db/types": ["../../packages/db/src/types.ts"]
+      "@saas/db/types": ["../../packages/db/src/types.ts"],
+      "@saas/db/membership": ["../../packages/db/src/membership/index.ts"],
+      "@saas/db/events": ["../../packages/db/src/events/index.ts"]
     }
   },
   "include": ["src/**/*.ts"],
