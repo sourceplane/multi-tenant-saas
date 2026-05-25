@@ -30,5 +30,14 @@ export const manifest: MigrationManifest = {
       description:
         "Membership persistence foundation — organizations, members, invitations, role assignments",
     },
+    {
+      id: "030_events_audit_core",
+      context: "events",
+      path: "030_events_audit_core/up.sql",
+      checksum:
+        "388aa634380200595ff3a3d15c638e696bf9b93e46330327e84ef10cec8a3f58",
+      description:
+        "Events/audit persistence foundation — canonical event log and audit entry projections",
+    },
   ],
 };

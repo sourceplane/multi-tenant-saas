@@ -10,6 +10,7 @@
     "./hyperdrive": "./src/hyperdrive/index.ts",
     "./identity": "./src/identity/index.ts",
     "./membership": "./src/membership/index.ts",
+    "./events": "./src/events/index.ts",
     "./runner": "./src/runner/index.ts"
   },
   "bin": {
