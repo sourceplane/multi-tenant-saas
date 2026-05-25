@@ -2,6 +2,7 @@ import type { Env } from "./env.js";
 import { handleHealth } from "./handlers/health.js";
 import { handleCreateProject } from "./handlers/create-project.js";
 import { handleGetProject } from "./handlers/get-project.js";
+import { handleListProjects } from "./handlers/list-projects.js";
 import { errorResponse, notFound, methodNotAllowed } from "./http.js";
 import { generateRequestId, parseOrgPublicId, parseProjectPublicId } from "./ids.js";
 
@@ -51,6 +52,13 @@ export async function route(request: Request, env: Env): Promise<Response> {
           return errorResponse("unauthenticated", "Authentication required", 401, requestId);
         }
         return handleCreateProject(request, env, requestId, actor, orgUuid);
+      }
+      if (request.method === "GET") {
+        const actor = resolveActor(request);
+        if (!actor) {
+          return errorResponse("unauthenticated", "Authentication required", 401, requestId);
+        }
+        return handleListProjects(request, env, requestId, actor, orgUuid);
       }
       return methodNotAllowed(requestId);
     }
