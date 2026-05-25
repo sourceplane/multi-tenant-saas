@@ -1806,6 +1806,124 @@ describe("invitation administration", () => {
       const text = await response.text();
       expect(text).not.toContain(invUuid);
     });
+
+    it("successful revoke appends invite.revoked event/audit via eventsRepo", async () => {
+      const repo = createRepo();
+      let appendedInput: any = null;
+      const eventsRepo = {
+        appendEventWithAudit: async (input: any) => {
+          appendedInput = input;
+          return { ok: true as const, value: { event: {}, audit: {} } };
+        },
+      } as any;
+      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+
+      const response = await handleRevokeInvitation(
+        env as any, "req_test", actor, orgPublicIdStr, invPublicIdStr,
+        { repo, eventsRepo, now: () => fixedNowLocal, generateId: () => "generated_id_1" },
+      );
+
+      expect(response.status).toBe(200);
+      expect(appendedInput).not.toBeNull();
+      expect(appendedInput.event.type).toBe("invite.revoked");
+      expect(appendedInput.event.version).toBe(1);
+      expect(appendedInput.event.source).toBe("membership-worker");
+      expect(appendedInput.event.actorType).toBe("user");
+      expect(appendedInput.event.actorId).toBe("usr_admin");
+      expect(appendedInput.event.subjectKind).toBe("invitation");
+      expect(appendedInput.event.subjectId).toMatch(/^inv_[0-9a-f]{32}$/);
+      expect(appendedInput.event.orgId).toMatch(/^org_[0-9a-f]{32}$/);
+      expect(appendedInput.event.requestId).toBe("req_test");
+      expect(appendedInput.audit.category).toBe("membership");
+      expect(appendedInput.audit.description).toContain("revoked");
+    });
+
+    it("event/audit append failure returns safe error and prevents commit", async () => {
+      const repo = createRepo();
+      const eventsRepo = {
+        appendEventWithAudit: async () => {
+          return { ok: false as const, error: { kind: "internal" as const, message: "db error" } };
+        },
+      } as any;
+      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+
+      const response = await handleRevokeInvitation(
+        env as any, "req_test", actor, orgPublicIdStr, invPublicIdStr,
+        { repo, eventsRepo, now: () => fixedNowLocal, generateId: () => "gen_id" },
+      );
+
+      expect(response.status).toBe(500);
+      const json = await response.json() as any;
+      expect(json.error.code).toBe("internal_error");
+    });
+
+    it("policy denial appends no event", async () => {
+      const repo = createRepo();
+      let eventAppended = false;
+      const eventsRepo = {
+        appendEventWithAudit: async () => {
+          eventAppended = true;
+          return { ok: true as const, value: { event: {}, audit: {} } };
+        },
+      } as any;
+      const env = { POLICY_WORKER: createPolicyFetcher(false), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+
+      const response = await handleRevokeInvitation(
+        env as any, "req_test", actor, orgPublicIdStr, invPublicIdStr,
+        { repo, eventsRepo, now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(404);
+      expect(eventAppended).toBe(false);
+    });
+
+    it("invitation not found appends no event", async () => {
+      const repo = createRepo({ notFound: true });
+      let eventAppended = false;
+      const eventsRepo = {
+        appendEventWithAudit: async () => {
+          eventAppended = true;
+          return { ok: true as const, value: { event: {}, audit: {} } };
+        },
+      } as any;
+      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+
+      const response = await handleRevokeInvitation(
+        env as any, "req_test", actor, orgPublicIdStr, invPublicIdStr,
+        { repo, eventsRepo, now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(404);
+      expect(eventAppended).toBe(false);
+    });
+
+    it("event/audit values use public IDs and do not expose raw UUIDs or tokens", async () => {
+      const repo = createRepo();
+      let appendedInput: any = null;
+      const eventsRepo = {
+        appendEventWithAudit: async (input: any) => {
+          appendedInput = input;
+          return { ok: true as const, value: { event: {}, audit: {} } };
+        },
+      } as any;
+      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+
+      await handleRevokeInvitation(
+        env as any, "req_test", actor, orgPublicIdStr, invPublicIdStr,
+        { repo, eventsRepo, now: () => fixedNowLocal, generateId: () => "gen_id" },
+      );
+
+      const eventStr = JSON.stringify(appendedInput);
+      // Must not contain raw UUID with dashes
+      expect(eventStr).not.toContain(invUuid);
+      expect(eventStr).not.toContain(orgUuid);
+      // Must use public ID prefixes
+      expect(appendedInput.event.orgId).toMatch(/^org_/);
+      expect(appendedInput.event.subjectId).toMatch(/^inv_/);
+      // Must not contain token-like strings
+      expect(eventStr).not.toContain("token_hash");
+      expect(eventStr).not.toContain("bearer");
+    });
   });
 
   describe("handleAcceptInvitation", () => {

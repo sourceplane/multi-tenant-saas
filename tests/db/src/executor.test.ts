@@ -1,6 +1,7 @@
 import {
   createSqlExecutor,
   type SqlRow,
+  type TransactionalSqlExecutor,
 } from "@saas/db/hyperdrive";
 
 describe("SqlExecutor", () => {
@@ -151,6 +152,161 @@ describe("SqlExecutor", () => {
     });
   });
 
+  describe("transaction support", () => {
+    it("transaction callback receives a working executor", async () => {
+      const queries: string[] = [];
+
+      const fakeSql = Object.assign(
+        () => {
+          throw new Error("tagged template not supported");
+        },
+        {
+          unsafe: (text: string, _params: unknown[]) => {
+            queries.push(text);
+            return Promise.resolve([{ ok: true }]);
+          },
+          begin: (fn: (txSql: unknown) => Promise<unknown>) => {
+            const txSql = {
+              unsafe: (text: string, _params: unknown[]) => {
+                queries.push(`TX:${text}`);
+                return Promise.resolve([{ id: "row-1" }]);
+              },
+            };
+            return fn(txSql);
+          },
+          end: () => Promise.resolve(),
+        },
+      );
+
+      const executor = createSqlExecutor(
+        { connectionString: "postgres://fake:fake@localhost/test" },
+        () => fakeSql as never,
+      );
+
+      const result = await executor.transaction(async (txExec) => {
+        const r = await txExec.execute("INSERT INTO foo VALUES ($1)", ["bar"]);
+        return r.rows;
+      });
+
+      expect(result).toEqual([{ id: "row-1" }]);
+      expect(queries).toContain("TX:INSERT INTO foo VALUES ($1)");
+
+      await executor.dispose();
+    });
+
+    it("successful transaction commits (resolves)", async () => {
+      const fakeSql = Object.assign(
+        () => {
+          throw new Error("tagged template not supported");
+        },
+        {
+          unsafe: () => Promise.resolve([]),
+          begin: async (fn: (txSql: unknown) => Promise<unknown>) => {
+            const txSql = { unsafe: () => Promise.resolve([]) };
+            return fn(txSql);
+          },
+          end: () => Promise.resolve(),
+        },
+      );
+
+      const executor = createSqlExecutor(
+        { connectionString: "postgres://fake:fake@localhost/test" },
+        () => fakeSql as never,
+      );
+
+      const result = await executor.transaction(async () => "committed");
+      expect(result).toBe("committed");
+
+      await executor.dispose();
+    });
+
+    it("thrown callback rejects and rolls back", async () => {
+      let rolledBack = false;
+
+      const fakeSql = Object.assign(
+        () => {
+          throw new Error("tagged template not supported");
+        },
+        {
+          unsafe: () => Promise.resolve([]),
+          begin: async (fn: (txSql: unknown) => Promise<unknown>) => {
+            const txSql = { unsafe: () => Promise.resolve([]) };
+            try {
+              return await fn(txSql);
+            } catch (err) {
+              rolledBack = true;
+              throw err;
+            }
+          },
+          end: () => Promise.resolve(),
+        },
+      );
+
+      const executor = createSqlExecutor(
+        { connectionString: "postgres://fake:fake@localhost/test" },
+        () => fakeSql as never,
+      );
+
+      await expect(
+        executor.transaction(async () => {
+          throw new Error("business logic failed");
+        }),
+      ).rejects.toThrow("business logic failed");
+
+      expect(rolledBack).toBe(true);
+
+      await executor.dispose();
+    });
+
+    it("normal execute behavior is unchanged with transaction support", async () => {
+      const fakeSql = Object.assign(
+        () => {
+          throw new Error("tagged template not supported");
+        },
+        {
+          unsafe: (_text: string, _params: unknown[]) => Promise.resolve([{ val: 1 }]),
+          begin: () => Promise.resolve(null),
+          end: () => Promise.resolve(),
+        },
+      );
+
+      const executor = createSqlExecutor(
+        { connectionString: "postgres://fake:fake@localhost/test" },
+        () => fakeSql as never,
+      );
+
+      const result = await executor.execute("SELECT 1 AS val");
+      expect(result.rows).toEqual([{ val: 1 }]);
+      expect(result.rowCount).toBe(1);
+
+      await executor.dispose();
+    });
+
+    it("disposal remains safe after transaction usage", async () => {
+      const fakeSql = Object.assign(
+        () => {
+          throw new Error("tagged template not supported");
+        },
+        {
+          unsafe: () => Promise.resolve([]),
+          begin: async (fn: (txSql: unknown) => Promise<unknown>) => {
+            const txSql = { unsafe: () => Promise.resolve([]) };
+            return fn(txSql);
+          },
+          end: () => Promise.reject(new Error("already closed")),
+        },
+      );
+
+      const executor = createSqlExecutor(
+        { connectionString: "postgres://fake:fake@localhost/test" },
+        () => fakeSql as never,
+      );
+
+      await executor.transaction(async () => "ok");
+      await expect(executor.dispose()).resolves.toBeUndefined();
+    });
+  });
+
   describe("Worker-safe export surface", () => {
     it("exports executor alongside existing hyperdrive symbols", async () => {
       const mod = await import("@saas/db/hyperdrive");
@@ -161,6 +317,17 @@ describe("SqlExecutor", () => {
       expect(keys).not.toContain("runMigrations");
       expect(keys).not.toContain("PgAdapter");
       expect(keys).not.toContain("loadSecret");
+    });
+
+    it("exports TransactionalSqlExecutor type", async () => {
+      const mod = await import("@saas/db/hyperdrive");
+      const executor = mod.createSqlExecutor(
+        { connectionString: "postgres://fake:fake@localhost/test" },
+        () => Object.assign(() => { throw new Error("no"); }, { unsafe: () => Promise.resolve([]), begin: () => Promise.resolve(null), end: () => Promise.resolve() }) as never,
+      );
+      // Verify transaction method exists on the returned executor
+      expect(typeof executor.transaction).toBe("function");
+      await executor.dispose();
     });
   });
 });

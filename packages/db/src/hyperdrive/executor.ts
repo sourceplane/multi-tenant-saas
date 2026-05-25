@@ -16,6 +16,10 @@ export interface SqlExecutor {
   ): Promise<SqlExecutorResult<T>>;
 }
 
+export interface TransactionalSqlExecutor extends SqlExecutor {
+  transaction<T>(fn: (executor: SqlExecutor) => Promise<T>): Promise<T>;
+}
+
 export interface SqlExecutorFactory {
   create(binding: { connectionString: string }): SqlExecutor & { dispose(): Promise<void> };
 }
@@ -23,7 +27,7 @@ export interface SqlExecutorFactory {
 export function createSqlExecutor(
   binding: { connectionString: string },
   clientFactory?: (connectionString: string) => postgres.Sql,
-): SqlExecutor & { dispose(): Promise<void> } {
+): TransactionalSqlExecutor & { dispose(): Promise<void> } {
   const factory =
     clientFactory ??
     ((cs: string) =>
@@ -45,6 +49,24 @@ export function createSqlExecutor(
         rows: result as unknown as T[],
         rowCount: result.length,
       };
+    },
+
+    async transaction<T>(fn: (executor: SqlExecutor) => Promise<T>): Promise<T> {
+      return sql.begin(async (txSql) => {
+        const txExecutor: SqlExecutor = {
+          async execute<R extends SqlRow = SqlRow>(
+            text: string,
+            params?: unknown[],
+          ): Promise<SqlExecutorResult<R>> {
+            const result = await txSql.unsafe(text, (params ?? []) as never[]);
+            return {
+              rows: result as unknown as R[],
+              rowCount: result.length,
+            };
+          },
+        };
+        return fn(txExecutor);
+      }) as Promise<T>;
     },
 
     async dispose(): Promise<void> {
