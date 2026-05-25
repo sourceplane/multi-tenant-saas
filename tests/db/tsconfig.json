@@ -16,7 +16,8 @@
       "@saas/db/manifest": ["../../packages/db/src/manifest.ts"],
       "@saas/db/types": ["../../packages/db/src/types.ts"],
       "@saas/db/membership": ["../../packages/db/src/membership/index.ts"],
-      "@saas/db/events": ["../../packages/db/src/events/index.ts"]
+      "@saas/db/events": ["../../packages/db/src/events/index.ts"],
+      "@saas/db/projects": ["../../packages/db/src/projects/index.ts"]
     }
   },
   "include": ["src/**/*.ts"],

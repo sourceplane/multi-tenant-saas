@@ -39,5 +39,14 @@ export const manifest: MigrationManifest = {
       description:
         "Events/audit persistence foundation — canonical event log and audit entry projections",
     },
+    {
+      id: "040_projects_core",
+      context: "projects",
+      path: "040_projects_core/up.sql",
+      checksum:
+        "d7cb842130856986157629965fd9afba6b36e737e73b125884b64976d2f8b7f6",
+      description:
+        "Projects persistence foundation — projects and environments tables with tenant isolation",
+    },
   ],
 };

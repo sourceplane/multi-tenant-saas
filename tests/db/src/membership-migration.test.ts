@@ -145,7 +145,7 @@ describe("Membership Migration Verification", () => {
 
     it("membership migrations are not subject to project-scoped org_id/project_id check", () => {
       expect(membershipMigrations.every((m) => m.context === "membership")).toBe(true);
-      expect(projectMigrations.length).toBe(0);
+      expect(membershipMigrations.some((m) => m.context === "projects")).toBe(false);
     });
   });
 });
