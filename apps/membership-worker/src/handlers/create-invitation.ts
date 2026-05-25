@@ -1,20 +1,34 @@
 import type { Env } from "../env.js";
 import type { ActorContext } from "../router.js";
 import type { MembershipRepository } from "@saas/db/membership";
+import type { EventsRepository } from "@saas/db/events";
 import { ORGANIZATION_ROLES } from "@saas/contracts/membership";
 import { createSqlExecutor } from "@saas/db/hyperdrive";
 import { createMembershipRepository } from "@saas/db/membership";
+import { createEventsRepository } from "@saas/db/events";
 import { authorizeViaPolicy } from "../policy-client.js";
 import { successResponse, errorResponse, validationError } from "../http.js";
-import { parseOrgPublicId, invitationPublicId, generateInvitationToken } from "../ids.js";
+import { parseOrgPublicId, invitationPublicId, orgPublicId, generateInvitationToken } from "../ids.js";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const INVITATION_EXPIRY_DAYS = 7;
 
 export interface CreateInvitationDeps {
   repo: Pick<MembershipRepository, "listRoleAssignments" | "createInvitation">;
+  eventsRepo?: Pick<EventsRepository, "appendEventWithAudit">;
   generateToken?: () => Promise<{ raw: string; hash: string }>;
   now?: () => Date;
+  generateId?: () => string;
+}
+
+function randomHex(bytes: number): string {
+  const buf = new Uint8Array(bytes);
+  crypto.getRandomValues(buf);
+  let hex = "";
+  for (let i = 0; i < buf.length; i++) {
+    hex += buf[i]!.toString(16).padStart(2, "0");
+  }
+  return hex;
 }
 
 export async function handleCreateInvitation(
@@ -93,7 +107,85 @@ export async function handleCreateInvitation(
     const tokenGen = deps?.generateToken ?? generateInvitationToken;
     const { raw: rawToken, hash: tokenHash } = await tokenGen();
     const invitationId = crypto.randomUUID();
+    const genId = deps?.generateId ?? (() => randomHex(16));
 
+    if (executor && "transaction" in executor) {
+      const result = await executor.transaction(async (txExec) => {
+        const txRepo = createMembershipRepository(txExec);
+        const txEventsRepo = createEventsRepository(txExec);
+
+        const createResult = await txRepo.createInvitation({
+          id: invitationId,
+          orgId: orgUuid,
+          email: validEmail,
+          emailLower: validEmail.toLowerCase(),
+          role: validRole,
+          tokenHash,
+          invitedBy: actor.subjectId,
+          expiresAt,
+          createdAt: now,
+        });
+
+        if (!createResult.ok) {
+          return { createResult };
+        }
+
+        const eventResult = await txEventsRepo.appendEventWithAudit({
+          event: {
+            id: genId(),
+            type: "invite.created",
+            version: 1,
+            source: "membership-worker",
+            occurredAt: now,
+            actorType: actor.subjectType,
+            actorId: actor.subjectId,
+            orgId: orgPublicId(orgUuid),
+            subjectKind: "invitation",
+            subjectId: invitationPublicId(invitationId),
+            requestId,
+            payload: { role: validRole, expiresAt: expiresAt.toISOString() },
+          },
+          audit: {
+            id: genId(),
+            category: "membership",
+            description: `Invitation ${invitationPublicId(invitationId)} created`,
+          },
+        });
+
+        if (!eventResult.ok) {
+          throw new Error("event_append_failed");
+        }
+
+        return { createResult };
+      });
+
+      if (!result.createResult.ok) {
+        return errorResponse("internal_error", "An unexpected error occurred", 500, requestId);
+      }
+
+      const inv = result.createResult.value;
+      const publicInv = {
+        id: invitationPublicId(inv.id),
+        email: inv.email,
+        role: inv.role,
+        status: deriveStatus(inv, now),
+        invitedBy: inv.invitedBy,
+        expiresAt: inv.expiresAt.toISOString(),
+        createdAt: inv.createdAt.toISOString(),
+        acceptedAt: inv.acceptedAt ? inv.acceptedAt.toISOString() : null,
+        revokedAt: inv.revokedAt ? inv.revokedAt.toISOString() : null,
+      };
+
+      const isDebug = env.DEBUG_DELIVERY === "true";
+      const responseData: Record<string, unknown> = { invitation: publicInv };
+      if (isDebug) {
+        responseData.delivery = { mode: "local_debug", token: rawToken };
+      }
+
+      return successResponse(responseData, requestId, 201);
+    }
+
+    // Non-transactional path (unit tests with injected deps)
     const createResult = await repo.createInvitation({
       id: invitationId,
       orgId: orgUuid,
@@ -108,6 +200,34 @@ export async function handleCreateInvitation(
 
     if (!createResult.ok) {
       return errorResponse("internal_error", "An unexpected error occurred", 500, requestId);
+    }
+
+    if (deps?.eventsRepo) {
+      const eventResult = await deps.eventsRepo.appendEventWithAudit({
+        event: {
+          id: genId(),
+          type: "invite.created",
+          version: 1,
+          source: "membership-worker",
+          occurredAt: now,
+          actorType: actor.subjectType,
+          actorId: actor.subjectId,
+          orgId: orgPublicId(orgUuid),
+          subjectKind: "invitation",
+          subjectId: invitationPublicId(invitationId),
+          requestId,
+          payload: { role: validRole, expiresAt: expiresAt.toISOString() },
+        },
+        audit: {
+          id: genId(),
+          category: "membership",
+          description: `Invitation ${invitationPublicId(invitationId)} created`,
+        },
+      });
+
+      if (!eventResult.ok) {
+        return errorResponse("internal_error", "An unexpected error occurred", 500, requestId);
+      }
     }
 
     const inv = createResult.value;

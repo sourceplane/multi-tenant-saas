@@ -1524,6 +1524,172 @@ describe("invitation administration", () => {
 
       expect(response.status).toBe(404);
     });
+
+    it("successful create appends invite.created event/audit via eventsRepo", async () => {
+      const repo = createRepo();
+      let appendedInput: any = null;
+      const eventsRepo = {
+        appendEventWithAudit: async (input: any) => {
+          appendedInput = input;
+          return { ok: true as const, value: { event: {}, audit: {} } };
+        },
+      } as any;
+      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+
+      const response = await handleCreateInvitation(
+        makeRequest({ email: "invite@test.com", role: "builder" }),
+        env as any, "req_test", actor, orgPublicIdStr,
+        { repo, eventsRepo, generateToken: async () => ({ raw: "x", hash: "y" }), now: () => fixedNowLocal, generateId: () => "generated_id_1" },
+      );
+
+      expect(response.status).toBe(201);
+      expect(appendedInput).not.toBeNull();
+      expect(appendedInput.event.type).toBe("invite.created");
+      expect(appendedInput.event.version).toBe(1);
+      expect(appendedInput.event.source).toBe("membership-worker");
+      expect(appendedInput.event.actorType).toBe("user");
+      expect(appendedInput.event.actorId).toBe("usr_admin");
+      expect(appendedInput.event.subjectKind).toBe("invitation");
+      expect(appendedInput.event.subjectId).toMatch(/^inv_[0-9a-f]{32}$/);
+      expect(appendedInput.event.orgId).toMatch(/^org_[0-9a-f]{32}$/);
+      expect(appendedInput.event.requestId).toBe("req_test");
+      expect(appendedInput.event.payload.role).toBe("builder");
+      expect(appendedInput.event.payload.expiresAt).toBeDefined();
+      expect(appendedInput.audit.category).toBe("membership");
+      expect(appendedInput.audit.description).toContain("created");
+    });
+
+    it("create event/audit append failure returns safe error and prevents commit", async () => {
+      const repo = createRepo();
+      const eventsRepo = {
+        appendEventWithAudit: async () => {
+          return { ok: false as const, error: { kind: "internal" as const, message: "db error" } };
+        },
+      } as any;
+      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+
+      const response = await handleCreateInvitation(
+        makeRequest({ email: "invite@test.com", role: "viewer" }),
+        env as any, "req_test", actor, orgPublicIdStr,
+        { repo, eventsRepo, generateToken: async () => ({ raw: "x", hash: "y" }), now: () => fixedNowLocal, generateId: () => "gen_id" },
+      );
+
+      expect(response.status).toBe(500);
+      const json = await response.json() as any;
+      expect(json.error.code).toBe("internal_error");
+    });
+
+    it("create policy denial appends no event", async () => {
+      const repo = createRepo();
+      let eventAppended = false;
+      const eventsRepo = {
+        appendEventWithAudit: async () => {
+          eventAppended = true;
+          return { ok: true as const, value: { event: {}, audit: {} } };
+        },
+      } as any;
+      const env = { POLICY_WORKER: createPolicyFetcher(false), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+
+      const response = await handleCreateInvitation(
+        makeRequest({ email: "invite@test.com", role: "viewer" }),
+        env as any, "req_test", actor, orgPublicIdStr,
+        { repo, eventsRepo, generateToken: async () => ({ raw: "x", hash: "y" }), now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(404);
+      expect(eventAppended).toBe(false);
+    });
+
+    it("create validation failure appends no event", async () => {
+      const repo = createRepo();
+      let eventAppended = false;
+      const eventsRepo = {
+        appendEventWithAudit: async () => {
+          eventAppended = true;
+          return { ok: true as const, value: { event: {}, audit: {} } };
+        },
+      } as any;
+      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+
+      const response = await handleCreateInvitation(
+        makeRequest({ email: "not-an-email", role: "viewer" }),
+        env as any, "req_test", actor, orgPublicIdStr,
+        { repo, eventsRepo, generateToken: async () => ({ raw: "x", hash: "y" }), now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(422);
+      expect(eventAppended).toBe(false);
+    });
+
+    it("create repository failure appends no event", async () => {
+      const repo = createRepo({ createFail: true });
+      let eventAppended = false;
+      const eventsRepo = {
+        appendEventWithAudit: async () => {
+          eventAppended = true;
+          return { ok: true as const, value: { event: {}, audit: {} } };
+        },
+      } as any;
+      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+
+      const response = await handleCreateInvitation(
+        makeRequest({ email: "invite@test.com", role: "viewer" }),
+        env as any, "req_test", actor, orgPublicIdStr,
+        { repo, eventsRepo, generateToken: async () => ({ raw: "x", hash: "y" }), now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(500);
+      expect(eventAppended).toBe(false);
+    });
+
+    it("create event/audit values use public IDs and do not expose raw UUIDs or tokens", async () => {
+      const repo = createRepo();
+      let appendedInput: any = null;
+      const eventsRepo = {
+        appendEventWithAudit: async (input: any) => {
+          appendedInput = input;
+          return { ok: true as const, value: { event: {}, audit: {} } };
+        },
+      } as any;
+      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+
+      await handleCreateInvitation(
+        makeRequest({ email: "invite@test.com", role: "viewer" }),
+        env as any, "req_test", actor, orgPublicIdStr,
+        { repo, eventsRepo, generateToken: async () => ({ raw: "secret_raw_token", hash: "secret_hash" }), now: () => fixedNowLocal, generateId: () => "gen_id" },
+      );
+
+      const eventStr = JSON.stringify(appendedInput);
+      expect(eventStr).not.toContain(orgUuid);
+      expect(appendedInput.event.orgId).toMatch(/^org_/);
+      expect(appendedInput.event.subjectId).toMatch(/^inv_/);
+      expect(eventStr).not.toContain("secret_raw_token");
+      expect(eventStr).not.toContain("secret_hash");
+      expect(eventStr).not.toContain("token_hash");
+      expect(eventStr).not.toContain("bearer");
+    });
+
+    it("create response shape remains compatible with existing tests", async () => {
+      const repo = createRepo();
+      const eventsRepo = {
+        appendEventWithAudit: async () => ({ ok: true as const, value: { event: {}, audit: {} } }),
+      } as any;
+      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "true" };
+
+      const response = await handleCreateInvitation(
+        makeRequest({ email: "invite@test.com", role: "builder" }),
+        env as any, "req_test", actor, orgPublicIdStr,
+        { repo, eventsRepo, generateToken: async () => ({ raw: "deadbeef".repeat(8), hash: "cafebabe".repeat(8) }), now: () => fixedNowLocal, generateId: () => "gen_id" },
+      );
+
+      expect(response.status).toBe(201);
+      const json = await response.json() as any;
+      expect(json.data.invitation.id).toMatch(/^inv_[0-9a-f]{32}$/);
+      expect(json.data.invitation.email).toBe("invite@test.com");
+      expect(json.data.invitation.role).toBe("builder");
+      expect(json.data.invitation.status).toBe("pending");
+      expect(json.data.delivery).toEqual({ mode: "local_debug", token: "deadbeef".repeat(8) });
+    });
   });
 
   describe("handleListInvitations", () => {
@@ -2194,6 +2360,218 @@ describe("invitation administration", () => {
       expect(text).not.toContain("hashed_value");
       expect(text).not.toContain("11111111-2222-3333-4444-555555555555");
       expect(text).not.toContain("66666666-7777-8888-9999-aaaaaaaaaaaa");
+    });
+
+    it("successful accept appends invite.accepted event/audit via eventsRepo", async () => {
+      const repo = createAcceptRepo();
+      let appendedInput: any = null;
+      const eventsRepo = {
+        appendEventWithAudit: async (input: any) => {
+          appendedInput = input;
+          return { ok: true as const, value: { event: {}, audit: {} } };
+        },
+      } as any;
+      const env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+      const response = await handleAcceptInvitation(
+        makeAcceptRequest({ token: validToken }),
+        env as any, "req_test", acceptActor, orgPublicIdStr,
+        { repo, eventsRepo, hashToken: async () => "hashed_value", now: () => fixedNowLocal, generateId: () => "generated_id_1" },
+      );
+
+      expect(response.status).toBe(200);
+      expect(appendedInput).not.toBeNull();
+      expect(appendedInput.event.type).toBe("invite.accepted");
+      expect(appendedInput.event.version).toBe(1);
+      expect(appendedInput.event.source).toBe("membership-worker");
+      expect(appendedInput.event.actorType).toBe("user");
+      expect(appendedInput.event.actorId).toBe("usr_acceptor");
+      expect(appendedInput.event.subjectKind).toBe("invitation");
+      expect(appendedInput.event.subjectId).toMatch(/^inv_[0-9a-f]{32}$/);
+      expect(appendedInput.event.orgId).toMatch(/^org_[0-9a-f]{32}$/);
+      expect(appendedInput.event.requestId).toBe("req_test");
+      expect(appendedInput.event.payload.role).toBe("builder");
+      expect(appendedInput.event.payload.memberId).toMatch(/^mem_[0-9a-f]{32}$/);
+      expect(appendedInput.audit.category).toBe("membership");
+      expect(appendedInput.audit.description).toContain("accepted");
+    });
+
+    it("accept event/audit append failure returns safe error and prevents commit", async () => {
+      const repo = createAcceptRepo();
+      const eventsRepo = {
+        appendEventWithAudit: async () => {
+          return { ok: false as const, error: { kind: "internal" as const, message: "db error" } };
+        },
+      } as any;
+      const env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+      const response = await handleAcceptInvitation(
+        makeAcceptRequest({ token: validToken }),
+        env as any, "req_test", acceptActor, orgPublicIdStr,
+        { repo, eventsRepo, hashToken: async () => "hashed_value", now: () => fixedNowLocal, generateId: () => "gen_id" },
+      );
+
+      expect(response.status).toBe(500);
+      const json = await response.json() as any;
+      expect(json.error.code).toBe("internal_error");
+    });
+
+    it("accept not-found appends no event", async () => {
+      const repo = createAcceptRepo({ result: { ok: false, error: { kind: "not_found" } } });
+      let eventAppended = false;
+      const eventsRepo = {
+        appendEventWithAudit: async () => {
+          eventAppended = true;
+          return { ok: true as const, value: { event: {}, audit: {} } };
+        },
+      } as any;
+      const env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+      const response = await handleAcceptInvitation(
+        makeAcceptRequest({ token: validToken }),
+        env as any, "req_test", acceptActor, orgPublicIdStr,
+        { repo, eventsRepo, hashToken: async () => "hash", now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(404);
+      expect(eventAppended).toBe(false);
+    });
+
+    it("accept expired appends no event", async () => {
+      const repo = createAcceptRepo({ result: { ok: false, error: { kind: "expired" } } });
+      let eventAppended = false;
+      const eventsRepo = {
+        appendEventWithAudit: async () => {
+          eventAppended = true;
+          return { ok: true as const, value: { event: {}, audit: {} } };
+        },
+      } as any;
+      const env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+      const response = await handleAcceptInvitation(
+        makeAcceptRequest({ token: validToken }),
+        env as any, "req_test", acceptActor, orgPublicIdStr,
+        { repo, eventsRepo, hashToken: async () => "hash", now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(404);
+      expect(eventAppended).toBe(false);
+    });
+
+    it("accept revoked appends no event", async () => {
+      const repo = createAcceptRepo({ result: { ok: false, error: { kind: "revoked" } } });
+      let eventAppended = false;
+      const eventsRepo = {
+        appendEventWithAudit: async () => {
+          eventAppended = true;
+          return { ok: true as const, value: { event: {}, audit: {} } };
+        },
+      } as any;
+      const env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+      const response = await handleAcceptInvitation(
+        makeAcceptRequest({ token: validToken }),
+        env as any, "req_test", acceptActor, orgPublicIdStr,
+        { repo, eventsRepo, hashToken: async () => "hash", now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(404);
+      expect(eventAppended).toBe(false);
+    });
+
+    it("accept already-accepted appends no event", async () => {
+      const repo = createAcceptRepo({ result: { ok: false, error: { kind: "already_accepted" } } });
+      let eventAppended = false;
+      const eventsRepo = {
+        appendEventWithAudit: async () => {
+          eventAppended = true;
+          return { ok: true as const, value: { event: {}, audit: {} } };
+        },
+      } as any;
+      const env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+      const response = await handleAcceptInvitation(
+        makeAcceptRequest({ token: validToken }),
+        env as any, "req_test", acceptActor, orgPublicIdStr,
+        { repo, eventsRepo, hashToken: async () => "hash", now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(404);
+      expect(eventAppended).toBe(false);
+    });
+
+    it("accept conflict appends no event", async () => {
+      const repo = createAcceptRepo({ result: { ok: false, error: { kind: "conflict", entity: "organization_member" } } });
+      let eventAppended = false;
+      const eventsRepo = {
+        appendEventWithAudit: async () => {
+          eventAppended = true;
+          return { ok: true as const, value: { event: {}, audit: {} } };
+        },
+      } as any;
+      const env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+      const response = await handleAcceptInvitation(
+        makeAcceptRequest({ token: validToken }),
+        env as any, "req_test", acceptActor, orgPublicIdStr,
+        { repo, eventsRepo, hashToken: async () => "hash", now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(409);
+      expect(eventAppended).toBe(false);
+    });
+
+    it("accept event/audit values use public IDs and do not expose raw UUIDs or tokens", async () => {
+      const repo = createAcceptRepo();
+      let appendedInput: any = null;
+      const eventsRepo = {
+        appendEventWithAudit: async (input: any) => {
+          appendedInput = input;
+          return { ok: true as const, value: { event: {}, audit: {} } };
+        },
+      } as any;
+      const env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+      await handleAcceptInvitation(
+        makeAcceptRequest({ token: validToken }),
+        env as any, "req_test", acceptActor, orgPublicIdStr,
+        { repo, eventsRepo, hashToken: async () => "hashed_value", now: () => fixedNowLocal, generateId: () => "gen_id" },
+      );
+
+      const eventStr = JSON.stringify(appendedInput);
+      expect(eventStr).not.toContain(orgUuid);
+      expect(eventStr).not.toContain("11111111-2222-3333-4444-555555555555");
+      expect(eventStr).not.toContain("66666666-7777-8888-9999-aaaaaaaaaaaa");
+      expect(appendedInput.event.orgId).toMatch(/^org_/);
+      expect(appendedInput.event.subjectId).toMatch(/^inv_/);
+      expect(appendedInput.event.payload.memberId).toMatch(/^mem_/);
+      expect(eventStr).not.toContain(validToken);
+      expect(eventStr).not.toContain("hashed_value");
+      expect(eventStr).not.toContain("token_hash");
+      expect(eventStr).not.toContain("bearer");
+    });
+
+    it("accept response shape remains compatible", async () => {
+      const repo = createAcceptRepo();
+      const eventsRepo = {
+        appendEventWithAudit: async () => ({ ok: true as const, value: { event: {}, audit: {} } }),
+      } as any;
+      const env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+      const response = await handleAcceptInvitation(
+        makeAcceptRequest({ token: validToken }),
+        env as any, "req_test", acceptActor, orgPublicIdStr,
+        { repo, eventsRepo, hashToken: async () => "hashed_value", now: () => fixedNowLocal, generateId: () => "gen_id" },
+      );
+
+      expect(response.status).toBe(200);
+      const json = await response.json() as any;
+      expect(json.data.invitation.id).toMatch(/^inv_[0-9a-f]{32}$/);
+      expect(json.data.invitation.status).toBe("accepted");
+      expect(json.data.membership.id).toMatch(/^mem_/);
+      expect(json.data.membership.role).toBe("builder");
+      expect(json.data.membership.status).toBe("active");
+      expect(json.data.membership.joinedAt).toBeDefined();
     });
   });
 
