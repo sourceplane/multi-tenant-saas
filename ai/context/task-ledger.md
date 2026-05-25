@@ -1,6 +1,6 @@
 # Task Ledger
 
-Last updated: 2026-05-24
+Last updated: 2026-05-25
 
 ## Task 0001
 
@@ -541,6 +541,89 @@ Last updated: 2026-05-24
   (19/19 jobs).
 - Reports: `ai/reports/task-0021-implementer.md`,
   `ai/reports/task-0021-verifier.md`
+
+## Task 0022
+
+- Agent: Implementer -> Verifier
+- Prompt: `ai/tasks/task-0022.md`
+- Verifier prompt: `ai/tasks/task-0022-verifier.md`
+- Status: verified PASS
+- PR: #63 (`feat: add invitation acceptance endpoint with atomic role assignment
+  (#63)`), squash-merged at `28dd671`
+- Objective: add `POST /v1/organizations/{orgId}/invitations/accept` through
+  api-edge to membership-worker.
+- Verifier fix:
+  - Removed `ON CONFLICT (id) DO NOTHING` from the acceptance CTE member and
+    role-assignment INSERTs so generated-ID uniqueness conflicts abort the whole
+    statement instead of allowing partial acceptance.
+- Durable outcome: invitation acceptance is available through the public
+  api-edge gateway. A signed-in user whose email matches a pending invitation
+  can accept it; acceptance validates token hash, organization, email, status,
+  and expiry, then atomically marks the invitation accepted, creates the member,
+  and creates the organization-scoped role assignment. Acceptance is authorized
+  by token possession plus authenticated email match, not policy-worker.
+  api-edge forwards `x-actor-email` from identity sessions while still redacting
+  bearer tokens from membership-worker. 119 membership-worker tests, 188 db
+  tests, and 85 api-edge tests pass.
+- Main CI run: `26371024844` — all green (19/19 jobs).
+- Follow-up docs/state CI run: `26371131814` — green.
+- Reports: `ai/reports/task-0022-implementer.md`,
+  `ai/reports/task-0022-verifier.md`
+
+## Task 0023
+
+- Agent: Implementer → Verifier
+- Prompt: `ai/tasks/task-0023.md`
+- Verifier prompt: `ai/tasks/task-0023-verifier.md`
+- Status: verified PASS
+- PR: #64 (`feat(events): add events/audit persistence foundation`),
+  squash-merged at `de89408`
+- Objective: add events/audit persistence foundation — shared contract types,
+  database migration, Worker-safe repository adapter, and focused tests — before
+  destructive member-admin mutations.
+- Verifier fix:
+  - Replaced invalid `UNION ALL` in `appendEventWithAudit` (event_log has 22
+    columns, audit_entries has 21 — column count mismatch is a PostgreSQL error)
+    with `row_to_json` approach returning both CTE results as JSON columns in a
+    single row. Updated test fixtures to match new shape.
+- Durable outcome: `@saas/contracts` exports event envelope, audit entry, and
+  query filter types matching the spec schema. Migration `030_events_audit_core`
+  creates `events.event_log` and `events.audit_entries` with org scope, project/
+  environment columns, useful indexes, and JSONB payload/redaction storage.
+  `@saas/db/events` provides `createEventsRepository(executor)` with atomic
+  event+audit append, conflict detection, and cursor-paginated audit queries
+  scoped by organization or target. 222 db tests, 18 contract tests pass.
+- Main CI run: `26379294370` — all green (9/9 jobs).
+- PR CI run (final head with verifier fix): `26379248053` — all green (9/9 jobs).
+- Reports: `ai/reports/task-0023-implementer.md`,
+  `ai/reports/task-0023-verifier.md`
+
+## Task 0024
+
+- Agent: Implementer → Verifier
+- Prompt: `ai/tasks/task-0024.md`
+- Verifier prompt: `ai/tasks/task-0024-verifier.md`
+- Status: verified PASS
+- PR: #65 (`feat: add transaction seam and wire invite.revoked event/audit
+  atomically`), squash-merged at `be47532`
+- Objective: add the first production-safe runtime use of the events/audit
+  foundation by wiring invitation revocation to append an `invite.revoked`
+  event and audit entry atomically with the existing membership mutation,
+  establishing the reusable transaction pattern.
+- No verifier fixes required.
+- Durable outcome: `TransactionalSqlExecutor` interface extends `SqlExecutor`
+  with `transaction(...)` using postgres `begin()`. Production
+  `DELETE /v1/organizations/{orgId}/invitations/{invitationId}` creates both
+  membership and events repositories from the same transaction executor;
+  event append failure rolls back the invitation revoke. Event type
+  `invite.revoked`, version 1, source `membership-worker`, actor from context,
+  org/invitation use public IDs (`org_...`/`inv_...`), audit category
+  `membership`. 228 db tests, 124 membership-worker tests, 85 api-edge tests
+  pass.
+- Main CI run: `26380045214` — all green (12/12 jobs).
+- PR CI run: `26379797141` — all green (12/12 jobs).
+- Reports: `ai/reports/task-0024-implementer.md`,
+  `ai/reports/task-0024-verifier.md`
 
 ## Historical Notes
 

@@ -1,6 +1,6 @@
 {
   "goal": "Supabase/Postgres-backed multi-organization Orun SaaS control plane",
-  "current_task": null,
+  "current_task": "none",
   "completed": [
     "0001",
     "0001.1",
@@ -28,23 +28,20 @@
     "0019",
     "0020",
     "0021",
-    "0022"
+    "0022",
+    "0023",
+    "0024"
   ],
   "repo_health": "green",
-  "next_focus": "member-admin-mutations-or-audit-events",
+  "next_focus": "wire-additional-membership-events-or-public-audit-api",
   "last_verified": "2026-05-25",
   "waiting_for_input": "true",
-  "task_agent": null,
+  "task_agent": "none",
   "notes": [
-    "Task 0022 verified PASS: invitation acceptance merged via PR #63 at 28dd671.",
-    "Verifier fix: removed ON CONFLICT (id) DO NOTHING from acceptance CTE member/role INSERTs to guarantee atomicity.",
-    "Post-merge main CI run 26371024844 passed (19/19 jobs).",
-    "POST /v1/organizations/{orgId}/invitations/accept creates member + org-scoped role assignment atomically.",
-    "Acceptance authorized by token possession + authenticated email match (no policy-worker).",
-    "api-edge forwards x-actor-email from identity session for all org routes.",
-    "119 membership-worker tests, 188 db tests, 85 api-edge tests pass.",
-    "Remaining gaps: duplicate-invitation prevention, idempotent acceptance, audit events.",
-    "Dead parameters (dryRunCommand, deployCommand) remain in component.yaml files; recommend cleanup.",
+    "Task 0024 verified PASS. PR #65 merged at be47532. Post-merge CI 26380045214 passed (12/12 jobs).",
+    "TransactionalSqlExecutor established as reusable transaction pattern for atomic mutation+event wiring.",
+    "invite.revoked event/audit wiring is live on stage and prod membership-worker.",
+    "Next: wire event emission for additional mutations, add member removal/role update, or public audit API.",
     "Ignored generated outputs must not be staged or committed: dist, node_modules, .orun, Terraform dirs, plan.json."
   ]
 }

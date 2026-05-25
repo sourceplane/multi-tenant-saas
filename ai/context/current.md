@@ -6,7 +6,8 @@ Last updated: 2026-05-25
 
 - Task 0021 squash-merged at `324ca36` via PR #62.
 - Task 0022 squash-merged at `28dd671` via PR #63.
-- Tasks 0001–0022 are verified.
+- Follow-up docs/state commit `2c8ebb5` is on `main`.
+- Tasks 0001–0023 are verified.
 - Task 0021 added policy-gated invitation administration endpoints:
   - `POST /v1/organizations/{orgId}/invitations` — create invitation
   - `GET /v1/organizations/{orgId}/invitations` — list with cursor pagination
@@ -23,6 +24,20 @@ Last updated: 2026-05-25
   - Role allowlist: `owner`, `admin`, `builder`, `viewer`, `billing_admin`.
   - 104 membership-worker tests, 183 db tests, 78 api-edge tests.
   - Verifier committed the implementer report to the PR branch before merge.
+- Task 0022 added invitation acceptance:
+  - `POST /v1/organizations/{orgId}/invitations/accept` through api-edge to
+    membership-worker.
+  - Acceptance is authorized by valid token possession plus authenticated email
+    match and explicit path organization match; it does not call policy-worker
+    because the invited user is not yet a member.
+  - Repository acceptance marks the invitation accepted, creates the active
+    member, and creates the organization-scoped role assignment in one CTE.
+  - Verifier removed `ON CONFLICT (id) DO NOTHING` from member/role INSERT CTEs
+    so generated-ID uniqueness conflicts abort the whole statement instead of
+    allowing partial acceptance.
+  - api-edge now forwards `x-actor-email` from the identity session response for
+    organization routes while continuing not to forward bearer tokens.
+  - 119 membership-worker tests, 188 db tests, 85 api-edge tests passed.
 - Previous infrastructure unchanged:
   - membership-worker stage/prod deployed with `POLICY_WORKER`, `SOURCEPLANE_DB`,
     `DEBUG_DELIVERY`, and `workers_dev: false`.
@@ -37,6 +52,8 @@ Last updated: 2026-05-25
   dev remains unprovisioned.
 - Local Orun validation passes.
 - Post-merge Task 0021 main CI run `26369638914` passed (19/19 jobs).
+- Post-merge Task 0022 main CI run `26371024844` passed (19/19 jobs), and
+  follow-up docs/state CI run `26371131814` passed.
 
 ## Current Roadmap Position
 
@@ -46,20 +63,22 @@ Last updated: 2026-05-25
   identity Worker auth runtime, api-edge auth facade, membership persistence
   foundation, membership Worker organization runtime, policy authorization seam,
   membership-to-policy binding, member-list read surface, cursor pagination, and
-  invitation administration are complete.
+  invitation administration, and invitation acceptance are complete.
 - The full auth flow is accessible through the public `api-edge` gateway.
-- Organization create/list/read, member-list, and invitation create/list/revoke
-  routes are accessible through the public `api-edge` gateway with bearer token
-  authentication and pagination.
+- Organization create/list/read, member-list, invitation create/list/revoke, and
+  invitation acceptance routes are accessible through the public `api-edge`
+  gateway with bearer token authentication. List routes use cursor pagination.
 - Organization read, member list, and invitation create/list/revoke are
   policy-gated through the internal policy-worker.
-- Next focus: invitation acceptance, member-admin mutations, or audit/events
-  (depends on next task prompt).
+- Next focus: events/audit persistence foundation before destructive
+  member-admin mutations is now complete. Next: wire event emission, add
+  destructive member-admin mutations, or add public audit API.
 
 ## Current Task
 
-- None. Awaiting next task prompt.
-- Task 0022 verified PASS and merged via PR #63 at `28dd671`.
-- Post-merge main CI run `26371024844` passed (19/19 jobs).
-- Verifier fix: removed `ON CONFLICT (id) DO NOTHING` from acceptance CTE
-  member/role INSERTs to guarantee full atomicity on error.
+- Task 0024 verified PASS and merged via PR #65 at `be47532`.
+- Post-merge main CI run `26380045214` passed (12/12 jobs).
+- `TransactionalSqlExecutor` and `invite.revoked` event/audit wiring are live.
+- No verifier fixes were required.
+- Next: wire event emission for additional membership mutations, add member
+  removal/role update endpoints, or add public audit read API.

@@ -1,6 +1,6 @@
 # Decisions
 
-Last updated: 2026-05-24
+Last updated: 2026-05-25
 
 ## Active Decisions
 
@@ -90,8 +90,28 @@ Last updated: 2026-05-24
   are rejected with `validation_failed`.
 - Invitation expiration is derived without DB mutation: `expiresAt < now` computes
   `expired` status at read time. No background job or sweep is needed for V1.
-- Invitation acceptance route must not be exposed until `acceptInvitation` creates
-  the accepted member's role assignment in addition to the membership record.
+- Task 0022 establishes invitation acceptance. `POST
+  /v1/organizations/{orgId}/invitations/accept` is exposed through api-edge and
+  uses token possession plus authenticated email match and explicit path org
+  match as the domain authorization rule. It does not call policy-worker because
+  the invited user is not a member before acceptance.
+- `acceptInvitation` must keep invitation accepted state, member creation, and
+  organization-scoped role-assignment creation atomic. The accepted Task 0022
+  verifier fix removed member/role INSERT `ON CONFLICT (id) DO NOTHING` clauses
+  from the acceptance CTE so uniqueness conflicts abort the statement.
+- api-edge forwards `x-actor-email` from the identity session response for
+  organization routes. Downstream workers may ignore it unless a route explicitly
+  requires authenticated email matching.
+- Before shipping destructive member-admin mutations such as member removal or
+  role changes, add an events/audit persistence seam so those mutations can be
+  audited instead of deepening the existing audit gap.
+- Task 0023 establishes the events/audit persistence foundation. Event envelope
+  types in `@saas/contracts` match `specs/contracts/event-envelope.schema.yaml`.
+  Migration `030_events_audit_core` owns the `events` schema with `event_log` and
+  `audit_entries` tables. `@saas/db/events` provides `createEventsRepository` with
+  atomic event+audit append via CTE and cursor-paginated audit queries. The
+  `appendEventWithAudit` SQL uses `row_to_json` to return both CTE results in a
+  single row (verified safe against PostgreSQL semantics).
 
 ## Pending Decisions
 
@@ -128,3 +148,7 @@ Last updated: 2026-05-24
   `dwazxcrywsdbxpuouifa`.
 - PR #34 and main CI run `26221338775` verified the database migration harness
   and verifier component on `main`.
+- Task 0024 established `TransactionalSqlExecutor` as the reusable transaction
+  pattern for atomic mutation+event wiring. Future membership event emission
+  tasks should use the same `executor.transaction(...)` approach with both
+  domain and events repositories sharing the transaction-bound executor.
