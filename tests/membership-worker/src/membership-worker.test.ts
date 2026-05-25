@@ -4,7 +4,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createOrganizationService } from "@membership-worker/services/organization";
 import type { PolicyAuthorizer } from "@membership-worker/services/organization";
-import { orgPublicId, parseOrgPublicId, memberPublicId, invitationPublicId, parseInvitationPublicId } from "@membership-worker/ids";
+import { orgPublicId, parseOrgPublicId, memberPublicId, parseMemberPublicId, invitationPublicId, parseInvitationPublicId } from "@membership-worker/ids";
+import { handleUpdateMemberRole } from "@membership-worker/handlers/update-member-role";
+import { handleRemoveMember } from "@membership-worker/handlers/remove-member";
 import { mapRoleAssignments, authorizeViaPolicy } from "@membership-worker/policy-client";
 import { handleListMembers } from "@membership-worker/handlers/list-members";
 import { handleCreateInvitation } from "@membership-worker/handlers/create-invitation";
@@ -83,6 +85,8 @@ function createFakeRepository(): MembershipRepository & { _orgs: Map<string, Org
     async acceptInvitation() { return { ok: false, error: { kind: "internal" as const, message: "not implemented" } }; },
     async createRoleAssignment() { return { ok: false, error: { kind: "internal" as const, message: "not implemented" } }; },
     async revokeRoleAssignment() { return { ok: false, error: { kind: "internal" as const, message: "not implemented" } }; },
+    async revokeAllRoleAssignments() { return { ok: false, error: { kind: "internal" as const, message: "not implemented" } }; },
+    async countActiveOwners() { return { ok: false, error: { kind: "internal" as const, message: "not implemented" } }; },
   };
 
   return repo;
@@ -2595,6 +2599,737 @@ describe("invitation administration", () => {
     it("roundtrips correctly", () => {
       const uuid = "12345678-abcd-ef01-2345-6789abcdef01";
       expect(parseInvitationPublicId(invitationPublicId(uuid))).toBe(uuid);
+    });
+  });
+});
+
+describe("member administration", () => {
+  const orgUuid = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+  const orgPublicIdStr = `org_${orgUuid.replace(/-/g, "")}`;
+  const memberUuid = "11111111-2222-3333-4444-555555555555";
+  const memberPublicIdStr = `mem_${memberUuid.replace(/-/g, "")}`;
+  const actor = { subjectId: "usr_admin", subjectType: "user" };
+  const fixedNowLocal = new Date("2026-01-15T10:00:00.000Z");
+
+  function createPolicyFetcher(allow: boolean, captureBody?: { value: unknown }) {
+    return {
+      fetch: async (_url: string, init: RequestInit) => {
+        if (captureBody) captureBody.value = JSON.parse(init.body as string);
+        return Response.json({
+          data: { allow, reason: allow ? "granted" : "denied", policyVersion: 1, derivedScope: {} },
+          meta: { requestId: "req_test", cursor: null },
+        });
+      },
+    } as unknown as Fetcher;
+  }
+
+  function createMemberRepo(opts: {
+    memberNotFound?: boolean;
+    memberRemoved?: boolean;
+    actorRolesFail?: boolean;
+    ownerCount?: number;
+    ownerCountFail?: boolean;
+    removeFail?: boolean;
+    revokeFail?: boolean;
+    createRoleFail?: boolean;
+  } = {}) {
+    const member: OrganizationMember = {
+      id: memberUuid,
+      orgId: orgUuid,
+      subjectId: "usr_target",
+      subjectType: "user",
+      status: "active",
+      createdAt: fixedNowLocal,
+      updatedAt: fixedNowLocal,
+    };
+    const currentRoles: RoleAssignment[] = [
+      {
+        id: "ra-current-1",
+        orgId: orgUuid,
+        subjectId: "usr_target",
+        subjectType: "user",
+        role: "admin",
+        scopeKind: "organization",
+        scopeRef: null,
+        createdAt: fixedNowLocal,
+        revokedAt: null,
+      },
+    ];
+
+    return {
+      listRoleAssignments: async (id: string, subjectId: string) => {
+        if (opts.actorRolesFail && subjectId === actor.subjectId) {
+          return { ok: false as const, error: { kind: "internal" as const, message: "db error" } };
+        }
+        if (subjectId === "usr_target") {
+          return { ok: true as const, value: currentRoles };
+        }
+        return { ok: true as const, value: [{ id: "ra-actor", orgId: orgUuid, subjectId: actor.subjectId, subjectType: "user", role: "owner", scopeKind: "organization", scopeRef: null, createdAt: fixedNowLocal, revokedAt: null }] };
+      },
+      getMemberById: async (_orgId: string, _memberId: string) => {
+        if (opts.memberNotFound) return { ok: false as const, error: { kind: "not_found" as const } };
+        if (opts.memberRemoved) return { ok: false as const, error: { kind: "removed" as const } };
+        return { ok: true as const, value: member };
+      },
+      countActiveOwners: async (_orgId: string) => {
+        if (opts.ownerCountFail) return { ok: false as const, error: { kind: "internal" as const, message: "db fail" } };
+        return { ok: true as const, value: opts.ownerCount ?? 2 };
+      },
+      revokeAllRoleAssignments: async (_orgId: string, _subjectId: string, _revokedAt: Date) => {
+        if (opts.revokeFail) return { ok: false as const, error: { kind: "internal" as const, message: "revoke failed" } };
+        return { ok: true as const, value: currentRoles.map((r) => ({ ...r, revokedAt: fixedNowLocal })) };
+      },
+      createRoleAssignment: async (input: any) => {
+        if (opts.createRoleFail) return { ok: false as const, error: { kind: "internal" as const, message: "create failed" } };
+        return { ok: true as const, value: { ...input, revokedAt: null } };
+      },
+      removeMember: async (_orgId: string, _memberId: string, _at: Date) => {
+        if (opts.removeFail) return { ok: false as const, error: { kind: "not_found" as const } };
+        return { ok: true as const, value: { ...member, status: "removed", updatedAt: _at } };
+      },
+    };
+  }
+
+  function makeRequest(body: unknown): Request {
+    return new Request("http://localhost/test", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  }
+
+  describe("handleUpdateMemberRole", () => {
+    it("successful role update authorizes through policy and appends membership.updated", async () => {
+      const repo = createMemberRepo();
+      let appendedInput: any = null;
+      const eventsRepo = {
+        appendEventWithAudit: async (input: any) => {
+          appendedInput = input;
+          return { ok: true as const, value: { event: {}, audit: {} } };
+        },
+      } as any;
+      const policyCapture = { value: null as unknown };
+      const env = { POLICY_WORKER: createPolicyFetcher(true, policyCapture), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+      const response = await handleUpdateMemberRole(
+        makeRequest({ role: "viewer" }),
+        env as any, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
+        { repo, eventsRepo, now: () => fixedNowLocal, generateId: () => "generated_evt_1" },
+      );
+
+      expect(response.status).toBe(200);
+      const json = await response.json() as any;
+      expect(json.data.member.id).toMatch(/^mem_/);
+      expect(json.data.member.roles).toBeDefined();
+
+      // Policy was called
+      expect(policyCapture.value).not.toBeNull();
+      const policyBody = policyCapture.value as any;
+      expect(policyBody.action).toBe("organization.member.update_role");
+
+      // Event was appended
+      expect(appendedInput).not.toBeNull();
+      expect(appendedInput.event.type).toBe("membership.updated");
+      expect(appendedInput.event.version).toBe(1);
+      expect(appendedInput.event.source).toBe("membership-worker");
+      expect(appendedInput.event.actorType).toBe("user");
+      expect(appendedInput.event.actorId).toBe("usr_admin");
+      expect(appendedInput.event.subjectKind).toBe("member");
+      expect(appendedInput.event.subjectId).toMatch(/^mem_[0-9a-f]{32}$/);
+      expect(appendedInput.event.orgId).toMatch(/^org_[0-9a-f]{32}$/);
+      expect(appendedInput.event.requestId).toBe("req_test");
+      expect(appendedInput.event.payload.role).toBe("viewer");
+      expect(appendedInput.event.payload.previousRoles).toContain("admin");
+      expect(appendedInput.audit.category).toBe("membership");
+      expect(appendedInput.audit.description).toContain("updated");
+    });
+
+    it("event/audit append failure returns safe error", async () => {
+      const repo = createMemberRepo();
+      const eventsRepo = {
+        appendEventWithAudit: async () => {
+          return { ok: false as const, error: { kind: "internal" as const, message: "db error" } };
+        },
+      } as any;
+      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+      const response = await handleUpdateMemberRole(
+        makeRequest({ role: "viewer" }),
+        env as any, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
+        { repo, eventsRepo, now: () => fixedNowLocal, generateId: () => "gen_id" },
+      );
+
+      expect(response.status).toBe(500);
+      const json = await response.json() as any;
+      expect(json.error.code).toBe("internal_error");
+      const text = JSON.stringify(json);
+      expect(text).not.toContain("db error");
+      expect(text).not.toContain("stack");
+      expect(text).not.toContain("SQL");
+    });
+
+    it("policy denial appends no event", async () => {
+      const repo = createMemberRepo();
+      let eventAppended = false;
+      const eventsRepo = {
+        appendEventWithAudit: async () => {
+          eventAppended = true;
+          return { ok: true as const, value: { event: {}, audit: {} } };
+        },
+      } as any;
+      const env = { POLICY_WORKER: createPolicyFetcher(false), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+      const response = await handleUpdateMemberRole(
+        makeRequest({ role: "viewer" }),
+        env as any, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
+        { repo, eventsRepo, now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(404);
+      expect(eventAppended).toBe(false);
+    });
+
+    it("invalid org ID appends no event", async () => {
+      const repo = createMemberRepo();
+      let eventAppended = false;
+      const eventsRepo = {
+        appendEventWithAudit: async () => {
+          eventAppended = true;
+          return { ok: true as const, value: { event: {}, audit: {} } };
+        },
+      } as any;
+      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+      const response = await handleUpdateMemberRole(
+        makeRequest({ role: "viewer" }),
+        env as any, "req_test", actor, "bad_org_id", memberPublicIdStr,
+        { repo, eventsRepo, now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(404);
+      expect(eventAppended).toBe(false);
+    });
+
+    it("invalid member ID appends no event", async () => {
+      const repo = createMemberRepo();
+      let eventAppended = false;
+      const eventsRepo = {
+        appendEventWithAudit: async () => {
+          eventAppended = true;
+          return { ok: true as const, value: { event: {}, audit: {} } };
+        },
+      } as any;
+      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+      const response = await handleUpdateMemberRole(
+        makeRequest({ role: "viewer" }),
+        env as any, "req_test", actor, orgPublicIdStr, "invalid_member",
+        { repo, eventsRepo, now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(404);
+      expect(eventAppended).toBe(false);
+    });
+
+    it("invalid role body appends no event", async () => {
+      const repo = createMemberRepo();
+      let eventAppended = false;
+      const eventsRepo = {
+        appendEventWithAudit: async () => {
+          eventAppended = true;
+          return { ok: true as const, value: { event: {}, audit: {} } };
+        },
+      } as any;
+      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+      const response = await handleUpdateMemberRole(
+        makeRequest({ role: "superadmin" }),
+        env as any, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
+        { repo, eventsRepo, now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(422);
+      expect(eventAppended).toBe(false);
+    });
+
+    it("missing role in body returns validation error and appends no event", async () => {
+      const repo = createMemberRepo();
+      let eventAppended = false;
+      const eventsRepo = {
+        appendEventWithAudit: async () => {
+          eventAppended = true;
+          return { ok: true as const, value: { event: {}, audit: {} } };
+        },
+      } as any;
+      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+      const response = await handleUpdateMemberRole(
+        makeRequest({}),
+        env as any, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
+        { repo, eventsRepo, now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(422);
+      expect(eventAppended).toBe(false);
+    });
+
+    it("target member not found appends no event", async () => {
+      const repo = createMemberRepo({ memberNotFound: true });
+      let eventAppended = false;
+      const eventsRepo = {
+        appendEventWithAudit: async () => {
+          eventAppended = true;
+          return { ok: true as const, value: { event: {}, audit: {} } };
+        },
+      } as any;
+      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+      const response = await handleUpdateMemberRole(
+        makeRequest({ role: "viewer" }),
+        env as any, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
+        { repo, eventsRepo, now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(404);
+      expect(eventAppended).toBe(false);
+    });
+
+    it("target member removed appends no event", async () => {
+      const repo = createMemberRepo({ memberRemoved: true });
+      let eventAppended = false;
+      const eventsRepo = {
+        appendEventWithAudit: async () => {
+          eventAppended = true;
+          return { ok: true as const, value: { event: {}, audit: {} } };
+        },
+      } as any;
+      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+      const response = await handleUpdateMemberRole(
+        makeRequest({ role: "viewer" }),
+        env as any, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
+        { repo, eventsRepo, now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(404);
+      expect(eventAppended).toBe(false);
+    });
+
+    it("last-owner role change is rejected and appends no event", async () => {
+      // Create repo where target is owner and is the only owner
+      const ownerRepo = createMemberRepo({ ownerCount: 1 });
+      // Override listRoleAssignments so the target is an owner
+      const originalList = ownerRepo.listRoleAssignments;
+      ownerRepo.listRoleAssignments = async (id: string, subjectId: string) => {
+        if (subjectId === "usr_target") {
+          return { ok: true as const, value: [{
+            id: "ra-owner-1", orgId: orgUuid, subjectId: "usr_target", subjectType: "user",
+            role: "owner", scopeKind: "organization", scopeRef: null, createdAt: fixedNowLocal, revokedAt: null,
+          }] };
+        }
+        return originalList(id, subjectId);
+      };
+
+      let eventAppended = false;
+      const eventsRepo = {
+        appendEventWithAudit: async () => {
+          eventAppended = true;
+          return { ok: true as const, value: { event: {}, audit: {} } };
+        },
+      } as any;
+      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+      const response = await handleUpdateMemberRole(
+        makeRequest({ role: "viewer" }),
+        env as any, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
+        { repo: ownerRepo, eventsRepo, now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(422);
+      const json = await response.json() as any;
+      expect(json.error.code).toBe("precondition_failed");
+      expect(eventAppended).toBe(false);
+    });
+
+    it("missing POLICY_WORKER returns 503 and appends no event", async () => {
+      const repo = createMemberRepo();
+      let eventAppended = false;
+      const eventsRepo = {
+        appendEventWithAudit: async () => {
+          eventAppended = true;
+          return { ok: true as const, value: { event: {}, audit: {} } };
+        },
+      } as any;
+      const env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+      const response = await handleUpdateMemberRole(
+        makeRequest({ role: "viewer" }),
+        env as any, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
+        { repo, eventsRepo, now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(503);
+      expect(eventAppended).toBe(false);
+    });
+
+    it("missing SOURCEPLANE_DB without deps returns 503", async () => {
+      const env = { POLICY_WORKER: createPolicyFetcher(true), ENVIRONMENT: "test" };
+
+      const response = await handleUpdateMemberRole(
+        makeRequest({ role: "viewer" }),
+        env as any, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
+      );
+
+      expect(response.status).toBe(503);
+      const json = await response.json() as any;
+      expect(json.error.code).toBe("internal_error");
+    });
+
+    it("responses use public IDs and safe role summaries", async () => {
+      const repo = createMemberRepo();
+      const eventsRepo = {
+        appendEventWithAudit: async () => ({ ok: true as const, value: { event: {}, audit: {} } }),
+      } as any;
+      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+      const response = await handleUpdateMemberRole(
+        makeRequest({ role: "builder" }),
+        env as any, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
+        { repo, eventsRepo, now: () => fixedNowLocal, generateId: () => "gen_id" },
+      );
+
+      expect(response.status).toBe(200);
+      const json = await response.json() as any;
+      expect(json.data.member.id).toMatch(/^mem_[0-9a-f]{32}$/);
+      expect(Array.isArray(json.data.member.roles)).toBe(true);
+      for (const r of json.data.member.roles) {
+        expect(r).toHaveProperty("role");
+        expect(r).toHaveProperty("scopeKind");
+        expect(r).not.toHaveProperty("id");
+        expect(r).not.toHaveProperty("subjectId");
+        expect(r).not.toHaveProperty("orgId");
+        expect(r).not.toHaveProperty("scopeRef");
+      }
+    });
+
+    it("event/audit values do not expose raw UUIDs, bearer tokens, SQL, stack traces, or provider details", async () => {
+      const repo = createMemberRepo();
+      let appendedInput: any = null;
+      const eventsRepo = {
+        appendEventWithAudit: async (input: any) => {
+          appendedInput = input;
+          return { ok: true as const, value: { event: {}, audit: {} } };
+        },
+      } as any;
+      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+      await handleUpdateMemberRole(
+        makeRequest({ role: "viewer" }),
+        env as any, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
+        { repo, eventsRepo, now: () => fixedNowLocal, generateId: () => "gen_id" },
+      );
+
+      const eventStr = JSON.stringify(appendedInput);
+      // Must not contain raw UUIDs with dashes
+      expect(eventStr).not.toContain(orgUuid);
+      expect(eventStr).not.toContain(memberUuid);
+      // Must use public ID prefixes
+      expect(appendedInput.event.orgId).toMatch(/^org_/);
+      expect(appendedInput.event.subjectId).toMatch(/^mem_/);
+      // Must not contain sensitive patterns
+      expect(eventStr.toLowerCase()).not.toContain("bearer");
+      expect(eventStr).not.toMatch(/SELECT|INSERT|UPDATE|DELETE/);
+      expect(eventStr).not.toContain("stack");
+      expect(eventStr).not.toContain("postgres");
+      expect(eventStr).not.toContain("hyperdrive");
+    });
+  });
+
+  describe("handleRemoveMember", () => {
+    it("successful removal authorizes through policy and appends membership.removed", async () => {
+      const repo = createMemberRepo();
+      let appendedInput: any = null;
+      const eventsRepo = {
+        appendEventWithAudit: async (input: any) => {
+          appendedInput = input;
+          return { ok: true as const, value: { event: {}, audit: {} } };
+        },
+      } as any;
+      const policyCapture = { value: null as unknown };
+      const env = { POLICY_WORKER: createPolicyFetcher(true, policyCapture), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+      const response = await handleRemoveMember(
+        env as any, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
+        { repo, eventsRepo, now: () => fixedNowLocal, generateId: () => "generated_evt_2" },
+      );
+
+      expect(response.status).toBe(200);
+      const json = await response.json() as any;
+      expect(json.data.member.id).toMatch(/^mem_/);
+      expect(json.data.member.status).toBe("removed");
+      expect(json.data.member.roles).toEqual([]);
+
+      // Policy was called
+      expect(policyCapture.value).not.toBeNull();
+      const policyBody = policyCapture.value as any;
+      expect(policyBody.action).toBe("organization.member.remove");
+
+      // Event was appended
+      expect(appendedInput).not.toBeNull();
+      expect(appendedInput.event.type).toBe("membership.removed");
+      expect(appendedInput.event.version).toBe(1);
+      expect(appendedInput.event.source).toBe("membership-worker");
+      expect(appendedInput.event.actorType).toBe("user");
+      expect(appendedInput.event.actorId).toBe("usr_admin");
+      expect(appendedInput.event.subjectKind).toBe("member");
+      expect(appendedInput.event.subjectId).toMatch(/^mem_[0-9a-f]{32}$/);
+      expect(appendedInput.event.orgId).toMatch(/^org_[0-9a-f]{32}$/);
+      expect(appendedInput.event.requestId).toBe("req_test");
+      expect(appendedInput.event.payload.previousRoles).toContain("admin");
+      expect(appendedInput.event.payload.revokedRoleCount).toBeGreaterThanOrEqual(1);
+      expect(appendedInput.audit.category).toBe("membership");
+      expect(appendedInput.audit.description).toContain("removed");
+    });
+
+    it("event/audit append failure returns safe error", async () => {
+      const repo = createMemberRepo();
+      const eventsRepo = {
+        appendEventWithAudit: async () => {
+          return { ok: false as const, error: { kind: "internal" as const, message: "db error" } };
+        },
+      } as any;
+      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+      const response = await handleRemoveMember(
+        env as any, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
+        { repo, eventsRepo, now: () => fixedNowLocal, generateId: () => "gen_id" },
+      );
+
+      expect(response.status).toBe(500);
+      const json = await response.json() as any;
+      expect(json.error.code).toBe("internal_error");
+      const text = JSON.stringify(json);
+      expect(text).not.toContain("db error");
+      expect(text).not.toContain("stack");
+      expect(text).not.toContain("SQL");
+    });
+
+    it("policy denial appends no event", async () => {
+      const repo = createMemberRepo();
+      let eventAppended = false;
+      const eventsRepo = {
+        appendEventWithAudit: async () => {
+          eventAppended = true;
+          return { ok: true as const, value: { event: {}, audit: {} } };
+        },
+      } as any;
+      const env = { POLICY_WORKER: createPolicyFetcher(false), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+      const response = await handleRemoveMember(
+        env as any, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
+        { repo, eventsRepo, now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(404);
+      expect(eventAppended).toBe(false);
+    });
+
+    it("invalid org ID appends no event", async () => {
+      const repo = createMemberRepo();
+      let eventAppended = false;
+      const eventsRepo = {
+        appendEventWithAudit: async () => {
+          eventAppended = true;
+          return { ok: true as const, value: { event: {}, audit: {} } };
+        },
+      } as any;
+      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+      const response = await handleRemoveMember(
+        env as any, "req_test", actor, "bad_org_id", memberPublicIdStr,
+        { repo, eventsRepo, now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(404);
+      expect(eventAppended).toBe(false);
+    });
+
+    it("invalid member ID appends no event", async () => {
+      const repo = createMemberRepo();
+      let eventAppended = false;
+      const eventsRepo = {
+        appendEventWithAudit: async () => {
+          eventAppended = true;
+          return { ok: true as const, value: { event: {}, audit: {} } };
+        },
+      } as any;
+      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+      const response = await handleRemoveMember(
+        env as any, "req_test", actor, orgPublicIdStr, "invalid_member",
+        { repo, eventsRepo, now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(404);
+      expect(eventAppended).toBe(false);
+    });
+
+    it("target member not found appends no event", async () => {
+      const repo = createMemberRepo({ memberNotFound: true });
+      let eventAppended = false;
+      const eventsRepo = {
+        appendEventWithAudit: async () => {
+          eventAppended = true;
+          return { ok: true as const, value: { event: {}, audit: {} } };
+        },
+      } as any;
+      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+      const response = await handleRemoveMember(
+        env as any, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
+        { repo, eventsRepo, now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(404);
+      expect(eventAppended).toBe(false);
+    });
+
+    it("target member already removed appends no event", async () => {
+      const repo = createMemberRepo({ memberRemoved: true });
+      let eventAppended = false;
+      const eventsRepo = {
+        appendEventWithAudit: async () => {
+          eventAppended = true;
+          return { ok: true as const, value: { event: {}, audit: {} } };
+        },
+      } as any;
+      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+      const response = await handleRemoveMember(
+        env as any, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
+        { repo, eventsRepo, now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(404);
+      expect(eventAppended).toBe(false);
+    });
+
+    it("last-owner removal is rejected and appends no event", async () => {
+      // Create repo where target is owner and is the only owner
+      const ownerRepo = createMemberRepo({ ownerCount: 1 });
+      const originalList = ownerRepo.listRoleAssignments;
+      ownerRepo.listRoleAssignments = async (id: string, subjectId: string) => {
+        if (subjectId === "usr_target") {
+          return { ok: true as const, value: [{
+            id: "ra-owner-1", orgId: orgUuid, subjectId: "usr_target", subjectType: "user",
+            role: "owner", scopeKind: "organization", scopeRef: null, createdAt: fixedNowLocal, revokedAt: null,
+          }] };
+        }
+        return originalList(id, subjectId);
+      };
+
+      let eventAppended = false;
+      const eventsRepo = {
+        appendEventWithAudit: async () => {
+          eventAppended = true;
+          return { ok: true as const, value: { event: {}, audit: {} } };
+        },
+      } as any;
+      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+      const response = await handleRemoveMember(
+        env as any, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
+        { repo: ownerRepo, eventsRepo, now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(422);
+      const json = await response.json() as any;
+      expect(json.error.code).toBe("precondition_failed");
+      expect(eventAppended).toBe(false);
+    });
+
+    it("missing POLICY_WORKER returns 503 and appends no event", async () => {
+      const repo = createMemberRepo();
+      let eventAppended = false;
+      const eventsRepo = {
+        appendEventWithAudit: async () => {
+          eventAppended = true;
+          return { ok: true as const, value: { event: {}, audit: {} } };
+        },
+      } as any;
+      const env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+      const response = await handleRemoveMember(
+        env as any, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
+        { repo, eventsRepo, now: () => fixedNowLocal },
+      );
+
+      expect(response.status).toBe(503);
+      expect(eventAppended).toBe(false);
+    });
+
+    it("missing SOURCEPLANE_DB without deps returns 503", async () => {
+      const env = { POLICY_WORKER: createPolicyFetcher(true), ENVIRONMENT: "test" };
+
+      const response = await handleRemoveMember(
+        env as any, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
+      );
+
+      expect(response.status).toBe(503);
+      const json = await response.json() as any;
+      expect(json.error.code).toBe("internal_error");
+    });
+
+    it("responses use public IDs and safe role summaries", async () => {
+      const repo = createMemberRepo();
+      const eventsRepo = {
+        appendEventWithAudit: async () => ({ ok: true as const, value: { event: {}, audit: {} } }),
+      } as any;
+      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+      const response = await handleRemoveMember(
+        env as any, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
+        { repo, eventsRepo, now: () => fixedNowLocal, generateId: () => "gen_id" },
+      );
+
+      expect(response.status).toBe(200);
+      const text = await response.text();
+      // Raw UUIDs must not appear
+      expect(text).not.toContain(orgUuid);
+      expect(text).not.toContain(memberUuid);
+      // Public prefixed IDs should appear
+      expect(text).toContain("mem_");
+    });
+
+    it("event/audit values do not expose raw UUIDs, bearer tokens, SQL, stack traces, or provider details", async () => {
+      const repo = createMemberRepo();
+      let appendedInput: any = null;
+      const eventsRepo = {
+        appendEventWithAudit: async (input: any) => {
+          appendedInput = input;
+          return { ok: true as const, value: { event: {}, audit: {} } };
+        },
+      } as any;
+      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+      await handleRemoveMember(
+        env as any, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
+        { repo, eventsRepo, now: () => fixedNowLocal, generateId: () => "gen_id" },
+      );
+
+      const eventStr = JSON.stringify(appendedInput);
+      // Must not contain raw UUIDs with dashes
+      expect(eventStr).not.toContain(orgUuid);
+      expect(eventStr).not.toContain(memberUuid);
+      // Must use public ID prefixes
+      expect(appendedInput.event.orgId).toMatch(/^org_/);
+      expect(appendedInput.event.subjectId).toMatch(/^mem_/);
+      // Must not contain sensitive patterns
+      expect(eventStr.toLowerCase()).not.toContain("bearer");
+      expect(eventStr).not.toMatch(/SELECT|INSERT|UPDATE|DELETE/);
+      expect(eventStr).not.toContain("stack");
+      expect(eventStr).not.toContain("postgres");
+      expect(eventStr).not.toContain("hyperdrive");
     });
   });
 });

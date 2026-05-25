@@ -619,5 +619,41 @@ export function createMembershipRepository(executor: SqlExecutor): MembershipRep
         return safeError("Failed to revoke role assignment");
       }
     },
+
+    async revokeAllRoleAssignments(orgId: string, subjectId: string, revokedAt: Date): Promise<MembershipResult<RoleAssignment[]>> {
+      try {
+        const result = await executor.execute<Record<string, unknown>>(
+          `UPDATE membership.role_assignments
+           SET revoked_at = $3
+           WHERE org_id = $1 AND subject_id = $2 AND revoked_at IS NULL
+           RETURNING *`,
+          [orgId, subjectId, revokedAt.toISOString()],
+        );
+        return { ok: true, value: result.rows.map(mapRoleAssignment) };
+      } catch {
+        return safeError("Failed to revoke all role assignments");
+      }
+    },
+
+    async countActiveOwners(orgId: string): Promise<MembershipResult<number>> {
+      try {
+        const result = await executor.execute<Record<string, unknown>>(
+          `SELECT COUNT(*) AS cnt
+           FROM membership.role_assignments ra
+           INNER JOIN membership.organization_members m
+             ON m.org_id = ra.org_id AND m.subject_id = ra.subject_id
+           WHERE ra.org_id = $1
+             AND ra.role = 'owner'
+             AND ra.scope_kind = 'organization'
+             AND ra.revoked_at IS NULL
+             AND m.status = 'active'`,
+          [orgId],
+        );
+        const cnt = Number(result.rows[0]?.cnt ?? 0);
+        return { ok: true, value: cnt };
+      } catch {
+        return safeError("Failed to count active owners");
+      }
+    },
   };
 }

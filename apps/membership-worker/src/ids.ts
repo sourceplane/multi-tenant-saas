@@ -34,6 +34,11 @@ export function memberPublicId(uuid: string): string {
   return `mem_${uuidToHex(uuid)}`;
 }
 
+export function parseMemberPublicId(publicId: string): string | null {
+  if (!publicId.startsWith("mem_")) return null;
+  return hexToUuid(publicId.slice(4));
+}
+
 export function invitationPublicId(uuid: string): string {
   return `inv_${uuidToHex(uuid)}`;
 }
