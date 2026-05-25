@@ -227,9 +227,11 @@ export function createEventsRepository(executor: SqlExecutor): EventsRepository 
             FROM inserted_event
             RETURNING *
           )
-          SELECT 'event' AS _row_type, e.* FROM inserted_event e
-          UNION ALL
-          SELECT 'audit' AS _row_type, a.* FROM inserted_audit a`,
+          SELECT
+            row_to_json(e.*) AS _event,
+            row_to_json(a.*) AS _audit
+          FROM inserted_event e
+          FULL JOIN inserted_audit a ON true`,
           [
             event.id,
             event.type,
@@ -260,22 +262,26 @@ export function createEventsRepository(executor: SqlExecutor): EventsRepository 
           ],
         );
 
-        const eventRow = result.rows.find((r) => r._row_type === "event");
-        const auditRow = result.rows.find((r) => r._row_type === "audit");
-
-        if (!eventRow) {
+        if (result.rows.length === 0) {
           return { ok: false, error: { kind: "conflict", entity: "event" } };
         }
-        if (!auditRow) {
-          // Event conflicted so audit was not inserted (CTE dependency)
+
+        const row = result.rows[0]!;
+        const eventData = typeof row._event === "string" ? JSON.parse(row._event) : row._event;
+        const auditData = typeof row._audit === "string" ? JSON.parse(row._audit) : row._audit;
+
+        if (!eventData) {
+          return { ok: false, error: { kind: "conflict", entity: "event" } };
+        }
+        if (!auditData) {
           return { ok: false, error: { kind: "conflict", entity: "event" } };
         }
 
         return {
           ok: true,
           value: {
-            event: mapEvent(eventRow),
-            audit: mapAuditEntry(auditRow),
+            event: mapEvent(eventData as Record<string, unknown>),
+            audit: mapAuditEntry(auditData as Record<string, unknown>),
           },
         };
       } catch (err) {

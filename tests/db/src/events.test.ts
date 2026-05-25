@@ -61,10 +61,9 @@ const SAMPLE_EVENT_ROW = {
   payload: JSON.stringify({ name: "Acme Corp" }),
   redact_paths: JSON.stringify([]),
   created_at: NOW.toISOString(),
-  _row_type: "event",
 };
 
-const SAMPLE_AUDIT_ROW = {
+const SAMPLE_AUDIT_ROW_DATA = {
   id: "aud-001",
   event_id: "evt-001",
   org_id: "org-001",
@@ -86,7 +85,13 @@ const SAMPLE_AUDIT_ROW = {
   payload: JSON.stringify({ name: "Acme Corp" }),
   redact_paths: JSON.stringify(["$.payload.secret"]),
   created_at: NOW.toISOString(),
-  _row_type: "audit",
+};
+
+const SAMPLE_AUDIT_ROW = { ...SAMPLE_AUDIT_ROW_DATA };
+
+const SAMPLE_EVENT_WITH_AUDIT_ROW = {
+  _event: SAMPLE_EVENT_ROW,
+  _audit: SAMPLE_AUDIT_ROW_DATA,
 };
 
 describe("events repository: appendEvent", () => {
@@ -231,7 +236,7 @@ describe("events repository: appendEvent", () => {
 describe("events repository: appendEventWithAudit", () => {
   it("inserts event and audit in one SQL statement", async () => {
     const { executor, queries } = createFakeExecutor({
-      rows: [SAMPLE_EVENT_ROW, SAMPLE_AUDIT_ROW],
+      rows: [SAMPLE_EVENT_WITH_AUDIT_ROW],
     });
     const repo = createEventsRepository(executor);
 
