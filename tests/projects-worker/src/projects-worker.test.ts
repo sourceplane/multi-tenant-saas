@@ -1,3 +1,4 @@
+import { handleArchiveProject } from "@projects-worker/handlers/archive-project";
 import { handleCreateProject } from "@projects-worker/handlers/create-project";
 import { handleGetProject } from "@projects-worker/handlers/get-project";
 import { handleListProjects } from "@projects-worker/handlers/list-projects";
@@ -264,9 +265,18 @@ describe("projects-worker router", () => {
 
   it("returns 405 for unsupported methods on project item", async () => {
     const env = createFakeEnv();
-    const req = makeRequest("DELETE", `/v1/organizations/${TEST_ORG_PUBLIC}/projects/${TEST_PROJECT_PUBLIC}`);
+    const req = makeRequest("PATCH", `/v1/organizations/${TEST_ORG_PUBLIC}/projects/${TEST_PROJECT_PUBLIC}`);
     const res = await route(req, env);
     expect(res.status).toBe(405);
+  });
+
+  it("returns 401 for missing actor on DELETE project", async () => {
+    const env = createFakeEnv();
+    const req = new Request(`https://projects-worker/v1/organizations/${TEST_ORG_PUBLIC}/projects/${TEST_PROJECT_PUBLIC}`, {
+      method: "DELETE",
+    });
+    const res = await route(req, env);
+    expect(res.status).toBe(401);
   });
 });
 
@@ -844,5 +854,208 @@ describe("handleListProjects", () => {
     expect(callBody.resource.kind).toBe("organization");
     expect(callBody.resource.orgId).toBe(TEST_ORG_UUID);
     expect(callBody.resource.projectId).toBeUndefined();
+  });
+});
+
+describe("handleArchiveProject", () => {
+  const archivedProject: Project = {
+    ...fakeProject,
+    status: "archived",
+    archivedAt: new Date("2026-01-15T00:00:00Z"),
+    updatedAt: new Date("2026-01-15T00:00:00Z"),
+  };
+
+  it("archives a project with authorization and atomic event", async () => {
+    const env = createFakeEnv();
+    const projectsRepo = createFakeProjectsRepo({
+      archiveProject: async () => ({ ok: true as const, value: archivedProject }),
+    });
+    const eventsRepo = createFakeEventsRepo();
+
+    const res = await handleArchiveProject(env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID, { projectsRepo, eventsRepo });
+    expect(res.status).toBe(200);
+
+    const json = await res.json() as { data: { project: { id: string; orgId: string; status: string } } };
+    expect(json.data.project.id).toMatch(/^prj_/);
+    expect(json.data.project.orgId).toMatch(/^org_/);
+    expect(json.data.project.status).toBe("archived");
+
+    expect(eventsRepo.appendEventWithAuditCalls.length).toBe(1);
+  });
+
+  it("uses project.delete policy action with explicit project resource shape", async () => {
+    const env = createFakeEnv();
+    const projectsRepo = createFakeProjectsRepo({
+      archiveProject: async () => ({ ok: true as const, value: archivedProject }),
+    });
+    const eventsRepo = createFakeEventsRepo();
+
+    await handleArchiveProject(env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID, { projectsRepo, eventsRepo });
+
+    const policyFetcher = env.POLICY_WORKER as unknown as { fetchCalls: Array<{ url: string; init: RequestInit }> };
+    const callBody = JSON.parse(policyFetcher.fetchCalls[0]!.init.body as string);
+    expect(callBody.action).toBe("project.delete");
+    expect(callBody.resource.kind).toBe("project");
+    expect(callBody.resource.id).toBe(TEST_PROJECT_UUID);
+    expect(callBody.resource.orgId).toBe(TEST_ORG_UUID);
+    expect(callBody.resource.projectId).toBe(TEST_PROJECT_UUID);
+  });
+
+  it("returns 404 for malformed org/project IDs via router", async () => {
+    const env = createFakeEnv();
+    const req = makeRequest("DELETE", `/v1/organizations/bad_org/projects/${TEST_PROJECT_PUBLIC}`);
+    const res = await route(req, env);
+    expect(res.status).toBe(404);
+
+    const req2 = makeRequest("DELETE", `/v1/organizations/${TEST_ORG_PUBLIC}/projects/bad_prj`);
+    const res2 = await route(req2, env);
+    expect(res2.status).toBe(404);
+  });
+
+  it("returns 503 when SOURCEPLANE_DB is missing", async () => {
+    const env = createFakeEnv({ SOURCEPLANE_DB: undefined });
+    const res = await handleArchiveProject(env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID);
+    expect(res.status).toBe(503);
+  });
+
+  it("returns 503 when MEMBERSHIP_WORKER is missing", async () => {
+    const env = createFakeEnv({ MEMBERSHIP_WORKER: undefined });
+    const res = await handleArchiveProject(env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID);
+    expect(res.status).toBe(503);
+  });
+
+  it("returns 503 when POLICY_WORKER is missing", async () => {
+    const env = createFakeEnv({ POLICY_WORKER: undefined });
+    const res = await handleArchiveProject(env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID);
+    expect(res.status).toBe(503);
+  });
+
+  it("fails closed when membership-context call fails", async () => {
+    const env = createFakeEnv({ MEMBERSHIP_WORKER: createMockFetcherThatThrows() });
+    const projectsRepo = createFakeProjectsRepo();
+    const eventsRepo = createFakeEventsRepo();
+
+    const res = await handleArchiveProject(env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID, { projectsRepo, eventsRepo });
+    expect(res.status).toBe(404);
+  });
+
+  it("fails closed when membership returns malformed envelope", async () => {
+    const env = createFakeEnv({ MEMBERSHIP_WORKER: createMockFetcher({ wrong: "shape" }) });
+    const projectsRepo = createFakeProjectsRepo();
+    const eventsRepo = createFakeEventsRepo();
+
+    const res = await handleArchiveProject(env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID, { projectsRepo, eventsRepo });
+    expect(res.status).toBe(404);
+  });
+
+  it("fails closed when policy denies", async () => {
+    const env = createFakeEnv({
+      POLICY_WORKER: createMockFetcher({ data: { allow: false, reason: "denied", policyVersion: 1, derivedScope: { orgId: TEST_ORG_UUID } } }),
+    });
+    const projectsRepo = createFakeProjectsRepo();
+    const eventsRepo = createFakeEventsRepo();
+
+    const res = await handleArchiveProject(env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID, { projectsRepo, eventsRepo });
+    expect(res.status).toBe(404);
+  });
+
+  it("fails closed when policy-worker fetch throws", async () => {
+    const env = createFakeEnv({ POLICY_WORKER: createMockFetcherThatThrows() });
+    const projectsRepo = createFakeProjectsRepo();
+    const eventsRepo = createFakeEventsRepo();
+
+    const res = await handleArchiveProject(env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID, { projectsRepo, eventsRepo });
+    expect(res.status).toBe(404);
+  });
+
+  it("fails closed when policy returns malformed envelope", async () => {
+    const env = createFakeEnv({ POLICY_WORKER: createMockFetcher({ wrong: "shape" }) });
+    const projectsRepo = createFakeProjectsRepo();
+    const eventsRepo = createFakeEventsRepo();
+
+    const res = await handleArchiveProject(env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID, { projectsRepo, eventsRepo });
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 404 when project not found in repository", async () => {
+    const env = createFakeEnv();
+    const projectsRepo = createFakeProjectsRepo({
+      archiveProject: async () => ({ ok: false as const, error: { kind: "not_found" as const } }),
+    });
+    const eventsRepo = createFakeEventsRepo();
+
+    const res = await handleArchiveProject(env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID, { projectsRepo, eventsRepo });
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 503 when repository has internal failure", async () => {
+    const env = createFakeEnv();
+    const projectsRepo = createFakeProjectsRepo({
+      archiveProject: async () => ({ ok: false as const, error: { kind: "internal" as const, message: "db error" } }),
+    });
+    const eventsRepo = createFakeEventsRepo();
+
+    const res = await handleArchiveProject(env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID, { projectsRepo, eventsRepo });
+    expect(res.status).toBe(503);
+  });
+
+  it("event append failure prevents successful archive", async () => {
+    const env = createFakeEnv();
+    const projectsRepo = createFakeProjectsRepo({
+      archiveProject: async () => ({ ok: true as const, value: archivedProject }),
+    });
+    const eventsRepo = createFakeEventsRepo({
+      appendEventWithAudit: async () => ({ ok: false as const, error: { kind: "internal" as const, message: "db error" } }),
+    });
+
+    const res = await handleArchiveProject(env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID, { projectsRepo, eventsRepo });
+    expect(res.status).toBe(503);
+  });
+
+  it("does not expose raw UUIDs in response", async () => {
+    const env = createFakeEnv();
+    const projectsRepo = createFakeProjectsRepo({
+      archiveProject: async () => ({ ok: true as const, value: archivedProject }),
+    });
+    const eventsRepo = createFakeEventsRepo();
+
+    const res = await handleArchiveProject(env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID, { projectsRepo, eventsRepo });
+    const text = await res.text();
+    expect(text).not.toContain(TEST_ORG_UUID);
+    expect(text).not.toContain(TEST_PROJECT_UUID);
+  });
+
+  it("does not expose raw UUIDs in event payload", async () => {
+    const env = createFakeEnv();
+    const projectsRepo = createFakeProjectsRepo({
+      archiveProject: async () => ({ ok: true as const, value: archivedProject }),
+    });
+    const eventsRepo = createFakeEventsRepo();
+
+    await handleArchiveProject(env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID, { projectsRepo, eventsRepo });
+
+    const eventCall = eventsRepo.appendEventWithAuditCalls[0]![0] as AppendEventWithAuditInput;
+    const payload = eventCall.event.payload;
+    const payloadStr = JSON.stringify(payload);
+    expect(payloadStr).not.toContain(TEST_ORG_UUID);
+    expect(payloadStr).not.toContain(TEST_PROJECT_UUID);
+    expect(payload.projectId).toMatch(/^prj_/);
+    expect(payload.orgId).toMatch(/^org_/);
+  });
+
+  it("audit description does not expose raw UUIDs or secrets", async () => {
+    const env = createFakeEnv();
+    const projectsRepo = createFakeProjectsRepo({
+      archiveProject: async () => ({ ok: true as const, value: archivedProject }),
+    });
+    const eventsRepo = createFakeEventsRepo();
+
+    await handleArchiveProject(env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID, { projectsRepo, eventsRepo });
+
+    const eventCall = eventsRepo.appendEventWithAuditCalls[0]![0] as AppendEventWithAuditInput;
+    const description = eventCall.audit.description;
+    expect(description).not.toContain(TEST_ORG_UUID);
+    expect(description).not.toContain(TEST_PROJECT_UUID);
+    expect(description).toContain("Archived project");
   });
 });
