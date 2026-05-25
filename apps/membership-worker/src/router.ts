@@ -10,6 +10,7 @@ import { handleCreateInvitation } from "./handlers/create-invitation.js";
 import { handleListInvitations } from "./handlers/list-invitations.js";
 import { handleRevokeInvitation } from "./handlers/revoke-invitation.js";
 import { handleAcceptInvitation } from "./handlers/accept-invitation.js";
+import { handleAuthorizationContext } from "./handlers/authorization-context.js";
 import { errorResponse, notFound, methodNotAllowed } from "./http.js";
 import { generateRequestId } from "./ids.js";
 
@@ -47,6 +48,13 @@ export async function route(request: Request, env: Env): Promise<Response> {
   try {
     if (url.pathname === "/health" && request.method === "GET") {
       return handleHealth(env, requestId);
+    }
+
+    if (url.pathname === "/v1/internal/membership/authorization-context") {
+      if (request.method === "POST") {
+        return handleAuthorizationContext(request, env, requestId);
+      }
+      return methodNotAllowed(requestId);
     }
 
     if (url.pathname === "/v1/organizations") {

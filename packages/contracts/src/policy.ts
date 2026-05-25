@@ -108,4 +108,13 @@ export type OrganizationAction = (typeof ORGANIZATION_ACTIONS)[number];
 
 export const POLICY_VERSION = 1;
 
+export interface AuthorizationContextRequest {
+  subject: PolicySubject;
+  orgId: string;
+}
+
+export interface AuthorizationContextResponse {
+  memberships: MembershipFact[];
+}
+
 export type { OrganizationRole, ProjectRole, TenancyRole, RoleScopeKind };
