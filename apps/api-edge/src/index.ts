@@ -4,6 +4,7 @@ import type { Env } from "./env";
 import { resolveRequestId, notFound } from "./http";
 import { isAuthRoute, handleAuthRoute } from "./auth-facade";
 import { isOrgRoute, handleOrgRoute } from "./org-facade";
+import { isProjectRoute, handleProjectRoute } from "./project-facade";
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -16,6 +17,10 @@ export default {
 
     if (isAuthRoute(url.pathname)) {
       return handleAuthRoute(request, env, requestId, url.pathname);
+    }
+
+    if (isProjectRoute(url.pathname)) {
+      return handleProjectRoute(request, env, requestId, url.pathname);
     }
 
     if (isOrgRoute(url.pathname)) {

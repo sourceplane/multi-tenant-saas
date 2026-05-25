@@ -1,14 +1,15 @@
 apiVersion: sourceplane.io/v1
 kind: Component
 metadata:
-  name: api-edge
-  description: Cloudflare Worker for the API edge Runtime
+  name: projects-worker
+  description: Cloudflare Worker for the Projects runtime
 spec:
   type: cloudflare-worker-turbo
   domain: starter-runtime
-  path: apps/api-edge
+  path: apps/projects-worker
   dependsOn:
-    - component: projects-worker
+    - component: membership-worker
+    - component: policy-worker
   subscribe:
     environments:
       - name: dev
@@ -28,25 +29,20 @@ spec:
   parameters:
     nodeVersion: "22"
     pnpmVersion: "10.12.1"
-
     workspaceDir: ../..
     appDir: .
-
-    turboFilter: "@saas/api-edge"
+    turboFilter: "@saas/projects-worker"
     wranglerConfig: wrangler.jsonc
-
     installCommand: pnpm install --frozen-lockfile
-    buildCommand: pnpm exec turbo run build --filter=@saas/api-edge
-    typecheckCommand: pnpm exec turbo run typecheck --filter=@saas/api-edge
-
+    buildCommand: pnpm exec turbo run build --filter=@saas/projects-worker
+    typecheckCommand: pnpm exec turbo run typecheck --filter=@saas/projects-worker
     dryRunCommand: pnpm exec wrangler deploy --dry-run --config wrangler.jsonc --env prod
     deployCommand: pnpm exec wrangler deploy --config wrangler.jsonc --env prod
-
     preDeployCommand: "echo 'No pre-deploy step configured.'"
     migrationCommand: "echo 'No migrations configured.'"
     smokeCommand: "echo 'No smoke test configured.'"
   labels:
     team: platform
     layer: runtime
-    surface: api
+    surface: projects
     runtime: cloudflare
