@@ -29,6 +29,10 @@ const EXPECTED_SERVICES = {
       binding: "MEMBERSHIP_WORKER",
       service: "membership-worker-stage",
     },
+    {
+      binding: "PROJECTS_WORKER",
+      service: "projects-worker-stage",
+    },
   ],
   prod: [
     {
@@ -38,6 +42,10 @@ const EXPECTED_SERVICES = {
     {
       binding: "MEMBERSHIP_WORKER",
       service: "membership-worker-prod",
+    },
+    {
+      binding: "PROJECTS_WORKER",
+      service: "projects-worker-prod",
     },
   ],
 };
