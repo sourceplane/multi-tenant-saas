@@ -313,8 +313,66 @@ describe("authorize", () => {
       expect(authorize(authReq("project.read", "org_1", facts, "prj_1")).allow).toBe(false);
     });
 
+    it("denies project.list", () => {
+      expect(authorize(authReq("project.list", "org_1", facts)).allow).toBe(false);
+    });
+
     it("denies settings", () => {
       expect(authorize(authReq("organization.settings.update", "org_1", facts)).allow).toBe(false);
+    });
+  });
+
+  describe("project.list action", () => {
+    it("allows owner to list projects", () => {
+      const result = authorize(authReq("project.list", "org_1", [orgFact("owner", "org_1")]));
+      expect(result.allow).toBe(true);
+      expect(result.reason).toBe("org_owner");
+    });
+
+    it("allows admin to list projects", () => {
+      const result = authorize(authReq("project.list", "org_1", [orgFact("admin", "org_1")]));
+      expect(result.allow).toBe(true);
+      expect(result.reason).toBe("org_admin");
+    });
+
+    it("allows builder to list projects", () => {
+      const result = authorize(authReq("project.list", "org_1", [orgFact("builder", "org_1")]));
+      expect(result.allow).toBe(true);
+      expect(result.reason).toBe("org_builder");
+    });
+
+    it("allows viewer to list projects", () => {
+      const result = authorize(authReq("project.list", "org_1", [orgFact("viewer", "org_1")]));
+      expect(result.allow).toBe(true);
+      expect(result.reason).toBe("org_viewer");
+    });
+
+    it("denies billing_admin from listing projects", () => {
+      const result = authorize(authReq("project.list", "org_1", [orgFact("billing_admin", "org_1")]));
+      expect(result.allow).toBe(false);
+    });
+
+    it("denies when no memberships", () => {
+      const result = authorize(authReq("project.list", "org_1", []));
+      expect(result.allow).toBe(false);
+      expect(result.reason).toBe("no_matching_role");
+    });
+
+    it("denies cross-org facts", () => {
+      const result = authorize(authReq("project.list", "org_2", [orgFact("owner", "org_1")]));
+      expect(result.allow).toBe(false);
+    });
+
+    it("project-scoped roles alone do not grant org-wide list", () => {
+      const facts = [projectFact("project_admin", "org_1", "prj_1")];
+      const result = authorize(authReq("project.list", "org_1", facts));
+      expect(result.allow).toBe(false);
+    });
+
+    it("project.read still requires explicit projectId", () => {
+      const result = authorize(authReq("project.read", "org_1", [orgFact("owner", "org_1")]));
+      expect(result.allow).toBe(false);
+      expect(result.reason).toBe("invalid_scope");
     });
   });
 
@@ -465,7 +523,7 @@ describe("listEffectivePermissions", () => {
     expect(result.derivedScope.orgId).toBe("org_1");
 
     const allowed = result.permissions.filter((p) => p.allow);
-    expect(allowed.length).toBe(11);
+    expect(allowed.length).toBe(12);
   });
 
   it("returns limited permissions for viewer", () => {
@@ -476,9 +534,10 @@ describe("listEffectivePermissions", () => {
     };
     const result = listEffectivePermissions(input);
     const allowed = result.permissions.filter((p) => p.allow);
-    expect(allowed.length).toBe(1);
+    expect(allowed.length).toBe(2);
     expect(allowed.map((p) => p.action).sort()).toEqual([
       "organization.read",
+      "project.list",
     ]);
   });
 

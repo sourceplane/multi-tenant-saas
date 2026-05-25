@@ -21,7 +21,7 @@ export async function handleProjectRoute(
   requestId: string,
   pathname: string,
 ): Promise<Response> {
-  if (ORG_PROJECTS_RE.test(pathname) && request.method !== "POST") {
+  if (ORG_PROJECTS_RE.test(pathname) && request.method !== "POST" && request.method !== "GET") {
     return errorResponse("unsupported", "Method not allowed", 405, requestId);
   }
 

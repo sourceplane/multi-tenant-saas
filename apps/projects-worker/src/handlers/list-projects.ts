@@ -1,0 +1,93 @@
+import type { Env } from "../env.js";
+import type { ActorContext } from "../router.js";
+import type { ProjectsRepository } from "@saas/db/projects";
+import { createProjectsRepository } from "@saas/db/projects";
+import { createSqlExecutor } from "@saas/db/hyperdrive";
+import { fetchAuthorizationContext } from "../membership-client.js";
+import { authorizeViaPolicy } from "../policy-client.js";
+import { errorResponse, validationError } from "../http.js";
+import { toPublicProject } from "./create-project.js";
+import { parsePageParams, encodeCursor } from "../pagination.js";
+
+export interface HandleListProjectsDeps {
+  projectsRepo?: ProjectsRepository;
+}
+
+export async function handleListProjects(
+  request: Request,
+  env: Env,
+  requestId: string,
+  actor: ActorContext,
+  orgId: string,
+  deps?: HandleListProjectsDeps,
+): Promise<Response> {
+  if (!env.SOURCEPLANE_DB) {
+    return errorResponse("internal_error", "Service unavailable", 503, requestId);
+  }
+  if (!env.MEMBERSHIP_WORKER) {
+    return errorResponse("internal_error", "Service unavailable", 503, requestId);
+  }
+  if (!env.POLICY_WORKER) {
+    return errorResponse("internal_error", "Service unavailable", 503, requestId);
+  }
+
+  const url = new URL(request.url);
+  const pageResult = parsePageParams(url);
+  if (!pageResult.ok) {
+    return validationError(requestId, { [pageResult.field]: [pageResult.reason] });
+  }
+
+  const contextResult = await fetchAuthorizationContext(
+    env.MEMBERSHIP_WORKER,
+    actor.subjectId,
+    actor.subjectType,
+    orgId,
+    requestId,
+  );
+  if (!contextResult.ok) {
+    return errorResponse("not_found", "Not found", 404, requestId);
+  }
+
+  const policyResult = await authorizeViaPolicy(
+    env.POLICY_WORKER,
+    actor.subjectId,
+    actor.subjectType,
+    "project.list",
+    { kind: "organization", orgId },
+    contextResult.memberships,
+    requestId,
+  );
+  if (!policyResult.allow) {
+    return errorResponse("not_found", "Not found", 404, requestId);
+  }
+
+  const { limit, cursor } = pageResult.value;
+  const dbCursor = cursor ? { createdAt: cursor.createdAt, id: cursor.id } : null;
+
+  const executor = createSqlExecutor(env.SOURCEPLANE_DB);
+  try {
+    const repo = deps?.projectsRepo ?? createProjectsRepository(executor);
+    const result = await repo.listProjectsPaged(orgId, { limit, cursor: dbCursor });
+
+    if (!result.ok) {
+      return errorResponse("internal_error", "Service unavailable", 503, requestId);
+    }
+
+    const projects = result.value.items.map(toPublicProject);
+    const nextCursor = result.value.nextCursor
+      ? encodeCursor(result.value.nextCursor.createdAt, result.value.nextCursor.id)
+      : null;
+
+    return Response.json(
+      {
+        data: { projects },
+        meta: { requestId, cursor: nextCursor },
+      },
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+  } catch {
+    return errorResponse("internal_error", "Service unavailable", 503, requestId);
+  } finally {
+    await executor.dispose();
+  }
+}

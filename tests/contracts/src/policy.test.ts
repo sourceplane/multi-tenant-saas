@@ -4,6 +4,7 @@ import type {
   MembershipFact,
   PolicySubject,
 } from "@saas/contracts/policy";
+import { ORGANIZATION_ACTIONS } from "@saas/contracts/policy";
 
 describe("contracts: authorization-context types", () => {
   it("AuthorizationContextRequest accepts subject and orgId", () => {
@@ -59,5 +60,15 @@ describe("contracts: authorization-context types", () => {
     const subject: PolicySubject = { type: "workflow", id: "wf_run_1" };
     const req: AuthorizationContextRequest = { subject, orgId: "org_003" };
     expect(req.subject.type).toBe("workflow");
+  });
+});
+
+describe("contracts: ORGANIZATION_ACTIONS", () => {
+  it("includes project.list as a known action", () => {
+    expect(ORGANIZATION_ACTIONS).toContain("project.list");
+  });
+
+  it("includes project.read as a known action", () => {
+    expect(ORGANIZATION_ACTIONS).toContain("project.read");
   });
 });

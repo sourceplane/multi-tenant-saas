@@ -1,5 +1,6 @@
 import { handleCreateProject } from "@projects-worker/handlers/create-project";
 import { handleGetProject } from "@projects-worker/handlers/get-project";
+import { handleListProjects } from "@projects-worker/handlers/list-projects";
 import { route } from "@projects-worker/router";
 import type { Env } from "@projects-worker/env";
 import type { ProjectsRepository, ProjectsResult, Project, CreateProjectInput, PageQueryParams, PagedResult, Environment, CreateEnvironmentInput } from "@saas/db/projects";
@@ -589,5 +590,259 @@ describe("handleGetProject", () => {
     expect(callBody.resource.projectId).toBe(TEST_PROJECT_UUID);
     expect(callBody.resource.orgId).toBe(TEST_ORG_UUID);
     expect(callBody.resource.id).toBe(TEST_PROJECT_UUID);
+  });
+});
+
+describe("handleListProjects", () => {
+  function listRequest(orgPublic: string, query = ""): Request {
+    return new Request(`https://projects.internal/v1/organizations/${orgPublic}/projects${query}`, {
+      method: "GET",
+      headers: {
+        "x-actor-subject-id": TEST_USER_ID,
+        "x-actor-subject-type": "user",
+        "x-request-id": "req_test",
+      },
+    });
+  }
+
+  it("returns paginated project list on success", async () => {
+    const env = createFakeEnv();
+    const projectsRepo = createFakeProjectsRepo();
+
+    const request = listRequest(TEST_ORG_PUBLIC);
+    const response = await handleListProjects(request, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, { projectsRepo });
+
+    expect(response.status).toBe(200);
+    const json = await response.json() as any;
+    expect(json.data.projects).toHaveLength(1);
+    expect(json.data.projects[0].id).toBe(TEST_PROJECT_PUBLIC);
+    expect(json.data.projects[0].orgId).toBe(TEST_ORG_PUBLIC);
+    expect(json.meta.cursor).toBeNull();
+  });
+
+  it("does not expose raw UUIDs in list response", async () => {
+    const env = createFakeEnv();
+    const projectsRepo = createFakeProjectsRepo();
+
+    const request = listRequest(TEST_ORG_PUBLIC);
+    const response = await handleListProjects(request, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, { projectsRepo });
+
+    const raw = await response.text();
+    expect(raw).not.toContain(TEST_ORG_UUID);
+    expect(raw).not.toContain(TEST_PROJECT_UUID);
+  });
+
+  it("uses default limit of 50 when not specified", async () => {
+    const env = createFakeEnv();
+    const listCalls: unknown[][] = [];
+    const projectsRepo = createFakeProjectsRepo({
+      listProjectsPaged: (...args: unknown[]) => {
+        listCalls.push(args);
+        return Promise.resolve({ ok: true, value: { items: [], nextCursor: null } });
+      },
+    });
+
+    const request = listRequest(TEST_ORG_PUBLIC);
+    await handleListProjects(request, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, { projectsRepo });
+
+    expect(listCalls[0]![1]).toEqual({ limit: 50, cursor: null });
+  });
+
+  it("respects limit query parameter", async () => {
+    const env = createFakeEnv();
+    const listCalls: unknown[][] = [];
+    const projectsRepo = createFakeProjectsRepo({
+      listProjectsPaged: (...args: unknown[]) => {
+        listCalls.push(args);
+        return Promise.resolve({ ok: true, value: { items: [], nextCursor: null } });
+      },
+    });
+
+    const request = listRequest(TEST_ORG_PUBLIC, "?limit=10");
+    await handleListProjects(request, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, { projectsRepo });
+
+    expect((listCalls[0]![1] as any).limit).toBe(10);
+  });
+
+  it("returns validation_failed for limit > 100", async () => {
+    const env = createFakeEnv();
+    const projectsRepo = createFakeProjectsRepo();
+
+    const request = listRequest(TEST_ORG_PUBLIC, "?limit=200");
+    const response = await handleListProjects(request, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, { projectsRepo });
+
+    expect(response.status).toBe(422);
+    const json = await response.json() as any;
+    expect(json.error.code).toBe("validation_failed");
+  });
+
+  it("returns validation_failed for invalid cursor", async () => {
+    const env = createFakeEnv();
+    const projectsRepo = createFakeProjectsRepo();
+
+    const request = listRequest(TEST_ORG_PUBLIC, "?cursor=not-valid");
+    const response = await handleListProjects(request, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, { projectsRepo });
+
+    expect(response.status).toBe(422);
+    const json = await response.json() as any;
+    expect(json.error.code).toBe("validation_failed");
+  });
+
+  it("returns next cursor when more pages exist", async () => {
+    const env = createFakeEnv();
+    const projectsRepo = createFakeProjectsRepo({
+      listProjectsPaged: () => Promise.resolve({
+        ok: true,
+        value: {
+          items: [fakeProject],
+          nextCursor: { createdAt: "2026-01-01T00:00:00.000Z", id: TEST_PROJECT_UUID },
+        },
+      }),
+    });
+
+    const request = listRequest(TEST_ORG_PUBLIC);
+    const response = await handleListProjects(request, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, { projectsRepo });
+
+    expect(response.status).toBe(200);
+    const json = await response.json() as any;
+    expect(json.meta.cursor).not.toBeNull();
+    expect(typeof json.meta.cursor).toBe("string");
+  });
+
+  it("returns 404 for malformed org ID via router", async () => {
+    const env = createFakeEnv();
+    const request = new Request("https://projects.internal/v1/organizations/bad-org/projects", {
+      method: "GET",
+      headers: {
+        "x-actor-subject-id": TEST_USER_ID,
+        "x-actor-subject-type": "user",
+      },
+    });
+
+    const response = await route(request, env);
+    expect(response.status).toBe(404);
+  });
+
+  it("returns 503 when SOURCEPLANE_DB is missing", async () => {
+    const env = createFakeEnv({ SOURCEPLANE_DB: undefined });
+    const request = listRequest(TEST_ORG_PUBLIC);
+    const response = await handleListProjects(request, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID);
+
+    expect(response.status).toBe(503);
+  });
+
+  it("returns 503 when MEMBERSHIP_WORKER is missing", async () => {
+    const env = createFakeEnv({ MEMBERSHIP_WORKER: undefined });
+    const request = listRequest(TEST_ORG_PUBLIC);
+    const response = await handleListProjects(request, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID);
+
+    expect(response.status).toBe(503);
+  });
+
+  it("returns 503 when POLICY_WORKER is missing", async () => {
+    const env = createFakeEnv({ POLICY_WORKER: undefined });
+    const request = listRequest(TEST_ORG_PUBLIC);
+    const response = await handleListProjects(request, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID);
+
+    expect(response.status).toBe(503);
+  });
+
+  it("returns 404 when membership-context fails", async () => {
+    const env = createFakeEnv({
+      MEMBERSHIP_WORKER: createMockFetcher({ error: "not found" }, 404),
+    });
+    const projectsRepo = createFakeProjectsRepo();
+
+    const request = listRequest(TEST_ORG_PUBLIC);
+    const response = await handleListProjects(request, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, { projectsRepo });
+
+    expect(response.status).toBe(404);
+  });
+
+  it("returns 404 when membership-context returns malformed envelope", async () => {
+    const env = createFakeEnv({
+      MEMBERSHIP_WORKER: createMockFetcher({ wrong: "shape" }),
+    });
+    const projectsRepo = createFakeProjectsRepo();
+
+    const request = listRequest(TEST_ORG_PUBLIC);
+    const response = await handleListProjects(request, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, { projectsRepo });
+
+    expect(response.status).toBe(404);
+  });
+
+  it("returns 404 when membership-worker throws network error", async () => {
+    const env = createFakeEnv({
+      MEMBERSHIP_WORKER: createMockFetcherThatThrows(),
+    });
+    const projectsRepo = createFakeProjectsRepo();
+
+    const request = listRequest(TEST_ORG_PUBLIC);
+    const response = await handleListProjects(request, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, { projectsRepo });
+
+    expect(response.status).toBe(404);
+  });
+
+  it("returns 404 when policy denies", async () => {
+    const env = createFakeEnv({
+      POLICY_WORKER: createMockFetcher({ data: { allow: false, reason: "no_matching_role", policyVersion: 1, derivedScope: { orgId: TEST_ORG_UUID } } }),
+    });
+    const projectsRepo = createFakeProjectsRepo();
+
+    const request = listRequest(TEST_ORG_PUBLIC);
+    const response = await handleListProjects(request, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, { projectsRepo });
+
+    expect(response.status).toBe(404);
+  });
+
+  it("returns 404 when policy returns malformed envelope", async () => {
+    const env = createFakeEnv({
+      POLICY_WORKER: createMockFetcher({ wrong: "shape" }),
+    });
+    const projectsRepo = createFakeProjectsRepo();
+
+    const request = listRequest(TEST_ORG_PUBLIC);
+    const response = await handleListProjects(request, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, { projectsRepo });
+
+    expect(response.status).toBe(404);
+  });
+
+  it("returns 404 when policy-worker throws network error", async () => {
+    const env = createFakeEnv({
+      POLICY_WORKER: createMockFetcherThatThrows(),
+    });
+    const projectsRepo = createFakeProjectsRepo();
+
+    const request = listRequest(TEST_ORG_PUBLIC);
+    const response = await handleListProjects(request, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, { projectsRepo });
+
+    expect(response.status).toBe(404);
+  });
+
+  it("returns 503 when repository fails", async () => {
+    const env = createFakeEnv();
+    const projectsRepo = createFakeProjectsRepo({
+      listProjectsPaged: () => Promise.resolve({ ok: false, error: { kind: "internal", message: "db error" } }),
+    });
+
+    const request = listRequest(TEST_ORG_PUBLIC);
+    const response = await handleListProjects(request, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, { projectsRepo });
+
+    expect(response.status).toBe(503);
+  });
+
+  it("sends project.list action with organization-scoped resource", async () => {
+    const env = createFakeEnv();
+    const projectsRepo = createFakeProjectsRepo();
+
+    const request = listRequest(TEST_ORG_PUBLIC);
+    await handleListProjects(request, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, { projectsRepo });
+
+    const policyFetcher = env.POLICY_WORKER as unknown as { fetchCalls: Array<{ url: string; init: RequestInit }> };
+    const callBody = JSON.parse(policyFetcher.fetchCalls[0]!.init.body as string);
+    expect(callBody.action).toBe("project.list");
+    expect(callBody.resource.kind).toBe("organization");
+    expect(callBody.resource.orgId).toBe(TEST_ORG_UUID);
+    expect(callBody.resource.projectId).toBeUndefined();
   });
 });

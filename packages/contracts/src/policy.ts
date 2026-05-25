@@ -95,6 +95,7 @@ export const ORGANIZATION_ACTIONS = [
   "organization.member.remove",
   "organization.member.update_role",
   "project.create",
+  "project.list",
   "project.read",
   "project.update",
   "project.delete",

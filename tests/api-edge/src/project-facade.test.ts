@@ -285,11 +285,13 @@ describe("api-edge project facade", () => {
       expect(JSON.stringify(json)).not.toContain("network error");
     });
 
-    it("returns 405 for GET on projects collection (list not supported)", async () => {
+    it("forwards GET on projects collection to PROJECTS_WORKER after identity resolution", async () => {
       const { fetcher: identityFetcher } = createSessionFetcher("usr_abc123");
-      const { fetcher: projectsFetcher } = createFakeFetcher();
+      const { fetcher: projectsFetcher, calls: projectsCalls } = createFakeFetcher(
+        Response.json({ data: { projects: [] }, meta: { requestId: "req_test", cursor: null } }),
+      );
 
-      const request = new Request("https://api.example.com/v1/organizations/org_abc123/projects", {
+      const request = new Request("https://api.example.com/v1/organizations/org_abc123/projects?limit=10&cursor=abc", {
         method: "GET",
         headers: { authorization: "Bearer sps_ses_abc.secret" },
       });
@@ -301,9 +303,37 @@ describe("api-edge project facade", () => {
         "/v1/organizations/org_abc123/projects",
       );
 
-      expect(response.status).toBe(405);
+      expect(response.status).toBe(200);
+      expect(projectsCalls).toHaveLength(1);
+      expect(projectsCalls[0]!.url).toContain("/v1/organizations/org_abc123/projects");
+      expect(projectsCalls[0]!.url).toContain("limit=10");
+      expect(projectsCalls[0]!.url).toContain("cursor=abc");
+      expect(projectsCalls[0]!.init.method).toBe("GET");
+
+      const forwarded = new Headers(projectsCalls[0]!.init.headers as HeadersInit);
+      expect(forwarded.get("x-actor-subject-id")).toBe("usr_abc123");
+      expect(forwarded.get("x-actor-subject-type")).toBe("user");
+      expect(forwarded.get("authorization")).toBeNull();
+    });
+
+    it("returns 503 when PROJECTS_WORKER is not configured for GET collection", async () => {
+      const { fetcher: identityFetcher } = createSessionFetcher("usr_abc123");
+
+      const request = new Request("https://api.example.com/v1/organizations/org_abc123/projects", {
+        method: "GET",
+        headers: { authorization: "Bearer sps_ses_abc.secret" },
+      });
+
+      const response = await handleProjectRoute(
+        request,
+        { IDENTITY_WORKER: identityFetcher, ENVIRONMENT: "test" },
+        "req_test",
+        "/v1/organizations/org_abc123/projects",
+      );
+
+      expect(response.status).toBe(503);
       const json = await response.json() as any;
-      expect(json.error.code).toBe("unsupported");
+      expect(json.error.message).toBe("Projects service unavailable");
     });
 
     it("returns 401 when bearer token is missing", async () => {
