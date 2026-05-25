@@ -309,7 +309,7 @@ describe("membership-facts: mapRoleAssignmentsToFacts", () => {
     ]);
   });
 
-  it("treats project scopeKind with null scopeRef as organization-scoped", () => {
+  it("maps project scopeKind with null scopeRef as project-scoped without projectId", () => {
     const assignments: RoleAssignment[] = [
       {
         id: "ra-3",
@@ -324,6 +324,7 @@ describe("membership-facts: mapRoleAssignmentsToFacts", () => {
       },
     ];
     const facts = mapRoleAssignmentsToFacts("org-1", assignments);
-    expect(facts[0]!.scope.kind).toBe("organization");
+    expect(facts[0]!.scope.kind).toBe("project");
+    expect(facts[0]!.scope.projectId).toBeUndefined();
   });
 });
