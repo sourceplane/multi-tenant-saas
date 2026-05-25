@@ -107,7 +107,7 @@ describe("Identity Migration Verification", () => {
 
     it("identity migrations are not subject to project-scoped org_id/project_id check", () => {
       expect(identityMigrations.every((m) => m.context === "identity")).toBe(true);
-      expect(projectMigrations.length).toBe(0);
+      expect(identityMigrations.some((m) => m.context === "projects")).toBe(false);
     });
   });
 });

@@ -102,6 +102,23 @@ describe("Migration Manifest Verifier", () => {
 
       expect(true).toBe(true);
     });
+
+    it("project-scoped migrations do not reference other bounded-context schemas", () => {
+      const PROJECT_SCOPED_CONTEXTS: BoundedContext[] = ["projects"];
+      const FORBIDDEN_REFS = ["membership.", "identity.", "billing.", "events."];
+
+      const projectMigrations = migrations.filter((m) =>
+        PROJECT_SCOPED_CONTEXTS.includes(m.context)
+      );
+
+      for (const m of projectMigrations) {
+        const fullPath = resolve(MIGRATIONS_ROOT, m.path);
+        const sql = readFileSync(fullPath, "utf-8");
+        for (const ref of FORBIDDEN_REFS) {
+          expect(sql).not.toContain(ref);
+        }
+      }
+    });
   });
 
   describe("migration description", () => {

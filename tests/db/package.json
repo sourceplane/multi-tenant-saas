@@ -32,6 +32,7 @@
       "^@saas/db/identity$": "<rootDir>/../../packages/db/src/identity/index.ts",
       "^@saas/db/membership$": "<rootDir>/../../packages/db/src/membership/index.ts",
       "^@saas/db/events$": "<rootDir>/../../packages/db/src/events/index.ts",
+      "^@saas/db/projects$": "<rootDir>/../../packages/db/src/projects/index.ts",
       "^@saas/db/(.*)$": "<rootDir>/../../packages/db/src/$1.ts"
     },
     "transform": {

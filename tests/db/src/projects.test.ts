@@ -1,0 +1,626 @@
+import {
+  createProjectsRepository,
+} from "@saas/db/projects";
+import type { SqlExecutor, SqlExecutorResult, SqlRow } from "@saas/db/hyperdrive";
+
+type QueryRecord = { text: string; params: unknown[] };
+
+function createFakeExecutor(options?: {
+  rows?: Record<string, unknown>[];
+  error?: unknown;
+  rowCount?: number;
+}): { executor: SqlExecutor; queries: QueryRecord[] } {
+  const queries: QueryRecord[] = [];
+  const executor: SqlExecutor = {
+    async execute<T extends SqlRow = SqlRow>(
+      text: string,
+      params?: unknown[],
+    ): Promise<SqlExecutorResult<T>> {
+      queries.push({ text, params: params ?? [] });
+      if (options?.error) {
+        throw options.error;
+      }
+      const rows = (options?.rows ?? []) as unknown as T[];
+      return { rows, rowCount: options?.rowCount ?? rows.length };
+    },
+  };
+  return { executor, queries };
+}
+
+const NOW = new Date("2026-01-15T10:00:00Z");
+
+const SAMPLE_PROJECT_ROW = {
+  id: "prj-001",
+  org_id: "org-001",
+  name: "My Project",
+  slug: "my-project",
+  slug_lower: "my-project",
+  status: "active",
+  created_at: NOW.toISOString(),
+  updated_at: NOW.toISOString(),
+  archived_at: null,
+};
+
+const SAMPLE_ENVIRONMENT_ROW = {
+  id: "env-001",
+  org_id: "org-001",
+  project_id: "prj-001",
+  name: "Production",
+  slug: "production",
+  slug_lower: "production",
+  status: "active",
+  created_at: NOW.toISOString(),
+  updated_at: NOW.toISOString(),
+  archived_at: null,
+};
+
+describe("ProjectsRepository", () => {
+  describe("createProject", () => {
+    it("uses parameterized query for project creation", async () => {
+      const { executor, queries } = createFakeExecutor({ rows: [SAMPLE_PROJECT_ROW] });
+      const repo = createProjectsRepository(executor);
+
+      await repo.createProject({
+        id: "prj-001",
+        orgId: "org-001",
+        name: "My Project",
+        slug: "my-project",
+        slugLower: "my-project",
+        createdAt: NOW,
+      });
+
+      expect(queries).toHaveLength(1);
+      expect(queries[0]!.text).toContain("$1");
+      expect(queries[0]!.text).toContain("$2");
+      expect(queries[0]!.text).toContain("$3");
+      expect(queries[0]!.text).toContain("$4");
+      expect(queries[0]!.text).toContain("$5");
+      expect(queries[0]!.text).toContain("$6");
+      expect(queries[0]!.params).toEqual([
+        "prj-001",
+        "org-001",
+        "My Project",
+        "my-project",
+        "my-project",
+        NOW.toISOString(),
+      ]);
+    });
+
+    it("maps returned row to Project type", async () => {
+      const { executor } = createFakeExecutor({ rows: [SAMPLE_PROJECT_ROW] });
+      const repo = createProjectsRepository(executor);
+
+      const result = await repo.createProject({
+        id: "prj-001",
+        orgId: "org-001",
+        name: "My Project",
+        slug: "my-project",
+        slugLower: "my-project",
+        createdAt: NOW,
+      });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value.id).toBe("prj-001");
+        expect(result.value.orgId).toBe("org-001");
+        expect(result.value.name).toBe("My Project");
+        expect(result.value.slugLower).toBe("my-project");
+        expect(result.value.status).toBe("active");
+        expect(result.value.createdAt).toEqual(NOW);
+        expect(result.value.archivedAt).toBeNull();
+      }
+    });
+
+    it("returns conflict on duplicate project", async () => {
+      const { executor } = createFakeExecutor({ rows: [], rowCount: 0 });
+      const repo = createProjectsRepository(executor);
+
+      const result = await repo.createProject({
+        id: "prj-001",
+        orgId: "org-001",
+        name: "My Project",
+        slug: "my-project",
+        slugLower: "my-project",
+        createdAt: NOW,
+      });
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.kind).toBe("conflict");
+      }
+    });
+
+    it("returns conflict on unique violation error code", async () => {
+      const { executor } = createFakeExecutor({
+        error: Object.assign(new Error("unique_violation"), { code: "23505" }),
+      });
+      const repo = createProjectsRepository(executor);
+
+      const result = await repo.createProject({
+        id: "prj-002",
+        orgId: "org-001",
+        name: "My Project",
+        slug: "my-project",
+        slugLower: "my-project",
+        createdAt: NOW,
+      });
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.kind).toBe("conflict");
+      }
+    });
+
+    it("maps generic errors to safe internal error", async () => {
+      const { executor } = createFakeExecutor({
+        error: new Error("connection to host 10.0.0.1:5432 refused"),
+      });
+      const repo = createProjectsRepository(executor);
+
+      const result = await repo.createProject({
+        id: "prj-001",
+        orgId: "org-001",
+        name: "Test",
+        slug: "test",
+        slugLower: "test",
+        createdAt: NOW,
+      });
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.kind).toBe("internal");
+        expect((result.error as { kind: "internal"; message: string }).message).not.toContain("10.0.0.1");
+      }
+    });
+  });
+
+  describe("getProjectById", () => {
+    it("includes org_id and project_id in query params", async () => {
+      const { executor, queries } = createFakeExecutor({ rows: [SAMPLE_PROJECT_ROW] });
+      const repo = createProjectsRepository(executor);
+
+      await repo.getProjectById("org-001", "prj-001");
+
+      expect(queries[0]!.params).toEqual(["org-001", "prj-001"]);
+      expect(queries[0]!.text).toContain("org_id = $1");
+      expect(queries[0]!.text).toContain("id = $2");
+    });
+
+    it("returns not_found when no rows", async () => {
+      const { executor } = createFakeExecutor({ rows: [] });
+      const repo = createProjectsRepository(executor);
+
+      const result = await repo.getProjectById("org-001", "prj-missing");
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.kind).toBe("not_found");
+    });
+  });
+
+  describe("getProjectBySlug", () => {
+    it("scopes slug lookup by org_id", async () => {
+      const { executor, queries } = createFakeExecutor({ rows: [SAMPLE_PROJECT_ROW] });
+      const repo = createProjectsRepository(executor);
+
+      await repo.getProjectBySlug("org-001", "my-project");
+
+      expect(queries[0]!.params).toEqual(["org-001", "my-project"]);
+      expect(queries[0]!.text).toContain("org_id = $1");
+      expect(queries[0]!.text).toContain("slug_lower = $2");
+    });
+
+    it("returns not_found for unknown slug", async () => {
+      const { executor } = createFakeExecutor({ rows: [] });
+      const repo = createProjectsRepository(executor);
+
+      const result = await repo.getProjectBySlug("org-001", "unknown-slug");
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.kind).toBe("not_found");
+    });
+  });
+
+  describe("listProjectsPaged", () => {
+    it("uses deterministic ordering with limit+1 and org_id scope", async () => {
+      const { executor, queries } = createFakeExecutor({ rows: [SAMPLE_PROJECT_ROW] });
+      const repo = createProjectsRepository(executor);
+
+      await repo.listProjectsPaged("org-001", { limit: 10, cursor: null });
+
+      expect(queries).toHaveLength(1);
+      expect(queries[0]!.text).toContain("org_id = $1");
+      expect(queries[0]!.text).toContain("ORDER BY");
+      expect(queries[0]!.text).toContain("LIMIT");
+      expect(queries[0]!.params).toEqual(["org-001", 11]);
+    });
+
+    it("applies cursor filtering with timestamp and id tie-breaker", async () => {
+      const { executor, queries } = createFakeExecutor({ rows: [] });
+      const repo = createProjectsRepository(executor);
+
+      await repo.listProjectsPaged("org-001", {
+        limit: 5,
+        cursor: { createdAt: "2026-01-15T10:00:00.000Z", id: "prj-001" },
+      });
+
+      expect(queries[0]!.text).toContain("$3");
+      expect(queries[0]!.text).toContain("$4");
+      expect(queries[0]!.params).toEqual(["org-001", 6, "2026-01-15T10:00:00.000Z", "prj-001"]);
+    });
+
+    it("returns nextCursor when more rows exist", async () => {
+      const rows = Array.from({ length: 3 }, (_, i) => ({
+        ...SAMPLE_PROJECT_ROW,
+        id: `prj-${String(i).padStart(3, "0")}`,
+        created_at: new Date(NOW.getTime() - i * 1000).toISOString(),
+        updated_at: new Date(NOW.getTime() - i * 1000).toISOString(),
+      }));
+      const { executor } = createFakeExecutor({ rows });
+      const repo = createProjectsRepository(executor);
+
+      const result = await repo.listProjectsPaged("org-001", { limit: 2, cursor: null });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value.items).toHaveLength(2);
+        expect(result.value.nextCursor).not.toBeNull();
+        expect(result.value.nextCursor!.id).toBe("prj-001");
+      }
+    });
+
+    it("returns null nextCursor when no more rows", async () => {
+      const { executor } = createFakeExecutor({ rows: [SAMPLE_PROJECT_ROW] });
+      const repo = createProjectsRepository(executor);
+
+      const result = await repo.listProjectsPaged("org-001", { limit: 10, cursor: null });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value.items).toHaveLength(1);
+        expect(result.value.nextCursor).toBeNull();
+      }
+    });
+
+    it("returns empty result safely", async () => {
+      const { executor } = createFakeExecutor({ rows: [] });
+      const repo = createProjectsRepository(executor);
+
+      const result = await repo.listProjectsPaged("org-001", { limit: 50, cursor: null });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value.items).toHaveLength(0);
+        expect(result.value.nextCursor).toBeNull();
+      }
+    });
+  });
+
+  describe("archiveProject", () => {
+    it("uses parameterized update with status = 'active' guard and org_id scope", async () => {
+      const archivedRow = { ...SAMPLE_PROJECT_ROW, status: "archived", archived_at: NOW.toISOString() };
+      const { executor, queries } = createFakeExecutor({ rows: [archivedRow] });
+      const repo = createProjectsRepository(executor);
+
+      await repo.archiveProject("org-001", "prj-001", NOW);
+
+      expect(queries[0]!.text).toContain("org_id = $1");
+      expect(queries[0]!.text).toContain("id = $2");
+      expect(queries[0]!.text).toContain("status = 'active'");
+      expect(queries[0]!.params).toEqual(["org-001", "prj-001", NOW.toISOString()]);
+    });
+
+    it("returns not_found when project already archived or does not exist", async () => {
+      const { executor } = createFakeExecutor({ rows: [], rowCount: 0 });
+      const repo = createProjectsRepository(executor);
+
+      const result = await repo.archiveProject("org-001", "prj-001", NOW);
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.kind).toBe("not_found");
+    });
+
+    it("maps generic errors to safe internal error", async () => {
+      const { executor } = createFakeExecutor({ error: new Error("timeout") });
+      const repo = createProjectsRepository(executor);
+
+      const result = await repo.archiveProject("org-001", "prj-001", NOW);
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.kind).toBe("internal");
+      }
+    });
+  });
+
+  describe("createEnvironment", () => {
+    it("carries org_id and project_id in parameterized insert", async () => {
+      const { executor, queries } = createFakeExecutor({ rows: [SAMPLE_ENVIRONMENT_ROW] });
+      const repo = createProjectsRepository(executor);
+
+      await repo.createEnvironment({
+        id: "env-001",
+        orgId: "org-001",
+        projectId: "prj-001",
+        name: "Production",
+        slug: "production",
+        slugLower: "production",
+        createdAt: NOW,
+      });
+
+      expect(queries).toHaveLength(1);
+      expect(queries[0]!.text).toContain("$1");
+      expect(queries[0]!.text).toContain("$7");
+      expect(queries[0]!.params).toEqual([
+        "env-001",
+        "org-001",
+        "prj-001",
+        "Production",
+        "production",
+        "production",
+        NOW.toISOString(),
+      ]);
+    });
+
+    it("maps returned row to Environment type", async () => {
+      const { executor } = createFakeExecutor({ rows: [SAMPLE_ENVIRONMENT_ROW] });
+      const repo = createProjectsRepository(executor);
+
+      const result = await repo.createEnvironment({
+        id: "env-001",
+        orgId: "org-001",
+        projectId: "prj-001",
+        name: "Production",
+        slug: "production",
+        slugLower: "production",
+        createdAt: NOW,
+      });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value.id).toBe("env-001");
+        expect(result.value.orgId).toBe("org-001");
+        expect(result.value.projectId).toBe("prj-001");
+        expect(result.value.name).toBe("Production");
+        expect(result.value.archivedAt).toBeNull();
+      }
+    });
+
+    it("returns conflict on unique violation", async () => {
+      const { executor } = createFakeExecutor({
+        error: Object.assign(new Error("unique_violation"), { code: "23505" }),
+      });
+      const repo = createProjectsRepository(executor);
+
+      const result = await repo.createEnvironment({
+        id: "env-002",
+        orgId: "org-001",
+        projectId: "prj-001",
+        name: "Production",
+        slug: "production",
+        slugLower: "production",
+        createdAt: NOW,
+      });
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.kind).toBe("conflict");
+    });
+  });
+
+  describe("getEnvironmentById", () => {
+    it("includes org_id + project_id + environment_id in query params", async () => {
+      const { executor, queries } = createFakeExecutor({ rows: [SAMPLE_ENVIRONMENT_ROW] });
+      const repo = createProjectsRepository(executor);
+
+      await repo.getEnvironmentById("org-001", "prj-001", "env-001");
+
+      expect(queries[0]!.params).toEqual(["org-001", "prj-001", "env-001"]);
+      expect(queries[0]!.text).toContain("org_id = $1");
+      expect(queries[0]!.text).toContain("project_id = $2");
+      expect(queries[0]!.text).toContain("id = $3");
+    });
+
+    it("returns not_found when no rows", async () => {
+      const { executor } = createFakeExecutor({ rows: [] });
+      const repo = createProjectsRepository(executor);
+
+      const result = await repo.getEnvironmentById("org-001", "prj-001", "env-missing");
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.kind).toBe("not_found");
+    });
+  });
+
+  describe("getEnvironmentBySlug", () => {
+    it("scopes slug lookup by org_id + project_id", async () => {
+      const { executor, queries } = createFakeExecutor({ rows: [SAMPLE_ENVIRONMENT_ROW] });
+      const repo = createProjectsRepository(executor);
+
+      await repo.getEnvironmentBySlug("org-001", "prj-001", "production");
+
+      expect(queries[0]!.params).toEqual(["org-001", "prj-001", "production"]);
+      expect(queries[0]!.text).toContain("org_id = $1");
+      expect(queries[0]!.text).toContain("project_id = $2");
+      expect(queries[0]!.text).toContain("slug_lower = $3");
+    });
+
+    it("returns not_found for unknown slug", async () => {
+      const { executor } = createFakeExecutor({ rows: [] });
+      const repo = createProjectsRepository(executor);
+
+      const result = await repo.getEnvironmentBySlug("org-001", "prj-001", "unknown");
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.kind).toBe("not_found");
+    });
+  });
+
+  describe("listEnvironmentsPaged", () => {
+    it("includes org_id + project_id and uses deterministic ordering", async () => {
+      const { executor, queries } = createFakeExecutor({ rows: [SAMPLE_ENVIRONMENT_ROW] });
+      const repo = createProjectsRepository(executor);
+
+      await repo.listEnvironmentsPaged("org-001", "prj-001", { limit: 10, cursor: null });
+
+      expect(queries).toHaveLength(1);
+      expect(queries[0]!.text).toContain("org_id = $1");
+      expect(queries[0]!.text).toContain("project_id = $2");
+      expect(queries[0]!.text).toContain("ORDER BY");
+      expect(queries[0]!.text).toContain("LIMIT");
+      expect(queries[0]!.params).toEqual(["org-001", "prj-001", 11]);
+    });
+
+    it("applies cursor filtering with timestamp and id tie-breaker", async () => {
+      const { executor, queries } = createFakeExecutor({ rows: [] });
+      const repo = createProjectsRepository(executor);
+
+      await repo.listEnvironmentsPaged("org-001", "prj-001", {
+        limit: 5,
+        cursor: { createdAt: "2026-01-15T10:00:00.000Z", id: "env-001" },
+      });
+
+      expect(queries[0]!.text).toContain("$4");
+      expect(queries[0]!.text).toContain("$5");
+      expect(queries[0]!.params).toEqual(["org-001", "prj-001", 6, "2026-01-15T10:00:00.000Z", "env-001"]);
+    });
+
+    it("returns nextCursor when more rows exist", async () => {
+      const rows = Array.from({ length: 3 }, (_, i) => ({
+        ...SAMPLE_ENVIRONMENT_ROW,
+        id: `env-${String(i).padStart(3, "0")}`,
+        created_at: new Date(NOW.getTime() - i * 1000).toISOString(),
+        updated_at: new Date(NOW.getTime() - i * 1000).toISOString(),
+      }));
+      const { executor } = createFakeExecutor({ rows });
+      const repo = createProjectsRepository(executor);
+
+      const result = await repo.listEnvironmentsPaged("org-001", "prj-001", { limit: 2, cursor: null });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value.items).toHaveLength(2);
+        expect(result.value.nextCursor).not.toBeNull();
+        expect(result.value.nextCursor!.id).toBe("env-001");
+      }
+    });
+
+    it("returns null nextCursor when no more rows", async () => {
+      const { executor } = createFakeExecutor({ rows: [SAMPLE_ENVIRONMENT_ROW] });
+      const repo = createProjectsRepository(executor);
+
+      const result = await repo.listEnvironmentsPaged("org-001", "prj-001", { limit: 10, cursor: null });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value.items).toHaveLength(1);
+        expect(result.value.nextCursor).toBeNull();
+      }
+    });
+
+    it("returns empty result safely", async () => {
+      const { executor } = createFakeExecutor({ rows: [] });
+      const repo = createProjectsRepository(executor);
+
+      const result = await repo.listEnvironmentsPaged("org-001", "prj-001", { limit: 50, cursor: null });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value.items).toHaveLength(0);
+        expect(result.value.nextCursor).toBeNull();
+      }
+    });
+  });
+
+  describe("archiveEnvironment", () => {
+    it("uses parameterized update with org_id + project_id + id and active guard", async () => {
+      const archivedRow = { ...SAMPLE_ENVIRONMENT_ROW, status: "archived", archived_at: NOW.toISOString() };
+      const { executor, queries } = createFakeExecutor({ rows: [archivedRow] });
+      const repo = createProjectsRepository(executor);
+
+      await repo.archiveEnvironment("org-001", "prj-001", "env-001", NOW);
+
+      expect(queries[0]!.text).toContain("org_id = $1");
+      expect(queries[0]!.text).toContain("project_id = $2");
+      expect(queries[0]!.text).toContain("id = $3");
+      expect(queries[0]!.text).toContain("status = 'active'");
+      expect(queries[0]!.params).toEqual(["org-001", "prj-001", "env-001", NOW.toISOString()]);
+    });
+
+    it("returns not_found when environment already archived", async () => {
+      const { executor } = createFakeExecutor({ rows: [], rowCount: 0 });
+      const repo = createProjectsRepository(executor);
+
+      const result = await repo.archiveEnvironment("org-001", "prj-001", "env-001", NOW);
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.kind).toBe("not_found");
+    });
+
+    it("maps generic errors to safe internal error", async () => {
+      const { executor } = createFakeExecutor({ error: new Error("connection refused") });
+      const repo = createProjectsRepository(executor);
+
+      const result = await repo.archiveEnvironment("org-001", "prj-001", "env-001", NOW);
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.kind).toBe("internal");
+        expect((result.error as { kind: "internal"; message: string }).message).not.toContain("connection refused");
+      }
+    });
+  });
+
+  describe("safe error handling", () => {
+    it("never exposes raw SQL errors in repository outputs", async () => {
+      const pgError = new Error(
+        'relation "projects.projects" does not exist at character 15',
+      );
+      const { executor } = createFakeExecutor({ error: pgError });
+      const repo = createProjectsRepository(executor);
+
+      const result = await repo.getProjectById("org-001", "prj-001");
+
+      expect(result.ok).toBe(false);
+      if (!result.ok && result.error.kind === "internal") {
+        expect(result.error.message).not.toContain("relation");
+        expect(result.error.message).not.toContain("character 15");
+      }
+    });
+
+    it("never exposes connection strings in errors", async () => {
+      const connError = new Error(
+        "could not connect to postgres://admin:secret@db.internal:5432/prod",
+      );
+      const { executor } = createFakeExecutor({ error: connError });
+      const repo = createProjectsRepository(executor);
+
+      const result = await repo.createProject({
+        id: "prj-001",
+        orgId: "org-001",
+        name: "Test",
+        slug: "test",
+        slugLower: "test",
+        createdAt: NOW,
+      });
+
+      expect(result.ok).toBe(false);
+      if (!result.ok && result.error.kind === "internal") {
+        expect(result.error.message).not.toContain("admin");
+        expect(result.error.message).not.toContain("secret");
+        expect(result.error.message).not.toContain("db.internal");
+      }
+    });
+  });
+
+  describe("Worker-safe import isolation", () => {
+    it("does not import runner-only modules", async () => {
+      const mod = await import("@saas/db/projects");
+      const exportKeys = Object.keys(mod);
+
+      expect(exportKeys).toContain("createProjectsRepository");
+      expect(exportKeys).not.toContain("runMigrations");
+      expect(exportKeys).not.toContain("PgAdapter");
+      expect(exportKeys).not.toContain("loadSecret");
+      expect(exportKeys).not.toContain("SupabaseApiAdapter");
+    });
+  });
+});
