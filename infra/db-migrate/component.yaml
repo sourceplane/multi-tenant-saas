@@ -16,8 +16,7 @@ spec:
   dependsOn:
     - component: db
 
-  paths:
-    - packages/db/src/migrations/**
+  path: packages/db/src/migrations
 
   parameters:
     nodeVersion: "20"
