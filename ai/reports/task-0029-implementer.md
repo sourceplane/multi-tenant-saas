@@ -82,7 +82,7 @@ orun run --plan ... --dry-run --runner github-actions → ✓ for both PR and ma
 
 ## PR Number
 
-PR #70 (pending — will be filled after push)
+PR #70 — https://github.com/sourceplane/multi-tenant-saas/pull/70
 
 ## Post-Merge Apply Notes
 
