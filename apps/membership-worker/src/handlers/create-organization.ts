@@ -1,9 +1,12 @@
 import type { Env } from "../env.js";
 import type { ActorContext } from "../router.js";
+import type { MembershipRepository } from "@saas/db/membership";
+import type { EventsRepository } from "@saas/db/events";
 import { createSqlExecutor } from "@saas/db/hyperdrive";
 import { createMembershipRepository } from "@saas/db/membership";
-import { createOrganizationService } from "../services/organization.js";
+import { createEventsRepository } from "@saas/db/events";
 import { successResponse, errorResponse, validationError } from "../http.js";
+import { orgPublicId, memberPublicId } from "../ids.js";
 
 const NAME_MIN = 1;
 const NAME_MAX = 100;
@@ -16,6 +19,13 @@ interface CreateOrgBody {
   slug?: unknown;
 }
 
+export interface CreateOrganizationDeps {
+  repo: Pick<MembershipRepository, "bootstrapOrganization">;
+  eventsRepo?: Pick<EventsRepository, "appendEventWithAudit">;
+  now?: () => Date;
+  generateId?: () => string;
+}
+
 function generateSlugFromName(name: string): string {
   return name
     .toLowerCase()
@@ -25,11 +35,22 @@ function generateSlugFromName(name: string): string {
     .replace(/-+$/, "");
 }
 
+function randomHex(bytes: number): string {
+  const buf = new Uint8Array(bytes);
+  crypto.getRandomValues(buf);
+  let hex = "";
+  for (let i = 0; i < buf.length; i++) {
+    hex += buf[i]!.toString(16).padStart(2, "0");
+  }
+  return hex;
+}
+
 export async function handleCreateOrganization(
   request: Request,
   env: Env,
   requestId: string,
   actor: ActorContext,
+  deps?: CreateOrganizationDeps,
 ): Promise<Response> {
   let body: CreateOrgBody;
   try {
@@ -65,28 +86,187 @@ export async function handleCreateOrganization(
     return validationError(requestId, fields);
   }
 
-  if (!env.SOURCEPLANE_DB) {
+  if (!deps && !env.SOURCEPLANE_DB) {
     return errorResponse("internal_error", "Database not configured", 503, requestId);
   }
 
-  const executor = createSqlExecutor(env.SOURCEPLANE_DB);
-  try {
-    const repo = createMembershipRepository(executor);
-    const service = createOrganizationService({ repo, now: () => new Date() });
-    const result = await service.createOrganization(actor, {
-      name: body.name as string,
-      slug,
-      slugLower: slug.toLowerCase(),
-    });
+  const now = deps?.now ? deps.now() : new Date();
+  const genId = deps?.generateId ?? (() => randomHex(16));
+  const orgId = crypto.randomUUID();
+  const memberId = crypto.randomUUID();
+  const roleAssignmentId = crypto.randomUUID();
+  const orgName = body.name as string;
+  const slugLower = slug.toLowerCase();
 
-    if (!result.ok) {
-      return errorResponse(result.code, result.message, result.status, requestId);
+  const bootstrapInput = {
+    org: { id: orgId, name: orgName, slug, slugLower, createdAt: now },
+    member: { id: memberId, orgId, subjectId: actor.subjectId, subjectType: actor.subjectType, createdAt: now },
+    roleAssignment: { id: roleAssignmentId, orgId, subjectId: actor.subjectId, subjectType: actor.subjectType, role: "owner", scopeKind: "organization", scopeRef: null, createdAt: now },
+  };
+
+  const executor = deps ? null : createSqlExecutor(env.SOURCEPLANE_DB!);
+  try {
+    if (executor && "transaction" in executor) {
+      const result = await executor.transaction(async (txExec) => {
+        const txRepo = createMembershipRepository(txExec);
+        const txEventsRepo = createEventsRepository(txExec);
+
+        const bootstrapResult = await txRepo.bootstrapOrganization(bootstrapInput);
+        if (!bootstrapResult.ok) {
+          return { bootstrapResult };
+        }
+
+        const orgEventResult = await txEventsRepo.appendEventWithAudit({
+          event: {
+            id: genId(),
+            type: "organization.created",
+            version: 1,
+            source: "membership-worker",
+            occurredAt: now,
+            actorType: actor.subjectType,
+            actorId: actor.subjectId,
+            orgId,
+            subjectKind: "organization",
+            subjectId: orgId,
+            subjectName: orgName,
+            requestId,
+            payload: { orgId: orgPublicId(orgId), name: orgName, slug },
+          },
+          audit: {
+            id: genId(),
+            category: "membership",
+            description: `Organization ${orgPublicId(orgId)} created`,
+          },
+        });
+
+        if (!orgEventResult.ok) {
+          throw new Error("event_append_failed");
+        }
+
+        const memberEventResult = await txEventsRepo.appendEventWithAudit({
+          event: {
+            id: genId(),
+            type: "membership.added",
+            version: 1,
+            source: "membership-worker",
+            occurredAt: now,
+            actorType: actor.subjectType,
+            actorId: actor.subjectId,
+            orgId,
+            subjectKind: "member",
+            subjectId: memberId,
+            requestId,
+            payload: { orgId: orgPublicId(orgId), memberId: memberPublicId(memberId), subjectType: actor.subjectType, subjectId: actor.subjectId, role: "owner" },
+          },
+          audit: {
+            id: genId(),
+            category: "membership",
+            description: `Member ${memberPublicId(memberId)} added as owner`,
+          },
+        });
+
+        if (!memberEventResult.ok) {
+          throw new Error("event_append_failed");
+        }
+
+        return { bootstrapResult };
+      });
+
+      if (!result.bootstrapResult.ok) {
+        if (result.bootstrapResult.error.kind === "conflict") {
+          return errorResponse("conflict", "Organization already exists", 409, requestId);
+        }
+        return errorResponse("internal_error", "Failed to create organization", 500, requestId);
+      }
+
+      const { org, roleAssignment } = result.bootstrapResult.value;
+      return successResponse(
+        {
+          organization: { id: orgPublicId(org.id), name: org.name, slug: org.slug, createdAt: org.createdAt.toISOString() },
+          membership: { role: roleAssignment.role, joinedAt: result.bootstrapResult.value.member.createdAt.toISOString() },
+        },
+        requestId,
+        201,
+      );
     }
 
-    return successResponse(result.value, requestId, 201);
+    // Non-transactional path (unit tests with injected deps)
+    const repo = deps!.repo;
+    const bootstrapResult = await repo.bootstrapOrganization(bootstrapInput);
+    if (!bootstrapResult.ok) {
+      if (bootstrapResult.error.kind === "conflict") {
+        return errorResponse("conflict", "Organization already exists", 409, requestId);
+      }
+      return errorResponse("internal_error", "Failed to create organization", 500, requestId);
+    }
+
+    if (deps?.eventsRepo) {
+      const orgEventResult = await deps.eventsRepo.appendEventWithAudit({
+        event: {
+          id: genId(),
+          type: "organization.created",
+          version: 1,
+          source: "membership-worker",
+          occurredAt: now,
+          actorType: actor.subjectType,
+          actorId: actor.subjectId,
+          orgId,
+          subjectKind: "organization",
+          subjectId: orgId,
+          subjectName: orgName,
+          requestId,
+          payload: { orgId: orgPublicId(orgId), name: orgName, slug },
+        },
+        audit: {
+          id: genId(),
+          category: "membership",
+          description: `Organization ${orgPublicId(orgId)} created`,
+        },
+      });
+
+      if (!orgEventResult.ok) {
+        return errorResponse("internal_error", "An unexpected error occurred", 500, requestId);
+      }
+
+      const memberEventResult = await deps.eventsRepo.appendEventWithAudit({
+        event: {
+          id: genId(),
+          type: "membership.added",
+          version: 1,
+          source: "membership-worker",
+          occurredAt: now,
+          actorType: actor.subjectType,
+          actorId: actor.subjectId,
+          orgId,
+          subjectKind: "member",
+          subjectId: memberId,
+          requestId,
+          payload: { orgId: orgPublicId(orgId), memberId: memberPublicId(memberId), subjectType: actor.subjectType, subjectId: actor.subjectId, role: "owner" },
+        },
+        audit: {
+          id: genId(),
+          category: "membership",
+          description: `Member ${memberPublicId(memberId)} added as owner`,
+        },
+      });
+
+      if (!memberEventResult.ok) {
+        return errorResponse("internal_error", "An unexpected error occurred", 500, requestId);
+      }
+    }
+
+    const { org, member, roleAssignment } = bootstrapResult.value;
+    return successResponse(
+      {
+        organization: { id: orgPublicId(org.id), name: org.name, slug: org.slug, createdAt: org.createdAt.toISOString() },
+        membership: { role: roleAssignment.role, joinedAt: member.createdAt.toISOString() },
+      },
+      requestId,
+      201,
+    );
   } catch {
     return errorResponse("internal_error", "An unexpected error occurred", 500, requestId);
   } finally {
-    await executor.dispose();
+    if (executor) await executor.dispose();
   }
 }

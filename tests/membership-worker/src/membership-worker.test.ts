@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { createOrganizationService } from "@membership-worker/services/organization";
 import type { PolicyAuthorizer } from "@membership-worker/services/organization";
 import { orgPublicId, parseOrgPublicId, memberPublicId, parseMemberPublicId, invitationPublicId, parseInvitationPublicId } from "@membership-worker/ids";
+import { handleCreateOrganization } from "@membership-worker/handlers/create-organization";
 import { handleUpdateMemberRole } from "@membership-worker/handlers/update-member-role";
 import { handleRemoveMember } from "@membership-worker/handlers/remove-member";
 import { mapRoleAssignments, authorizeViaPolicy } from "@membership-worker/policy-client";
@@ -3322,6 +3323,270 @@ describe("member administration", () => {
       expect(eventStr.toLowerCase()).not.toContain("bearer");
       expect(eventStr).not.toMatch(/SELECT|INSERT|UPDATE|DELETE/);
       expect(eventStr).not.toContain("stack");
+    });
+  });
+
+  describe("organization bootstrap event/audit", () => {
+    const actor = { subjectId: "usr_00112233445566778899aabbccddeeff", subjectType: "user" };
+    const fixedNowLocal = new Date("2026-01-20T12:00:00.000Z");
+
+    function createRequest(body: object): Request {
+      return new Request("http://localhost/v1/organizations", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+    }
+
+    it("emits organization.created and membership.added events on successful bootstrap", async () => {
+      const repo = createFakeRepository();
+      const appendedInputs: any[] = [];
+      const eventsRepo = {
+        appendEventWithAudit: async (input: any) => {
+          appendedInputs.push(input);
+          return { ok: true as const, value: { event: {}, audit: {} } };
+        },
+      } as any;
+
+      const response = await handleCreateOrganization(
+        createRequest({ name: "Acme Corp", slug: "acme-corp" }),
+        {} as any,
+        "req_bootstrap_1",
+        actor,
+        { repo, eventsRepo, now: () => fixedNowLocal, generateId: () => "gen_id_1" },
+      );
+
+      expect(response.status).toBe(201);
+      expect(appendedInputs).toHaveLength(2);
+      expect(appendedInputs[0].event.type).toBe("organization.created");
+      expect(appendedInputs[1].event.type).toBe("membership.added");
+    });
+
+    it("stores raw UUIDs in canonical event fields", async () => {
+      const repo = createFakeRepository();
+      const appendedInputs: any[] = [];
+      const eventsRepo = {
+        appendEventWithAudit: async (input: any) => {
+          appendedInputs.push(input);
+          return { ok: true as const, value: { event: {}, audit: {} } };
+        },
+      } as any;
+
+      await handleCreateOrganization(
+        createRequest({ name: "Raw IDs Test", slug: "raw-ids" }),
+        {} as any,
+        "req_raw",
+        actor,
+        { repo, eventsRepo, now: () => fixedNowLocal, generateId: () => "gen_id_2" },
+      );
+
+      const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+      // organization.created
+      expect(appendedInputs[0].event.orgId).toMatch(uuidRe);
+      expect(appendedInputs[0].event.subjectId).toMatch(uuidRe);
+      expect(appendedInputs[0].event.subjectKind).toBe("organization");
+      // membership.added
+      expect(appendedInputs[1].event.orgId).toMatch(uuidRe);
+      expect(appendedInputs[1].event.subjectId).toMatch(uuidRe);
+      expect(appendedInputs[1].event.subjectKind).toBe("member");
+      // orgId should be the same in both events
+      expect(appendedInputs[0].event.orgId).toBe(appendedInputs[1].event.orgId);
+    });
+
+    it("includes safe public IDs in event payloads", async () => {
+      const repo = createFakeRepository();
+      const appendedInputs: any[] = [];
+      const eventsRepo = {
+        appendEventWithAudit: async (input: any) => {
+          appendedInputs.push(input);
+          return { ok: true as const, value: { event: {}, audit: {} } };
+        },
+      } as any;
+
+      await handleCreateOrganization(
+        createRequest({ name: "Payload Test", slug: "payload-test" }),
+        {} as any,
+        "req_payload",
+        actor,
+        { repo, eventsRepo, now: () => fixedNowLocal, generateId: () => "gen_id_3" },
+      );
+
+      // organization.created payload has public org ID, name, slug
+      const orgPayload = appendedInputs[0].event.payload;
+      expect(orgPayload.orgId).toMatch(/^org_[0-9a-f]{32}$/);
+      expect(orgPayload.name).toBe("Payload Test");
+      expect(orgPayload.slug).toBe("payload-test");
+
+      // membership.added payload has public org/member IDs and role
+      const memPayload = appendedInputs[1].event.payload;
+      expect(memPayload.orgId).toMatch(/^org_[0-9a-f]{32}$/);
+      expect(memPayload.memberId).toMatch(/^mem_[0-9a-f]{32}$/);
+      expect(memPayload.role).toBe("owner");
+      expect(memPayload.subjectType).toBe("user");
+    });
+
+    it("does not expose bearer tokens, SQL, secrets, or stack traces in events", async () => {
+      const repo = createFakeRepository();
+      const appendedInputs: any[] = [];
+      const eventsRepo = {
+        appendEventWithAudit: async (input: any) => {
+          appendedInputs.push(input);
+          return { ok: true as const, value: { event: {}, audit: {} } };
+        },
+      } as any;
+
+      await handleCreateOrganization(
+        createRequest({ name: "Security Test", slug: "sec-test" }),
+        {} as any,
+        "req_sec",
+        actor,
+        { repo, eventsRepo, now: () => fixedNowLocal, generateId: () => "gen_id_4" },
+      );
+
+      for (const input of appendedInputs) {
+        const str = JSON.stringify(input);
+        expect(str.toLowerCase()).not.toContain("bearer");
+        expect(str.toLowerCase()).not.toContain("token");
+        expect(str).not.toMatch(/SELECT|INSERT|UPDATE|DELETE/);
+        expect(str).not.toContain("stack");
+        expect(str).not.toContain("connectionString");
+      }
+    });
+
+    it("returns failure when event/audit append fails (atomicity seam)", async () => {
+      const repo = createFakeRepository();
+      const eventsRepo = {
+        appendEventWithAudit: async () => ({ ok: false as const, error: { kind: "internal" as const, message: "db failure" } }),
+      } as any;
+
+      const response = await handleCreateOrganization(
+        createRequest({ name: "Failure Test", slug: "fail-test" }),
+        {} as any,
+        "req_fail",
+        actor,
+        { repo, eventsRepo, now: () => fixedNowLocal, generateId: () => "gen_id_5" },
+      );
+
+      expect(response.status).toBe(500);
+      const body = await response.json() as any;
+      expect(body.error.code).toBe("internal_error");
+    });
+
+    it("does not report successful org creation when event append fails", async () => {
+      const repo = createFakeRepository();
+      let callCount = 0;
+      const eventsRepo = {
+        appendEventWithAudit: async () => {
+          callCount++;
+          if (callCount === 1) {
+            return { ok: true as const, value: { event: {}, audit: {} } };
+          }
+          return { ok: false as const, error: { kind: "internal" as const, message: "second event failed" } };
+        },
+      } as any;
+
+      const response = await handleCreateOrganization(
+        createRequest({ name: "Partial Fail", slug: "partial-fail" }),
+        {} as any,
+        "req_partial",
+        actor,
+        { repo, eventsRepo, now: () => fixedNowLocal, generateId: () => "gen_id_6" },
+      );
+
+      expect(response.status).toBe(500);
+      const body = await response.json() as any;
+      expect(body.error.code).toBe("internal_error");
+    });
+
+    it("preserves existing public response shape on success", async () => {
+      const repo = createFakeRepository();
+      const eventsRepo = {
+        appendEventWithAudit: async () => ({ ok: true as const, value: { event: {}, audit: {} } }),
+      } as any;
+
+      const response = await handleCreateOrganization(
+        createRequest({ name: "Shape Test", slug: "shape-test" }),
+        {} as any,
+        "req_shape",
+        actor,
+        { repo, eventsRepo, now: () => fixedNowLocal, generateId: () => "gen_id_7" },
+      );
+
+      expect(response.status).toBe(201);
+      const body = await response.json() as any;
+      expect(body.data.organization.id).toMatch(/^org_[0-9a-f]{32}$/);
+      expect(body.data.organization.name).toBe("Shape Test");
+      expect(body.data.organization.slug).toBe("shape-test");
+      expect(body.data.organization.createdAt).toBe("2026-01-20T12:00:00.000Z");
+      expect(body.data.membership.role).toBe("owner");
+      expect(body.data.membership.joinedAt).toBe("2026-01-20T12:00:00.000Z");
+    });
+
+    it("audit entries use membership category", async () => {
+      const repo = createFakeRepository();
+      const appendedInputs: any[] = [];
+      const eventsRepo = {
+        appendEventWithAudit: async (input: any) => {
+          appendedInputs.push(input);
+          return { ok: true as const, value: { event: {}, audit: {} } };
+        },
+      } as any;
+
+      await handleCreateOrganization(
+        createRequest({ name: "Category Test", slug: "cat-test" }),
+        {} as any,
+        "req_cat",
+        actor,
+        { repo, eventsRepo, now: () => fixedNowLocal, generateId: () => "gen_id_8" },
+      );
+
+      expect(appendedInputs[0].audit.category).toBe("membership");
+      expect(appendedInputs[1].audit.category).toBe("membership");
+    });
+
+    it("uses organization UUID as subject ID for organization.created", async () => {
+      const repo = createFakeRepository();
+      const appendedInputs: any[] = [];
+      const eventsRepo = {
+        appendEventWithAudit: async (input: any) => {
+          appendedInputs.push(input);
+          return { ok: true as const, value: { event: {}, audit: {} } };
+        },
+      } as any;
+
+      await handleCreateOrganization(
+        createRequest({ name: "Subject Test", slug: "subj-test" }),
+        {} as any,
+        "req_subj",
+        actor,
+        { repo, eventsRepo, now: () => fixedNowLocal, generateId: () => "gen_id_9" },
+      );
+
+      // The orgId and subjectId for organization.created must be the same UUID
+      expect(appendedInputs[0].event.orgId).toBe(appendedInputs[0].event.subjectId);
+    });
+
+    it("uses membership UUID as subject ID for membership.added", async () => {
+      const repo = createFakeRepository();
+      const appendedInputs: any[] = [];
+      const eventsRepo = {
+        appendEventWithAudit: async (input: any) => {
+          appendedInputs.push(input);
+          return { ok: true as const, value: { event: {}, audit: {} } };
+        },
+      } as any;
+
+      await handleCreateOrganization(
+        createRequest({ name: "Member Subject", slug: "mem-subj" }),
+        {} as any,
+        "req_mem_subj",
+        actor,
+        { repo, eventsRepo, now: () => fixedNowLocal, generateId: () => "gen_id_10" },
+      );
+
+      // membership.added subjectId should be different from orgId (it's the member UUID)
+      expect(appendedInputs[1].event.subjectId).not.toBe(appendedInputs[1].event.orgId);
+      expect(appendedInputs[1].event.subjectId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-/);
     });
   });
 });
