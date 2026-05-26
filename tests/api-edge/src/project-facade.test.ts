@@ -79,8 +79,8 @@ describe("api-edge project facade", () => {
       expect(isProjectRoute("/v1/organizations/org_abc123/projects")).toBe(true);
     });
 
-    it("does not match deeper nested project routes", () => {
-      expect(isProjectRoute("/v1/organizations/org_abc/projects/prj_def/environments")).toBe(false);
+    it("matches nested environment routes under projects", () => {
+      expect(isProjectRoute("/v1/organizations/org_abc/projects/prj_def/environments")).toBe(true);
     });
 
     it("does not match org routes", () => {
@@ -448,6 +448,231 @@ describe("api-edge project facade", () => {
       expect(response.status).toBe(401);
       const json = await response.json() as any;
       expect(json.error.code).toBe("unauthenticated");
+    });
+  });
+
+  describe("isProjectRoute environment routes", () => {
+    it("matches POST /v1/organizations/{orgId}/projects/{projectId}/environments", () => {
+      expect(isProjectRoute("/v1/organizations/org_abc/projects/prj_def/environments")).toBe(true);
+    });
+
+    it("matches GET /v1/organizations/{orgId}/projects/{projectId}/environments/{envId}", () => {
+      expect(isProjectRoute("/v1/organizations/org_abc/projects/prj_def/environments/env_ghi")).toBe(true);
+    });
+  });
+
+  describe("POST /v1/organizations/{orgId}/projects/{projectId}/environments forwarding", () => {
+    it("forwards POST to PROJECTS_WORKER after identity resolution with body", async () => {
+      const { fetcher: identityFetcher } = createSessionFetcher("usr_abc123");
+      const { fetcher: projectsFetcher, calls: projectsCalls } = createFakeFetcher(
+        Response.json({ data: { environment: { id: "env_abc" } }, meta: { requestId: "req_test", cursor: null } }, { status: 201 }),
+      );
+
+      const request = new Request("https://api.example.com/v1/organizations/org_abc123/projects/prj_def456/environments", {
+        method: "POST",
+        headers: { authorization: "Bearer sps_ses_abc.secret", "content-type": "application/json" },
+        body: JSON.stringify({ name: "Production", slug: "production" }),
+      });
+
+      const response = await handleProjectRoute(
+        request,
+        { IDENTITY_WORKER: identityFetcher, PROJECTS_WORKER: projectsFetcher, ENVIRONMENT: "test" },
+        "req_test",
+        "/v1/organizations/org_abc123/projects/prj_def456/environments",
+      );
+
+      expect(response.status).toBe(201);
+      expect(projectsCalls).toHaveLength(1);
+      expect(projectsCalls[0]!.url).toContain("/v1/organizations/org_abc123/projects/prj_def456/environments");
+      expect(projectsCalls[0]!.init.method).toBe("POST");
+    });
+
+    it("forwards actor headers and does not forward bearer token", async () => {
+      const { fetcher: identityFetcher } = createSessionFetcher("usr_abc123");
+      const { fetcher: projectsFetcher, calls: projectsCalls } = createFakeFetcher();
+
+      const request = new Request("https://api.example.com/v1/organizations/org_abc123/projects/prj_def456/environments", {
+        method: "POST",
+        headers: { authorization: "Bearer sps_ses_secret.token", "content-type": "application/json" },
+        body: JSON.stringify({ name: "Staging" }),
+      });
+
+      await handleProjectRoute(
+        request,
+        { IDENTITY_WORKER: identityFetcher, PROJECTS_WORKER: projectsFetcher, ENVIRONMENT: "test" },
+        "req_test",
+        "/v1/organizations/org_abc123/projects/prj_def456/environments",
+      );
+
+      const forwarded = new Headers(projectsCalls[0]!.init.headers as HeadersInit);
+      expect(forwarded.get("x-actor-subject-id")).toBe("usr_abc123");
+      expect(forwarded.get("x-actor-subject-type")).toBe("user");
+      expect(forwarded.get("authorization")).toBeNull();
+      const rawCall = JSON.stringify(projectsCalls[0]);
+      expect(rawCall).not.toContain("sps_ses_secret");
+    });
+  });
+
+  describe("GET /v1/organizations/{orgId}/projects/{projectId}/environments forwarding", () => {
+    it("forwards GET with query params to PROJECTS_WORKER", async () => {
+      const { fetcher: identityFetcher } = createSessionFetcher("usr_abc123");
+      const { fetcher: projectsFetcher, calls: projectsCalls } = createFakeFetcher(
+        Response.json({ data: { environments: [] }, meta: { requestId: "req_test", cursor: null } }),
+      );
+
+      const request = new Request("https://api.example.com/v1/organizations/org_abc123/projects/prj_def456/environments?limit=10&cursor=abc", {
+        method: "GET",
+        headers: { authorization: "Bearer sps_ses_abc.secret" },
+      });
+
+      const response = await handleProjectRoute(
+        request,
+        { IDENTITY_WORKER: identityFetcher, PROJECTS_WORKER: projectsFetcher, ENVIRONMENT: "test" },
+        "req_test",
+        "/v1/organizations/org_abc123/projects/prj_def456/environments",
+      );
+
+      expect(response.status).toBe(200);
+      expect(projectsCalls).toHaveLength(1);
+      expect(projectsCalls[0]!.url).toContain("/v1/organizations/org_abc123/projects/prj_def456/environments");
+      expect(projectsCalls[0]!.url).toContain("limit=10");
+      expect(projectsCalls[0]!.url).toContain("cursor=abc");
+      expect(projectsCalls[0]!.init.method).toBe("GET");
+    });
+  });
+
+  describe("GET /v1/organizations/{orgId}/projects/{projectId}/environments/{envId} forwarding", () => {
+    it("forwards GET to PROJECTS_WORKER with actor headers", async () => {
+      const { fetcher: identityFetcher } = createSessionFetcher("usr_abc123");
+      const { fetcher: projectsFetcher, calls: projectsCalls } = createFakeFetcher();
+
+      const request = new Request("https://api.example.com/v1/organizations/org_abc123/projects/prj_def456/environments/env_ghi789", {
+        method: "GET",
+        headers: { authorization: "Bearer sps_ses_abc.secret" },
+      });
+
+      const response = await handleProjectRoute(
+        request,
+        { IDENTITY_WORKER: identityFetcher, PROJECTS_WORKER: projectsFetcher, ENVIRONMENT: "test" },
+        "req_test",
+        "/v1/organizations/org_abc123/projects/prj_def456/environments/env_ghi789",
+      );
+
+      expect(response.status).toBe(200);
+      expect(projectsCalls).toHaveLength(1);
+      expect(projectsCalls[0]!.url).toContain("/v1/organizations/org_abc123/projects/prj_def456/environments/env_ghi789");
+      expect(projectsCalls[0]!.init.method).toBe("GET");
+
+      const forwarded = new Headers(projectsCalls[0]!.init.headers as HeadersInit);
+      expect(forwarded.get("x-actor-subject-id")).toBe("usr_abc123");
+      expect(forwarded.get("authorization")).toBeNull();
+    });
+  });
+
+  describe("environment route method restrictions", () => {
+    it("returns 405 for DELETE on environments collection", async () => {
+      const { fetcher: identityFetcher } = createSessionFetcher("usr_abc123");
+      const { fetcher: projectsFetcher } = createFakeFetcher();
+
+      const request = new Request("https://api.example.com/v1/organizations/org_abc123/projects/prj_def456/environments", {
+        method: "DELETE",
+        headers: { authorization: "Bearer sps_ses_abc.secret" },
+      });
+
+      const response = await handleProjectRoute(
+        request,
+        { IDENTITY_WORKER: identityFetcher, PROJECTS_WORKER: projectsFetcher, ENVIRONMENT: "test" },
+        "req_test",
+        "/v1/organizations/org_abc123/projects/prj_def456/environments",
+      );
+
+      expect(response.status).toBe(405);
+    });
+
+    it("returns 405 for DELETE on environment item", async () => {
+      const { fetcher: identityFetcher } = createSessionFetcher("usr_abc123");
+      const { fetcher: projectsFetcher } = createFakeFetcher();
+
+      const request = new Request("https://api.example.com/v1/organizations/org_abc123/projects/prj_def456/environments/env_ghi789", {
+        method: "DELETE",
+        headers: { authorization: "Bearer sps_ses_abc.secret" },
+      });
+
+      const response = await handleProjectRoute(
+        request,
+        { IDENTITY_WORKER: identityFetcher, PROJECTS_WORKER: projectsFetcher, ENVIRONMENT: "test" },
+        "req_test",
+        "/v1/organizations/org_abc123/projects/prj_def456/environments/env_ghi789",
+      );
+
+      expect(response.status).toBe(405);
+    });
+
+    it("returns 503 when PROJECTS_WORKER is missing for environment route", async () => {
+      const { fetcher: identityFetcher } = createSessionFetcher("usr_abc123");
+
+      const request = new Request("https://api.example.com/v1/organizations/org_abc123/projects/prj_def456/environments", {
+        method: "POST",
+        headers: { authorization: "Bearer sps_ses_abc.secret", "content-type": "application/json" },
+        body: JSON.stringify({ name: "Test" }),
+      });
+
+      const response = await handleProjectRoute(
+        request,
+        { IDENTITY_WORKER: identityFetcher, ENVIRONMENT: "test" },
+        "req_test",
+        "/v1/organizations/org_abc123/projects/prj_def456/environments",
+      );
+
+      expect(response.status).toBe(503);
+      const json = await response.json() as any;
+      expect(json.error.message).toBe("Projects service unavailable");
+    });
+  });
+
+  describe("existing project routes still work", () => {
+    it("POST projects collection still forwards correctly", async () => {
+      const { fetcher: identityFetcher } = createSessionFetcher("usr_abc123");
+      const { fetcher: projectsFetcher, calls: projectsCalls } = createFakeFetcher(
+        Response.json({ data: { project: { id: "prj_abc" } }, meta: { requestId: "req_test", cursor: null } }, { status: 201 }),
+      );
+
+      const request = new Request("https://api.example.com/v1/organizations/org_abc123/projects", {
+        method: "POST",
+        headers: { authorization: "Bearer sps_ses_abc.secret", "content-type": "application/json" },
+        body: JSON.stringify({ name: "My Project" }),
+      });
+
+      const response = await handleProjectRoute(
+        request,
+        { IDENTITY_WORKER: identityFetcher, PROJECTS_WORKER: projectsFetcher, ENVIRONMENT: "test" },
+        "req_test",
+        "/v1/organizations/org_abc123/projects",
+      );
+
+      expect(response.status).toBe(201);
+      expect(projectsCalls).toHaveLength(1);
+    });
+
+    it("DELETE project item still forwards correctly", async () => {
+      const { fetcher: identityFetcher } = createSessionFetcher("usr_abc123");
+      const { fetcher: projectsFetcher, calls: projectsCalls } = createFakeFetcher();
+
+      const request = new Request("https://api.example.com/v1/organizations/org_abc123/projects/prj_def456", {
+        method: "DELETE",
+        headers: { authorization: "Bearer sps_ses_abc.secret" },
+      });
+
+      const response = await handleProjectRoute(
+        request,
+        { IDENTITY_WORKER: identityFetcher, PROJECTS_WORKER: projectsFetcher, ENVIRONMENT: "test" },
+        "req_test",
+        "/v1/organizations/org_abc123/projects/prj_def456",
+      );
+
+      expect(response.status).toBe(200);
+      expect(projectsCalls).toHaveLength(1);
+      expect(projectsCalls[0]!.init.method).toBe("DELETE");
     });
   });
 

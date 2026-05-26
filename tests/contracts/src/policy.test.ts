@@ -71,4 +71,12 @@ describe("contracts: ORGANIZATION_ACTIONS", () => {
   it("includes project.read as a known action", () => {
     expect(ORGANIZATION_ACTIONS).toContain("project.read");
   });
+
+  it("includes environment.create as a known action", () => {
+    expect(ORGANIZATION_ACTIONS).toContain("environment.create");
+  });
+
+  it("includes environment.read as a known action", () => {
+    expect(ORGANIZATION_ACTIONS).toContain("environment.read");
+  });
 });
