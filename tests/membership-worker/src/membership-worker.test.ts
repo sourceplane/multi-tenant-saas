@@ -101,139 +101,27 @@ const allowAuthorizer: PolicyAuthorizer = async () => ({ allow: true });
 const denyAuthorizer: PolicyAuthorizer = async () => ({ allow: false });
 
 describe("membership-worker organization service", () => {
-  describe("createOrganization", () => {
-    it("calls bootstrapOrganization with org, member, and owner role assignment", async () => {
-      const repo = createFakeRepository();
-      const service = createOrganizationService({ repo, now: () => fixedNow });
-
-      const result = await service.createOrganization(
-        { subjectId: "usr_00112233445566778899aabbccddeeff", subjectType: "user" },
-        { name: "Test Org", slug: "test-org", slugLower: "test-org" },
-      );
-
-      expect(result.ok).toBe(true);
-      if (!result.ok) return;
-      expect(result.value.organization.name).toBe("Test Org");
-      expect(result.value.organization.slug).toBe("test-org");
-      expect(result.value.membership.role).toBe("owner");
-      expect(result.value.membership.joinedAt).toBe("2026-01-15T10:00:00.000Z");
-      expect(repo._orgs.size).toBe(1);
+  function bootstrapOrg(repo: ReturnType<typeof createFakeRepository>, subjectId: string, name: string, slug: string) {
+    const orgId = crypto.randomUUID();
+    const memberId = crypto.randomUUID();
+    const roleAssignmentId = crypto.randomUUID();
+    return repo.bootstrapOrganization({
+      org: { id: orgId, name, slug, slugLower: slug, createdAt: fixedNow },
+      member: { id: memberId, orgId, subjectId, subjectType: "user", createdAt: fixedNow },
+      roleAssignment: { id: roleAssignmentId, orgId, subjectId, subjectType: "user", role: "owner", scopeKind: "organization", scopeRef: null, createdAt: fixedNow },
     });
-
-    it("returns public org_ prefixed IDs not raw UUIDs", async () => {
-      const repo = createFakeRepository();
-      const service = createOrganizationService({ repo, now: () => fixedNow });
-
-      const result = await service.createOrganization(
-        { subjectId: "usr_abc", subjectType: "user" },
-        { name: "X", slug: "xx", slugLower: "xx" },
-      );
-
-      expect(result.ok).toBe(true);
-      if (!result.ok) return;
-      expect(result.value.organization.id).toMatch(/^org_[0-9a-f]{32}$/);
-      expect(result.value.organization.id).not.toContain("-");
-    });
-
-    it("stores subject ID from actor context", async () => {
-      const repo = createFakeRepository();
-      const service = createOrganizationService({ repo, now: () => fixedNow });
-
-      await service.createOrganization(
-        { subjectId: "usr_subject123", subjectType: "user" },
-        { name: "X", slug: "xx", slugLower: "xx" },
-      );
-
-      const roles = [...repo._roles.values()].flat();
-      expect(roles[0]!.subjectId).toBe("usr_subject123");
-      expect(roles[0]!.subjectType).toBe("user");
-    });
-
-    it("returns conflict when slug already exists", async () => {
-      const repo = createFakeRepository();
-      const service = createOrganizationService({ repo, now: () => fixedNow });
-
-      await service.createOrganization(
-        { subjectId: "usr_1", subjectType: "user" },
-        { name: "A", slug: "taken", slugLower: "taken" },
-      );
-
-      const result = await service.createOrganization(
-        { subjectId: "usr_2", subjectType: "user" },
-        { name: "B", slug: "taken", slugLower: "taken" },
-      );
-
-      expect(result.ok).toBe(false);
-      if (result.ok) return;
-      expect(result.code).toBe("conflict");
-      expect(result.status).toBe(409);
-    });
-
-    it("uses UUIDs for internal storage IDs", async () => {
-      const repo = createFakeRepository();
-      const service = createOrganizationService({ repo, now: () => fixedNow });
-
-      await service.createOrganization(
-        { subjectId: "usr_abc", subjectType: "user" },
-        { name: "X", slug: "xx", slugLower: "xx" },
-      );
-
-      const orgId = [...repo._orgs.keys()][0]!;
-      expect(orgId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
-    });
-  });
-
-  describe("listOrganizations", () => {
-    it("lists organizations for current subject by subject ID", async () => {
-      const repo = createFakeRepository();
-      const service = createOrganizationService({ repo, now: () => fixedNow });
-
-      await service.createOrganization(
-        { subjectId: "usr_subject1", subjectType: "user" },
-        { name: "Org A", slug: "org-a", slugLower: "org-a" },
-      );
-      await service.createOrganization(
-        { subjectId: "usr_subject1", subjectType: "user" },
-        { name: "Org B", slug: "org-b", slugLower: "org-b" },
-      );
-      await service.createOrganization(
-        { subjectId: "usr_other", subjectType: "user" },
-        { name: "Org C", slug: "org-c", slugLower: "org-c" },
-      );
-
-      const result = await service.listOrganizations({ subjectId: "usr_subject1", subjectType: "user" });
-
-      expect(result.ok).toBe(true);
-      if (!result.ok) return;
-      expect(result.value.organizations).toHaveLength(2);
-      expect(result.value.organizations.every((o) => o.id.startsWith("org_"))).toBe(true);
-    });
-
-    it("returns empty array when user has no organizations", async () => {
-      const repo = createFakeRepository();
-      const service = createOrganizationService({ repo, now: () => fixedNow });
-
-      const result = await service.listOrganizations({ subjectId: "usr_nobody", subjectType: "user" });
-
-      expect(result.ok).toBe(true);
-      if (!result.ok) return;
-      expect(result.value.organizations).toHaveLength(0);
-    });
-  });
+  }
 
   describe("getOrganization", () => {
     it("returns organization when policy allows", async () => {
       const repo = createFakeRepository();
       const service = createOrganizationService({ repo, now: () => fixedNow });
 
-      const createResult = await service.createOrganization(
-        { subjectId: "usr_owner", subjectType: "user" },
-        { name: "My Org", slug: "my-org", slugLower: "my-org" },
-      );
+      const createResult = await bootstrapOrg(repo, "usr_owner", "My Org", "my-org");
       expect(createResult.ok).toBe(true);
       if (!createResult.ok) return;
 
-      const orgUuid = parseOrgPublicId(createResult.value.organization.id)!;
+      const orgUuid = createResult.value.org.id;
       const result = await service.getOrganization({ subjectId: "usr_owner", subjectType: "user" }, orgUuid, allowAuthorizer);
 
       expect(result.ok).toBe(true);
@@ -246,14 +134,11 @@ describe("membership-worker organization service", () => {
       const repo = createFakeRepository();
       const service = createOrganizationService({ repo, now: () => fixedNow });
 
-      const createResult = await service.createOrganization(
-        { subjectId: "usr_owner", subjectType: "user" },
-        { name: "Secret", slug: "secret", slugLower: "secret" },
-      );
+      const createResult = await bootstrapOrg(repo, "usr_owner", "Secret", "secret");
       expect(createResult.ok).toBe(true);
       if (!createResult.ok) return;
 
-      const orgUuid = parseOrgPublicId(createResult.value.organization.id)!;
+      const orgUuid = createResult.value.org.id;
       const result = await service.getOrganization({ subjectId: "usr_outsider", subjectType: "user" }, orgUuid, denyAuthorizer);
 
       expect(result.ok).toBe(false);
@@ -282,14 +167,11 @@ describe("membership-worker organization service", () => {
       const repo = createFakeRepository();
       const service = createOrganizationService({ repo, now: () => fixedNow });
 
-      const createResult = await service.createOrganization(
-        { subjectId: "usr_owner", subjectType: "user" },
-        { name: "Closed", slug: "closed", slugLower: "closed" },
-      );
+      const createResult = await bootstrapOrg(repo, "usr_owner", "Closed", "closed");
       expect(createResult.ok).toBe(true);
       if (!createResult.ok) return;
 
-      const orgUuid = parseOrgPublicId(createResult.value.organization.id)!;
+      const orgUuid = createResult.value.org.id;
       const result = await service.getOrganization({ subjectId: "usr_owner", subjectType: "user" }, orgUuid);
 
       expect(result.ok).toBe(false);
@@ -301,14 +183,11 @@ describe("membership-worker organization service", () => {
       const repo = createFakeRepository();
       const service = createOrganizationService({ repo, now: () => fixedNow });
 
-      const createResult = await service.createOrganization(
-        { subjectId: "usr_owner", subjectType: "user" },
-        { name: "Check", slug: "check", slugLower: "check" },
-      );
+      const createResult = await bootstrapOrg(repo, "usr_owner", "Check", "check");
       expect(createResult.ok).toBe(true);
       if (!createResult.ok) return;
 
-      const orgUuid = parseOrgPublicId(createResult.value.organization.id)!;
+      const orgUuid = createResult.value.org.id;
       let capturedAction: string | undefined;
       let capturedRoles: RoleAssignment[] | undefined;
 
@@ -330,14 +209,11 @@ describe("membership-worker organization service", () => {
       const repo = createFakeRepository();
       const service = createOrganizationService({ repo, now: () => fixedNow });
 
-      const createResult = await service.createOrganization(
-        { subjectId: "usr_owner", subjectType: "user" },
-        { name: "RoleFail", slug: "role-fail", slugLower: "role-fail" },
-      );
+      const createResult = await bootstrapOrg(repo, "usr_owner", "RoleFail", "role-fail");
       expect(createResult.ok).toBe(true);
       if (!createResult.ok) return;
 
-      const orgUuid = parseOrgPublicId(createResult.value.organization.id)!;
+      const orgUuid = createResult.value.org.id;
 
       // Override listRoleAssignments to simulate DB failure
       repo.listRoleAssignments = async () => ({ ok: false, error: { kind: "internal" as const, message: "db timeout" } });
