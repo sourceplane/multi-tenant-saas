@@ -919,6 +919,36 @@ Last updated: 2026-05-26
 - Reports: `ai/reports/task-0035-implementer.md`,
   `ai/reports/task-0035-verifier.md`
 
+## Task 0036
+
+|- Agent: Implementer, Verifier
+|- Prompt: `ai/tasks/task-0036.md`
+|- Verifier prompt: `ai/tasks/task-0036-verifier.md`
+|- Status: verified PASS
+|- Implementation: PR #77 (`task-0036/organization-audit-list`),
+  squash-merged at `969eb8b`
+|- PR CI run: 26439198439 — green (29/29 jobs)
+|- Reports: `ai/reports/task-0036-implementer.md`,
+  `ai/reports/task-0036-verifier.md`
+|- Objective: add the first public audit-read surface through a new private
+  events-worker runtime and api-edge forwarding:
+  - `GET /v1/organizations/{orgId}/audit` with audit.read policy
+    (owner/admin only), category-aware queryAuditByOrg filtering,
+    cursor pagination, public ID mapping, and payload redaction
+|- Scope boundary: New private `apps/events-worker` Worker runtime (health +
+  audit-list route), api-edge forwarding without bearer token, audit.read policy
+  action (org-scoped, owner/admin only), public audit response contract types,
+  queryAuditByOrg category filtering, focused tests for events-worker, api-edge,
+  policy-engine. No per-actor audit, no security-event query APIs, no event
+  fanout, no integration/smoke test against live stage.
+|- Orun validation: validate PASS, component discovery PASS (events-worker and
+  api-edge with correct dependencies), plan 51 jobs across 24 components,
+  dry-run PASS (no infra apply jobs, all Verify/Verify-deploy).
+|- events-worker: private (workers_dev: false), SOURCEPLANE_DB Hyperdrive
+  bindings, MEMBERSHIP_WORKER/POLICY_WORKER service bindings.
+|- api-edge: EVENTS_WORKER service bindings (stage→events-worker-stage,
+  prod→events-worker-prod).
+
 ## Historical Notes
 
 - PR #1 split product-specific V2 Git catalog work away from the reusable SaaS

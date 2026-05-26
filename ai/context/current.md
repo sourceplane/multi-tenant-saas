@@ -203,12 +203,13 @@ Last updated: 2026-05-26
   transaction-safe invitation event wiring, member-admin mutations,
   projects/environments persistence contracts/repository, db-migrate
   changed-plan repair, membership-owned authorization-context seam, first
-  projects-worker create/get runtime slice, public project listing, project
-  archival, environment create/list/get, and environment archive are complete.
+  project archival, environment create/list/get, environment archive, and
+  organization audit list (Task 0036) are complete.
 - The full auth flow is accessible through the public `api-edge` gateway.
 - Organization create/list/read, member-list, invitation create/list/revoke,
   invitation acceptance, member role update, member removal, project
-  create/list/read/archive, and environment create/list/get/archive routes are
+  create/list/read/archive, environment create/list/get/archive, and
+  organization audit list routes are
   accessible through the public `api-edge` gateway with bearer token
   authentication. Existing list routes use cursor pagination.
 - Organization read, member list, invitation create/list/revoke, member role
@@ -217,4 +218,6 @@ Last updated: 2026-05-26
 
 ## Current Task
 
+- Task 0036 verification PASS. PR #77 merged at `969eb8b`.
+- Events audit list endpoint live through new private events-worker runtime.
 - No active task. Awaiting next task definition or user direction.

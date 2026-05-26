@@ -41,7 +41,8 @@
     "0032",
     "0033",
     "0034",
-    "0035"
+    "0035",
+    "0036"
   ],
   "repo_health": "green",
   "next_focus": "none",
@@ -49,11 +50,11 @@
   "waiting_for_input": "false",
   "task_agent": null,
   "notes": [
-    "Task 0034 verification PASS: PR #75 merged at 7e4dc5e. Verifier committed the implementer report before merge.",
-    "Task 0034 post-merge CI runs 26432854069 and 26432938193 passed.",
-    "Environment create/list/get is live through api-edge and projects-worker with env_ public IDs, project-scoped environment.create, environment.read list/get authorization, and atomic environment.created event/audit wiring.",
-    "Task 0035 verification PASS: PR #76 merged at 081655e. Environment archive DELETE route verified with atomic event/audit wiring.",
-    "Task 0035 CI run 26435562122 green across 23 checks, no infra apply jobs selected.",
-    "Local main synced to origin/main at 081655e."
+    "Task 0036 verification PASS: PR #77 merged at 969eb8b. Organization audit list endpoint live through events-worker.",
+    "Task 0036 added: private events-worker runtime, GET /v1/organizations/{orgId}/audit route, audit.read policy (owner/admin only), category filtering, cursor pagination, payload redaction.",
+    "Task 0036 CI run 26439198439: 29/29 jobs PASS. Orun validation: all pass (validate, plan, dry-run).",
+    "events-worker: private (workers_dev: false), Hyperdrive SOURCEPLANE_DB bindings, MEMBERSHIP_WORKER/POLICY_WORKER service bindings.",
+    "api-edge: EVENTS_WORKER service bindings for stage→events-worker-stage and prod→events-worker-prod.",
+    "Local main synced to origin/main at 969eb8b."
   ]
 }
