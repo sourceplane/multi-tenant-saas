@@ -83,4 +83,8 @@ describe("contracts: ORGANIZATION_ACTIONS", () => {
   it("includes environment.delete as a known action", () => {
     expect(ORGANIZATION_ACTIONS).toContain("environment.delete");
   });
+
+  it("includes audit.read as a known action", () => {
+    expect(ORGANIZATION_ACTIONS).toContain("audit.read");
+  });
 });

@@ -292,15 +292,31 @@ export function createEventsRepository(executor: SqlExecutor): EventsRepository 
       }
     },
 
-    async queryAuditByOrg(orgId: string, params: EventsPageQueryParams): Promise<EventsResult<EventsPagedResult<StoredAuditEntry>>> {
+    async queryAuditByOrg(orgId: string, params: EventsPageQueryParams, category?: string): Promise<EventsResult<EventsPagedResult<StoredAuditEntry>>> {
       try {
-        const { clause, params: cursorParams } = buildCursorCondition(params.cursor, 3);
+        const baseParams: unknown[] = [orgId];
+        let paramIndex = 2;
+
+        let categoryClause = "";
+        if (category) {
+          categoryClause = ` AND category = $${paramIndex}`;
+          baseParams.push(category);
+          paramIndex++;
+        }
+
+        baseParams.push(params.limit + 1);
+        const limitParam = paramIndex;
+        paramIndex++;
+
+        const { clause, params: cursorParams } = buildCursorCondition(params.cursor, paramIndex);
+        const allParams = [...baseParams, ...cursorParams];
+
         const result = await executor.execute<Record<string, unknown>>(
           `SELECT * FROM events.audit_entries
-           WHERE org_id = $1${clause}
+           WHERE org_id = $1${categoryClause}${clause}
            ORDER BY occurred_at DESC, id DESC
-           LIMIT $2`,
-          [orgId, params.limit + 1, ...cursorParams],
+           LIMIT $${limitParam}`,
+          allParams,
         );
 
         const mapped = result.rows.map(mapAuditEntry);

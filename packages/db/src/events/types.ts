@@ -153,6 +153,6 @@ export interface EventsPagedResult<T> {
 export interface EventsRepository {
   appendEvent(input: AppendEventInput): Promise<EventsResult<StoredEvent>>;
   appendEventWithAudit(input: AppendEventWithAuditInput): Promise<EventsResult<{ event: StoredEvent; audit: StoredAuditEntry }>>;
-  queryAuditByOrg(orgId: string, params: EventsPageQueryParams): Promise<EventsResult<EventsPagedResult<StoredAuditEntry>>>;
+  queryAuditByOrg(orgId: string, params: EventsPageQueryParams, category?: string): Promise<EventsResult<EventsPagedResult<StoredAuditEntry>>>;
   queryAuditByTarget(orgId: string, subjectKind: string, subjectId: string, params: EventsPageQueryParams): Promise<EventsResult<EventsPagedResult<StoredAuditEntry>>>;
 }

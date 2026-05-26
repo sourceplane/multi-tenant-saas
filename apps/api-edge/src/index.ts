@@ -5,6 +5,7 @@ import { resolveRequestId, notFound } from "./http";
 import { isAuthRoute, handleAuthRoute } from "./auth-facade";
 import { isOrgRoute, handleOrgRoute } from "./org-facade";
 import { isProjectRoute, handleProjectRoute } from "./project-facade";
+import { isAuditRoute, handleAuditRoute } from "./audit-facade";
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -17,6 +18,10 @@ export default {
 
     if (isAuthRoute(url.pathname)) {
       return handleAuthRoute(request, env, requestId, url.pathname);
+    }
+
+    if (isAuditRoute(url.pathname)) {
+      return handleAuditRoute(request, env, requestId, url.pathname);
     }
 
     if (isProjectRoute(url.pathname)) {

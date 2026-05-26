@@ -33,6 +33,7 @@ const ORG_ROLE_PERMISSIONS: Record<OrganizationRole, readonly string[]> = {
     "environment.read",
     "environment.update",
     "environment.delete",
+    "audit.read",
     "billing.read",
     "billing.manage",
   ],
@@ -54,6 +55,7 @@ const ORG_ROLE_PERMISSIONS: Record<OrganizationRole, readonly string[]> = {
     "environment.read",
     "environment.update",
     "environment.delete",
+    "audit.read",
   ],
   builder: [
     "organization.read",
@@ -143,6 +145,7 @@ const ALL_KNOWN_ACTIONS: ReadonlySet<string> = new Set([
   "environment.read",
   "environment.update",
   "environment.delete",
+  "audit.read",
   "billing.read",
   "billing.manage",
 ]);

@@ -44,7 +44,7 @@
     "0035"
   ],
   "repo_health": "green",
-  "next_focus": null,
+  "next_focus": "none",
   "last_verified": "2026-05-26",
   "waiting_for_input": "false",
   "task_agent": null,
@@ -52,8 +52,8 @@
     "Task 0034 verification PASS: PR #75 merged at 7e4dc5e. Verifier committed the implementer report before merge.",
     "Task 0034 post-merge CI runs 26432854069 and 26432938193 passed.",
     "Environment create/list/get is live through api-edge and projects-worker with env_ public IDs, project-scoped environment.create, environment.read list/get authorization, and atomic environment.created event/audit wiring.",
-    "Task 0035 verification PASS: PR #76 environment archive runtime implemented with 22 new tests, all existing tests passing (497 total).",
-    "Task 0035 scope: DELETE /v1/organizations/{orgId}/projects/{projectId}/environments/{environmentId} using project-scoped environment.delete policy action, soft archive via archiveEnvironment, api-edge forwarding, and atomic environment.archived event/audit wiring.",
-    "Task 0035 intentionally excludes environment update/restore, hard delete, migrations, infrastructure, public audit API, README cleanup, and specs-v2 work."
+    "Task 0035 verification PASS: PR #76 merged at 081655e. Environment archive DELETE route verified with atomic event/audit wiring.",
+    "Task 0035 CI run 26435562122 green across 23 checks, no infra apply jobs selected.",
+    "Local main synced to origin/main at 081655e."
   ]
 }
