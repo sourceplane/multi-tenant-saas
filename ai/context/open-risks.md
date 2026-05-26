@@ -64,21 +64,17 @@ Last updated: 2026-05-26
 - policy-worker intentionally has no public route, so post-deploy verification
   is limited to Cloudflare deployment metadata and workers.dev-disabled checks
   until a same-environment service-binding caller exists.
-- Environment archive is complete via Task 0035. PR #76 adds
-  `DELETE /v1/organizations/{orgId}/projects/{projectId}/environments/{environmentId}`
-  under explicit `orgId + projectId + environmentId`, with
-  `environment.archived` event/audit wiring for the archive mutation.
 - A future filtered "my projects" or project-assignment list needs a separate
   contract; project-scoped roles alone do not authorize the current org-wide
   project list.
 - The repo now has a durable events/audit persistence seam (Task 0023).
-  Invitation lifecycle event wiring is complete; organization creation,
-  membership-added semantics, project/environment mutations, identity security
-  events, and future destructive mutations still need event/audit coverage as
-  they are exposed.
-- `queryAuditByOrg` does not yet filter by the optional `category` field despite
-  the contract accepting it and the index existing. Minor; wire when building the
-  public audit API.
+  Invitation lifecycle, organization bootstrap, and current project/environment
+  create/archive event wiring are complete. Identity security events and future
+  destructive mutations still need event/audit coverage as they are exposed.
+- Identity security events are a near-term roadmap gap. The current events/audit
+  schema requires `org_id`, while login/session security events can occur before
+  a user selects or creates an organization; keep that scope decision isolated
+  from unrelated cleanup tasks.
 - Durable idempotency for invitation creation is not implemented. `idempotency-key`
   is forwarded by api-edge but not stored; duplicate POST requests may produce
   multiple pending invitations to the same email.
@@ -182,6 +178,24 @@ Last updated: 2026-05-26
   active parent project checks; and wrote `environment.created` event/audit
   atomically. Verifier commit `83831f3` added the missing implementer report
   before merge. Post-merge CI runs `26432854069` and `26432938193` passed.
+- Task 0035 resolved the public environment-archive gap. PR #76 added
+  `DELETE /v1/organizations/{orgId}/projects/{projectId}/environments/{environmentId}`
+  under explicit `orgId + projectId + environmentId`, with
+  `environment.archived` event/audit wiring for the archive mutation.
+- Task 0036 resolved the first public audit-list gap. PR #77 added private
+  events-worker, `GET /v1/organizations/{orgId}/audit`, `audit.read` policy,
+  category filtering, cursor pagination, public ID mapping, and payload
+  redaction.
+- Task 0037 resolved the membership audit raw/public ID mismatch. PR #78
+  normalized invitation/member audit canonical IDs to raw UUIDs and kept legacy
+  public `org_` rows queryable without a backfill.
+- Task 0038 resolved organization-bootstrap audit coverage. PR #79 wired
+  `organization.created` and initial `membership.added` event/audit rows
+  atomically with membership-worker organization bootstrap.
+- Task 0039 resolved stale organization-service cleanup. PR #80 removed dead
+  `createOrganization` and `listOrganizations` methods from the service after
+  Task 0038 moved these into handler-level implementations. Tests retargeted
+  to use `repo.bootstrapOrganization` directly for getOrganization coverage.
 
 ## Watch Items
 

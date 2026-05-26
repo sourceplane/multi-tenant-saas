@@ -160,6 +160,20 @@ Last updated: 2026-05-26
   A distinct project-scoped `environment.delete` action authorizes destructive
   archival. The parent project must exist and be active; archival emits
   `environment.archived` event/audit atomically. Verified PASS in PR #76.
+- Task 0036 establishes the first public audit-read surface:
+  `GET /v1/organizations/{orgId}/audit` through api-edge and private
+  events-worker. The route uses org-scoped `audit.read` policy, category
+  filtering, cursor pagination, payload redaction, and public ID mapping.
+- Task 0037 establishes raw UUIDs as the canonical membership event/audit
+  persistence identifiers for invitation/member lifecycle rows. Public IDs
+  belong in public API responses, safe payload fields, and descriptions. The
+  events repository keeps legacy public `org_` audit rows queryable without a
+  live backfill.
+- Task 0038 establishes organization bootstrap audit coverage. Successful
+  `POST /v1/organizations` now atomically emits `organization.created` and the
+  initial `membership.added` event/audit rows in the membership-worker
+  transaction. Raw UUIDs remain canonical persistence IDs; public IDs stay at
+  the API/payload boundary.
 
 ## Pending Decisions
 
