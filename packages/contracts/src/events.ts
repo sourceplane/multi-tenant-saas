@@ -121,3 +121,40 @@ export interface AuditQueryByTarget {
   limit: number;
   cursor?: string | null;
 }
+
+// ---------------------------------------------------------------------------
+// Public Audit Response (API boundary types)
+// ---------------------------------------------------------------------------
+
+export interface PublicAuditEntry {
+  id: string;
+  eventId: string;
+  orgId: string;
+  projectId: string | null;
+  environmentId: string | null;
+  actorType: EventActorType;
+  actorId: string;
+  eventType: string;
+  source: string;
+  category: string;
+  description: string;
+  subject: {
+    kind: string;
+    id: string;
+    name: string | null;
+  };
+  occurredAt: string;
+  requestId: string;
+  correlationId: string | null;
+  payload: Record<string, unknown>;
+}
+
+export interface ListAuditEntriesResponse {
+  data: {
+    auditEntries: PublicAuditEntry[];
+  };
+  meta: {
+    requestId: string;
+    cursor: string | null;
+  };
+}

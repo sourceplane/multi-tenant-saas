@@ -684,7 +684,7 @@ describe("listEffectivePermissions", () => {
     expect(result.derivedScope.orgId).toBe("org_1");
 
     const allowed = result.permissions.filter((p) => p.allow);
-    expect(allowed.length).toBe(12);
+    expect(allowed.length).toBe(13);
   });
 
   it("returns limited permissions for viewer", () => {
@@ -832,5 +832,68 @@ describe("validateRoleAssignment", () => {
       expect(result.valid).toBe(false);
       expect(result.reason).toBe("unknown_scope_kind");
     });
+  });
+});
+
+describe("audit.read authorization", () => {
+  it("allows organization owner to read audit", () => {
+    const result = authorize(authReq("audit.read", "org_1", [orgFact("owner", "org_1")]));
+    expect(result.allow).toBe(true);
+    expect(result.reason).toBe("org_owner");
+  });
+
+  it("allows organization admin to read audit", () => {
+    const result = authorize(authReq("audit.read", "org_1", [orgFact("admin", "org_1")]));
+    expect(result.allow).toBe(true);
+    expect(result.reason).toBe("org_admin");
+  });
+
+  it("denies organization builder from reading audit", () => {
+    const result = authorize(authReq("audit.read", "org_1", [orgFact("builder", "org_1")]));
+    expect(result.allow).toBe(false);
+    expect(result.reason).toBe("no_matching_role");
+  });
+
+  it("denies organization viewer from reading audit", () => {
+    const result = authorize(authReq("audit.read", "org_1", [orgFact("viewer", "org_1")]));
+    expect(result.allow).toBe(false);
+    expect(result.reason).toBe("no_matching_role");
+  });
+
+  it("denies billing_admin from reading audit", () => {
+    const result = authorize(authReq("audit.read", "org_1", [orgFact("billing_admin", "org_1")]));
+    expect(result.allow).toBe(false);
+    expect(result.reason).toBe("no_matching_role");
+  });
+
+  it("denies project-scoped roles from reading organization audit", () => {
+    const result = authorize(authReq("audit.read", "org_1", [projectFact("project_admin", "org_1", "prj_1")]));
+    expect(result.allow).toBe(false);
+    expect(result.reason).toBe("no_matching_role");
+  });
+
+  it("denies project_builder from reading organization audit", () => {
+    const result = authorize(authReq("audit.read", "org_1", [projectFact("project_builder", "org_1", "prj_1")]));
+    expect(result.allow).toBe(false);
+    expect(result.reason).toBe("no_matching_role");
+  });
+
+  it("denies project_viewer from reading organization audit", () => {
+    const result = authorize(authReq("audit.read", "org_1", [projectFact("project_viewer", "org_1", "prj_1")]));
+    expect(result.allow).toBe(false);
+    expect(result.reason).toBe("no_matching_role");
+  });
+
+  it("denies when memberships are for a different org", () => {
+    const result = authorize(authReq("audit.read", "org_1", [orgFact("owner", "org_other")]));
+    expect(result.allow).toBe(false);
+    expect(result.reason).toBe("no_matching_role");
+  });
+
+  it("denies malformed membership facts", () => {
+    const malformed = { kind: "something_else", role: "owner" } as unknown as MembershipFact;
+    const result = authorize(authReq("audit.read", "org_1", [malformed]));
+    expect(result.allow).toBe(false);
+    expect(result.reason).toBe("no_matching_role");
   });
 });

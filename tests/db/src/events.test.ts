@@ -360,6 +360,57 @@ describe("events repository: queryAuditByOrg", () => {
     expect(queries[0]!.params[2]).toBe("2026-01-15T09:00:00Z");
     expect(queries[0]!.params[3]).toBe("aud-005");
   });
+
+  it("filters by category when provided", async () => {
+    const { executor, queries } = createFakeExecutor({ rows: [] });
+    const repo = createEventsRepository(executor);
+
+    await repo.queryAuditByOrg("org-001", { limit: 10, cursor: null }, "membership");
+
+    expect(queries[0]!.text).toContain("category = $2");
+    expect(queries[0]!.params[0]).toBe("org-001");
+    expect(queries[0]!.params[1]).toBe("membership");
+    expect(queries[0]!.params[2]).toBe(11);
+  });
+
+  it("applies both category and cursor conditions", async () => {
+    const { executor, queries } = createFakeExecutor({ rows: [] });
+    const repo = createEventsRepository(executor);
+
+    await repo.queryAuditByOrg("org-001", {
+      limit: 5,
+      cursor: { occurredAt: "2026-01-15T09:00:00Z", id: "aud-010" },
+    }, "projects");
+
+    expect(queries[0]!.text).toContain("category = $2");
+    expect(queries[0]!.text).toContain("(occurred_at, id) < ($4, $5)");
+    expect(queries[0]!.params[0]).toBe("org-001");
+    expect(queries[0]!.params[1]).toBe("projects");
+    expect(queries[0]!.params[2]).toBe(6);
+    expect(queries[0]!.params[3]).toBe("2026-01-15T09:00:00Z");
+    expect(queries[0]!.params[4]).toBe("aud-010");
+  });
+
+  it("does not add category clause when category is undefined", async () => {
+    const { executor, queries } = createFakeExecutor({ rows: [] });
+    const repo = createEventsRepository(executor);
+
+    await repo.queryAuditByOrg("org-001", { limit: 10, cursor: null }, undefined);
+
+    expect(queries[0]!.text).not.toContain("category");
+  });
+
+  it("returns safe internal error on query failure", async () => {
+    const { executor } = createFakeExecutor({ rows: [], error: new Error("db crash") });
+    const repo = createEventsRepository(executor);
+
+    const result = await repo.queryAuditByOrg("org-001", { limit: 10, cursor: null }, "membership");
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.kind).toBe("internal");
+    }
+  });
 });
 
 describe("events repository: queryAuditByTarget", () => {
