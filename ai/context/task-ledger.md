@@ -949,6 +949,30 @@ Last updated: 2026-05-26
 |- api-edge: EVENTS_WORKER service bindings (stage→events-worker-stage,
   prod→events-worker-prod).
 
+
+## Task 0038
+
+- Agent: Verifyer
+- Prompt: `ai/tasks/task-0038.md`
+- Verifier prompt: `ai/tasks/task-0038-verifier.md`
+- Status: verified PASS
+- Implementation: PR #79 (`codex/task-0038-organization-bootstrap-audit`), merged
+- Objective: wire `organization.created` and initial `membership.added` event/audit rows
+  atomically with membership-worker organization bootstrap (moved into handlers).
+
+## Task 0039
+
+- Agent: Implementer, Verifier
+- Prompt: `ai/tasks/task-0039.md`
+- Verifier prompt: `ai/tasks/task-0039-verifier.md`
+- Status: verified PASS
+- Implementation: PR #80 (`codex/task-0039-membership-org-service-cleanup`), squash-merged
+- Objective: remove stale membership-worker organization-service `createOrganization` and
+  `listOrganizations` methods after Task 0038 moved these into handlers; retarget tests
+  to use `repo.bootstrapOrganization` directly for getOrganization coverage.
+- PR CI run: 26450296601 — green (all checks passed after infrastructure retry)
+- Post-merge CI run confirmed (squash merge executed successfully)
+
 ## Historical Notes
 
 - PR #1 split product-specific V2 Git catalog work away from the reusable SaaS

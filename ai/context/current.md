@@ -218,6 +218,6 @@ Last updated: 2026-05-26
 
 ## Current Task
 
-- Task 0036 verification PASS. PR #77 merged at `969eb8b`.
-- Events audit list endpoint live through new private events-worker runtime.
-- No active task. Awaiting next task definition or user direction.
+None. Task 0037 verified PASS (membership audit UUID canonicalization), Task 0038
+verified PASS (organization bootstrap audit wiring), Task 0039 verified PASS (stale
+service cleanup). Awaiting next task definition or user direction.

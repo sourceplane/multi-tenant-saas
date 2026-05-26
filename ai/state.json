@@ -42,11 +42,14 @@
     "0033",
     "0034",
     "0035",
-    "0036"
+    "0036",
+    "0037",
+    "0038",
+    "0039"
   ],
   "repo_health": "green",
   "next_focus": "none",
-  "last_verified": "2026-05-26",
+  "last_verified": "2026-05-26T13:16Z",
   "waiting_for_input": "false",
   "task_agent": null,
   "notes": [
@@ -55,6 +58,9 @@
     "Task 0036 CI run 26439198439: 29/29 jobs PASS. Orun validation: all pass (validate, plan, dry-run).",
     "events-worker: private (workers_dev: false), Hyperdrive SOURCEPLANE_DB bindings, MEMBERSHIP_WORKER/POLICY_WORKER service bindings.",
     "api-edge: EVENTS_WORKER service bindings for stage→events-worker-stage and prod→events-worker-prod.",
-    "Local main synced to origin/main at 969eb8b."
+    "Local main synced to origin/main at 969eb8b.",
+    "Task 0039 merged: PR #80 squash-merged at fbbce92. Removed stale organization-service create/list methods. All CI checks PASS.",
+    "Task 0037, 0038, 0039: verification complete. PR #77 (audit list), #78 (UUID fix), #79 (bootstrap audit), #80 (cleanup) all merged.",
+    "Post-merge CI run 26450296601: all checks PASS after infrastructure retry."
   ]
 }
