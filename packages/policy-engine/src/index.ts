@@ -32,6 +32,7 @@ const ORG_ROLE_PERMISSIONS: Record<OrganizationRole, readonly string[]> = {
     "environment.create",
     "environment.read",
     "environment.update",
+    "environment.delete",
     "billing.read",
     "billing.manage",
   ],
@@ -52,6 +53,7 @@ const ORG_ROLE_PERMISSIONS: Record<OrganizationRole, readonly string[]> = {
     "environment.create",
     "environment.read",
     "environment.update",
+    "environment.delete",
   ],
   builder: [
     "organization.read",
@@ -84,6 +86,7 @@ const PROJECT_ROLE_PERMISSIONS: Record<ProjectRole, readonly string[]> = {
     "environment.create",
     "environment.read",
     "environment.update",
+    "environment.delete",
   ],
   project_builder: [
     "project.read",
@@ -119,6 +122,7 @@ const PROJECT_SCOPED_ACTIONS: ReadonlySet<string> = new Set([
   "environment.create",
   "environment.read",
   "environment.update",
+  "environment.delete",
 ]);
 
 const ALL_KNOWN_ACTIONS: ReadonlySet<string> = new Set([
@@ -138,6 +142,7 @@ const ALL_KNOWN_ACTIONS: ReadonlySet<string> = new Set([
   "environment.create",
   "environment.read",
   "environment.update",
+  "environment.delete",
   "billing.read",
   "billing.manage",
 ]);

@@ -1,6 +1,6 @@
 # Open Risks
 
-Last updated: 2026-05-24
+Last updated: 2026-05-26
 
 ## Active Risks
 
@@ -42,6 +42,9 @@ Last updated: 2026-05-24
   `apps/api-edge/component.yaml` and `apps/identity-worker/component.yaml` point
   to `--env prod` but are overridden by the composition template. Non-blocking;
   recommend cleanup.
+- Root `README.md` is stale: it still says Cloudflare Workers, Hyperdrive, and
+  live migration apply are not implemented. Trust compact context/code reality
+  until a bounded docs cleanup task updates it.
 - Tests in `tests/identity-worker` re-implement auth service logic rather than
   importing from Worker source. Low risk since live deployment proves behavior,
   but a future maintenance task should improve import structure.
@@ -49,10 +52,10 @@ Last updated: 2026-05-24
   Referential integrity is enforced at the application layer (CTE dependency chain
   in bootstrap, repository adapter write ordering). Acceptable for autocommit-safe
   bounded-context persistence. Revisit if integrity gaps appear.
-- `SqlExecutor` does not expose explicit transaction control (`BEGIN/COMMIT`).
-  CTE-based atomicity solves immediate needs (bootstrap, accept-invitation). A
-  future task may add a transaction-capable executor seam if multi-statement
-  transactions are required.
+- Base `SqlExecutor` remains execute-only for repository compatibility, while
+  Task 0024 added `TransactionalSqlExecutor` for runtime paths that need
+  multi-statement atomicity. Future event-emitting mutations should use the
+  transaction-capable executor pattern.
 - Task 0016 first-deployment ordering: `api-edge-prod` deploy failed initially
   because `membership-worker-prod` did not exist yet. Resolved on retry.
   One-time issue; future deploys are safe because the named Worker now exists.
@@ -61,15 +64,24 @@ Last updated: 2026-05-24
 - policy-worker intentionally has no public route, so post-deploy verification
   is limited to Cloudflare deployment metadata and workers.dev-disabled checks
   until a same-environment service-binding caller exists.
-- Membership mutations still need explicit policy authorization before
-  member removal or role updates ship. (Invitation create/list/revoke are now
-  policy-gated via Task 0021.)
+- Environment archive is complete via Task 0035. PR #76 adds
+  `DELETE /v1/organizations/{orgId}/projects/{projectId}/environments/{environmentId}`
+  under explicit `orgId + projectId + environmentId`, with
+  `environment.archived` event/audit wiring for the archive mutation.
+- A future filtered "my projects" or project-assignment list needs a separate
+  contract; project-scoped roles alone do not authorize the current org-wide
+  project list.
+- The repo now has a durable events/audit persistence seam (Task 0023).
+  Invitation lifecycle event wiring is complete; organization creation,
+  membership-added semantics, project/environment mutations, identity security
+  events, and future destructive mutations still need event/audit coverage as
+  they are exposed.
+- `queryAuditByOrg` does not yet filter by the optional `category` field despite
+  the contract accepting it and the index existing. Minor; wire when building the
+  public audit API.
 - Durable idempotency for invitation creation is not implemented. `idempotency-key`
   is forwarded by api-edge but not stored; duplicate POST requests may produce
   multiple pending invitations to the same email.
-- `acceptInvitation` creates the membership record but does not create the
-  accepted member's role assignment. Do not expose an accept route until this is
-  fixed.
 - Duplicate pending invitations to the same email are allowed by the current
   schema (no uniqueness constraint on email_lower + org_id + status). Consider
   adding uniqueness enforcement in a future task if this causes user confusion.
@@ -110,6 +122,66 @@ Last updated: 2026-05-24
 - Task 0017/0018 policy-caller gap resolved for current read paths:
   organization read and member list now authorize through policy-worker via
   same-environment service bindings.
+- Task 0022 resolved the invitation acceptance role-assignment gap. Acceptance
+  now marks the invitation accepted, creates the member, and creates the
+  organization-scoped role assignment atomically before exposing the accept route
+  through api-edge.
+- Task 0023 resolved the missing events/audit persistence gap. The
+  `appendEventWithAudit` UNION ALL column mismatch was fixed by the verifier
+  before merge (replaced with `row_to_json` approach). Migration
+  `030_events_audit_core` applied to stage and prod via CI run `26379294370`.
+- Task 0025 resolved the local db-tests module-resolution gap. PR #66 added
+  `@saas/db/membership` and `@saas/db/events` path aliases to
+  `tests/db/tsconfig.json`; post-merge CI run `26382162480` passed.
+- Task 0026 resolved invitation lifecycle event/audit coverage. PR #67 wired
+  `invite.created` and `invite.accepted` atomically with create/accept, joining
+  Task 0024's `invite.revoked` coverage. Post-merge CI run `26383797222`
+  passed.
+- Task 0027 resolved member-admin mutation coverage. PR #68 added policy-gated
+  role update and member removal with last-owner protection, stale role cleanup,
+  and atomic `membership.updated` / `membership.removed` event/audit writes.
+  Verifier fixes prevented ignored role-cleanup failures from committing partial
+  mutations. Post-merge CI run `26385774244` passed.
+- Task 0028 resolved the projects/environments persistence foundation. PR #69
+  added contracts, migration `040_projects_core`, and `@saas/db/projects` with
+  tenant-scoped project/environment repository methods. The verifier added a
+  composite FK `(org_id, project_id) REFERENCES projects.projects (org_id, id)`
+  to prevent cross-org environment rows.
+- Task 0029 resolved the db-migrate changed-plan gap. PR #70 replaced
+  `spec.paths` with `spec.path` for the `db-migrate` component, preserved the
+  stage/prod `Migration Apply` merge path, and post-merge main CI run
+  `26389807233` confirmed `040_projects_core` applied on both live Supabase
+  projects.
+- Task 0030 resolved the non-membership policy-context gap. PR #71 added
+  `POST /v1/internal/membership/authorization-context` and a shared
+  `mapRoleAssignmentsToFacts` helper. The verifier fixed a malformed
+  project-scope mapping bug so missing `scopeRef` cannot widen into
+  organization-scoped facts. Post-merge CI run `26392905135` passed.
+- Task 0031 resolved the first projects runtime gap. PR #72 added private
+  `apps/projects-worker`, public project create/get through api-edge,
+  membership authorization-context plus policy-worker authorization, and atomic
+  `project.created` event/audit writes. Verifier commit `1944979` added missing
+  api-edge facade tests and the implementer report before merge. Post-merge CI
+  run `26409923288` passed.
+- Task 0032 resolved the public project-list gap. PR #73 added org-scoped
+  `project.list`, `GET /v1/organizations/{orgId}/projects`, cursor pagination,
+  api-edge forwarding, and focused policy/projects/api-edge tests. Verifier
+  commit `4eff29a` added the missing implementer report before merge.
+  Post-merge CI run `26411761006` passed.
+- Task 0033 resolved the public project-archive gap. PR #74 added
+  `DELETE /v1/organizations/{orgId}/projects/{projectId}`, used existing
+  `project.delete` authorization, soft-archived via `archiveProject`, and wrote
+  `project.archived` event/audit atomically. Verifier commit `fe4b427` added
+  the missing implementer report before merge. Post-merge CI run `26413213117`
+  passed.
+- Task 0034 resolved the public environment create/list/get gap. PR #75 added
+  `POST /v1/organizations/{orgId}/projects/{projectId}/environments`,
+  `GET /v1/organizations/{orgId}/projects/{projectId}/environments`, and
+  `GET /v1/organizations/{orgId}/projects/{projectId}/environments/{environmentId}`;
+  used project-scoped `environment.create` and `environment.read`; enforced
+  active parent project checks; and wrote `environment.created` event/audit
+  atomically. Verifier commit `83831f3` added the missing implementer report
+  before merge. Post-merge CI runs `26432854069` and `26432938193` passed.
 
 ## Watch Items
 

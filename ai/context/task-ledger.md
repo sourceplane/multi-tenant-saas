@@ -1,6 +1,6 @@
 # Task Ledger
 
-Last updated: 2026-05-25
+Last updated: 2026-05-26
 
 ## Task 0001
 
@@ -356,7 +356,9 @@ Last updated: 2026-05-25
   bootstrap and safe invitation acceptance. Migration `020_membership_core` applied
   to both stage and prod. `@saas/contracts` has `OrganizationRole`, `ProjectRole`,
   `TenancyRole`, `RoleScopeKind`, `RoleAssignmentFact` types. 167 tests pass.
-  `db-migrate` Orun component detects migration file changes via `paths`.
+  Task 0029 planning later found the `db-migrate` `paths` assertion no longer
+  holds for Task 0028-style changed plans; trust the Task 0029 follow-up for
+  current migration change-detection reality.
 - Main CI run: `26353527266` — all green (10/10 jobs).
 - Reports: `ai/reports/task-0015-implementer.md`,
   `ai/reports/task-0015-verifier.md`
@@ -624,6 +626,298 @@ Last updated: 2026-05-25
 - PR CI run: `26379797141` — all green (12/12 jobs).
 - Reports: `ai/reports/task-0024-implementer.md`,
   `ai/reports/task-0024-verifier.md`
+
+## Task 0025
+
+- Agent: Implementer → Verifier
+- Prompt: `ai/tasks/task-0025.md`
+- Verifier prompt: `ai/tasks/task-0025-verifier.md`
+- Status: verified PASS
+- PR: #66 (`fix(db-tests): add missing tsconfig path mappings for
+  membership/events`), squash-merged at `295bdd8`
+- Objective: repair local `@saas/db-tests` Jest/ts-jest module resolution after
+  `tests/db/src/membership.test.ts` failed with TypeScript `TS2307` for
+  `@saas/db/membership`.
+- Durable outcome: `tests/db/tsconfig.json` now maps `@saas/db/membership` and
+  `@saas/db/events`, aligning TypeScript path aliases with Jest
+  `moduleNameMapper` and adjacent test-package patterns. No runtime code,
+  migrations, or infrastructure changed.
+- Main CI run: `26382162480` — green.
+- PR CI run: `26381539683` — green (`plan` and `db-tests · dev · Verify`).
+- Reports: `ai/reports/task-0025-implementer.md`,
+  `ai/reports/task-0025-verifier.md`
+
+## Task 0026
+
+- Agent: Implementer -> Verifier
+- Prompt: `ai/tasks/task-0026.md`
+- Verifier prompt: `ai/tasks/task-0026-verifier.md`
+- Status: verified PASS
+- PR: #67 (`feat: wire invite.created and invite.accepted events atomically`),
+  squash-merged at `c02a47d`
+- Objective: complete invitation lifecycle event/audit coverage by wiring
+  `invite.created` and `invite.accepted` atomically with invitation create and
+  accept mutations.
+- Durable outcome: production create/accept handlers use
+  `executor.transaction(...)` with membership and events repositories sharing
+  the transaction-bound executor. Event append failure rolls back invitation
+  creation or acceptance. Payloads use public `org_`, `inv_`, and `mem_`
+  identifiers and omit raw tokens, token hashes, bearer tokens, invitee email,
+  provider details, SQL, and stack traces. All three invitation lifecycle events
+  are now wired: `invite.created`, `invite.accepted`, and `invite.revoked`.
+- Main CI run: `26383797222` — green.
+- PR CI run: `26382990385` — green (8/8 checks).
+- Reports: `ai/reports/task-0026-implementer.md`,
+  `ai/reports/task-0026-verifier.md`
+
+## Task 0027
+
+- Agent: Implementer -> Verifier
+- Prompt: `ai/tasks/task-0027.md`
+- Verifier prompt: `ai/tasks/task-0027-verifier.md`
+- Status: verified PASS
+- PR: #68 (`feat: add policy-gated member administration mutations`),
+  squash-merged at `60240ce`
+- Objective: add policy-gated organization member role update and member removal
+  routes through api-edge and membership-worker, with last-owner protection,
+  stale role-fact cleanup, and atomic `membership.updated` /
+  `membership.removed` event/audit writes.
+- Verifier fixes:
+  - In `update-member-role`, checked each transactional
+    `revokeRoleAssignment(...)` result and throw on failure so stale active org
+    roles cannot survive alongside a new role/event.
+  - In `remove-member`, checked `revokeAllRoleAssignments(...)` in the
+    transactional path and throw on failure so member removal cannot commit
+    without role cleanup.
+- Durable outcome: `PATCH /v1/organizations/{orgId}/members/{memberId}` and
+  `DELETE /v1/organizations/{orgId}/members/{memberId}` are available through
+  api-edge. Both resolve identity at the public edge, avoid forwarding bearer
+  tokens, authorize through private policy-worker actions
+  `organization.member.update_role` and `organization.member.remove`, enforce
+  last-active-owner protection, and write audit-safe public-ID events atomically
+  with membership mutations. 236 db tests, 166 membership-worker tests, 94
+  api-edge tests, 80 policy-engine tests, and 18 contracts tests passed during
+  verification.
+- Main CI run: `26385774244` — green.
+- PR CI run after verifier fixes: `26385631693` — green (19/19 checks).
+- Reports: `ai/reports/task-0027-implementer.md`,
+  `ai/reports/task-0027-verifier.md`
+
+## Task 0028
+
+- Agent: Implementer -> Verifier
+- Prompt: `ai/tasks/task-0028.md`
+- Verifier prompt: `ai/tasks/task-0028-verifier.md`
+- Status: verified PASS, merged; migration apply follow-up required
+- PR: #69 (`feat: add projects/environments persistence foundation`),
+  squash-merged at `240e412`
+- Objective: add the projects/environments persistence foundation: public
+  contract types, `040_projects_core` migration, and Worker-safe
+  `@saas/db/projects` repository methods.
+- Verifier fix:
+  - Added composite FK `FOREIGN KEY (org_id, project_id) REFERENCES
+    projects.projects (org_id, id)` plus a supporting unique index on
+    `(org_id, id)` so an environment row cannot reference a project from a
+    different organization.
+- Durable outcome: `@saas/contracts/projects` exports 12 project/environment
+  API types; `packages/db/src/migrations/040_projects_core/up.sql` creates
+  `projects.projects` and `projects.environments`; `@saas/db/projects` exposes
+  10 repository methods, all scoped by `orgId` and, for environments,
+  `orgId + projectId`. 273 db tests and 30 contract tests passed during
+  verification.
+- PR CI run after verifier fix: `26387568489` — green (9/9 checks).
+- Main CI run: `26387697533` — green, but rendered changed plan did not include
+  `db-migrate`; `040_projects_core` is not yet proven applied to stage/prod.
+- Reports: `ai/reports/task-0028-implementer.md`,
+  `ai/reports/task-0028-verifier.md`
+
+## Task 0029
+
+- Agent: Implementer -> Verifier
+- Prompt: `ai/tasks/task-0029.md`
+- Verifier prompt: `ai/tasks/task-0029-verifier.md`
+- Status: verified PASS
+- PR: #70 (`fix(db-migrate): use spec.path for Orun changed-plan detection`),
+  squash-merged at `974b7b2`
+- Objective: repair Orun changed-plan ownership for
+  `packages/db/src/migrations/**` so `db-migrate` runs on migration-file
+  changes, then prove `040_projects_core` applies to `stage` and `prod`
+  through the existing merge path.
+- Durable outcome: `infra/db-migrate/component.yaml` now uses
+  `spec.path: packages/db/src/migrations`, and the db-migrate Stack Tectonic
+  job template resolves the runner CLI from the working directory created by
+  that path ownership. Migration-file changes now select both `db` and
+  `db-migrate`; PR plans use `Migration Plan`, and `github-push-main` uses
+  `Migration Apply`.
+- PR CI run: `26389113641` — green (6/6 checks), including
+  `db-migrate.stage.migrate` and `db-migrate.prod.migrate`.
+- Main CI run: `26389807233` — green (6/6 checks). Both `db-migrate` jobs ran
+  `Migration Apply` and logged `040_projects_core` in the applied set for
+  `stage` and `prod`.
+- Reports: `ai/reports/task-0029-implementer.md`,
+  `ai/reports/task-0029-verifier.md`
+
+## Task 0030
+
+- Agent: Implementer -> Verifier
+- Prompt: `ai/tasks/task-0030.md`
+- Verifier prompt: `ai/tasks/task-0030-verifier.md`
+- Status: verified PASS
+- PR: #71 (`feat: add membership-owned internal authorization-context seam`),
+  squash-merged at `1928559`
+- Objective: add a membership-owned internal authorization-context query seam so
+  future non-membership workers can obtain policy-ready membership facts without
+  querying `membership.*` storage directly.
+- Verifier fix:
+  - Fixed `mapRoleAssignmentsToFacts` so a project-scoped role assignment with
+    missing `scopeRef` remains project-scoped without `projectId` instead of
+    widening into an organization-scoped fact.
+- Durable outcome: added `AuthorizationContextRequest` /
+  `AuthorizationContextResponse` policy contract types, private internal
+  `POST /v1/internal/membership/authorization-context` membership-worker route,
+  shared role-assignment-to-policy-fact mapping helper, focused contract tests,
+  and focused membership-worker tests. The seam is not exposed through api-edge.
+- PR CI run after verifier fix: `26392691908` — green (12/12 checks).
+- Main CI run: `26392905135` — green (12/12 checks).
+- Reports: `ai/reports/task-0030-implementer.md`,
+  `ai/reports/task-0030-verifier.md`
+
+## Task 0031
+
+- Agent: Implementer -> Verifier
+- Prompt: `ai/tasks/task-0031.md`
+- Verifier prompt: `ai/tasks/task-0031-verifier.md`
+- Status: verified PASS
+- PR: #72 (`feat: add projects-worker with create and get project routes`),
+  squash-merged at `3fc15bf`
+- Objective: scaffold `apps/projects-worker` and expose the first public
+  projects runtime slice through api-edge:
+  `POST /v1/organizations/{orgId}/projects` and
+  `GET /v1/organizations/{orgId}/projects/{projectId}`.
+- Scope boundary: no project list, no environment routes, no policy action
+  changes, no migrations, and no `specs-v2/**` work.
+- Verifier fix:
+  - Committed missing `tests/api-edge/src/project-facade.test.ts` and
+    `ai/reports/task-0031-implementer.md` to the PR branch as `1944979`.
+- Durable outcome: private `apps/projects-worker` is live on main with create
+  and explicit read routes. api-edge forwards those routes through
+  `PROJECTS_WORKER` after identity resolution without forwarding bearer tokens.
+  projects-worker uses membership-worker authorization-context before
+  policy-worker and writes `project.created` event/audit atomically with project
+  creation. Stage/prod projects-worker deployments are private
+  (`workers_dev: false`), and api-edge stage/prod bind to same-environment
+  projects-worker.
+- PR CI run after verifier fix: `26409759476` — green (14/14 checks), including
+  `api-edge-tests` and `projects-worker-tests`.
+- Main CI run: `26409923288` — green (14/14 jobs).
+- Reports: `ai/reports/task-0031-implementer.md`,
+  `ai/reports/task-0031-verifier.md`
+
+## Task 0032
+
+- Agent: Implementer -> Verifier
+- Prompt: `ai/tasks/task-0032.md`
+- Verifier prompt: `ai/tasks/task-0032-verifier.md`
+- Status: verified PASS
+- PR: #73 (`feat: add projects-worker list endpoint with project.list policy
+  action`), squash-merged at `06c7dbb`
+- Objective: add public project list:
+  `GET /v1/organizations/{orgId}/projects`.
+- Scope boundary: add bounded org-scoped `project.list` policy action,
+  projects-worker list handler, api-edge forwarding, and focused tests only. No
+  project update/archive/delete, no environment routes, no migrations, no
+  infrastructure, and no `specs-v2/**` work.
+- Verifier fix:
+  - Committed missing `ai/reports/task-0032-implementer.md` to the PR branch as
+    `4eff29a`.
+- Durable outcome: project list is available through api-edge and
+  projects-worker. It uses org-scoped `project.list`, cursor pagination, the
+  membership authorization-context seam before policy-worker, and tenant-scoped
+  `listProjectsPaged(orgId, pageParams)`. Organization roles owner/admin/builder
+  and viewer may list active projects; billing_admin and project-scoped roles
+  alone cannot list organization-wide projects.
+- PR CI run after verifier fix: `26411612299` — green (22/22 checks).
+- Main CI run: `26411761006` — green (23/23 jobs).
+- Reports: `ai/reports/task-0032-implementer.md`,
+  `ai/reports/task-0032-verifier.md`
+
+## Task 0033
+
+- Agent: Implementer -> Verifier
+- Prompt: `ai/tasks/task-0033.md`
+- Verifier prompt: `ai/tasks/task-0033-verifier.md`
+- Status: verified PASS
+- PR: #74 (`feat: add project archive endpoint with project.delete policy
+  action`), squash-merged at `9666308`
+- Objective: add public project archival:
+  `DELETE /v1/organizations/{orgId}/projects/{projectId}`.
+- Scope boundary: soft-archive via `archiveProject`, authorize with existing
+  `project.delete`, write `project.archived` event/audit atomically, and add
+  focused projects-worker/api-edge tests only. No project update, restore, hard
+  delete, environment routes, migrations, infrastructure, policy action changes,
+  or `specs-v2/**` work.
+- Verifier fix:
+  - Committed missing `ai/reports/task-0033-implementer.md` to the PR branch as
+    `fe4b427`.
+- Durable outcome: project archive is available through api-edge and
+  projects-worker. It uses existing project-scoped `project.delete`, obtains
+  role facts through membership-worker authorization-context, soft-archives with
+  `archiveProject`, and writes `project.archived` event/audit atomically with
+  the archive mutation.
+- PR CI run after verifier fix: `26413053582` — green (15/15 checks).
+- Main CI run: `26413213117` — green (15/15 jobs).
+- Reports: `ai/reports/task-0033-implementer.md`,
+  `ai/reports/task-0033-verifier.md`
+
+## Task 0034
+
+- Agent: Implementer -> Verifier
+- Prompt: `ai/tasks/task-0034.md`
+- Verifier prompt: `ai/tasks/task-0034-verifier.md`
+- Status: verified PASS
+- PR: #75 (`feat: add environment create/list/get routes with project-scoped
+  policy`), squash-merged at `7e4dc5e`
+- Objective: add the first public environment runtime slice through
+  projects-worker and api-edge:
+  - `POST /v1/organizations/{orgId}/projects/{projectId}/environments`
+  - `GET /v1/organizations/{orgId}/projects/{projectId}/environments`
+  - `GET /v1/organizations/{orgId}/projects/{projectId}/environments/{environmentId}`
+- Scope boundary: add `env_` public IDs, project-scoped `environment.create`,
+  environment create/list/get handlers, api-edge forwarding, atomic
+  `environment.created` event/audit wiring, and focused tests only. No
+  environment update/archive, project update/restore, role assignment
+  management, migrations, infrastructure, public audit API, or `specs-v2/**`
+  work.
+- Verifier fix:
+  - Committed missing `ai/reports/task-0034-implementer.md` to the PR branch as
+    `83831f3`.
+- Durable outcome: environment create/list/get are available through api-edge
+  and projects-worker. Create uses project-scoped `environment.create`; list/get
+  use project-scoped `environment.read`; all routes include explicit
+  `orgId + projectId`; get includes `environmentId`; parent projects must exist
+  and be active; and environment creation writes `environment.created`
+  event/audit atomically.
+- PR CI run after verifier fix: `26432668853` — green (22/22 checks).
+- Main CI runs: `26432854069` and `26432938193` — green.
+- Reports: `ai/reports/task-0034-implementer.md`,
+  `ai/reports/task-0034-verifier.md`
+
+## Task 0035
+
+- Agent: Implementer, Verifier
+- Prompt: `ai/tasks/task-0035.md`
+- Status: COMPLETE (verifier verified)
+- Implementation: PR #76
+- PR CI runs: green (all 497 tests pass)
+- Verifier fix: Committed `ai/reports/task-0035-verifier.md` (4672 bytes)
+- Durable outcome: Environment archival is available through DELETE
+  `/v1/organizations/{orgId}/projects/{projectId}/environments/{environmentId}`.
+  Uses project-scoped `environment.delete` policy action; soft archive via
+  `archiveEnvironment`; parent project must exist and be active; writes
+  `environment.archived` event/audit atomically; api-edge forwards DELETE
+  without bearer token or body.
+- Reports: `ai/reports/task-0035-implementer.md`,
+  `ai/reports/task-0035-verifier.md`
 
 ## Historical Notes
 

@@ -71,6 +71,7 @@ describe("authorize", () => {
         "project.delete",
         "environment.read",
         "environment.update",
+        "environment.delete",
       ]) {
         const result = authorize(authReq(action, "org_1", [orgFact("owner", "org_1")]));
         expect(result.allow).toBe(false);
@@ -166,6 +167,11 @@ describe("authorize", () => {
       expect(result.allow).toBe(true);
     });
 
+    it("allows environment.delete", () => {
+      const result = authorize(authReq("environment.delete", "org_1", facts, "prj_1"));
+      expect(result.allow).toBe(true);
+    });
+
     it("allows billing.read", () => {
       const result = authorize(authReq("billing.read", "org_1", facts));
       expect(result.allow).toBe(true);
@@ -214,6 +220,7 @@ describe("authorize", () => {
       expect(authorize(authReq("environment.create", "org_1", facts, "prj_1")).allow).toBe(true);
       expect(authorize(authReq("environment.read", "org_1", facts, "prj_1")).allow).toBe(true);
       expect(authorize(authReq("environment.update", "org_1", facts, "prj_1")).allow).toBe(true);
+      expect(authorize(authReq("environment.delete", "org_1", facts, "prj_1")).allow).toBe(true);
     });
 
     it("denies billing.read", () => {
@@ -246,6 +253,10 @@ describe("authorize", () => {
       expect(authorize(authReq("environment.create", "org_1", facts, "prj_1")).allow).toBe(true);
       expect(authorize(authReq("environment.read", "org_1", facts, "prj_1")).allow).toBe(true);
       expect(authorize(authReq("environment.update", "org_1", facts, "prj_1")).allow).toBe(true);
+    });
+
+    it("denies environment.delete", () => {
+      expect(authorize(authReq("environment.delete", "org_1", facts, "prj_1")).allow).toBe(false);
     });
 
     it("denies organization.settings.update", () => {
@@ -294,6 +305,7 @@ describe("authorize", () => {
       expect(authorize(authReq("project.delete", "org_1", facts, "prj_1")).allow).toBe(false);
       expect(authorize(authReq("environment.create", "org_1", facts, "prj_1")).allow).toBe(false);
       expect(authorize(authReq("environment.update", "org_1", facts, "prj_1")).allow).toBe(false);
+      expect(authorize(authReq("environment.delete", "org_1", facts, "prj_1")).allow).toBe(false);
       expect(authorize(authReq("billing.read", "org_1", facts)).allow).toBe(false);
       expect(authorize(authReq("billing.manage", "org_1", facts)).allow).toBe(false);
     });
@@ -406,6 +418,7 @@ describe("authorize", () => {
         expect(authorize(authReq("environment.create", "org_1", facts, "prj_1")).allow).toBe(true);
         expect(authorize(authReq("environment.read", "org_1", facts, "prj_1")).allow).toBe(true);
         expect(authorize(authReq("environment.update", "org_1", facts, "prj_1")).allow).toBe(true);
+        expect(authorize(authReq("environment.delete", "org_1", facts, "prj_1")).allow).toBe(true);
       });
 
       it("denies access to a different project", () => {
@@ -436,6 +449,10 @@ describe("authorize", () => {
         expect(authorize(authReq("project.delete", "org_1", facts, "prj_1")).allow).toBe(false);
       });
 
+      it("denies environment.delete", () => {
+        expect(authorize(authReq("environment.delete", "org_1", facts, "prj_1")).allow).toBe(false);
+      });
+
       it("denies access to different project", () => {
         expect(authorize(authReq("project.read", "org_1", facts, "prj_2")).allow).toBe(false);
       });
@@ -458,6 +475,7 @@ describe("authorize", () => {
         expect(authorize(authReq("project.delete", "org_1", facts, "prj_1")).allow).toBe(false);
         expect(authorize(authReq("environment.create", "org_1", facts, "prj_1")).allow).toBe(false);
         expect(authorize(authReq("environment.update", "org_1", facts, "prj_1")).allow).toBe(false);
+        expect(authorize(authReq("environment.delete", "org_1", facts, "prj_1")).allow).toBe(false);
       });
     });
 
@@ -537,6 +555,71 @@ describe("authorize", () => {
     it("denies wrong-project project role", () => {
       const facts = [projectFact("project_admin", "org_1", "prj_1")];
       const result = authorize(authReq("environment.create", "org_1", facts, "prj_2"));
+      expect(result.allow).toBe(false);
+    });
+  });
+
+  describe("environment.delete action", () => {
+    it("allows owner to delete environments", () => {
+      const result = authorize(authReq("environment.delete", "org_1", [orgFact("owner", "org_1")], "prj_1"));
+      expect(result.allow).toBe(true);
+      expect(result.reason).toBe("org_owner");
+    });
+
+    it("allows admin to delete environments", () => {
+      const result = authorize(authReq("environment.delete", "org_1", [orgFact("admin", "org_1")], "prj_1"));
+      expect(result.allow).toBe(true);
+      expect(result.reason).toBe("org_admin");
+    });
+
+    it("denies builder from deleting environments", () => {
+      const result = authorize(authReq("environment.delete", "org_1", [orgFact("builder", "org_1")], "prj_1"));
+      expect(result.allow).toBe(false);
+    });
+
+    it("denies viewer from deleting environments", () => {
+      const result = authorize(authReq("environment.delete", "org_1", [orgFact("viewer", "org_1")], "prj_1"));
+      expect(result.allow).toBe(false);
+    });
+
+    it("denies billing_admin from deleting environments", () => {
+      const result = authorize(authReq("environment.delete", "org_1", [orgFact("billing_admin", "org_1")], "prj_1"));
+      expect(result.allow).toBe(false);
+    });
+
+    it("allows project_admin to delete environments for matching project", () => {
+      const facts = [projectFact("project_admin", "org_1", "prj_1")];
+      const result = authorize(authReq("environment.delete", "org_1", facts, "prj_1"));
+      expect(result.allow).toBe(true);
+      expect(result.reason).toBe("project_admin");
+    });
+
+    it("denies project_builder from deleting environments", () => {
+      const facts = [projectFact("project_builder", "org_1", "prj_1")];
+      const result = authorize(authReq("environment.delete", "org_1", facts, "prj_1"));
+      expect(result.allow).toBe(false);
+    });
+
+    it("denies project_viewer from deleting environments", () => {
+      const facts = [projectFact("project_viewer", "org_1", "prj_1")];
+      const result = authorize(authReq("environment.delete", "org_1", facts, "prj_1"));
+      expect(result.allow).toBe(false);
+    });
+
+    it("requires projectId scope", () => {
+      const result = authorize(authReq("environment.delete", "org_1", [orgFact("owner", "org_1")]));
+      expect(result.allow).toBe(false);
+      expect(result.reason).toBe("invalid_scope");
+    });
+
+    it("denies cross-org facts", () => {
+      const result = authorize(authReq("environment.delete", "org_2", [orgFact("owner", "org_1")], "prj_1"));
+      expect(result.allow).toBe(false);
+    });
+
+    it("denies wrong-project project role", () => {
+      const facts = [projectFact("project_admin", "org_1", "prj_1")];
+      const result = authorize(authReq("environment.delete", "org_1", facts, "prj_2"));
       expect(result.allow).toBe(false);
     });
   });
