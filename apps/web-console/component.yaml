@@ -39,7 +39,7 @@ spec:
     installCommand: pnpm install --frozen-lockfile
     buildCommand: pnpm exec turbo run build --filter=@saas/web-console
 
-    smokeCommand: "echo 'No smoke test configured.'"
+    smokeCommand: "curl -sf https://sourceplane-web-console.pages.dev/ | grep -q 'Sourceplane Console' && curl -sf https://api-edge-stage.rahulvarghesepullely.workers.dev/health | grep -q ok && curl -sf https://api-edge-prod.rahulvarghesepullely.workers.dev/health | grep -q ok"
   labels:
     team: platform
     layer: delivery

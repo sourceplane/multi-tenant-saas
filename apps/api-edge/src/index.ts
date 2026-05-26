@@ -2,6 +2,7 @@ import { createHyperdriveAdapter } from "@saas/db/hyperdrive";
 import type { HealthStatus } from "@saas/contracts/health";
 import type { Env } from "./env";
 import { resolveRequestId, notFound } from "./http";
+import { handlePreflight, applyCorsHeaders } from "./cors";
 import { isAuthRoute, handleAuthRoute } from "./auth-facade";
 import { isOrgRoute, handleOrgRoute } from "./org-facade";
 import { isProjectRoute, handleProjectRoute } from "./project-facade";
@@ -9,30 +10,29 @@ import { isAuditRoute, handleAuditRoute } from "./audit-facade";
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
+    const preflight = handlePreflight(request, env);
+    if (preflight) return preflight;
+
     const url = new URL(request.url);
     const requestId = resolveRequestId(request);
 
+    let response: Response;
+
     if (url.pathname === "/health") {
-      return handleHealth(env);
+      response = await handleHealth(env);
+    } else if (isAuthRoute(url.pathname)) {
+      response = await handleAuthRoute(request, env, requestId, url.pathname);
+    } else if (isAuditRoute(url.pathname)) {
+      response = await handleAuditRoute(request, env, requestId, url.pathname);
+    } else if (isProjectRoute(url.pathname)) {
+      response = await handleProjectRoute(request, env, requestId, url.pathname);
+    } else if (isOrgRoute(url.pathname)) {
+      response = await handleOrgRoute(request, env, requestId, url.pathname);
+    } else {
+      response = notFound(requestId, url.pathname);
     }
 
-    if (isAuthRoute(url.pathname)) {
-      return handleAuthRoute(request, env, requestId, url.pathname);
-    }
-
-    if (isAuditRoute(url.pathname)) {
-      return handleAuditRoute(request, env, requestId, url.pathname);
-    }
-
-    if (isProjectRoute(url.pathname)) {
-      return handleProjectRoute(request, env, requestId, url.pathname);
-    }
-
-    if (isOrgRoute(url.pathname)) {
-      return handleOrgRoute(request, env, requestId, url.pathname);
-    }
-
-    return notFound(requestId, url.pathname);
+    return applyCorsHeaders(response, request, env);
   },
 } satisfies ExportedHandler<Env>;
 
