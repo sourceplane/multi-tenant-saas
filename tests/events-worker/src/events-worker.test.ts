@@ -282,4 +282,174 @@ describe("events-worker list-audit handler", () => {
     expect(body.meta.cursor).not.toBeNull();
     expect(typeof body.meta.cursor).toBe("string");
   });
+
+  it("maps organization subject kind to org_ public ID", async () => {
+    const { handleListAudit } = await import("@events-worker/handlers/list-audit");
+
+    const orgSubjectUuid = "d1e2f3a4-b5c6-7890-abcd-ef1234567890";
+    const mockEntry = {
+      id: "aud-org-01",
+      eventId: "evt-org-01",
+      orgId: TEST_ORG_UUID,
+      projectId: null,
+      environmentId: null,
+      actorType: "user",
+      actorId: TEST_ACTOR_ID,
+      eventType: "organization.created",
+      eventVersion: 1,
+      source: "membership-worker",
+      subjectKind: "organization",
+      subjectId: orgSubjectUuid,
+      subjectName: "Acme Corp",
+      category: "membership",
+      description: "Organization org_d1e2f3a4b5c67890abcdef1234567890 created",
+      occurredAt: new Date("2026-05-26T12:00:00.000Z"),
+      requestId: TEST_REQUEST_ID,
+      correlationId: null,
+      payload: { orgId: "org_d1e2f3a4b5c67890abcdef1234567890", name: "Acme Corp", slug: "acme-corp" },
+      redactPaths: [],
+      createdAt: new Date("2026-05-26T12:00:00.000Z"),
+    };
+
+    const mockRepo = {
+      appendEvent: async () => ({ ok: false as const, error: { kind: "internal" as const, message: "" } }),
+      appendEventWithAudit: async () => ({ ok: false as const, error: { kind: "internal" as const, message: "" } }),
+      queryAuditByOrg: async () => ({
+        ok: true as const,
+        value: { items: [mockEntry], nextCursor: null },
+      }),
+      queryAuditByTarget: async () => ({ ok: true as const, value: { items: [], nextCursor: null } }),
+    };
+
+    const env = createEnv();
+    const req = makeRequest(`/v1/organizations/${TEST_ORG_PUBLIC_ID}/audit`);
+
+    const res = await handleListAudit(req, env, TEST_REQUEST_ID, { subjectId: TEST_ACTOR_ID, subjectType: "user" }, TEST_ORG_UUID, { eventsRepo: mockRepo as any });
+
+    expect(res.status).toBe(200);
+    const body = await res.json() as { data: { auditEntries: Array<Record<string, unknown>> } };
+    const entry = body.data.auditEntries[0]!;
+
+    // orgId should be mapped to public org_ format
+    expect(entry.orgId).toBe(TEST_ORG_PUBLIC_ID);
+    // Subject should be mapped with org_ prefix
+    const subject = entry.subject as { kind: string; id: string; name: string | null };
+    expect(subject.kind).toBe("organization");
+    expect(subject.id).toBe("org_d1e2f3a4b5c67890abcdef1234567890");
+    expect(subject.name).toBe("Acme Corp");
+    // No raw UUID in the public response
+    expect(JSON.stringify(entry)).not.toContain(orgSubjectUuid);
+    expect(JSON.stringify(entry)).not.toContain(TEST_ORG_UUID);
+  });
+
+  it("maps member subject kind to mem_ public ID", async () => {
+    const { handleListAudit } = await import("@events-worker/handlers/list-audit");
+
+    const memberSubjectUuid = "e2f3a4b5-c6d7-8901-bcde-f12345678901";
+    const mockEntry = {
+      id: "aud-mem-01",
+      eventId: "evt-mem-01",
+      orgId: TEST_ORG_UUID,
+      projectId: null,
+      environmentId: null,
+      actorType: "user",
+      actorId: TEST_ACTOR_ID,
+      eventType: "membership.added",
+      eventVersion: 1,
+      source: "membership-worker",
+      subjectKind: "member",
+      subjectId: memberSubjectUuid,
+      subjectName: null,
+      category: "membership",
+      description: "Member mem_e2f3a4b5c6d78901bcdef12345678901 added as owner",
+      occurredAt: new Date("2026-05-26T12:00:01.000Z"),
+      requestId: TEST_REQUEST_ID,
+      correlationId: null,
+      payload: { orgId: "org_a1b2c3d4e5f67890abcdef1234567890", memberId: "mem_e2f3a4b5c6d78901bcdef12345678901", subjectType: "user", subjectId: "usr_abc123", role: "owner" },
+      redactPaths: [],
+      createdAt: new Date("2026-05-26T12:00:01.000Z"),
+    };
+
+    const mockRepo = {
+      appendEvent: async () => ({ ok: false as const, error: { kind: "internal" as const, message: "" } }),
+      appendEventWithAudit: async () => ({ ok: false as const, error: { kind: "internal" as const, message: "" } }),
+      queryAuditByOrg: async () => ({
+        ok: true as const,
+        value: { items: [mockEntry], nextCursor: null },
+      }),
+      queryAuditByTarget: async () => ({ ok: true as const, value: { items: [], nextCursor: null } }),
+    };
+
+    const env = createEnv();
+    const req = makeRequest(`/v1/organizations/${TEST_ORG_PUBLIC_ID}/audit`);
+
+    const res = await handleListAudit(req, env, TEST_REQUEST_ID, { subjectId: TEST_ACTOR_ID, subjectType: "user" }, TEST_ORG_UUID, { eventsRepo: mockRepo as any });
+
+    expect(res.status).toBe(200);
+    const body = await res.json() as { data: { auditEntries: Array<Record<string, unknown>> } };
+    const entry = body.data.auditEntries[0]!;
+
+    // orgId should be mapped to public org_ format
+    expect(entry.orgId).toBe(TEST_ORG_PUBLIC_ID);
+    // Subject should be mapped with mem_ prefix
+    const subject = entry.subject as { kind: string; id: string; name: string | null };
+    expect(subject.kind).toBe("member");
+    expect(subject.id).toBe("mem_e2f3a4b5c6d78901bcdef12345678901");
+    // No raw UUID in the public response for known scope/subject fields
+    expect(entry.orgId).not.toContain("-");
+    expect(subject.id).not.toContain("-");
+  });
+
+  it("does not leak raw UUIDs in organization.created public audit response", async () => {
+    const { handleListAudit } = await import("@events-worker/handlers/list-audit");
+
+    const orgUuid = "f1a2b3c4-d5e6-7890-abcd-ef1234567890";
+    const mockEntry = {
+      id: "aud-leak-01",
+      eventId: "evt-leak-01",
+      orgId: orgUuid,
+      projectId: null,
+      environmentId: null,
+      actorType: "user",
+      actorId: TEST_ACTOR_ID,
+      eventType: "organization.created",
+      eventVersion: 1,
+      source: "membership-worker",
+      subjectKind: "organization",
+      subjectId: orgUuid,
+      subjectName: "Leak Test Org",
+      category: "membership",
+      description: "Organization org_f1a2b3c4d5e67890abcdef1234567890 created",
+      occurredAt: new Date("2026-05-26T14:00:00.000Z"),
+      requestId: TEST_REQUEST_ID,
+      correlationId: null,
+      payload: { orgId: "org_f1a2b3c4d5e67890abcdef1234567890", name: "Leak Test Org", slug: "leak-test" },
+      redactPaths: [],
+      createdAt: new Date("2026-05-26T14:00:00.000Z"),
+    };
+
+    const mockRepo = {
+      appendEvent: async () => ({ ok: false as const, error: { kind: "internal" as const, message: "" } }),
+      appendEventWithAudit: async () => ({ ok: false as const, error: { kind: "internal" as const, message: "" } }),
+      queryAuditByOrg: async () => ({
+        ok: true as const,
+        value: { items: [mockEntry], nextCursor: null },
+      }),
+      queryAuditByTarget: async () => ({ ok: true as const, value: { items: [], nextCursor: null } }),
+    };
+
+    const env = createEnv();
+    const req = makeRequest(`/v1/organizations/${TEST_ORG_PUBLIC_ID}/audit`);
+
+    const res = await handleListAudit(req, env, TEST_REQUEST_ID, { subjectId: TEST_ACTOR_ID, subjectType: "user" }, orgUuid, { eventsRepo: mockRepo as any });
+
+    expect(res.status).toBe(200);
+    const body = await res.json() as { data: { auditEntries: Array<Record<string, unknown>> } };
+    const responseStr = JSON.stringify(body.data.auditEntries[0]);
+
+    // Raw UUID format must not appear in orgId or subject.id
+    expect(responseStr).not.toMatch(/f1a2b3c4-d5e6-7890-abcd-ef1234567890/);
+    // Public org_ and prefixed IDs should be present
+    expect(responseStr).toContain("org_f1a2b3c4d5e67890abcdef1234567890");
+  });
 });
