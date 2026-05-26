@@ -156,6 +156,11 @@ describe("authorize", () => {
       expect(result.allow).toBe(true);
     });
 
+    it("allows environment.create", () => {
+      const result = authorize(authReq("environment.create", "org_1", facts, "prj_1"));
+      expect(result.allow).toBe(true);
+    });
+
     it("allows environment.update", () => {
       const result = authorize(authReq("environment.update", "org_1", facts, "prj_1"));
       expect(result.allow).toBe(true);
@@ -206,6 +211,7 @@ describe("authorize", () => {
     });
 
     it("allows environment access", () => {
+      expect(authorize(authReq("environment.create", "org_1", facts, "prj_1")).allow).toBe(true);
       expect(authorize(authReq("environment.read", "org_1", facts, "prj_1")).allow).toBe(true);
       expect(authorize(authReq("environment.update", "org_1", facts, "prj_1")).allow).toBe(true);
     });
@@ -237,6 +243,7 @@ describe("authorize", () => {
     });
 
     it("allows environment access", () => {
+      expect(authorize(authReq("environment.create", "org_1", facts, "prj_1")).allow).toBe(true);
       expect(authorize(authReq("environment.read", "org_1", facts, "prj_1")).allow).toBe(true);
       expect(authorize(authReq("environment.update", "org_1", facts, "prj_1")).allow).toBe(true);
     });
@@ -285,6 +292,7 @@ describe("authorize", () => {
       expect(authorize(authReq("project.create", "org_1", facts)).allow).toBe(false);
       expect(authorize(authReq("project.update", "org_1", facts, "prj_1")).allow).toBe(false);
       expect(authorize(authReq("project.delete", "org_1", facts, "prj_1")).allow).toBe(false);
+      expect(authorize(authReq("environment.create", "org_1", facts, "prj_1")).allow).toBe(false);
       expect(authorize(authReq("environment.update", "org_1", facts, "prj_1")).allow).toBe(false);
       expect(authorize(authReq("billing.read", "org_1", facts)).allow).toBe(false);
       expect(authorize(authReq("billing.manage", "org_1", facts)).allow).toBe(false);
@@ -395,6 +403,7 @@ describe("authorize", () => {
       });
 
       it("allows environment access for matching project", () => {
+        expect(authorize(authReq("environment.create", "org_1", facts, "prj_1")).allow).toBe(true);
         expect(authorize(authReq("environment.read", "org_1", facts, "prj_1")).allow).toBe(true);
         expect(authorize(authReq("environment.update", "org_1", facts, "prj_1")).allow).toBe(true);
       });
@@ -418,6 +427,7 @@ describe("authorize", () => {
       });
 
       it("allows environment access", () => {
+        expect(authorize(authReq("environment.create", "org_1", facts, "prj_1")).allow).toBe(true);
         expect(authorize(authReq("environment.read", "org_1", facts, "prj_1")).allow).toBe(true);
         expect(authorize(authReq("environment.update", "org_1", facts, "prj_1")).allow).toBe(true);
       });
@@ -446,6 +456,7 @@ describe("authorize", () => {
       it("denies writes", () => {
         expect(authorize(authReq("project.update", "org_1", facts, "prj_1")).allow).toBe(false);
         expect(authorize(authReq("project.delete", "org_1", facts, "prj_1")).allow).toBe(false);
+        expect(authorize(authReq("environment.create", "org_1", facts, "prj_1")).allow).toBe(false);
         expect(authorize(authReq("environment.update", "org_1", facts, "prj_1")).allow).toBe(false);
       });
     });
@@ -459,6 +470,73 @@ describe("authorize", () => {
     it("denies project role when projectId is missing from resource", () => {
       const facts = [projectFact("project_admin", "org_1", "prj_1")];
       const result = authorize(authReq("project.read", "org_1", facts));
+      expect(result.allow).toBe(false);
+    });
+  });
+
+  describe("environment.create action", () => {
+    it("allows owner to create environments", () => {
+      const result = authorize(authReq("environment.create", "org_1", [orgFact("owner", "org_1")], "prj_1"));
+      expect(result.allow).toBe(true);
+      expect(result.reason).toBe("org_owner");
+    });
+
+    it("allows admin to create environments", () => {
+      const result = authorize(authReq("environment.create", "org_1", [orgFact("admin", "org_1")], "prj_1"));
+      expect(result.allow).toBe(true);
+      expect(result.reason).toBe("org_admin");
+    });
+
+    it("allows builder to create environments", () => {
+      const result = authorize(authReq("environment.create", "org_1", [orgFact("builder", "org_1")], "prj_1"));
+      expect(result.allow).toBe(true);
+      expect(result.reason).toBe("org_builder");
+    });
+
+    it("denies viewer from creating environments", () => {
+      const result = authorize(authReq("environment.create", "org_1", [orgFact("viewer", "org_1")], "prj_1"));
+      expect(result.allow).toBe(false);
+    });
+
+    it("denies billing_admin from creating environments", () => {
+      const result = authorize(authReq("environment.create", "org_1", [orgFact("billing_admin", "org_1")], "prj_1"));
+      expect(result.allow).toBe(false);
+    });
+
+    it("allows project_admin to create environments for matching project", () => {
+      const facts = [projectFact("project_admin", "org_1", "prj_1")];
+      const result = authorize(authReq("environment.create", "org_1", facts, "prj_1"));
+      expect(result.allow).toBe(true);
+      expect(result.reason).toBe("project_admin");
+    });
+
+    it("allows project_builder to create environments for matching project", () => {
+      const facts = [projectFact("project_builder", "org_1", "prj_1")];
+      const result = authorize(authReq("environment.create", "org_1", facts, "prj_1"));
+      expect(result.allow).toBe(true);
+      expect(result.reason).toBe("project_builder");
+    });
+
+    it("denies project_viewer from creating environments", () => {
+      const facts = [projectFact("project_viewer", "org_1", "prj_1")];
+      const result = authorize(authReq("environment.create", "org_1", facts, "prj_1"));
+      expect(result.allow).toBe(false);
+    });
+
+    it("requires projectId scope", () => {
+      const result = authorize(authReq("environment.create", "org_1", [orgFact("owner", "org_1")]));
+      expect(result.allow).toBe(false);
+      expect(result.reason).toBe("invalid_scope");
+    });
+
+    it("denies cross-org facts", () => {
+      const result = authorize(authReq("environment.create", "org_2", [orgFact("owner", "org_1")], "prj_1"));
+      expect(result.allow).toBe(false);
+    });
+
+    it("denies wrong-project project role", () => {
+      const facts = [projectFact("project_admin", "org_1", "prj_1")];
+      const result = authorize(authReq("environment.create", "org_1", facts, "prj_2"));
       expect(result.allow).toBe(false);
     });
   });

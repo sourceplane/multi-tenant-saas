@@ -2,6 +2,9 @@ import { handleArchiveProject } from "@projects-worker/handlers/archive-project"
 import { handleCreateProject } from "@projects-worker/handlers/create-project";
 import { handleGetProject } from "@projects-worker/handlers/get-project";
 import { handleListProjects } from "@projects-worker/handlers/list-projects";
+import { handleCreateEnvironment } from "@projects-worker/handlers/create-environment";
+import { handleListEnvironments } from "@projects-worker/handlers/list-environments";
+import { handleGetEnvironment } from "@projects-worker/handlers/get-environment";
 import { route } from "@projects-worker/router";
 import type { Env } from "@projects-worker/env";
 import type { ProjectsRepository, ProjectsResult, Project, CreateProjectInput, PageQueryParams, PagedResult, Environment, CreateEnvironmentInput } from "@saas/db/projects";
@@ -11,6 +14,8 @@ const TEST_ORG_UUID = "11111111-1111-1111-1111-111111111111";
 const TEST_ORG_PUBLIC = "org_11111111111111111111111111111111";
 const TEST_PROJECT_UUID = "22222222-2222-2222-2222-222222222222";
 const TEST_PROJECT_PUBLIC = "prj_22222222222222222222222222222222";
+const TEST_ENVIRONMENT_UUID = "33333333-3333-3333-3333-333333333333";
+const TEST_ENVIRONMENT_PUBLIC = "env_33333333333333333333333333333333";
 const TEST_USER_ID = "usr_aabbccdd";
 
 interface MockFn<T = unknown> {
@@ -1057,5 +1062,621 @@ describe("handleArchiveProject", () => {
     expect(description).not.toContain(TEST_ORG_UUID);
     expect(description).not.toContain(TEST_PROJECT_UUID);
     expect(description).toContain("Archived project");
+  });
+});
+
+const fakeEnvironment: Environment = {
+  id: TEST_ENVIRONMENT_UUID,
+  orgId: TEST_ORG_UUID,
+  projectId: TEST_PROJECT_UUID,
+  name: "Production",
+  slug: "production",
+  slugLower: "production",
+  status: "active",
+  createdAt: new Date("2026-01-01T00:00:00Z"),
+  updatedAt: new Date("2026-01-01T00:00:00Z"),
+  archivedAt: null,
+};
+
+describe("handleCreateEnvironment", () => {
+  it("creates an environment with authorization and atomic event", async () => {
+    const env = createFakeEnv();
+    const projectsRepo = createFakeProjectsRepo({
+      createEnvironment: async (input: CreateEnvironmentInput) => ({ ok: true as const, value: { ...fakeEnvironment, id: input.id, name: input.name, slug: input.slug, slugLower: input.slugLower } }),
+    });
+    const eventsRepo = createFakeEventsRepo();
+    const req = makeRequest("POST", `/v1/organizations/${TEST_ORG_PUBLIC}/projects/${TEST_PROJECT_PUBLIC}/environments`, { name: "Production", slug: "production" });
+
+    const res = await handleCreateEnvironment(req, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID, { projectsRepo, eventsRepo });
+    expect(res.status).toBe(201);
+
+    const json = await res.json() as { data: { environment: { id: string; orgId: string; projectId: string; name: string; slug: string } } };
+    expect(json.data.environment.name).toBe("Production");
+    expect(json.data.environment.slug).toBe("production");
+    expect(json.data.environment.id).toMatch(/^env_/);
+    expect(json.data.environment.orgId).toMatch(/^org_/);
+    expect(json.data.environment.projectId).toMatch(/^prj_/);
+
+    expect(eventsRepo.appendEventWithAuditCalls.length).toBe(1);
+  });
+
+  it("uses environment.create policy action with explicit project resource shape", async () => {
+    const env = createFakeEnv();
+    const projectsRepo = createFakeProjectsRepo({
+      createEnvironment: async (input: CreateEnvironmentInput) => ({ ok: true as const, value: { ...fakeEnvironment, id: input.id, name: input.name, slug: input.slug, slugLower: input.slugLower } }),
+    });
+    const eventsRepo = createFakeEventsRepo();
+    const req = makeRequest("POST", `/v1/organizations/${TEST_ORG_PUBLIC}/projects/${TEST_PROJECT_PUBLIC}/environments`, { name: "Staging" });
+
+    await handleCreateEnvironment(req, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID, { projectsRepo, eventsRepo });
+
+    const policyFetcher = env.POLICY_WORKER as unknown as { fetchCalls: Array<{ url: string; init: RequestInit }> };
+    const callBody = JSON.parse(policyFetcher.fetchCalls[0]!.init.body as string);
+    expect(callBody.action).toBe("environment.create");
+    expect(callBody.resource.kind).toBe("environment");
+    expect(callBody.resource.orgId).toBe(TEST_ORG_UUID);
+    expect(callBody.resource.projectId).toBe(TEST_PROJECT_UUID);
+  });
+
+  it("returns 404 when parent project not found", async () => {
+    const env = createFakeEnv();
+    const projectsRepo = createFakeProjectsRepo({
+      getProjectById: async () => ({ ok: false as const, error: { kind: "not_found" as const } }),
+      createEnvironment: async (input: CreateEnvironmentInput) => ({ ok: true as const, value: { ...fakeEnvironment, id: input.id } }),
+    });
+    const eventsRepo = createFakeEventsRepo();
+    const req = makeRequest("POST", `/v1/organizations/${TEST_ORG_PUBLIC}/projects/${TEST_PROJECT_PUBLIC}/environments`, { name: "Test" });
+
+    const res = await handleCreateEnvironment(req, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID, { projectsRepo, eventsRepo });
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 404 when parent project is archived", async () => {
+    const env = createFakeEnv();
+    const projectsRepo = createFakeProjectsRepo({
+      getProjectById: async () => ({ ok: true as const, value: { ...fakeProject, status: "archived" } }),
+      createEnvironment: async (input: CreateEnvironmentInput) => ({ ok: true as const, value: { ...fakeEnvironment, id: input.id } }),
+    });
+    const eventsRepo = createFakeEventsRepo();
+    const req = makeRequest("POST", `/v1/organizations/${TEST_ORG_PUBLIC}/projects/${TEST_PROJECT_PUBLIC}/environments`, { name: "Test" });
+
+    const res = await handleCreateEnvironment(req, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID, { projectsRepo, eventsRepo });
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 409 on duplicate slug conflict", async () => {
+    const env = createFakeEnv();
+    const projectsRepo = createFakeProjectsRepo({
+      createEnvironment: async () => ({ ok: false as const, error: { kind: "conflict" as const, entity: "environment" } }),
+    });
+    const eventsRepo = createFakeEventsRepo();
+    const req = makeRequest("POST", `/v1/organizations/${TEST_ORG_PUBLIC}/projects/${TEST_PROJECT_PUBLIC}/environments`, { name: "Test", slug: "existing" });
+
+    const res = await handleCreateEnvironment(req, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID, { projectsRepo, eventsRepo });
+    expect(res.status).toBe(409);
+  });
+
+  it("event append failure prevents successful create", async () => {
+    const env = createFakeEnv();
+    const projectsRepo = createFakeProjectsRepo({
+      createEnvironment: async (input: CreateEnvironmentInput) => ({ ok: true as const, value: { ...fakeEnvironment, id: input.id } }),
+    });
+    const eventsRepo = createFakeEventsRepo({
+      appendEventWithAudit: async () => ({ ok: false as const, error: { kind: "internal" as const, message: "db error" } }),
+    });
+    const req = makeRequest("POST", `/v1/organizations/${TEST_ORG_PUBLIC}/projects/${TEST_PROJECT_PUBLIC}/environments`, { name: "Test" });
+
+    const res = await handleCreateEnvironment(req, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID, { projectsRepo, eventsRepo });
+    expect(res.status).toBe(503);
+  });
+
+  it("returns 503 when SOURCEPLANE_DB is missing", async () => {
+    const env = createFakeEnv({ SOURCEPLANE_DB: undefined });
+    const req = makeRequest("POST", `/v1/organizations/${TEST_ORG_PUBLIC}/projects/${TEST_PROJECT_PUBLIC}/environments`, { name: "Test" });
+
+    const res = await handleCreateEnvironment(req, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID);
+    expect(res.status).toBe(503);
+  });
+
+  it("returns 503 when MEMBERSHIP_WORKER is missing", async () => {
+    const env = createFakeEnv({ MEMBERSHIP_WORKER: undefined });
+    const req = makeRequest("POST", `/v1/organizations/${TEST_ORG_PUBLIC}/projects/${TEST_PROJECT_PUBLIC}/environments`, { name: "Test" });
+
+    const res = await handleCreateEnvironment(req, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID);
+    expect(res.status).toBe(503);
+  });
+
+  it("returns 503 when POLICY_WORKER is missing", async () => {
+    const env = createFakeEnv({ POLICY_WORKER: undefined });
+    const req = makeRequest("POST", `/v1/organizations/${TEST_ORG_PUBLIC}/projects/${TEST_PROJECT_PUBLIC}/environments`, { name: "Test" });
+
+    const res = await handleCreateEnvironment(req, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID);
+    expect(res.status).toBe(503);
+  });
+
+  it("fails closed when membership-context call fails", async () => {
+    const env = createFakeEnv({ MEMBERSHIP_WORKER: createMockFetcherThatThrows() });
+    const projectsRepo = createFakeProjectsRepo();
+    const eventsRepo = createFakeEventsRepo();
+    const req = makeRequest("POST", `/v1/organizations/${TEST_ORG_PUBLIC}/projects/${TEST_PROJECT_PUBLIC}/environments`, { name: "Test" });
+
+    const res = await handleCreateEnvironment(req, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID, { projectsRepo, eventsRepo });
+    expect(res.status).toBe(404);
+  });
+
+  it("fails closed when membership returns malformed envelope", async () => {
+    const env = createFakeEnv({ MEMBERSHIP_WORKER: createMockFetcher({ wrong: "shape" }) });
+    const projectsRepo = createFakeProjectsRepo();
+    const eventsRepo = createFakeEventsRepo();
+    const req = makeRequest("POST", `/v1/organizations/${TEST_ORG_PUBLIC}/projects/${TEST_PROJECT_PUBLIC}/environments`, { name: "Test" });
+
+    const res = await handleCreateEnvironment(req, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID, { projectsRepo, eventsRepo });
+    expect(res.status).toBe(404);
+  });
+
+  it("fails closed when policy denies", async () => {
+    const env = createFakeEnv({
+      POLICY_WORKER: createMockFetcher({ data: { allow: false, reason: "denied", policyVersion: 1, derivedScope: { orgId: TEST_ORG_UUID } } }),
+    });
+    const projectsRepo = createFakeProjectsRepo();
+    const eventsRepo = createFakeEventsRepo();
+    const req = makeRequest("POST", `/v1/organizations/${TEST_ORG_PUBLIC}/projects/${TEST_PROJECT_PUBLIC}/environments`, { name: "Test" });
+
+    const res = await handleCreateEnvironment(req, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID, { projectsRepo, eventsRepo });
+    expect(res.status).toBe(404);
+  });
+
+  it("fails closed when policy-worker fetch throws", async () => {
+    const env = createFakeEnv({ POLICY_WORKER: createMockFetcherThatThrows() });
+    const projectsRepo = createFakeProjectsRepo();
+    const eventsRepo = createFakeEventsRepo();
+    const req = makeRequest("POST", `/v1/organizations/${TEST_ORG_PUBLIC}/projects/${TEST_PROJECT_PUBLIC}/environments`, { name: "Test" });
+
+    const res = await handleCreateEnvironment(req, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID, { projectsRepo, eventsRepo });
+    expect(res.status).toBe(404);
+  });
+
+  it("fails closed when policy returns malformed envelope", async () => {
+    const env = createFakeEnv({ POLICY_WORKER: createMockFetcher({ wrong: "shape" }) });
+    const projectsRepo = createFakeProjectsRepo();
+    const eventsRepo = createFakeEventsRepo();
+    const req = makeRequest("POST", `/v1/organizations/${TEST_ORG_PUBLIC}/projects/${TEST_PROJECT_PUBLIC}/environments`, { name: "Test" });
+
+    const res = await handleCreateEnvironment(req, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID, { projectsRepo, eventsRepo });
+    expect(res.status).toBe(404);
+  });
+
+  it("does not expose raw UUIDs in response", async () => {
+    const env = createFakeEnv();
+    const projectsRepo = createFakeProjectsRepo({
+      createEnvironment: async (input: CreateEnvironmentInput) => ({ ok: true as const, value: { ...fakeEnvironment, id: input.id } }),
+    });
+    const eventsRepo = createFakeEventsRepo();
+    const req = makeRequest("POST", `/v1/organizations/${TEST_ORG_PUBLIC}/projects/${TEST_PROJECT_PUBLIC}/environments`, { name: "Test" });
+
+    const res = await handleCreateEnvironment(req, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID, { projectsRepo, eventsRepo });
+    const text = await res.text();
+    expect(text).not.toContain(TEST_ORG_UUID);
+    expect(text).not.toContain(TEST_PROJECT_UUID);
+  });
+
+  it("does not expose raw UUIDs in event payload", async () => {
+    const env = createFakeEnv();
+    const projectsRepo = createFakeProjectsRepo({
+      createEnvironment: async (input: CreateEnvironmentInput) => ({ ok: true as const, value: { ...fakeEnvironment, id: input.id } }),
+    });
+    const eventsRepo = createFakeEventsRepo();
+    const req = makeRequest("POST", `/v1/organizations/${TEST_ORG_PUBLIC}/projects/${TEST_PROJECT_PUBLIC}/environments`, { name: "Test" });
+
+    await handleCreateEnvironment(req, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID, { projectsRepo, eventsRepo });
+
+    const eventCall = eventsRepo.appendEventWithAuditCalls[0]![0] as AppendEventWithAuditInput;
+    const payload = eventCall.event.payload;
+    const payloadStr = JSON.stringify(payload);
+    expect(payloadStr).not.toContain(TEST_ORG_UUID);
+    expect(payloadStr).not.toContain(TEST_PROJECT_UUID);
+    expect(payload.environmentId).toMatch(/^env_/);
+    expect(payload.projectId).toMatch(/^prj_/);
+    expect(payload.orgId).toMatch(/^org_/);
+  });
+
+  it("returns 503 when repository has internal failure", async () => {
+    const env = createFakeEnv();
+    const projectsRepo = createFakeProjectsRepo({
+      createEnvironment: async () => ({ ok: false as const, error: { kind: "internal" as const, message: "db error" } }),
+    });
+    const eventsRepo = createFakeEventsRepo();
+    const req = makeRequest("POST", `/v1/organizations/${TEST_ORG_PUBLIC}/projects/${TEST_PROJECT_PUBLIC}/environments`, { name: "Test" });
+
+    const res = await handleCreateEnvironment(req, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID, { projectsRepo, eventsRepo });
+    expect(res.status).toBe(503);
+  });
+});
+
+describe("handleListEnvironments", () => {
+  function listRequest(orgPublic: string, projectPublic: string, query = ""): Request {
+    return new Request(`https://projects.internal/v1/organizations/${orgPublic}/projects/${projectPublic}/environments${query}`, {
+      method: "GET",
+      headers: {
+        "x-actor-subject-id": TEST_USER_ID,
+        "x-actor-subject-type": "user",
+        "x-request-id": "req_test",
+      },
+    });
+  }
+
+  it("returns paginated environment list on success", async () => {
+    const env = createFakeEnv();
+    const projectsRepo = createFakeProjectsRepo({
+      listEnvironmentsPaged: () => Promise.resolve({ ok: true as const, value: { items: [fakeEnvironment], nextCursor: null } }),
+    });
+
+    const request = listRequest(TEST_ORG_PUBLIC, TEST_PROJECT_PUBLIC);
+    const response = await handleListEnvironments(request, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID, { projectsRepo });
+
+    expect(response.status).toBe(200);
+    const json = await response.json() as any;
+    expect(json.data.environments).toHaveLength(1);
+    expect(json.data.environments[0].id).toBe(TEST_ENVIRONMENT_PUBLIC);
+    expect(json.data.environments[0].orgId).toBe(TEST_ORG_PUBLIC);
+    expect(json.data.environments[0].projectId).toBe(TEST_PROJECT_PUBLIC);
+    expect(json.meta.cursor).toBeNull();
+  });
+
+  it("returns 404 when parent project not found", async () => {
+    const env = createFakeEnv();
+    const projectsRepo = createFakeProjectsRepo({
+      getProjectById: async () => ({ ok: false as const, error: { kind: "not_found" as const } }),
+    });
+
+    const request = listRequest(TEST_ORG_PUBLIC, TEST_PROJECT_PUBLIC);
+    const response = await handleListEnvironments(request, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID, { projectsRepo });
+
+    expect(response.status).toBe(404);
+  });
+
+  it("returns 404 when parent project is archived", async () => {
+    const env = createFakeEnv();
+    const projectsRepo = createFakeProjectsRepo({
+      getProjectById: async () => ({ ok: true as const, value: { ...fakeProject, status: "archived" } }),
+    });
+
+    const request = listRequest(TEST_ORG_PUBLIC, TEST_PROJECT_PUBLIC);
+    const response = await handleListEnvironments(request, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID, { projectsRepo });
+
+    expect(response.status).toBe(404);
+  });
+
+  it("uses default limit of 50", async () => {
+    const env = createFakeEnv();
+    const listCalls: unknown[][] = [];
+    const projectsRepo = createFakeProjectsRepo({
+      listEnvironmentsPaged: (...args: unknown[]) => {
+        listCalls.push(args);
+        return Promise.resolve({ ok: true, value: { items: [], nextCursor: null } });
+      },
+    });
+
+    const request = listRequest(TEST_ORG_PUBLIC, TEST_PROJECT_PUBLIC);
+    await handleListEnvironments(request, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID, { projectsRepo });
+
+    expect(listCalls[0]![2]).toEqual({ limit: 50, cursor: null });
+  });
+
+  it("respects limit query parameter", async () => {
+    const env = createFakeEnv();
+    const listCalls: unknown[][] = [];
+    const projectsRepo = createFakeProjectsRepo({
+      listEnvironmentsPaged: (...args: unknown[]) => {
+        listCalls.push(args);
+        return Promise.resolve({ ok: true, value: { items: [], nextCursor: null } });
+      },
+    });
+
+    const request = listRequest(TEST_ORG_PUBLIC, TEST_PROJECT_PUBLIC, "?limit=10");
+    await handleListEnvironments(request, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID, { projectsRepo });
+
+    expect((listCalls[0]![2] as any).limit).toBe(10);
+  });
+
+  it("returns validation_failed for limit > 100", async () => {
+    const env = createFakeEnv();
+    const projectsRepo = createFakeProjectsRepo();
+
+    const request = listRequest(TEST_ORG_PUBLIC, TEST_PROJECT_PUBLIC, "?limit=200");
+    const response = await handleListEnvironments(request, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID, { projectsRepo });
+
+    expect(response.status).toBe(422);
+    const json = await response.json() as any;
+    expect(json.error.code).toBe("validation_failed");
+  });
+
+  it("returns validation_failed for invalid cursor", async () => {
+    const env = createFakeEnv();
+    const projectsRepo = createFakeProjectsRepo();
+
+    const request = listRequest(TEST_ORG_PUBLIC, TEST_PROJECT_PUBLIC, "?cursor=not-valid");
+    const response = await handleListEnvironments(request, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID, { projectsRepo });
+
+    expect(response.status).toBe(422);
+    const json = await response.json() as any;
+    expect(json.error.code).toBe("validation_failed");
+  });
+
+  it("returns next cursor when more pages exist", async () => {
+    const env = createFakeEnv();
+    const projectsRepo = createFakeProjectsRepo({
+      listEnvironmentsPaged: () => Promise.resolve({
+        ok: true as const,
+        value: {
+          items: [fakeEnvironment],
+          nextCursor: { createdAt: "2026-01-01T00:00:00.000Z", id: TEST_ENVIRONMENT_UUID },
+        },
+      }),
+    });
+
+    const request = listRequest(TEST_ORG_PUBLIC, TEST_PROJECT_PUBLIC);
+    const response = await handleListEnvironments(request, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID, { projectsRepo });
+
+    expect(response.status).toBe(200);
+    const json = await response.json() as any;
+    expect(json.meta.cursor).not.toBeNull();
+    expect(typeof json.meta.cursor).toBe("string");
+  });
+
+  it("does not expose raw UUIDs in list response", async () => {
+    const env = createFakeEnv();
+    const projectsRepo = createFakeProjectsRepo({
+      listEnvironmentsPaged: () => Promise.resolve({ ok: true as const, value: { items: [fakeEnvironment], nextCursor: null } }),
+    });
+
+    const request = listRequest(TEST_ORG_PUBLIC, TEST_PROJECT_PUBLIC);
+    const response = await handleListEnvironments(request, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID, { projectsRepo });
+
+    const raw = await response.text();
+    expect(raw).not.toContain(TEST_ORG_UUID);
+    expect(raw).not.toContain(TEST_PROJECT_UUID);
+    expect(raw).not.toContain(TEST_ENVIRONMENT_UUID);
+  });
+
+  it("returns 503 when SOURCEPLANE_DB is missing", async () => {
+    const env = createFakeEnv({ SOURCEPLANE_DB: undefined });
+    const request = listRequest(TEST_ORG_PUBLIC, TEST_PROJECT_PUBLIC);
+    const response = await handleListEnvironments(request, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID);
+
+    expect(response.status).toBe(503);
+  });
+
+  it("returns 503 when MEMBERSHIP_WORKER is missing", async () => {
+    const env = createFakeEnv({ MEMBERSHIP_WORKER: undefined });
+    const request = listRequest(TEST_ORG_PUBLIC, TEST_PROJECT_PUBLIC);
+    const response = await handleListEnvironments(request, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID);
+
+    expect(response.status).toBe(503);
+  });
+
+  it("returns 503 when POLICY_WORKER is missing", async () => {
+    const env = createFakeEnv({ POLICY_WORKER: undefined });
+    const request = listRequest(TEST_ORG_PUBLIC, TEST_PROJECT_PUBLIC);
+    const response = await handleListEnvironments(request, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID);
+
+    expect(response.status).toBe(503);
+  });
+
+  it("fails closed when membership-context fails", async () => {
+    const env = createFakeEnv({ MEMBERSHIP_WORKER: createMockFetcherThatThrows() });
+    const projectsRepo = createFakeProjectsRepo();
+
+    const request = listRequest(TEST_ORG_PUBLIC, TEST_PROJECT_PUBLIC);
+    const response = await handleListEnvironments(request, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID, { projectsRepo });
+
+    expect(response.status).toBe(404);
+  });
+
+  it("fails closed when policy denies", async () => {
+    const env = createFakeEnv({
+      POLICY_WORKER: createMockFetcher({ data: { allow: false, reason: "no_matching_role", policyVersion: 1, derivedScope: { orgId: TEST_ORG_UUID } } }),
+    });
+    const projectsRepo = createFakeProjectsRepo();
+
+    const request = listRequest(TEST_ORG_PUBLIC, TEST_PROJECT_PUBLIC);
+    const response = await handleListEnvironments(request, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID, { projectsRepo });
+
+    expect(response.status).toBe(404);
+  });
+
+  it("returns 503 when repository fails", async () => {
+    const env = createFakeEnv();
+    const projectsRepo = createFakeProjectsRepo({
+      listEnvironmentsPaged: () => Promise.resolve({ ok: false as const, error: { kind: "internal" as const, message: "db error" } }),
+    });
+
+    const request = listRequest(TEST_ORG_PUBLIC, TEST_PROJECT_PUBLIC);
+    const response = await handleListEnvironments(request, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID, { projectsRepo });
+
+    expect(response.status).toBe(503);
+  });
+});
+
+describe("handleGetEnvironment", () => {
+  it("returns environment with authorization", async () => {
+    const env = createFakeEnv();
+    const projectsRepo = createFakeProjectsRepo({
+      getEnvironmentById: async () => ({ ok: true as const, value: fakeEnvironment }),
+    });
+
+    const res = await handleGetEnvironment(env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID, TEST_ENVIRONMENT_UUID, { projectsRepo });
+    expect(res.status).toBe(200);
+
+    const json = await res.json() as { data: { environment: { id: string; orgId: string; projectId: string } } };
+    expect(json.data.environment.id).toMatch(/^env_/);
+    expect(json.data.environment.orgId).toMatch(/^org_/);
+    expect(json.data.environment.projectId).toMatch(/^prj_/);
+  });
+
+  it("returns 404 when parent project not found", async () => {
+    const env = createFakeEnv();
+    const projectsRepo = createFakeProjectsRepo({
+      getProjectById: async () => ({ ok: false as const, error: { kind: "not_found" as const } }),
+      getEnvironmentById: async () => ({ ok: true as const, value: fakeEnvironment }),
+    });
+
+    const res = await handleGetEnvironment(env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID, TEST_ENVIRONMENT_UUID, { projectsRepo });
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 404 when parent project is archived", async () => {
+    const env = createFakeEnv();
+    const projectsRepo = createFakeProjectsRepo({
+      getProjectById: async () => ({ ok: true as const, value: { ...fakeProject, status: "archived" } }),
+      getEnvironmentById: async () => ({ ok: true as const, value: fakeEnvironment }),
+    });
+
+    const res = await handleGetEnvironment(env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID, TEST_ENVIRONMENT_UUID, { projectsRepo });
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 404 when environment not found", async () => {
+    const env = createFakeEnv();
+    const projectsRepo = createFakeProjectsRepo({
+      getEnvironmentById: async () => ({ ok: false as const, error: { kind: "not_found" as const } }),
+    });
+
+    const res = await handleGetEnvironment(env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID, TEST_ENVIRONMENT_UUID, { projectsRepo });
+    expect(res.status).toBe(404);
+  });
+
+  it("fails closed when membership-context fails", async () => {
+    const env = createFakeEnv({ MEMBERSHIP_WORKER: createMockFetcherThatThrows() });
+
+    const res = await handleGetEnvironment(env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID, TEST_ENVIRONMENT_UUID);
+    expect(res.status).toBe(404);
+  });
+
+  it("fails closed when policy denies", async () => {
+    const env = createFakeEnv({
+      POLICY_WORKER: createMockFetcher({ data: { allow: false, reason: "denied", policyVersion: 1, derivedScope: { orgId: TEST_ORG_UUID } } }),
+    });
+    const projectsRepo = createFakeProjectsRepo({
+      getEnvironmentById: async () => ({ ok: true as const, value: fakeEnvironment }),
+    });
+
+    const res = await handleGetEnvironment(env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID, TEST_ENVIRONMENT_UUID, { projectsRepo });
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 503 when SOURCEPLANE_DB is missing", async () => {
+    const env = createFakeEnv({ SOURCEPLANE_DB: undefined });
+    const res = await handleGetEnvironment(env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID, TEST_ENVIRONMENT_UUID);
+    expect(res.status).toBe(503);
+  });
+
+  it("returns 503 when MEMBERSHIP_WORKER is missing", async () => {
+    const env = createFakeEnv({ MEMBERSHIP_WORKER: undefined });
+    const res = await handleGetEnvironment(env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID, TEST_ENVIRONMENT_UUID);
+    expect(res.status).toBe(503);
+  });
+
+  it("returns 503 when POLICY_WORKER is missing", async () => {
+    const env = createFakeEnv({ POLICY_WORKER: undefined });
+    const res = await handleGetEnvironment(env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID, TEST_ENVIRONMENT_UUID);
+    expect(res.status).toBe(503);
+  });
+
+  it("does not expose raw UUIDs in response", async () => {
+    const env = createFakeEnv();
+    const projectsRepo = createFakeProjectsRepo({
+      getEnvironmentById: async () => ({ ok: true as const, value: fakeEnvironment }),
+    });
+
+    const res = await handleGetEnvironment(env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID, TEST_ENVIRONMENT_UUID, { projectsRepo });
+    const text = await res.text();
+    expect(text).not.toContain(TEST_ORG_UUID);
+    expect(text).not.toContain(TEST_PROJECT_UUID);
+    expect(text).not.toContain(TEST_ENVIRONMENT_UUID);
+  });
+
+  it("sends environment.read action with explicit environment resource shape", async () => {
+    const env = createFakeEnv();
+    const projectsRepo = createFakeProjectsRepo({
+      getEnvironmentById: async () => ({ ok: true as const, value: fakeEnvironment }),
+    });
+
+    await handleGetEnvironment(env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID, TEST_ENVIRONMENT_UUID, { projectsRepo });
+
+    const policyFetcher = env.POLICY_WORKER as unknown as { fetchCalls: Array<{ url: string; init: RequestInit }> };
+    const callBody = JSON.parse(policyFetcher.fetchCalls[0]!.init.body as string);
+    expect(callBody.action).toBe("environment.read");
+    expect(callBody.resource.kind).toBe("environment");
+    expect(callBody.resource.id).toBe(TEST_ENVIRONMENT_UUID);
+    expect(callBody.resource.orgId).toBe(TEST_ORG_UUID);
+    expect(callBody.resource.projectId).toBe(TEST_PROJECT_UUID);
+    expect(callBody.resource.environmentId).toBe(TEST_ENVIRONMENT_UUID);
+  });
+});
+
+describe("environment router routes", () => {
+  it("returns 404 for malformed org ID on environment collection", async () => {
+    const env = createFakeEnv();
+    const req = makeRequest("POST", `/v1/organizations/bad_org/projects/${TEST_PROJECT_PUBLIC}/environments`, { name: "test" });
+    const res = await route(req, env);
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 404 for malformed project ID on environment collection", async () => {
+    const env = createFakeEnv();
+    const req = makeRequest("POST", `/v1/organizations/${TEST_ORG_PUBLIC}/projects/bad_prj/environments`, { name: "test" });
+    const res = await route(req, env);
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 404 for malformed environment ID on environment item", async () => {
+    const env = createFakeEnv();
+    const req = makeRequest("GET", `/v1/organizations/${TEST_ORG_PUBLIC}/projects/${TEST_PROJECT_PUBLIC}/environments/bad_env`);
+    const res = await route(req, env);
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 401 for missing actor on POST environments", async () => {
+    const env = createFakeEnv();
+    const req = new Request(`https://projects-worker/v1/organizations/${TEST_ORG_PUBLIC}/projects/${TEST_PROJECT_PUBLIC}/environments`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "test" }),
+    });
+    const res = await route(req, env);
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 401 for missing actor on GET environments", async () => {
+    const env = createFakeEnv();
+    const req = new Request(`https://projects-worker/v1/organizations/${TEST_ORG_PUBLIC}/projects/${TEST_PROJECT_PUBLIC}/environments`, {
+      method: "GET",
+    });
+    const res = await route(req, env);
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 401 for missing actor on GET environment item", async () => {
+    const env = createFakeEnv();
+    const req = new Request(`https://projects-worker/v1/organizations/${TEST_ORG_PUBLIC}/projects/${TEST_PROJECT_PUBLIC}/environments/${TEST_ENVIRONMENT_PUBLIC}`, {
+      method: "GET",
+    });
+    const res = await route(req, env);
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 405 for unsupported methods on environments collection", async () => {
+    const env = createFakeEnv();
+    const req = makeRequest("DELETE", `/v1/organizations/${TEST_ORG_PUBLIC}/projects/${TEST_PROJECT_PUBLIC}/environments`);
+    const res = await route(req, env);
+    expect(res.status).toBe(405);
+  });
+
+  it("returns 405 for unsupported methods on environment item", async () => {
+    const env = createFakeEnv();
+    const req = makeRequest("DELETE", `/v1/organizations/${TEST_ORG_PUBLIC}/projects/${TEST_PROJECT_PUBLIC}/environments/${TEST_ENVIRONMENT_PUBLIC}`);
+    const res = await route(req, env);
+    expect(res.status).toBe(405);
   });
 });

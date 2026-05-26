@@ -4,8 +4,11 @@ import { handleCreateProject } from "./handlers/create-project.js";
 import { handleGetProject } from "./handlers/get-project.js";
 import { handleListProjects } from "./handlers/list-projects.js";
 import { handleArchiveProject } from "./handlers/archive-project.js";
+import { handleCreateEnvironment } from "./handlers/create-environment.js";
+import { handleListEnvironments } from "./handlers/list-environments.js";
+import { handleGetEnvironment } from "./handlers/get-environment.js";
 import { errorResponse, notFound, methodNotAllowed } from "./http.js";
-import { generateRequestId, parseOrgPublicId, parseProjectPublicId } from "./ids.js";
+import { generateRequestId, parseOrgPublicId, parseProjectPublicId, parseEnvironmentPublicId } from "./ids.js";
 
 const REQUEST_ID_RE = /^[\w-]{1,128}$/;
 
@@ -29,6 +32,8 @@ function resolveActor(request: Request): ActorContext | null {
 
 const ORG_PROJECTS_RE = /^\/v1\/organizations\/([^/]+)\/projects$/;
 const ORG_PROJECT_ID_RE = /^\/v1\/organizations\/([^/]+)\/projects\/([^/]+)$/;
+const ORG_PROJECT_ENVIRONMENTS_RE = /^\/v1\/organizations\/([^/]+)\/projects\/([^/]+)\/environments$/;
+const ORG_PROJECT_ENVIRONMENT_ID_RE = /^\/v1\/organizations\/([^/]+)\/projects\/([^/]+)\/environments\/([^/]+)$/;
 
 export async function route(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
@@ -37,6 +42,55 @@ export async function route(request: Request, env: Env): Promise<Response> {
   try {
     if (url.pathname === "/health" && request.method === "GET") {
       return handleHealth(env, requestId);
+    }
+
+    const envIdMatch = url.pathname.match(ORG_PROJECT_ENVIRONMENT_ID_RE);
+    if (envIdMatch) {
+      const orgPublicId = envIdMatch[1]!;
+      const projectPublicIdStr = envIdMatch[2]!;
+      const envPublicId = envIdMatch[3]!;
+      const orgUuid = parseOrgPublicId(orgPublicId);
+      const projectUuid = parseProjectPublicId(projectPublicIdStr);
+      const envUuid = parseEnvironmentPublicId(envPublicId);
+      if (!orgUuid || !projectUuid || !envUuid) {
+        return errorResponse("not_found", "Not found", 404, requestId);
+      }
+
+      if (request.method === "GET") {
+        const actor = resolveActor(request);
+        if (!actor) {
+          return errorResponse("unauthenticated", "Authentication required", 401, requestId);
+        }
+        return handleGetEnvironment(env, requestId, actor, orgUuid, projectUuid, envUuid);
+      }
+      return methodNotAllowed(requestId);
+    }
+
+    const envsMatch = url.pathname.match(ORG_PROJECT_ENVIRONMENTS_RE);
+    if (envsMatch) {
+      const orgPublicId = envsMatch[1]!;
+      const projectPublicIdStr = envsMatch[2]!;
+      const orgUuid = parseOrgPublicId(orgPublicId);
+      const projectUuid = parseProjectPublicId(projectPublicIdStr);
+      if (!orgUuid || !projectUuid) {
+        return errorResponse("not_found", "Not found", 404, requestId);
+      }
+
+      if (request.method === "POST") {
+        const actor = resolveActor(request);
+        if (!actor) {
+          return errorResponse("unauthenticated", "Authentication required", 401, requestId);
+        }
+        return handleCreateEnvironment(request, env, requestId, actor, orgUuid, projectUuid);
+      }
+      if (request.method === "GET") {
+        const actor = resolveActor(request);
+        if (!actor) {
+          return errorResponse("unauthenticated", "Authentication required", 401, requestId);
+        }
+        return handleListEnvironments(request, env, requestId, actor, orgUuid, projectUuid);
+      }
+      return methodNotAllowed(requestId);
     }
 
     const projectsMatch = url.pathname.match(ORG_PROJECTS_RE);

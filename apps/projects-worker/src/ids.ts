@@ -34,3 +34,12 @@ export function parseProjectPublicId(publicId: string): string | null {
   if (!publicId.startsWith("prj_")) return null;
   return hexToUuid(publicId.slice(4));
 }
+
+export function environmentPublicId(uuid: string): string {
+  return `env_${uuidToHex(uuid)}`;
+}
+
+export function parseEnvironmentPublicId(publicId: string): string | null {
+  if (!publicId.startsWith("env_")) return null;
+  return hexToUuid(publicId.slice(4));
+}

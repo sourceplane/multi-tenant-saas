@@ -3,6 +3,8 @@ import { errorResponse } from "./http.js";
 
 const ORG_PROJECTS_RE = /^\/v1\/organizations\/[^/]+\/projects$/;
 const ORG_PROJECT_ID_RE = /^\/v1\/organizations\/[^/]+\/projects\/[^/]+$/;
+const ORG_PROJECT_ENVIRONMENTS_RE = /^\/v1\/organizations\/[^/]+\/projects\/[^/]+\/environments$/;
+const ORG_PROJECT_ENVIRONMENT_ID_RE = /^\/v1\/organizations\/[^/]+\/projects\/[^/]+\/environments\/[^/]+$/;
 
 const FORWARDED_HEADERS = [
   "content-type",
@@ -12,7 +14,12 @@ const FORWARDED_HEADERS = [
 ];
 
 export function isProjectRoute(pathname: string): boolean {
-  return ORG_PROJECTS_RE.test(pathname) || ORG_PROJECT_ID_RE.test(pathname);
+  return (
+    ORG_PROJECTS_RE.test(pathname) ||
+    ORG_PROJECT_ID_RE.test(pathname) ||
+    ORG_PROJECT_ENVIRONMENTS_RE.test(pathname) ||
+    ORG_PROJECT_ENVIRONMENT_ID_RE.test(pathname)
+  );
 }
 
 export async function handleProjectRoute(
@@ -26,6 +33,14 @@ export async function handleProjectRoute(
   }
 
   if (ORG_PROJECT_ID_RE.test(pathname) && request.method !== "GET" && request.method !== "DELETE") {
+    return errorResponse("unsupported", "Method not allowed", 405, requestId);
+  }
+
+  if (ORG_PROJECT_ENVIRONMENTS_RE.test(pathname) && request.method !== "POST" && request.method !== "GET") {
+    return errorResponse("unsupported", "Method not allowed", 405, requestId);
+  }
+
+  if (ORG_PROJECT_ENVIRONMENT_ID_RE.test(pathname) && request.method !== "GET") {
     return errorResponse("unsupported", "Method not allowed", 405, requestId);
   }
 
