@@ -7,7 +7,7 @@ import { createMembershipRepository } from "@saas/db/membership";
 import { createEventsRepository } from "@saas/db/events";
 import { authorizeViaPolicy } from "../policy-client.js";
 import { successResponse, errorResponse } from "../http.js";
-import { parseOrgPublicId, parseMemberPublicId, memberPublicId, orgPublicId } from "../ids.js";
+import { parseOrgPublicId, parseMemberPublicId, memberPublicId } from "../ids.js";
 
 export interface RemoveMemberDeps {
   repo: Pick<MembershipRepository, "listRoleAssignments" | "getMemberById" | "removeMember" | "countActiveOwners" | "revokeAllRoleAssignments">;
@@ -126,11 +126,11 @@ export async function handleRemoveMember(
             occurredAt: now,
             actorType: actor.subjectType,
             actorId: actor.subjectId,
-            orgId: orgPublicId(orgUuid),
+            orgId: orgUuid,
             subjectKind: "member",
-            subjectId: memberPublicId(memberUuid),
+            subjectId: memberUuid,
             requestId,
-            payload: { previousRoles, revokedRoleCount: revokedCount },
+            payload: { memberId: memberPublicId(memberUuid), previousRoles, revokedRoleCount: revokedCount },
           },
           audit: {
             id: genId(),
@@ -209,11 +209,11 @@ export async function handleRemoveMember(
           occurredAt: now,
           actorType: actor.subjectType,
           actorId: actor.subjectId,
-          orgId: orgPublicId(orgUuid),
+          orgId: orgUuid,
           subjectKind: "member",
-          subjectId: memberPublicId(memberUuid),
+          subjectId: memberUuid,
           requestId,
-          payload: { previousRoles, revokedRoleCount: revokedCount },
+          payload: { memberId: memberPublicId(memberUuid), previousRoles, revokedRoleCount: revokedCount },
         },
         audit: {
           id: genId(),
