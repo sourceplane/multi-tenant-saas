@@ -1,6 +1,6 @@
 {
   "goal": "Supabase/Postgres-backed multi-organization Orun SaaS control plane",
-  "current_task": "0034",
+  "current_task": null,
   "completed": [
     "0001",
     "0001.1",
@@ -40,22 +40,20 @@
     "0031",
     "0032",
     "0033",
-    "0034"
+    "0034",
+    "0035"
   ],
   "repo_health": "green",
-  "next_focus": "environment-runtime-create-list-get",
+  "next_focus": null,
   "last_verified": "2026-05-26",
   "waiting_for_input": "false",
-  "task_agent": "ai/tasks/task-0034-verifier.md",
+  "task_agent": null,
   "notes": [
-    "Task 0034 implementer prompt generated at ai/tasks/task-0034.md.",
-    "Task 0034 implementer report filed at ai/reports/task-0034-implementer.md.",
-    "Task 0034 PR #75 is open at codex/task-0034-environment-runtime-create-list-get.",
-    "PR #75 CI run 26431482114: 22/22 checks all SUCCESS.",
-    "Verifier task generated at ai/tasks/task-0034-verifier.md.",
-    "Task 0034 scope: POST/GET /v1/organizations/{orgId}/projects/{projectId}/environments and GET /v1/organizations/{orgId}/projects/{projectId}/environments/{environmentId}.",
-    "Task 0034 project-scoped environment.create policy semantics; existing environment.read for list/get.",
-    "Task 0034 environment creation writes environment.created event/audit atomically.",
-    "Task 0034 verification PASS: merged via PR #75 at 7e4dc5e. Verifier committed implementer report to PR branch before merge."
+    "Task 0034 verification PASS: PR #75 merged at 7e4dc5e. Verifier committed the implementer report before merge.",
+    "Task 0034 post-merge CI runs 26432854069 and 26432938193 passed.",
+    "Environment create/list/get is live through api-edge and projects-worker with env_ public IDs, project-scoped environment.create, environment.read list/get authorization, and atomic environment.created event/audit wiring.",
+    "Task 0035 verification PASS: PR #76 environment archive runtime implemented with 22 new tests, all existing tests passing (497 total).",
+    "Task 0035 scope: DELETE /v1/organizations/{orgId}/projects/{projectId}/environments/{environmentId} using project-scoped environment.delete policy action, soft archive via archiveEnvironment, api-edge forwarding, and atomic environment.archived event/audit wiring.",
+    "Task 0035 intentionally excludes environment update/restore, hard delete, migrations, infrastructure, public audit API, README cleanup, and specs-v2 work."
   ]
 }

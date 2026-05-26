@@ -1,6 +1,6 @@
 # Decisions
 
-Last updated: 2026-05-25
+Last updated: 2026-05-26
 
 ## Active Decisions
 
@@ -16,7 +16,7 @@ Last updated: 2026-05-25
 - Treat `../aws-admin` as the reference repo for Terraform-oriented Orun
   structure and backend behavior. Current code now uses Orun `v2.3.0` with
   `sourceplane/orun-action@v1.2.0`; Task 0009 verification accepted this as
-  repo reality. Task 0009.1 must align the active specs/context.
+  repo reality and Task 0009.1 aligned the active specs/context.
 - AWS IAM roles and shared Terraform state buckets are owned by `aws-admin`.
   `multi-tenant-saas` consumes the repo-scoped roles created there.
 - Terraform state for `multi-tenant-saas` uses the shared S3 buckets
@@ -112,6 +112,54 @@ Last updated: 2026-05-25
   atomic event+audit append via CTE and cursor-paginated audit queries. The
   `appendEventWithAudit` SQL uses `row_to_json` to return both CTE results in a
   single row (verified safe against PostgreSQL semantics).
+- Task 0029 establishes the live db-migrate ownership rule for migration-file
+  changes: `infra/db-migrate/component.yaml` must use
+  `spec.path: packages/db/src/migrations`; the previous `spec.paths` glob is
+  not honored by the current Orun changed-detection behavior.
+- `040_projects_core` is verified applied on both live Supabase projects via
+  main CI run `26389807233`; projects runtime work may now rely on the live
+  `projects.*` tables.
+- Non-membership workers must not query `membership.*` storage directly to
+  build policy context. When another bounded context needs policy-ready role
+  facts, add a membership-owned internal authorization-context seam rather than
+  coupling the caller to membership persistence.
+- Task 0030 establishes that membership-owned internal seam:
+  `POST /v1/internal/membership/authorization-context` on `membership-worker`
+  returns policy-ready `MembershipFact[]` for a subject and organization. It is
+  private, not exposed through api-edge, and future non-membership workers must
+  use it before calling policy-worker.
+- Malformed project-scoped role assignments must remain project-scoped and must
+  not fall back to organization-scoped policy facts.
+- Task 0031 establishes the first Projects runtime slice. `apps/projects-worker`
+  exposes project create and explicit project read through api-edge, uses the
+  membership authorization-context seam before policy-worker, persists through
+  `@saas/db/projects`, and writes `project.created` event/audit atomically with
+  project creation.
+- Public project IDs use `prj_` plus UUID hex, while raw UUIDs remain internal
+  for database and policy operations.
+- Task 0032 establishes project list as an explicit org-scoped `project.list`
+  policy action. Organization roles `owner`, `admin`, `builder`, and `viewer`
+  may list active projects in their organization; `billing_admin` and
+  project-scoped roles alone do not grant org-wide project listing.
+- `project.read` must continue requiring explicit `projectId`; do not reuse it
+  for organization-wide list authorization.
+- Task 0033 establishes project archival as a soft-delete operation through
+  `DELETE /v1/organizations/{orgId}/projects/{projectId}`. It uses existing
+  `project.delete` policy semantics with explicit `orgId + projectId`, calls
+  `archiveProject`, and emits `project.archived` event/audit atomically.
+- Task 0034 establishes the first environment runtime slice. Environment
+  create/list/get are exposed through api-edge and projects-worker under
+  explicit `orgId + projectId`. Creation uses distinct project-scoped
+  `environment.create`; list/get use existing project-scoped
+  `environment.read`; creation emits `environment.created` event/audit
+  atomically.
+- Environment public IDs use `env_` plus UUID hex, matching existing `org_` and
+  `prj_` boundary patterns.
+- Task 0035 establishes environment archival as a soft-delete operation through
+  `DELETE /v1/organizations/{orgId}/projects/{projectId}/environments/{environmentId}`.
+  A distinct project-scoped `environment.delete` action authorizes destructive
+  archival. The parent project must exist and be active; archival emits
+  `environment.archived` event/audit atomically. Verified PASS in PR #76.
 
 ## Pending Decisions
 
