@@ -7,6 +7,7 @@ import { handleArchiveProject } from "./handlers/archive-project.js";
 import { handleCreateEnvironment } from "./handlers/create-environment.js";
 import { handleListEnvironments } from "./handlers/list-environments.js";
 import { handleGetEnvironment } from "./handlers/get-environment.js";
+import { handleArchiveEnvironment } from "./handlers/archive-environment.js";
 import { errorResponse, notFound, methodNotAllowed } from "./http.js";
 import { generateRequestId, parseOrgPublicId, parseProjectPublicId, parseEnvironmentPublicId } from "./ids.js";
 
@@ -62,6 +63,13 @@ export async function route(request: Request, env: Env): Promise<Response> {
           return errorResponse("unauthenticated", "Authentication required", 401, requestId);
         }
         return handleGetEnvironment(env, requestId, actor, orgUuid, projectUuid, envUuid);
+      }
+      if (request.method === "DELETE") {
+        const actor = resolveActor(request);
+        if (!actor) {
+          return errorResponse("unauthenticated", "Authentication required", 401, requestId);
+        }
+        return handleArchiveEnvironment(env, requestId, actor, orgUuid, projectUuid, envUuid);
       }
       return methodNotAllowed(requestId);
     }

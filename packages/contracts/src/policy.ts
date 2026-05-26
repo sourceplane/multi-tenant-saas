@@ -102,6 +102,7 @@ export const ORGANIZATION_ACTIONS = [
   "environment.create",
   "environment.read",
   "environment.update",
+  "environment.delete",
   "billing.read",
   "billing.manage",
 ] as const;
