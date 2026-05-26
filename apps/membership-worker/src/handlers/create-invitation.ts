@@ -8,7 +8,7 @@ import { createMembershipRepository } from "@saas/db/membership";
 import { createEventsRepository } from "@saas/db/events";
 import { authorizeViaPolicy } from "../policy-client.js";
 import { successResponse, errorResponse, validationError } from "../http.js";
-import { parseOrgPublicId, invitationPublicId, orgPublicId, generateInvitationToken } from "../ids.js";
+import { parseOrgPublicId, invitationPublicId, generateInvitationToken } from "../ids.js";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const INVITATION_EXPIRY_DAYS = 7;
@@ -139,11 +139,11 @@ export async function handleCreateInvitation(
             occurredAt: now,
             actorType: actor.subjectType,
             actorId: actor.subjectId,
-            orgId: orgPublicId(orgUuid),
+            orgId: orgUuid,
             subjectKind: "invitation",
-            subjectId: invitationPublicId(invitationId),
+            subjectId: invitationId,
             requestId,
-            payload: { role: validRole, expiresAt: expiresAt.toISOString() },
+            payload: { invitationId: invitationPublicId(invitationId), role: validRole, expiresAt: expiresAt.toISOString() },
           },
           audit: {
             id: genId(),
@@ -212,11 +212,11 @@ export async function handleCreateInvitation(
           occurredAt: now,
           actorType: actor.subjectType,
           actorId: actor.subjectId,
-          orgId: orgPublicId(orgUuid),
+          orgId: orgUuid,
           subjectKind: "invitation",
-          subjectId: invitationPublicId(invitationId),
+          subjectId: invitationId,
           requestId,
-          payload: { role: validRole, expiresAt: expiresAt.toISOString() },
+          payload: { invitationId: invitationPublicId(invitationId), role: validRole, expiresAt: expiresAt.toISOString() },
         },
         audit: {
           id: genId(),

@@ -294,8 +294,11 @@ export function createEventsRepository(executor: SqlExecutor): EventsRepository 
 
     async queryAuditByOrg(orgId: string, params: EventsPageQueryParams, category?: string): Promise<EventsResult<EventsPagedResult<StoredAuditEntry>>> {
       try {
-        const baseParams: unknown[] = [orgId];
-        let paramIndex = 2;
+        // Support both raw UUID and legacy public org_ ID format.
+        // Legacy membership audit rows stored org_id as "org_<hex>" instead of raw UUID.
+        const legacyOrgId = `org_${orgId.replace(/-/g, "")}`;
+        const baseParams: unknown[] = [orgId, legacyOrgId];
+        let paramIndex = 3;
 
         let categoryClause = "";
         if (category) {
@@ -313,7 +316,7 @@ export function createEventsRepository(executor: SqlExecutor): EventsRepository 
 
         const result = await executor.execute<Record<string, unknown>>(
           `SELECT * FROM events.audit_entries
-           WHERE org_id = $1${categoryClause}${clause}
+           WHERE org_id IN ($1, $2)${categoryClause}${clause}
            ORDER BY occurred_at DESC, id DESC
            LIMIT $${limitParam}`,
           allParams,

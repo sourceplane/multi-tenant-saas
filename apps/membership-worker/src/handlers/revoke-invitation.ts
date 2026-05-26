@@ -7,7 +7,7 @@ import { createMembershipRepository } from "@saas/db/membership";
 import { createEventsRepository } from "@saas/db/events";
 import { authorizeViaPolicy } from "../policy-client.js";
 import { successResponse, errorResponse } from "../http.js";
-import { parseOrgPublicId, parseInvitationPublicId, invitationPublicId, orgPublicId } from "../ids.js";
+import { parseOrgPublicId, parseInvitationPublicId, invitationPublicId } from "../ids.js";
 
 export interface RevokeInvitationDeps {
   repo: Pick<MembershipRepository, "listRoleAssignments" | "revokeInvitation">;
@@ -99,11 +99,11 @@ export async function handleRevokeInvitation(
             occurredAt: now,
             actorType: actor.subjectType,
             actorId: actor.subjectId,
-            orgId: orgPublicId(orgUuid),
+            orgId: orgUuid,
             subjectKind: "invitation",
-            subjectId: invitationPublicId(invUuid),
+            subjectId: invUuid,
             requestId,
-            payload: { role: revokeResult.value.role },
+            payload: { invitationId: invitationPublicId(invUuid), role: revokeResult.value.role },
           },
           audit: {
             id: genId(),
@@ -162,11 +162,11 @@ export async function handleRevokeInvitation(
           occurredAt: now,
           actorType: actor.subjectType,
           actorId: actor.subjectId,
-          orgId: orgPublicId(orgUuid),
+          orgId: orgUuid,
           subjectKind: "invitation",
-          subjectId: invitationPublicId(invUuid),
+          subjectId: invUuid,
           requestId,
-          payload: { role: revokeResult.value.role },
+          payload: { invitationId: invitationPublicId(invUuid), role: revokeResult.value.role },
         },
         audit: {
           id: genId(),

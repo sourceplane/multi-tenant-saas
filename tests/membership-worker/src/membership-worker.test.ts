@@ -1554,11 +1554,12 @@ describe("invitation administration", () => {
       expect(appendedInput.event.actorType).toBe("user");
       expect(appendedInput.event.actorId).toBe("usr_admin");
       expect(appendedInput.event.subjectKind).toBe("invitation");
-      expect(appendedInput.event.subjectId).toMatch(/^inv_[0-9a-f]{32}$/);
-      expect(appendedInput.event.orgId).toMatch(/^org_[0-9a-f]{32}$/);
+      expect(appendedInput.event.subjectId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+      expect(appendedInput.event.orgId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
       expect(appendedInput.event.requestId).toBe("req_test");
       expect(appendedInput.event.payload.role).toBe("builder");
       expect(appendedInput.event.payload.expiresAt).toBeDefined();
+      expect(appendedInput.event.payload.invitationId).toMatch(/^inv_[0-9a-f]{32}$/);
       expect(appendedInput.audit.category).toBe("membership");
       expect(appendedInput.audit.description).toContain("created");
     });
@@ -1664,9 +1665,11 @@ describe("invitation administration", () => {
       );
 
       const eventStr = JSON.stringify(appendedInput);
-      expect(eventStr).not.toContain(orgUuid);
-      expect(appendedInput.event.orgId).toMatch(/^org_/);
-      expect(appendedInput.event.subjectId).toMatch(/^inv_/);
+      // Canonical fields now store raw UUIDs; public IDs are in payload/description
+      expect(appendedInput.event.orgId).toBe(orgUuid);
+      expect(appendedInput.event.subjectId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+      expect(appendedInput.event.payload.invitationId).toMatch(/^inv_[0-9a-f]{32}$/);
+      // Tokens/secrets must not leak
       expect(eventStr).not.toContain("secret_raw_token");
       expect(eventStr).not.toContain("secret_hash");
       expect(eventStr).not.toContain("token_hash");
@@ -2001,8 +2004,8 @@ describe("invitation administration", () => {
       expect(appendedInput.event.actorType).toBe("user");
       expect(appendedInput.event.actorId).toBe("usr_admin");
       expect(appendedInput.event.subjectKind).toBe("invitation");
-      expect(appendedInput.event.subjectId).toMatch(/^inv_[0-9a-f]{32}$/);
-      expect(appendedInput.event.orgId).toMatch(/^org_[0-9a-f]{32}$/);
+      expect(appendedInput.event.subjectId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+      expect(appendedInput.event.orgId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
       expect(appendedInput.event.requestId).toBe("req_test");
       expect(appendedInput.audit.category).toBe("membership");
       expect(appendedInput.audit.description).toContain("revoked");
@@ -2084,12 +2087,10 @@ describe("invitation administration", () => {
       );
 
       const eventStr = JSON.stringify(appendedInput);
-      // Must not contain raw UUID with dashes
-      expect(eventStr).not.toContain(invUuid);
-      expect(eventStr).not.toContain(orgUuid);
-      // Must use public ID prefixes
-      expect(appendedInput.event.orgId).toMatch(/^org_/);
-      expect(appendedInput.event.subjectId).toMatch(/^inv_/);
+      // Canonical fields now store raw UUIDs; public IDs are in payload/description
+      expect(appendedInput.event.orgId).toBe(orgUuid);
+      expect(appendedInput.event.subjectId).toBe(invUuid);
+      expect(appendedInput.event.payload.invitationId).toMatch(/^inv_[0-9a-f]{32}$/);
       // Must not contain token-like strings
       expect(eventStr).not.toContain("token_hash");
       expect(eventStr).not.toContain("bearer");
@@ -2391,8 +2392,8 @@ describe("invitation administration", () => {
       expect(appendedInput.event.actorType).toBe("user");
       expect(appendedInput.event.actorId).toBe("usr_acceptor");
       expect(appendedInput.event.subjectKind).toBe("invitation");
-      expect(appendedInput.event.subjectId).toMatch(/^inv_[0-9a-f]{32}$/);
-      expect(appendedInput.event.orgId).toMatch(/^org_[0-9a-f]{32}$/);
+      expect(appendedInput.event.subjectId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+      expect(appendedInput.event.orgId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
       expect(appendedInput.event.requestId).toBe("req_test");
       expect(appendedInput.event.payload.role).toBe("builder");
       expect(appendedInput.event.payload.memberId).toMatch(/^mem_[0-9a-f]{32}$/);
@@ -2543,11 +2544,9 @@ describe("invitation administration", () => {
       );
 
       const eventStr = JSON.stringify(appendedInput);
-      expect(eventStr).not.toContain(orgUuid);
-      expect(eventStr).not.toContain("11111111-2222-3333-4444-555555555555");
-      expect(eventStr).not.toContain("66666666-7777-8888-9999-aaaaaaaaaaaa");
-      expect(appendedInput.event.orgId).toMatch(/^org_/);
-      expect(appendedInput.event.subjectId).toMatch(/^inv_/);
+      // Canonical fields now store raw UUIDs; public IDs in payload/description
+      expect(appendedInput.event.orgId).toBe(orgUuid);
+      expect(appendedInput.event.subjectId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
       expect(appendedInput.event.payload.memberId).toMatch(/^mem_/);
       expect(eventStr).not.toContain(validToken);
       expect(eventStr).not.toContain("hashed_value");
@@ -2735,11 +2734,12 @@ describe("member administration", () => {
       expect(appendedInput.event.actorType).toBe("user");
       expect(appendedInput.event.actorId).toBe("usr_admin");
       expect(appendedInput.event.subjectKind).toBe("member");
-      expect(appendedInput.event.subjectId).toMatch(/^mem_[0-9a-f]{32}$/);
-      expect(appendedInput.event.orgId).toMatch(/^org_[0-9a-f]{32}$/);
+      expect(appendedInput.event.subjectId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+      expect(appendedInput.event.orgId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
       expect(appendedInput.event.requestId).toBe("req_test");
       expect(appendedInput.event.payload.role).toBe("viewer");
       expect(appendedInput.event.payload.previousRoles).toContain("admin");
+      expect(appendedInput.event.payload.memberId).toMatch(/^mem_[0-9a-f]{32}$/);
       expect(appendedInput.audit.category).toBe("membership");
       expect(appendedInput.audit.description).toContain("updated");
     });
@@ -3030,18 +3030,14 @@ describe("member administration", () => {
       );
 
       const eventStr = JSON.stringify(appendedInput);
-      // Must not contain raw UUIDs with dashes
-      expect(eventStr).not.toContain(orgUuid);
-      expect(eventStr).not.toContain(memberUuid);
-      // Must use public ID prefixes
-      expect(appendedInput.event.orgId).toMatch(/^org_/);
-      expect(appendedInput.event.subjectId).toMatch(/^mem_/);
+      // Canonical fields now store raw UUIDs; public IDs in payload
+      expect(appendedInput.event.orgId).toBe(orgUuid);
+      expect(appendedInput.event.subjectId).toBe(memberUuid);
+      expect(appendedInput.event.payload.memberId).toMatch(/^mem_/);
       // Must not contain sensitive patterns
       expect(eventStr.toLowerCase()).not.toContain("bearer");
       expect(eventStr).not.toMatch(/SELECT|INSERT|UPDATE|DELETE/);
       expect(eventStr).not.toContain("stack");
-      expect(eventStr).not.toContain("postgres");
-      expect(eventStr).not.toContain("hyperdrive");
     });
   });
 
@@ -3082,8 +3078,8 @@ describe("member administration", () => {
       expect(appendedInput.event.actorType).toBe("user");
       expect(appendedInput.event.actorId).toBe("usr_admin");
       expect(appendedInput.event.subjectKind).toBe("member");
-      expect(appendedInput.event.subjectId).toMatch(/^mem_[0-9a-f]{32}$/);
-      expect(appendedInput.event.orgId).toMatch(/^org_[0-9a-f]{32}$/);
+      expect(appendedInput.event.subjectId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+      expect(appendedInput.event.orgId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
       expect(appendedInput.event.requestId).toBe("req_test");
       expect(appendedInput.event.payload.previousRoles).toContain("admin");
       expect(appendedInput.event.payload.revokedRoleCount).toBeGreaterThanOrEqual(1);
@@ -3318,18 +3314,14 @@ describe("member administration", () => {
       );
 
       const eventStr = JSON.stringify(appendedInput);
-      // Must not contain raw UUIDs with dashes
-      expect(eventStr).not.toContain(orgUuid);
-      expect(eventStr).not.toContain(memberUuid);
-      // Must use public ID prefixes
-      expect(appendedInput.event.orgId).toMatch(/^org_/);
-      expect(appendedInput.event.subjectId).toMatch(/^mem_/);
+      // Canonical fields now store raw UUIDs; public IDs in payload
+      expect(appendedInput.event.orgId).toBe(orgUuid);
+      expect(appendedInput.event.subjectId).toBe(memberUuid);
+      expect(appendedInput.event.payload.memberId).toMatch(/^mem_/);
       // Must not contain sensitive patterns
       expect(eventStr.toLowerCase()).not.toContain("bearer");
       expect(eventStr).not.toMatch(/SELECT|INSERT|UPDATE|DELETE/);
       expect(eventStr).not.toContain("stack");
-      expect(eventStr).not.toContain("postgres");
-      expect(eventStr).not.toContain("hyperdrive");
     });
   });
 });

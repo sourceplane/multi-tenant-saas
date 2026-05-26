@@ -321,11 +321,13 @@ describe("events repository: queryAuditByOrg", () => {
       expect(result.value.items).toHaveLength(2);
       expect(result.value.nextCursor).toBeNull();
     }
-    expect(queries[0]!.text).toContain("WHERE org_id = $1");
+    expect(queries[0]!.text).toContain("WHERE org_id IN ($1, $2)");
     expect(queries[0]!.text).toContain("ORDER BY occurred_at DESC, id DESC");
     expect(queries[0]!.params[0]).toBe("org-001");
+    // Legacy org_ format for backward compatibility
+    expect(queries[0]!.params[1]).toBe("org_org001");
     // limit + 1 to detect next page
-    expect(queries[0]!.params[1]).toBe(11);
+    expect(queries[0]!.params[2]).toBe(11);
   });
 
   it("returns nextCursor when more items exist", async () => {
@@ -356,9 +358,9 @@ describe("events repository: queryAuditByOrg", () => {
       cursor: { occurredAt: "2026-01-15T09:00:00Z", id: "aud-005" },
     });
 
-    expect(queries[0]!.text).toContain("(occurred_at, id) < ($3, $4)");
-    expect(queries[0]!.params[2]).toBe("2026-01-15T09:00:00Z");
-    expect(queries[0]!.params[3]).toBe("aud-005");
+    expect(queries[0]!.text).toContain("(occurred_at, id) < ($4, $5)");
+    expect(queries[0]!.params[3]).toBe("2026-01-15T09:00:00Z");
+    expect(queries[0]!.params[4]).toBe("aud-005");
   });
 
   it("filters by category when provided", async () => {
@@ -367,10 +369,11 @@ describe("events repository: queryAuditByOrg", () => {
 
     await repo.queryAuditByOrg("org-001", { limit: 10, cursor: null }, "membership");
 
-    expect(queries[0]!.text).toContain("category = $2");
+    expect(queries[0]!.text).toContain("category = $3");
     expect(queries[0]!.params[0]).toBe("org-001");
-    expect(queries[0]!.params[1]).toBe("membership");
-    expect(queries[0]!.params[2]).toBe(11);
+    expect(queries[0]!.params[1]).toBe("org_org001");
+    expect(queries[0]!.params[2]).toBe("membership");
+    expect(queries[0]!.params[3]).toBe(11);
   });
 
   it("applies both category and cursor conditions", async () => {
@@ -382,13 +385,14 @@ describe("events repository: queryAuditByOrg", () => {
       cursor: { occurredAt: "2026-01-15T09:00:00Z", id: "aud-010" },
     }, "projects");
 
-    expect(queries[0]!.text).toContain("category = $2");
-    expect(queries[0]!.text).toContain("(occurred_at, id) < ($4, $5)");
+    expect(queries[0]!.text).toContain("category = $3");
+    expect(queries[0]!.text).toContain("(occurred_at, id) < ($5, $6)");
     expect(queries[0]!.params[0]).toBe("org-001");
-    expect(queries[0]!.params[1]).toBe("projects");
-    expect(queries[0]!.params[2]).toBe(6);
-    expect(queries[0]!.params[3]).toBe("2026-01-15T09:00:00Z");
-    expect(queries[0]!.params[4]).toBe("aud-010");
+    expect(queries[0]!.params[1]).toBe("org_org001");
+    expect(queries[0]!.params[2]).toBe("projects");
+    expect(queries[0]!.params[3]).toBe(6);
+    expect(queries[0]!.params[4]).toBe("2026-01-15T09:00:00Z");
+    expect(queries[0]!.params[5]).toBe("aud-010");
   });
 
   it("does not add category clause when category is undefined", async () => {
@@ -484,5 +488,17 @@ describe("events repository: JSON handling", () => {
     if (result.ok) {
       expect(result.value.items[0]!.redactPaths).toEqual(["$.payload.secret", "$.payload.token"]);
     }
+  });
+
+  it("queries both raw UUID and legacy org_ format for backward compatibility", async () => {
+    const { executor, queries } = createFakeExecutor({ rows: [] });
+    const repo = createEventsRepository(executor);
+
+    await repo.queryAuditByOrg("a1b2c3d4-e5f6-7890-abcd-ef1234567890", { limit: 10, cursor: null });
+
+    // Must use IN clause with both formats
+    expect(queries[0]!.text).toContain("WHERE org_id IN ($1, $2)");
+    expect(queries[0]!.params[0]).toBe("a1b2c3d4-e5f6-7890-abcd-ef1234567890");
+    expect(queries[0]!.params[1]).toBe("org_a1b2c3d4e5f67890abcdef1234567890");
   });
 });

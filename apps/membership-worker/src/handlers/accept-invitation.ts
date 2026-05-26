@@ -5,7 +5,7 @@ import { createSqlExecutor } from "@saas/db/hyperdrive";
 import { createMembershipRepository } from "@saas/db/membership";
 import { createEventsRepository } from "@saas/db/events";
 import { successResponse, errorResponse, validationError } from "../http.js";
-import { parseOrgPublicId, invitationPublicId, memberPublicId, orgPublicId, hashToken } from "../ids.js";
+import { parseOrgPublicId, invitationPublicId, memberPublicId, hashToken } from "../ids.js";
 
 export interface AcceptActorContext {
   subjectId: string;
@@ -114,11 +114,11 @@ export async function handleAcceptInvitation(
             occurredAt: now,
             actorType: actor.subjectType,
             actorId: actor.subjectId,
-            orgId: orgPublicId(orgUuid),
+            orgId: orgUuid,
             subjectKind: "invitation",
-            subjectId: invitationPublicId(inv.id),
+            subjectId: inv.id,
             requestId,
-            payload: { role: inv.role, memberId: memberPublicId(member.id) },
+            payload: { invitationId: invitationPublicId(inv.id), role: inv.role, memberId: memberPublicId(member.id) },
           },
           audit: {
             id: genId(),
@@ -219,11 +219,11 @@ export async function handleAcceptInvitation(
           occurredAt: now,
           actorType: actor.subjectType,
           actorId: actor.subjectId,
-          orgId: orgPublicId(orgUuid),
+          orgId: orgUuid,
           subjectKind: "invitation",
-          subjectId: invitationPublicId(inv.id),
+          subjectId: inv.id,
           requestId,
-          payload: { role: inv.role, memberId: memberPublicId(member.id) },
+          payload: { invitationId: invitationPublicId(inv.id), role: inv.role, memberId: memberPublicId(member.id) },
         },
         audit: {
           id: genId(),

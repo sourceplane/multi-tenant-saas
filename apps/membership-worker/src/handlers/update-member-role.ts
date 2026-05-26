@@ -8,7 +8,7 @@ import { createEventsRepository } from "@saas/db/events";
 import { ORGANIZATION_ROLES } from "@saas/contracts/membership";
 import { authorizeViaPolicy } from "../policy-client.js";
 import { successResponse, errorResponse, validationError } from "../http.js";
-import { parseOrgPublicId, parseMemberPublicId, memberPublicId, orgPublicId } from "../ids.js";
+import { parseOrgPublicId, parseMemberPublicId, memberPublicId } from "../ids.js";
 
 export interface UpdateMemberRoleDeps {
   repo: Pick<MembershipRepository, "listRoleAssignments" | "getMemberById" | "countActiveOwners" | "revokeAllRoleAssignments" | "createRoleAssignment">;
@@ -160,11 +160,11 @@ export async function handleUpdateMemberRole(
             occurredAt: now,
             actorType: actor.subjectType,
             actorId: actor.subjectId,
-            orgId: orgPublicId(orgUuid),
+            orgId: orgUuid,
             subjectKind: "member",
-            subjectId: memberPublicId(memberUuid),
+            subjectId: memberUuid,
             requestId,
-            payload: { previousRoles, role },
+            payload: { memberId: memberPublicId(memberUuid), previousRoles, role },
           },
           audit: {
             id: genId(),
@@ -282,11 +282,11 @@ export async function handleUpdateMemberRole(
           occurredAt: now,
           actorType: actor.subjectType,
           actorId: actor.subjectId,
-          orgId: orgPublicId(orgUuid),
+          orgId: orgUuid,
           subjectKind: "member",
-          subjectId: memberPublicId(memberUuid),
+          subjectId: memberUuid,
           requestId,
-          payload: { previousRoles, role },
+          payload: { memberId: memberPublicId(memberUuid), previousRoles, role },
         },
         audit: {
           id: genId(),
