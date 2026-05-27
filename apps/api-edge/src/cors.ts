@@ -1,10 +1,15 @@
 import type { Env } from "./env";
 
-const ALLOWED_ORIGINS = [
-  "https://sourceplane-web-console.pages.dev",
+const STAGE_ORIGINS = [
+  "https://sourceplane-web-console-stage.pages.dev",
 ];
 
-const PAGES_PREVIEW_RE = /^https:\/\/[a-z0-9-]+\.sourceplane-web-console\.pages\.dev$/;
+const PROD_ORIGINS = [
+  "https://sourceplane-web-console-prod.pages.dev",
+];
+
+const STAGE_PREVIEW_RE = /^https:\/\/[a-z0-9-]+\.sourceplane-web-console-stage\.pages\.dev$/;
+const PROD_PREVIEW_RE = /^https:\/\/[a-z0-9-]+\.sourceplane-web-console-prod\.pages\.dev$/;
 const LOCALHOST_RE = /^https?:\/\/localhost(:\d+)?$/;
 const VITE_DEV_RE = /^https?:\/\/127\.0\.0\.1(:\d+)?$/;
 
@@ -23,12 +28,31 @@ const EXPOSED_HEADERS = [
 const ALLOWED_METHODS = "GET, POST, PUT, PATCH, DELETE, OPTIONS";
 const MAX_AGE = "86400";
 
-export function isAllowedOrigin(origin: string | null, _env: Env): boolean {
+export function isAllowedOrigin(origin: string | null, env: Env): boolean {
   if (!origin) return false;
-  if (ALLOWED_ORIGINS.includes(origin)) return true;
-  if (PAGES_PREVIEW_RE.test(origin)) return true;
+
   if (LOCALHOST_RE.test(origin)) return true;
   if (VITE_DEV_RE.test(origin)) return true;
+
+  const environment = env.ENVIRONMENT;
+
+  if (environment === "stage") {
+    if (STAGE_ORIGINS.includes(origin)) return true;
+    if (STAGE_PREVIEW_RE.test(origin)) return true;
+    return false;
+  }
+
+  if (environment === "prod") {
+    if (PROD_ORIGINS.includes(origin)) return true;
+    if (PROD_PREVIEW_RE.test(origin)) return true;
+    return false;
+  }
+
+  if (STAGE_ORIGINS.includes(origin)) return true;
+  if (PROD_ORIGINS.includes(origin)) return true;
+  if (STAGE_PREVIEW_RE.test(origin)) return true;
+  if (PROD_PREVIEW_RE.test(origin)) return true;
+
   return false;
 }
 
