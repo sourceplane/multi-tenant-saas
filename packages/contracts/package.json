@@ -12,7 +12,8 @@
     "./membership": "./src/membership.ts",
     "./policy": "./src/policy.ts",
     "./projects": "./src/projects.ts",
-    "./events": "./src/events.ts"
+    "./events": "./src/events.ts",
+    "./security-events": "./src/security-events.ts"
   },
   "scripts": {
     "build": "tsc --project tsconfig.build.json",
