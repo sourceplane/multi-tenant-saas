@@ -1,6 +1,6 @@
 # Current Context
 
-Last updated: 2026-05-27
+Last updated: 2026-05-27 (Task 0045 scoped)
 
 ## Repo Reality
 
@@ -219,40 +219,34 @@ Last updated: 2026-05-27
 ## Current Task
 
 **Task 0042 (Verifier) — COMPLETE ✅**
+|- PR #85 (`codex/task-0042-cloudflare-custom-domains`), squash-merged at `d0d5c6e`
+|- Post-merge CI run 26518889622: all 22 jobs PASS
+|- Cloudflare custom domains live: stage.sourceplane.ai, prod.sourceplane.ai
+|- Intent.yaml domain config single source of truth
 
-- Prompt: `ai/tasks/task-0042.md`
-- Verifier prompt: `ai/tasks/task-0042-verifier.md`
-- PR #85 (`codex/task-0042-cloudflare-custom-domains`) **MERGED** at
-  commit `d0d5c6e` (2026-05-27T14:51:08Z).
-- PR URL: `https://github.com/sourceplane/multi-tenant-saas/pull/85`
-- All 22 PR CI checks passed in run `26501416473`.
-- Post-merge main CI run **26518889622** **COMPLETED** with conclusion=success
-  (22/22 jobs).
-- Cloudflare infrastructure deployed:
-  - `cloudflare-domain · stage · Terraform`: ✅ (14:53:12)
-  - `cloudflare-domain · prod · Terraform`: ✅ (14:53:54)
-- Cloudflare Pages deployments live:
-  - Stage: `https://ba5d2c65.sourceplane-web-console-stage.pages.dev`
-    (d0d5c6e, 2 min ago)
-  - Prod: `https://f774baf3.sourceplane-web-console-prod.pages.dev`
-    (d0d5c6e, 2 min ago)
-- Implementer report: `ai/reports/task-0042-implementer.md`
-- Verifier report: `ai/reports/task-0042-verifier.md` (final)
-- Custom domain config:
-  - Stage: `stage.sourceplane.ai`
-  - Prod: `prod.sourceplane.ai`
-  - Base domain: `sourceplane.ai` (existing Cloudflare zone, no new zone created)
-- Intent.yaml is the single domain source of truth: all domain configuration
-  flows from `intent.yaml` environment variables (`BASE_DOMAIN`,
-  `CONSOLE_CUSTOM_DOMAIN`) to all consuming components (api-edge Worker,
-  Terraform domain component).
-- CORS integration verified: api-edge reads `CONSOLE_CUSTOM_DOMAIN` from
-  environment for origin validation. 189 CORS tests passing.
-- Terraform resources match locked provider schema.
-- **Acceptance criteria**: All met. PR merged, CI passed, Terraform applied
-  to stage/prod, Pages deployed, custom domain configuration live.
+**Task 0043 (Verifier) — COMPLETE ✅**
+|- PR #86 (`codex/task-0043-identity-security-events-persistence`), squash-merged at `4739306`
+|- Identity security-event source persistence foundation: `identity.security_events` table, repository methods
+|- Pre-organization, user-scoped design (no org_id)
+|- 310 tests pass, cursor pagination with comprehensive secret-safety coverage
+|- Post-merge CI PASS
 
-Task 0041 was completed by PR #82 and subsequent hotfixes. The web-console
-live endpoints are accessible via Cloudflare Pages (stage/prod).
+**Task 0044 (Verifier) — COMPLETE ✅**
+|- PR #87 (`codex/task-0044-identity-runtime-security-events`), squash-merged at `769de5d`
+|- Auth runtime flows wired to security-event recording
+|- `login.challenge.created`, `session.created`, `login.complete.failed`, `session.revoked` events
+|- Request context extracted (IP, user-agent, requestId) and threaded through auth service
+|- No secret leakage: codes, hashes, tokens not stored
+|- 59 tests pass with happy path + failed attempts + secret-safety assertions
+|- Post-merge CI PASS
 
-**Next phase**: Identity security-event implementation (Task 0043+).
+**Task 0045 (Implementer) — SCOPED 🔄**
+|- Prompt: `ai/tasks/task-0045.md`
+|- Branch: `codex/task-0045-identity-security-events-query`
+|- Objective: expose authenticated `GET /v1/auth/security-events` over the existing identity-owned, user-scoped security-event persistence seam.
+|- PR boundary: `@saas/contracts` response types, identity-worker handler/router + pagination validation + safe response mapping, api-edge auth-facade forwarding, and focused api-edge/identity-worker tests.
+|- Constraints: keep history pre-organization and user-scoped, preserve `/v1` success/error envelope and cursor-pagination rules, redact sensitive metadata, and avoid API keys/account settings/web-console/org-audit-copy scope.
+|- Acceptance focus: authenticated self-only list route, opaque cursor pagination, `validation_failed` for invalid `limit`/`cursor`, redacted metadata, and no new migrations.
+|- Latest repo state used for scoping: branch `main`, no open PRs, latest main CI run `26542526959` passed.
+
+Next phase: Implementer executes Task 0045; likely follow-on after this route is stable is account-security UI or adjacent account/security management surface.

@@ -1,6 +1,6 @@
 {
   "goal": "Supabase/Postgres-backed multi-organization Orun SaaS control plane",
-  "current_task": "0041",
+  "current_task": "0045",
   "completed": [
     "0001",
     "0001.1",
@@ -46,21 +46,23 @@
     "0037",
     "0038",
     "0039",
-    "0040"
+    "0040",
+    "0041",
+    "0042",
+    "0043",
+    "0044"
   ],
   "repo_health": "green",
-  "next_focus": "verify-task-0041",
-  "last_verified": "2026-05-27T05:00Z",
+  "next_focus": "identity-security-events-query-surface",
+  "last_verified": "2026-05-27T22:59Z",
   "waiting_for_input": "false",
-  "task_agent": "/ai/tasks/task-0041-verifier.md",
+  "task_agent": "ai/tasks/task-0045.md",
   "notes": [
-    "Task 0040 PASS: PR #81 merged at 9740ca1. Web-console live-test UI and api-edge CORS deployed to stage and prod.",
-    "Post-merge main CI run 26489581397: 20/20 jobs PASS.",
-    "Live stage: full end-to-end flow verified (login, org create, project create, env create, audit, archive, logout).",
-    "Live prod: health OK, CORS preflight OK, login/start returns delivery.mode=email with no debug code, Pages console loads deployed bundle.",
-    "Stage test resources archived: org_b9686b1b61e94009a48f7fc318dd2824 (verifier-0040-test), prj_a6674d7df07c4bb99a6804bf12fb35b4, env_0a558643ea314a3c9f75e13a75b86eb0.",
-    "Identity security-event implementation remains deferred. Next focus TBD by orchestrator.",
-    "Node.js 20 deprecation warning in CI — actions need update before September 2026 runner cutoff.",
-    "Human requested separate stage/prod web-console deployments with different URLs. Task 0041 emitted to split the single sourceplane-web-console Pages deployment into sourceplane-web-console-stage and sourceplane-web-console-prod, with environment-bound builds and CORS."
+    "Task 0042 COMPLETE ✅: PR #85 merged at d0d5c6e. Cloudflare custom domains (stage.sourceplane.ai, prod.sourceplane.ai) deployed via infrastructure. Post-merge CI 26518889622: 22/22 jobs PASS.",
+    "Task 0043 COMPLETE ✅: PR #86 merged at 4739306. Identity security-event source persistence foundation (identity.security_events table, recordSecurityEvent/querySecurityEventsByUser methods, 310 tests). Post-merge CI PASS.",
+    "Task 0044 COMPLETE ✅: PR #87 merged at 769de5d. Identity auth runtime security-event recording (login flows, logout, session revocation wired to record events without secret leakage). Post-merge CI PASS.",
+    "Task 0045 SCOPED: authenticated GET /v1/auth/security-events public query surface over existing identity-owned security-event persistence.",
+    "Scope includes contracts, identity-worker handler/router, api-edge forwarding, cursor pagination, and focused redaction/query tests.",
+    "Non-goals: API keys, account settings/profile, org-scoped audit copies, web-console UI, and new migrations."
   ]
 }

@@ -6,6 +6,7 @@ const AUTH_ROUTES: Record<string, string> = {
   "/v1/auth/login/complete": "POST",
   "/v1/auth/session": "GET",
   "/v1/auth/logout": "POST",
+  "/v1/auth/security-events": "GET",
 };
 
 const FORWARDED_HEADERS = [

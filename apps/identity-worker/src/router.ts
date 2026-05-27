@@ -4,6 +4,7 @@ import { handleLoginStart } from "./handlers/login-start.js";
 import { handleLoginComplete } from "./handlers/login-complete.js";
 import { handleSession } from "./handlers/session.js";
 import { handleLogout } from "./handlers/logout.js";
+import { handleSecurityEvents } from "./handlers/security-events.js";
 import { errorResponse, notFound, methodNotAllowed } from "./http.js";
 import { generateRequestId } from "./ids.js";
 
@@ -42,6 +43,11 @@ export async function route(request: Request, env: Env): Promise<Response> {
     if (url.pathname === "/v1/auth/logout") {
       if (request.method !== "POST") return methodNotAllowed(requestId);
       return handleLogout(request, env, requestId);
+    }
+
+    if (url.pathname === "/v1/auth/security-events") {
+      if (request.method !== "GET") return methodNotAllowed(requestId);
+      return handleSecurityEvents(request, env, requestId);
     }
 
     return notFound(requestId, url.pathname);
