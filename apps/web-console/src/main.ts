@@ -1,4 +1,4 @@
-import { TARGETS } from "./api";
+import { TARGETS, IS_LOCKED } from "./api";
 import "./style.css";
 import {
   createState,
@@ -60,21 +60,6 @@ function renderHeader(): HTMLElement {
 
   const title = h("div", { class: "header-left" }, h("strong", {}, "Sourceplane Console"));
 
-  const targetSelect = document.createElement("select");
-  targetSelect.id = "target-select";
-  for (const t of TARGETS) {
-    const opt = document.createElement("option");
-    opt.value = t.name;
-    opt.textContent = `${t.name} — ${t.url}`;
-    if (t.name === state.target.name) opt.selected = true;
-    targetSelect.appendChild(opt);
-  }
-  targetSelect.addEventListener("change", () => {
-    const t = TARGETS.find((t) => t.name === targetSelect.value)!;
-    state = switchTarget(state, t);
-    render();
-  });
-
   const ctx = h("div", { class: "header-context" });
   ctx.appendChild(h("span", { class: `badge badge-${state.target.name}` }, state.target.name));
   if (state.authenticated) {
@@ -88,7 +73,25 @@ function renderHeader(): HTMLElement {
   }
 
   const right = h("div", { class: "header-right" });
-  right.appendChild(targetSelect);
+
+  if (!IS_LOCKED && TARGETS.length > 1) {
+    const targetSelect = document.createElement("select");
+    targetSelect.id = "target-select";
+    for (const t of TARGETS) {
+      const opt = document.createElement("option");
+      opt.value = t.name;
+      opt.textContent = `${t.name} — ${t.url}`;
+      if (t.name === state.target.name) opt.selected = true;
+      targetSelect.appendChild(opt);
+    }
+    targetSelect.addEventListener("change", () => {
+      const t = TARGETS.find((t) => t.name === targetSelect.value)!;
+      state = switchTarget(state, t);
+      render();
+    });
+    right.appendChild(targetSelect);
+  }
+
   if (state.authenticated) {
     right.appendChild(btn("Logout", handleLogout, "btn-sm btn-danger"));
   }

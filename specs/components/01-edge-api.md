@@ -119,3 +119,17 @@ It must not become a business database.
 ## Extraction Seam
 
 `api-edge` remains the stable public facade even if domain services leave the monorepo. Its job is to shield clients from infrastructure movement.
+
+## CORS Policy
+
+The API edge enforces an environment-aware CORS allowlist. Each deployed
+`api-edge` environment allows only the matching web-console origin:
+
+| API Environment | Allowed Console Origins |
+|----------------|-------------------------|
+| stage | `https://sourceplane-web-console-stage.pages.dev`, stage preview subdomains, localhost |
+| prod | `https://sourceplane-web-console-prod.pages.dev`, prod preview subdomains, localhost |
+
+Cross-environment requests (e.g. stage console calling prod API) are rejected.
+Localhost and 127.0.0.1 are allowed in all environments for local development.
+Wildcard origins are never used.

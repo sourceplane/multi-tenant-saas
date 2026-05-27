@@ -2,7 +2,7 @@ apiVersion: sourceplane.io/v1
 kind: Component
 metadata:
   name: web-console
-  description: Cloudflare Pages App for the Sourceplane web console
+  description: Cloudflare Pages App for the Sourceplane web console (per-environment)
 spec:
   type: cloudflare-pages-turbo
   domain: starter-ui
@@ -36,10 +36,13 @@ spec:
     projectName: sourceplane-web-console
     deployBranch: main
 
+    environmentAwareProjectName: true
+    environmentBuildVar: VITE_DEPLOY_ENV
+
     installCommand: pnpm install --frozen-lockfile
     buildCommand: pnpm exec turbo run build --filter=@saas/web-console
 
-    smokeCommand: "curl -sf https://sourceplane-web-console.pages.dev/ | grep -q 'Sourceplane Console' && curl -sf https://api-edge-stage.rahulvarghesepullely.workers.dev/health | grep -q ok && curl -sf https://api-edge-prod.rahulvarghesepullely.workers.dev/health | grep -q ok"
+    smokeCommand: "curl -sf https://${EFFECTIVE_PROJECT_NAME}.pages.dev/ | grep -q 'Sourceplane Console' && curl -sf https://api-edge-${ORUN_ENVIRONMENT}.rahulvarghesepullely.workers.dev/health | grep -q ok"
   labels:
     team: platform
     layer: delivery

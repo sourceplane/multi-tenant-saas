@@ -92,3 +92,20 @@ Provide the usable SaaS starter console for humans without creating a second, UI
 ## Extraction Seam
 
 The web console is a client of the platform, not part of the platform core. It must remain replaceable without changing domain contracts.
+
+## Deployment Model
+
+The web console is deployed as environment-specific Cloudflare Pages projects:
+
+- **Stage**: `sourceplane-web-console-stage` at `https://sourceplane-web-console-stage.pages.dev/`
+- **Prod**: `sourceplane-web-console-prod` at `https://sourceplane-web-console-prod.pages.dev/`
+
+Each deployed console is locked to a single API edge environment at build time
+via the `VITE_DEPLOY_ENV` variable. The stage console calls only the stage
+`api-edge`; the prod console calls only the prod `api-edge`. Cross-environment
+target switching is available only during local development and is stripped from
+deployed builds.
+
+The `cloudflare-pages-turbo` composition supports this via
+`environmentAwareProjectName: true`, which appends the Orun environment name as
+a suffix to the base `projectName`.

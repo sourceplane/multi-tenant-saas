@@ -21,10 +21,18 @@ export interface ApiTarget {
   url: string;
 }
 
-export const TARGETS: ApiTarget[] = [
+const ALL_TARGETS: ApiTarget[] = [
   { name: "stage", url: "https://api-edge-stage.rahulvarghesepullely.workers.dev" },
   { name: "prod", url: "https://api-edge-prod.rahulvarghesepullely.workers.dev" },
 ];
+
+export const DEPLOY_ENV: string | undefined = import.meta.env.VITE_DEPLOY_ENV;
+
+export const TARGETS: ApiTarget[] = DEPLOY_ENV
+  ? ALL_TARGETS.filter((t) => t.name === DEPLOY_ENV)
+  : ALL_TARGETS;
+
+export const IS_LOCKED: boolean = TARGETS.length === 1 && !!DEPLOY_ENV;
 
 export type ApiResult<T> =
   | { ok: true; data: T; meta: { requestId: string; cursor: string | null } }

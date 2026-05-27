@@ -68,5 +68,22 @@ spec:
           smokeCommand:
             type: string
             default: "echo 'No smoke test configured.'"
+
+          environmentAwareProjectName:
+            type: boolean
+            description: >-
+              When true, appends the Orun environment name as a suffix to
+              projectName (e.g. "my-app" becomes "my-app-stage" in the stage
+              environment). Useful for deploying per-environment Pages projects
+              from a single component definition.
+            default: false
+
+          environmentBuildVar:
+            type: string
+            description: >-
+              Optional Vite-compatible environment variable name (e.g.
+              VITE_DEPLOY_ENV) that will be exported with the Orun environment
+              name during the build step, allowing the app to lock its
+              configuration to the target environment at build time.
         additionalProperties: false
     additionalProperties: true
