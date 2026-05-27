@@ -20,6 +20,7 @@ compositions:
       - stack-tectonic
     bindings:
       terraform: stack-tectonic
+      cloudflare-domain: stack-tectonic
       db-migrate: stack-tectonic
 
 discovery:
@@ -80,6 +81,8 @@ environments:
       requireApproval: "false"
     env:
       AWS_REGION: us-east-1
+      BASE_DOMAIN: sourceplane.ai
+      CONSOLE_CUSTOM_DOMAIN: ""
 
   stage:
     activation:
@@ -101,6 +104,8 @@ environments:
       requireApproval: "true"
     env:
       AWS_REGION: us-east-1
+      BASE_DOMAIN: sourceplane.ai
+      CONSOLE_CUSTOM_DOMAIN: stage.sourceplane.ai
 
   prod:
     activation:
@@ -122,3 +127,5 @@ environments:
       requireApproval: "true"
     env:
       AWS_REGION: us-east-1
+      BASE_DOMAIN: sourceplane.ai
+      CONSOLE_CUSTOM_DOMAIN: prod.sourceplane.ai
