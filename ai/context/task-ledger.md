@@ -973,6 +973,46 @@ Last updated: 2026-05-26
 - PR CI run: 26450296601 — green (all checks passed after infrastructure retry)
 - Post-merge CI run confirmed (squash merge executed successfully)
 
+## Task 0040
+
+- Agent: Implementer, Verifier
+- Prompt: `ai/tasks/task-0040.md`
+- Verifier prompt: `ai/tasks/task-0040-verifier.md`
+- Status: verified PASS
+- Implementation: PR #81 (`codex/task-0040-web-console-live-ui`),
+  squash-merged at `9740ca1`
+- Objective: Replace the web-console placeholder with a usable live-test console
+  for public APIs, and add minimal api-edge CORS support for browser calls from
+  Cloudflare Pages.
+- Verifier fix confirmation: Implementer fixed invitation acceptance route from
+  `POST /v1/invitations/accept` to org-scoped
+  `POST /v1/organizations/{orgId}/invitations/accept` in commit `f0f498c`.
+  Verifier confirmed: global route eliminated, `orgId` required, guard on no-org.
+- PR CI run: `26489091737` — green (20/20 jobs).
+- Post-merge main CI run: `26489581397` — green (20/20 jobs).
+- Live stage verification: full end-to-end flow (login with debug code, org
+  create, project create, env create, audit list, archive env/project, logout).
+  CORS preflight from Pages origin → 204 with correct headers.
+- Live prod verification: health OK, CORS preflight OK, login/start returns
+  `delivery.mode: "email"` with no debug code. Pages console loads deployed
+  bundle. Manual token import available.
+- Stage test resources archived:
+  - `org_b9686b1b61e94009a48f7fc318dd2824` (verifier-0040-test)
+  - `prj_a6674d7df07c4bb99a6804bf12fb35b4` (verifier-0040-project)
+  - `env_0a558643ea314a3c9f75e13a75b86eb0` (verifier-0040-env)
+- Reports: `ai/reports/task-0040-implementer.md`,
+  `ai/reports/task-0040-verifier.md`
+
+## Task 0041
+
+|- Agent: Implementer → Verifier
+|- Prompt: `ai/tasks/task-0041.md` (Implementer)
+|- Verifier Prompt: `ai/tasks/task-0041-verifier.md`
+|- Status: PR #82 open, awaiting verification
+|- Objective: Split the web-console deployment into environment-specific Cloudflare Pages projects (stage and prod) with environment-bound builds, updated CORS, and smoke verification.
+|- Scope boundary: Composition enhancement, web-console environment-locking, CORS policy, spec documentation.
+|- Acceptance: Stage console locked to stage API; prod console locked to prod API; CORS enforces environment isolation; all tests pass; PR CI green.
+
 ## Historical Notes
 
 - PR #1 split product-specific V2 Git catalog work away from the reusable SaaS

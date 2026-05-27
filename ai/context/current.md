@@ -7,7 +7,7 @@ Last updated: 2026-05-26
 - Task 0021 squash-merged at `324ca36` via PR #62.
 - Task 0022 squash-merged at `28dd671` via PR #63.
 - Follow-up docs/state commit `2c8ebb5` is on `main`.
-- Tasks 0001–0035 are verified.
+- Tasks 0001–0039 are verified.
 - Task 0021 added policy-gated invitation administration endpoints:
   - `POST /v1/organizations/{orgId}/invitations` — create invitation
   - `GET /v1/organizations/{orgId}/invitations` — list with cursor pagination
@@ -180,7 +180,7 @@ Last updated: 2026-05-26
   - Writes `environment.created` event/audit atomically with environment
     creation.
   - Uses membership-worker authorization-context before policy-worker.
-- Task 0035 verified PASS and PR #76 is open with environment archival:
+- Task 0035 verified PASS and merged via PR #76 with environment archival:
   - `DELETE /v1/organizations/{orgId}/projects/{projectId}/environments/{environmentId}`
   - Uses project-scoped `environment.delete` policy action (org owner/admin,
     project_admin).
@@ -218,6 +218,17 @@ Last updated: 2026-05-26
 
 ## Current Task
 
-None. Task 0037 verified PASS (membership audit UUID canonicalization), Task 0038
-verified PASS (organization bootstrap audit wiring), Task 0039 verified PASS (stale
-service cleanup). Awaiting next task definition or user direction.
+**Task 0041 (Verifier) — NOW ACTIVE**
+
+- PR #82 (`codex/task-0041-env-specific-web-consoles`) is OPEN and awaiting verification.
+- All 20 CI checks: SUCCESS. Mergeable: MERGEABLE.
+- Implementer report: `ai/reports/task-0041-implementer.md`
+- Verifier prompt: `ai/tasks/task-0041-verifier.md`
+
+The web-console live-test console is deployed at the single URL `https://sourceplane-web-console.pages.dev/` — this is the legacy console. Task 0041 introduces environment-specific consoles at:
+- Stage: `https://sourceplane-web-console-stage.pages.dev/`
+- Prod: `https://sourceplane-web-console-prod.pages.dev/`
+
+Each deployed console will be locked to its matching API edge environment at build time via `VITE_DEPLOY_ENV`.
+
+Identity security-event implementation remains deferred until after Task 0041 verification.

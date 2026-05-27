@@ -71,10 +71,15 @@ Last updated: 2026-05-26
   Invitation lifecycle, organization bootstrap, and current project/environment
   create/archive event wiring are complete. Identity security events and future
   destructive mutations still need event/audit coverage as they are exposed.
-- Identity security events are a near-term roadmap gap. The current events/audit
-  schema requires `org_id`, while login/session security events can occur before
-  a user selects or creates an organization; keep that scope decision isolated
-  from unrelated cleanup tasks.
+- Identity security-event implementation remains a near-term roadmap gap after
+  the web-console work. The scope decision is settled: pre-organization identity
+  activity uses identity-owned user-scoped security-event records; organization
+  audit history remains org-scoped with required `org_id`; identity emits normal
+  org-scoped audit/event copies only when organization context exists.
+- The current Task 0040 console is one Pages project with a stage/prod target
+  selector. Human direction now requires two separate console deployments with
+  different URLs, one stage-bound and one prod-bound. Task 0041 is scoped to
+  split the Pages deployments and make CORS environment-aware.
 - Durable idempotency for invitation creation is not implemented. `idempotency-key`
   is forwarded by api-edge but not stored; duplicate POST requests may produce
   multiple pending invitations to the same email.

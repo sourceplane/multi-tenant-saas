@@ -1,5 +1,10 @@
 $schema: "https://json-schema.org/draft/2020-12/schema"
 title: SourceplaneEventEnvelope
+description: >
+  Shared domain and audit event envelope. This contract is organization-scoped:
+  tenant.orgId is required. Pre-organization identity security history is stored
+  as identity-owned user-scoped records and is not represented as an org-less
+  shared event envelope.
 type: object
 additionalProperties: false
 required:

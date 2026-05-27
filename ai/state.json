@@ -1,6 +1,6 @@
 {
   "goal": "Supabase/Postgres-backed multi-organization Orun SaaS control plane",
-  "current_task": null,
+  "current_task": "0041",
   "completed": [
     "0001",
     "0001.1",
@@ -45,22 +45,22 @@
     "0036",
     "0037",
     "0038",
-    "0039"
+    "0039",
+    "0040"
   ],
   "repo_health": "green",
-  "next_focus": "none",
-  "last_verified": "2026-05-26T13:16Z",
+  "next_focus": "verify-task-0041",
+  "last_verified": "2026-05-27T05:00Z",
   "waiting_for_input": "false",
-  "task_agent": null,
+  "task_agent": "/ai/tasks/task-0041-verifier.md",
   "notes": [
-    "Task 0036 verification PASS: PR #77 merged at 969eb8b. Organization audit list endpoint live through events-worker.",
-    "Task 0036 added: private events-worker runtime, GET /v1/organizations/{orgId}/audit route, audit.read policy (owner/admin only), category filtering, cursor pagination, payload redaction.",
-    "Task 0036 CI run 26439198439: 29/29 jobs PASS. Orun validation: all pass (validate, plan, dry-run).",
-    "events-worker: private (workers_dev: false), Hyperdrive SOURCEPLANE_DB bindings, MEMBERSHIP_WORKER/POLICY_WORKER service bindings.",
-    "api-edge: EVENTS_WORKER service bindings for stage→events-worker-stage and prod→events-worker-prod.",
-    "Local main synced to origin/main at 969eb8b.",
-    "Task 0039 merged: PR #80 squash-merged at fbbce92. Removed stale organization-service create/list methods. All CI checks PASS.",
-    "Task 0037, 0038, 0039: verification complete. PR #77 (audit list), #78 (UUID fix), #79 (bootstrap audit), #80 (cleanup) all merged.",
-    "Post-merge CI run 26450296601: all checks PASS after infrastructure retry."
+    "Task 0040 PASS: PR #81 merged at 9740ca1. Web-console live-test UI and api-edge CORS deployed to stage and prod.",
+    "Post-merge main CI run 26489581397: 20/20 jobs PASS.",
+    "Live stage: full end-to-end flow verified (login, org create, project create, env create, audit, archive, logout).",
+    "Live prod: health OK, CORS preflight OK, login/start returns delivery.mode=email with no debug code, Pages console loads deployed bundle.",
+    "Stage test resources archived: org_b9686b1b61e94009a48f7fc318dd2824 (verifier-0040-test), prj_a6674d7df07c4bb99a6804bf12fb35b4, env_0a558643ea314a3c9f75e13a75b86eb0.",
+    "Identity security-event implementation remains deferred. Next focus TBD by orchestrator.",
+    "Node.js 20 deprecation warning in CI — actions need update before September 2026 runner cutoff.",
+    "Human requested separate stage/prod web-console deployments with different URLs. Task 0041 emitted to split the single sourceplane-web-console Pages deployment into sourceplane-web-console-stage and sourceplane-web-console-prod, with environment-bound builds and CORS."
   ]
 }

@@ -22,7 +22,9 @@ Platform dependencies:
 
 ## Intent
 
-Provide the starter event backbone, immutable audit trail, security-event history, and minimum observability primitives needed by all other components.
+Provide the starter event backbone, immutable organization audit trail,
+organization-scoped security-event copies, and minimum observability primitives
+needed by all other components.
 
 ## Scope
 
@@ -30,7 +32,7 @@ Provide the starter event backbone, immutable audit trail, security-event histor
 - fan out events to subscribers
 - record audit entries
 - expose audit query APIs
-- expose security-event query APIs
+- expose organization-scoped security-event query APIs
 - write operational analytics and counters
 - dead-letter handling for failed async deliveries
 
@@ -54,11 +56,25 @@ Provide the starter event backbone, immutable audit trail, security-event histor
 - `querySecurityEvents`
 - `registerSubscriber` or static subscriber configuration
 
+### Identity Security History And Org Audit
+
+Identity security history has two layers:
+
+- identity-owned source records may be user-scoped and may occur before an
+  organization exists or is selected;
+- organization audit history is always org-scoped and always requires `org_id`;
+- org-scoped audit/event copies of identity security events are emitted only
+  when organization context exists.
+
+Do not widen the shared event envelope or audit-entry contract to allow org-less
+audit events. Pre-organization login/session activity belongs to identity-owned
+security history until it can be associated with an organization.
+
 ### Required Audit Coverage
 
 At minimum, audit entries are required for:
 
-- login and session security events
+- login and session security events when organization context exists
 - organization creation, update, archival, and deletion
 - member invitation, acceptance, removal, and role changes
 - project creation, update, archival, and deletion
@@ -105,7 +121,9 @@ This component owns:
 
 - Every mutating domain action can publish a shared event envelope.
 - Audit history is queryable by organization and target resource.
-- Security events are queryable by organization, user, and target where applicable.
+- Organization-scoped security events are queryable by organization, user, and
+  target where applicable. Pre-organization identity security history is
+  queryable through identity-owned user-scoped records rather than org audit.
 - Failed async deliveries are visible and retryable without mutating the original source data.
 
 ## Extraction Seam
