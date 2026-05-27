@@ -218,41 +218,21 @@ Last updated: 2026-05-27
 
 ## Current Task
 
-**Task 0042 (Verifier) — COMPLETE ✅**
+**Task 0045 (Verifier) — COMPLETE ✅**
 
-- Prompt: `ai/tasks/task-0042.md`
-- Verifier prompt: `ai/tasks/task-0042-verifier.md`
-- PR #85 (`codex/task-0042-cloudflare-custom-domains`) **MERGED** at
-  commit `d0d5c6e` (2026-05-27T14:51:08Z).
-- PR URL: `https://github.com/sourceplane/multi-tenant-saas/pull/85`
-- All 22 PR CI checks passed in run `26501416473`.
-- Post-merge main CI run **26518889622** **COMPLETED** with conclusion=success
-  (22/22 jobs).
-- Cloudflare infrastructure deployed:
-  - `cloudflare-domain · stage · Terraform`: ✅ (14:53:12)
-  - `cloudflare-domain · prod · Terraform`: ✅ (14:53:54)
-- Cloudflare Pages deployments live:
-  - Stage: `https://ba5d2c65.sourceplane-web-console-stage.pages.dev`
-    (d0d5c6e, 2 min ago)
-  - Prod: `https://f774baf3.sourceplane-web-console-prod.pages.dev`
-    (d0d5c6e, 2 min ago)
-- Implementer report: `ai/reports/task-0042-implementer.md`
-- Verifier report: `ai/reports/task-0042-verifier.md` (final)
-- Custom domain config:
-  - Stage: `stage.sourceplane.ai`
-  - Prod: `prod.sourceplane.ai`
-  - Base domain: `sourceplane.ai` (existing Cloudflare zone, no new zone created)
-- Intent.yaml is the single domain source of truth: all domain configuration
-  flows from `intent.yaml` environment variables (`BASE_DOMAIN`,
-  `CONSOLE_CUSTOM_DOMAIN`) to all consuming components (api-edge Worker,
-  Terraform domain component).
-- CORS integration verified: api-edge reads `CONSOLE_CUSTOM_DOMAIN` from
-  environment for origin validation. 189 CORS tests passing.
-- Terraform resources match locked provider schema.
-- **Acceptance criteria**: All met. PR merged, CI passed, Terraform applied
-  to stage/prod, Pages deployed, custom domain configuration live.
+- Prompt: `ai/tasks/task-0045.md`
+- Verifier prompt: `ai/tasks/task-0045-verifier.md`
+- PR #88 (`codex/task-0045-identity-security-events-query`) **MERGED** at
+  commit `e67a9b2` (2026-05-27T23:35Z).
+- PR URL: `https://github.com/sourceplane/multi-tenant-saas/pull/88`
+- All PR CI checks passed in run `26544676838` (23 jobs after verifier cleanup commit).
+- Post-merge main CI run **26544885697** triggered (in progress at merge time).
+- Key durable outcome: `GET /v1/auth/security-events` is now a live, authenticated,
+  self-scoped public route returning paginated identity security history with
+  SENSITIVE_KEYS redaction. Route is the public read surface for identity-owned
+  security events established by Tasks 0043–0044.
+- Verifier cleanup: removed 11 out-of-scope ai/ carryover files from PR before merge.
+- 269 tests passing (76 identity-worker + 193 api-edge).
+- Reports: `ai/reports/task-0045-implementer.md`, `ai/reports/task-0045-verifier.md`
 
-Task 0041 was completed by PR #82 and subsequent hotfixes. The web-console
-live endpoints are accessible via Cloudflare Pages (stage/prod).
-
-**Next phase**: Identity security-event implementation (Task 0043+).
+**Next phase**: Task 0046 — Web Console Account Security Events View (or next orchestrator cycle decision).

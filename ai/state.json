@@ -1,6 +1,6 @@
 {
   "goal": "Supabase/Postgres-backed multi-organization Orun SaaS control plane",
-  "current_task": "0041",
+  "current_task": "0045",
   "completed": [
     "0001",
     "0001.1",
@@ -46,21 +46,24 @@
     "0037",
     "0038",
     "0039",
-    "0040"
+    "0040",
+    "0041",
+    "0042",
+    "0043",
+    "0044",
+    "0045"
   ],
   "repo_health": "green",
-  "next_focus": "verify-task-0041",
-  "last_verified": "2026-05-27T05:00Z",
+  "next_focus": "account-security-ui-or-task-0046",
+  "last_verified": "2026-05-27T23:35Z",
   "waiting_for_input": "false",
-  "task_agent": "/ai/tasks/task-0041-verifier.md",
+  "task_agent": "/ai/tasks/task-0045-verifier.md",
   "notes": [
-    "Task 0040 PASS: PR #81 merged at 9740ca1. Web-console live-test UI and api-edge CORS deployed to stage and prod.",
-    "Post-merge main CI run 26489581397: 20/20 jobs PASS.",
-    "Live stage: full end-to-end flow verified (login, org create, project create, env create, audit, archive, logout).",
-    "Live prod: health OK, CORS preflight OK, login/start returns delivery.mode=email with no debug code, Pages console loads deployed bundle.",
-    "Stage test resources archived: org_b9686b1b61e94009a48f7fc318dd2824 (verifier-0040-test), prj_a6674d7df07c4bb99a6804bf12fb35b4, env_0a558643ea314a3c9f75e13a75b86eb0.",
-    "Identity security-event implementation remains deferred. Next focus TBD by orchestrator.",
-    "Node.js 20 deprecation warning in CI — actions need update before September 2026 runner cutoff.",
-    "Human requested separate stage/prod web-console deployments with different URLs. Task 0041 emitted to split the single sourceplane-web-console Pages deployment into sourceplane-web-console-stage and sourceplane-web-console-prod, with environment-bound builds and CORS."
+    "Task 0045 PASS: PR #88 merged at e67a9b2. GET /v1/auth/security-events exposed via identity-worker + api-edge.",
+    "Verifier cleanup commit 2245fb7 required: added missing implementer report, removed 11 out-of-scope ai/ carryover files.",
+    "Post-merge CI run 26544885697 triggered. All prior PR CI checks green (runs 26544257632, 26544676838).",
+    "269 tests passing (76 identity-worker + 193 api-edge). Cursor pagination, SENSITIVE_KEYS redaction, self-scoped auth all verified.",
+    "Recurring implementer anti-pattern: orchestration ai/ context files committed alongside code. Next task prompts should explicitly warn against this.",
+    "Node.js 20 deprecation warning in CI — actions need update before September 2026 runner cutoff."
   ]
 }

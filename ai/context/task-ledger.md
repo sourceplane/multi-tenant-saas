@@ -1063,6 +1063,40 @@ Last updated: 2026-05-27
   CORS integration verified, Terraform resources match locked provider schema.
   All acceptance criteria met.
 
+## Task 0043
+
+|- Agent: Implementer → Verifier
+|- Prompt: `ai/tasks/task-0043.md`
+|- Status: verified PASS and merged
+|- PR: #86 (`codex/task-0043-identity-security-events-persistence`), squash-merged at `4739306`
+|- Objective: identity-owned security-event persistence foundation: `identity.security_events` table, repository methods, comprehensive tests, secret-safety.
+|- Durable outcome: user-scoped security events persistable, cursor pagination, no org_id dependency.
+|- Reports: `ai/reports/task-0043-implementer.md`, `ai/reports/task-0043-verifier.md`
+
+## Task 0044
+
+|- Agent: Implementer → Verifier
+|- Prompt: `ai/tasks/task-0044.md`
+|- Status: verified PASS and merged
+|- PR: #87 (`codex/task-0044-identity-runtime-security-events`), squash-merged at `769de5d`
+|- Objective: wire identity auth runtime flows to security-event recording. `login.challenge.created`, `session.created`, `login.complete.failed`, `session.revoked` events.
+|- Durable outcome: auth runtime records security events with request context; no secret leakage.
+|- Reports: `ai/reports/task-0044-implementer.md`, `ai/reports/task-0044-verifier.md`
+
+## Task 0045
+
+|- Agent: Implementer → Verifier
+|- Prompt: `ai/tasks/task-0045.md`
+|- Status: verified PASS and merged
+|- PR: #88 (`codex/task-0045-identity-security-events-query`), squash-merged at `e67a9b2` (2026-05-27)
+|- Objective: expose authenticated `GET /v1/auth/security-events` public query surface for identity-owned, user-scoped security history.
+|- Scope: `@saas/contracts` types, identity-worker handler/pagination/router, api-edge auth-facade forwarding, focused identity-worker and api-edge tests.
+|- Post-merge CI: run 26544885697 triggered.
+|- Test results: 269 tests pass (76 identity-worker + 193 api-edge).
+|- Verifier cleanup: removed 11 out-of-scope ai/ carryover files before merge; added missing implementer report.
+|- Durable outcome: `GET /v1/auth/security-events` is live, authenticated, self-scoped, cursor-paginated, with SENSITIVE_KEYS metadata redaction. Unblocks account-security UI.
+|- Reports: `ai/reports/task-0045-implementer.md`, `ai/reports/task-0045-verifier.md`
+
 ## Historical Notes
 
 - PR #1 split product-specific V2 Git catalog work away from the reusable SaaS
