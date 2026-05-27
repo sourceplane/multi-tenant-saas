@@ -1,6 +1,6 @@
 # Task Ledger
 
-Last updated: 2026-05-26
+Last updated: 2026-05-27
 
 ## Task 0001
 
@@ -1005,13 +1005,63 @@ Last updated: 2026-05-26
 
 ## Task 0041
 
-|- Agent: Implementer → Verifier
-|- Prompt: `ai/tasks/task-0041.md` (Implementer)
-|- Verifier Prompt: `ai/tasks/task-0041-verifier.md`
-|- Status: PR #82 open, awaiting verification
-|- Objective: Split the web-console deployment into environment-specific Cloudflare Pages projects (stage and prod) with environment-bound builds, updated CORS, and smoke verification.
-|- Scope boundary: Composition enhancement, web-console environment-locking, CORS policy, spec documentation.
-|- Acceptance: Stage console locked to stage API; prod console locked to prod API; CORS enforces environment isolation; all tests pass; PR CI green.
+|- Agent: Implementer -> Verifier
+|- Prompt: `ai/tasks/task-0041.md`
+|- Verifier prompt: `ai/tasks/task-0041-verifier.md`
+|- Status: verified PASS and merged
+|- PR: #82 (`codex/task-0041-env-specific-web-consoles`), squash-merged at
+  `cb38e96675f6e4f0c6080718f7041208ec5250e1`
+|- Objective: Split the web-console deployment into environment-specific
+  Cloudflare Pages projects (stage and prod) with environment-bound builds,
+  updated CORS, and smoke verification.
+|- Durable outcome: `cloudflare-pages-turbo` supports
+  `environmentAwareProjectName` and `environmentBuildVar`; the web-console
+  builds are locked with `VITE_DEPLOY_ENV`; `sourceplane-web-console-stage`
+  and `sourceplane-web-console-prod` are the canonical environment-specific
+  Pages projects; api-edge CORS allows only matching Pages origins plus local
+  development origins.
+|- PR CI run: `26492143639` — green (20/20 checks).
+|- Post-merge note: main deploy run `26493287165` failed because the Pages
+  composition used `.environment.name`; PR #83 fixed it to
+  `.orun.environment.name`, and PR #84 retriggered web-console deploys.
+|- Latest main CI run: `26495115287` — green.
+|- Live smoke at `2026-05-27T07:04Z`: stage/prod Pages console HTML loads
+  Sourceplane Console and stage/prod api-edge `/health` returns ok.
+|- Reports: `ai/reports/task-0041-implementer.md`,
+  `ai/reports/task-0041-verifier.md`
+
+## Task 0042
+
+|- Agent: Implementer -> Verifier
+|- Prompt: `ai/tasks/task-0042.md`
+|- Verifier prompt: `ai/tasks/task-0042-verifier.md`
+|- Status: COMPLETE ✅
+|- PR: #85 (`codex/task-0042-cloudflare-custom-domains`), **MERGED** at
+  commit `d0d5c6e` (2026-05-27T14:51:08Z)
+|- Objective: Make Cloudflare custom domains first-class and intent-driven,
+  add a Cloudflare domain component type, and publish stage/prod web consoles
+  at `stage.sourceplane.ai` and `prod.sourceplane.ai`.
+|- Scope boundary: `intent.yaml` domain config, new Cloudflare domain
+  composition/component, Pages custom-domain attachment, typed custom-domain
+  support for Cloudflare app components, api-edge CORS updates, and focused
+  specs/docs. No private Worker public exposure, no legacy Pages deletion, no
+  `dev` live domain provisioning, and no `specs-v2/**` work.
+|- PR CI run: `26501416473` — green (22/22 checks)
+|- Post-merge main CI run: `26518889622` — green (22/22 jobs), all completed
+  with success.
+|- Cloudflare infrastructure deployed:
+  - stage Terraform: applied (14:53:12)
+  - prod Terraform: applied (14:53:54)
+|- Cloudflare Pages deployments live from d0d5c6e:
+  - stage: ba5d2c65.sourceplane-web-console-stage.pages.dev
+  - prod: f774baf3.sourceplane-web-console-prod.pages.dev
+|- Implementer report: `ai/reports/task-0042-implementer.md`
+|- Verifier report: `ai/reports/task-0042-verifier.md` (final)
+|- Verifier confirmation: intent.yaml is the single domain source of truth,
+  all domain config flows from intent.yaml env vars (`BASE_DOMAIN`,
+  `CONSOLE_CUSTOM_DOMAIN`) to consuming components (api-edge, Terraform).
+  CORS integration verified, Terraform resources match locked provider schema.
+  All acceptance criteria met.
 
 ## Historical Notes
 

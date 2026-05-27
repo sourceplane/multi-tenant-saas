@@ -1,6 +1,6 @@
 # Current Context
 
-Last updated: 2026-05-26
+Last updated: 2026-05-27
 
 ## Repo Reality
 
@@ -218,17 +218,41 @@ Last updated: 2026-05-26
 
 ## Current Task
 
-**Task 0041 (Verifier) — NOW ACTIVE**
+**Task 0042 (Verifier) — COMPLETE ✅**
 
-- PR #82 (`codex/task-0041-env-specific-web-consoles`) is OPEN and awaiting verification.
-- All 20 CI checks: SUCCESS. Mergeable: MERGEABLE.
-- Implementer report: `ai/reports/task-0041-implementer.md`
-- Verifier prompt: `ai/tasks/task-0041-verifier.md`
+- Prompt: `ai/tasks/task-0042.md`
+- Verifier prompt: `ai/tasks/task-0042-verifier.md`
+- PR #85 (`codex/task-0042-cloudflare-custom-domains`) **MERGED** at
+  commit `d0d5c6e` (2026-05-27T14:51:08Z).
+- PR URL: `https://github.com/sourceplane/multi-tenant-saas/pull/85`
+- All 22 PR CI checks passed in run `26501416473`.
+- Post-merge main CI run **26518889622** **COMPLETED** with conclusion=success
+  (22/22 jobs).
+- Cloudflare infrastructure deployed:
+  - `cloudflare-domain · stage · Terraform`: ✅ (14:53:12)
+  - `cloudflare-domain · prod · Terraform`: ✅ (14:53:54)
+- Cloudflare Pages deployments live:
+  - Stage: `https://ba5d2c65.sourceplane-web-console-stage.pages.dev`
+    (d0d5c6e, 2 min ago)
+  - Prod: `https://f774baf3.sourceplane-web-console-prod.pages.dev`
+    (d0d5c6e, 2 min ago)
+- Implementer report: `ai/reports/task-0042-implementer.md`
+- Verifier report: `ai/reports/task-0042-verifier.md` (final)
+- Custom domain config:
+  - Stage: `stage.sourceplane.ai`
+  - Prod: `prod.sourceplane.ai`
+  - Base domain: `sourceplane.ai` (existing Cloudflare zone, no new zone created)
+- Intent.yaml is the single domain source of truth: all domain configuration
+  flows from `intent.yaml` environment variables (`BASE_DOMAIN`,
+  `CONSOLE_CUSTOM_DOMAIN`) to all consuming components (api-edge Worker,
+  Terraform domain component).
+- CORS integration verified: api-edge reads `CONSOLE_CUSTOM_DOMAIN` from
+  environment for origin validation. 189 CORS tests passing.
+- Terraform resources match locked provider schema.
+- **Acceptance criteria**: All met. PR merged, CI passed, Terraform applied
+  to stage/prod, Pages deployed, custom domain configuration live.
 
-The web-console live-test console is deployed at the single URL `https://sourceplane-web-console.pages.dev/` — this is the legacy console. Task 0041 introduces environment-specific consoles at:
-- Stage: `https://sourceplane-web-console-stage.pages.dev/`
-- Prod: `https://sourceplane-web-console-prod.pages.dev/`
+Task 0041 was completed by PR #82 and subsequent hotfixes. The web-console
+live endpoints are accessible via Cloudflare Pages (stage/prod).
 
-Each deployed console will be locked to its matching API edge environment at build time via `VITE_DEPLOY_ENV`.
-
-Identity security-event implementation remains deferred until after Task 0041 verification.
+**Next phase**: Identity security-event implementation (Task 0043+).
