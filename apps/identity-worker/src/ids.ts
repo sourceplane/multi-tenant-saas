@@ -37,6 +37,10 @@ export function generateAuthIdentityId(): string {
   return crypto.randomUUID();
 }
 
+export function generateSecurityEventId(): string {
+  return crypto.randomUUID();
+}
+
 export function generateCode(): string {
   const buf = new Uint8Array(4);
   crypto.getRandomValues(buf);

@@ -1,8 +1,6 @@
 import { createFakeRepository } from "./helpers/fake-repository";
-import type { IdentityRepository } from "@saas/db/identity";
 import crypto from "node:crypto";
 
-// Polyfill Web Crypto for Node test environment
 if (!globalThis.crypto?.subtle) {
   Object.defineProperty(globalThis, "crypto", { value: crypto.webcrypto });
 }
@@ -10,168 +8,33 @@ if (typeof globalThis.crypto.randomUUID !== "function") {
   (globalThis.crypto as unknown as { randomUUID: () => string }).randomUUID = () => crypto.randomUUID();
 }
 
-async function hashSha256(input: string): Promise<string> {
-  const data = new TextEncoder().encode(input);
-  const buffer = await crypto.subtle.digest("SHA-256", data);
-  const bytes = new Uint8Array(buffer);
-  let hex = "";
-  for (let i = 0; i < bytes.length; i++) {
-    hex += bytes[i]!.toString(16).padStart(2, "0");
-  }
-  return hex;
-}
+import { createAuthService } from "../../../apps/identity-worker/src/services/auth";
+import {
+  challengePublicId,
+  parseChallengePublicId,
+  parseSessionToken,
+  buildSessionToken,
+} from "../../../apps/identity-worker/src/ids";
 
-// UUID/public-ID mapping — mirrors apps/identity-worker/src/ids.ts
-function uuidToHex(uuid: string): string {
-  return uuid.replace(/-/g, "");
-}
+const SECRET_PATTERNS = [
+  /\d{6}/,
+  /^[0-9a-f]{64}$/i,
+  /^sps_ses_/,
+];
 
-function hexToUuid(hex: string): string | null {
-  if (hex.length !== 32 || !/^[0-9a-f]+$/i.test(hex)) return null;
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
-}
-
-function randomHex(bytes: number): string {
-  const buf = new Uint8Array(bytes);
-  crypto.getRandomValues(buf);
-  let hex = "";
-  for (let i = 0; i < buf.length; i++) {
-    hex += buf[i]!.toString(16).padStart(2, "0");
-  }
-  return hex;
-}
-
-function userPublicId(uuid: string): string { return `usr_${uuidToHex(uuid)}`; }
-function sessionPublicId(uuid: string): string { return `ses_${uuidToHex(uuid)}`; }
-function challengePublicId(uuid: string): string { return `chl_${uuidToHex(uuid)}`; }
-function parseChallengePublicId(id: string): string | null {
-  if (!id.startsWith("chl_")) return null;
-  return hexToUuid(id.slice(4));
-}
-
-function generateCode(): string {
-  const buf = new Uint8Array(4);
-  crypto.getRandomValues(buf);
-  const num = ((buf[0]! << 24) | (buf[1]! << 16) | (buf[2]! << 8) | buf[3]!) >>> 0;
-  return String(num % 1000000).padStart(6, "0");
-}
-
-function emailHint(email: string): string {
-  const at = email.indexOf("@");
-  if (at < 1) return "***@***";
-  return `${email[0]}***@${email.slice(at + 1)}`;
-}
-
-function parseSessionToken(token: string): { sessionId: string; secret: string } | null {
-  if (!token.startsWith("sps_ses_")) return null;
-  const payload = token.slice(8);
-  const dotIndex = payload.indexOf(".");
-  if (dotIndex < 1) return null;
-  const hexId = payload.slice(0, dotIndex);
-  const secret = payload.slice(dotIndex + 1);
-  if (!hexId || !secret) return null;
-  const uuid = hexToUuid(hexId);
-  if (!uuid) return null;
-  return { sessionId: uuid, secret };
-}
-
-function buildSessionToken(sessionUuid: string, secret: string): string {
-  return `sps_ses_${uuidToHex(sessionUuid)}.${secret}`;
-}
-
-const CHALLENGE_TTL_MS = 10 * 60 * 1000;
-const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
-
-interface AuthServiceDeps {
-  repo: IdentityRepository;
-  now: () => Date;
-}
-
-function createAuthService(deps: AuthServiceDeps) {
-  const { repo, now } = deps;
-
-  async function resolveOrCreateUser(email: string, emailLower: string) {
-    const existing = await repo.getUserByEmail(emailLower);
-    if (existing.ok) return existing;
-    const userId = crypto.randomUUID();
-    const createResult = await repo.createUser({ id: userId, email, emailLower, createdAt: now() });
-    if (!createResult.ok && createResult.error.kind === "conflict") {
-      return repo.getUserByEmail(emailLower);
-    }
-    if (createResult.ok) {
-      await repo.createAuthIdentity({ id: crypto.randomUUID(), userId, provider: "email", subject: emailLower, createdAt: now() });
-    }
-    return createResult;
-  }
-
-  return {
-    async startLogin(email: string) {
-      const emailLower = email.trim().toLowerCase();
-      const userResult = await resolveOrCreateUser(email.trim(), emailLower);
-      if (!userResult.ok) return { error: "internal_error" as const, message: "Failed to resolve user" };
-      const code = generateCode();
-      const codeHash = await hashSha256(code);
-      const challengeUuid = crypto.randomUUID();
-      const currentTime = now();
-      const expiresAt = new Date(currentTime.getTime() + CHALLENGE_TTL_MS);
-      const challengeResult = await repo.createLoginChallenge({ id: challengeUuid, userId: userResult.value.id, method: "email_code", codeHash, expiresAt, createdAt: currentTime });
-      if (!challengeResult.ok) return { error: "internal_error" as const, message: "Failed to create login challenge" };
-      return { challengeId: challengePublicId(challengeUuid), expiresAt, emailHint: emailHint(emailLower), rawCode: code };
-    },
-
-    async completeLogin(challengeId: string, code: string) {
-      const challengeUuid = parseChallengePublicId(challengeId);
-      if (!challengeUuid) return { error: "not_found" as const, message: "Challenge not found or code is invalid" };
-      const codeHash = await hashSha256(code);
-      const consumeResult = await repo.consumeLoginChallenge(challengeUuid, codeHash, now());
-      if (!consumeResult.ok) {
-        switch (consumeResult.error.kind) {
-          case "not_found": return { error: "not_found" as const, message: "Challenge not found or code is invalid" };
-          case "expired": return { error: "precondition_failed" as const, message: "Challenge has expired" };
-          case "already_consumed": return { error: "precondition_failed" as const, message: "Challenge has already been used" };
-          default: return { error: "internal_error" as const, message: "Failed to complete login" };
+function assertNoSecrets(metadata: Record<string, unknown>): void {
+  const json = JSON.stringify(metadata);
+  for (const pattern of SECRET_PATTERNS) {
+    if (pattern.test(json)) {
+      const keys = Object.keys(metadata);
+      const suspectKeys = ["code", "codeHash", "tokenHash", "tokenSecret", "secret", "apiKey", "token", "bearerToken"];
+      for (const key of keys) {
+        if (suspectKeys.includes(key)) {
+          throw new Error(`Security event metadata contains suspect key: ${key}`);
         }
       }
-      const challenge = consumeResult.value;
-      const userResult = await repo.getUserById(challenge.userId);
-      if (!userResult.ok) return { error: "internal_error" as const, message: "Failed to resolve user" };
-      const sessionUuid = crypto.randomUUID();
-      const secret = randomHex(32);
-      const tokenHash = await hashSha256(secret);
-      const currentTime = now();
-      const expiresAt = new Date(currentTime.getTime() + SESSION_TTL_MS);
-      const sessionResult = await repo.createSession({ id: sessionUuid, userId: challenge.userId, tokenHash, expiresAt, createdAt: currentTime });
-      if (!sessionResult.ok) return { error: "internal_error" as const, message: "Failed to create session" };
-      const user = userResult.value;
-      return { token: buildSessionToken(sessionUuid, secret), expiresAt, user: { id: userPublicId(user.id), email: user.email, displayName: user.displayName } };
-    },
-
-    async getSession(token: string) {
-      const parsed = parseSessionToken(token);
-      if (!parsed) return { error: "unauthenticated" as const, message: "Invalid token format" };
-      const tokenHash = await hashSha256(parsed.secret);
-      const sessionResult = await repo.getSessionByTokenHash(tokenHash);
-      if (!sessionResult.ok) return { error: "unauthenticated" as const, message: "Session not found" };
-      const session = sessionResult.value;
-      if (session.revokedAt !== null) return { error: "unauthenticated" as const, message: "Session has been revoked" };
-      if (session.expiresAt.getTime() <= now().getTime()) return { error: "unauthenticated" as const, message: "Session has expired" };
-      const userResult = await repo.getUserById(session.userId);
-      if (!userResult.ok) return { error: "unauthenticated" as const, message: "User not found" };
-      const user = userResult.value;
-      return { session: { id: sessionPublicId(session.id), expiresAt: session.expiresAt, createdAt: session.createdAt }, user: { id: userPublicId(user.id), email: user.email, displayName: user.displayName } };
-    },
-
-    async logout(token: string) {
-      const parsed = parseSessionToken(token);
-      if (!parsed) return { error: "unauthenticated" as const, message: "Invalid token format" };
-      const tokenHash = await hashSha256(parsed.secret);
-      const sessionResult = await repo.getSessionByTokenHash(tokenHash);
-      if (!sessionResult.ok) return { error: "unauthenticated" as const, message: "Session not found" };
-      const session = sessionResult.value;
-      if (session.revokedAt === null) await repo.revokeSession(session.id, now());
-      return { success: true as const };
-    },
-  };
+    }
+  }
 }
 
 describe("Auth Service", () => {
@@ -236,6 +99,68 @@ describe("Auth Service", () => {
       expect(stored).toBeDefined();
       expect(stored!.codeHash).not.toBe(result.rawCode);
       expect(stored!.codeHash.length).toBe(64);
+    });
+
+    it("records login.challenge.created security event", async () => {
+      const repo = createFakeRepository();
+      const auth = createAuthService({ repo, now: () => fixedNow });
+      const result = await auth.startLogin("user@example.com");
+      if ("error" in result) throw new Error("startLogin failed");
+
+      expect(repo._securityEvents).toHaveLength(1);
+      const event = repo._securityEvents[0]!;
+      expect(event.eventType).toBe("login.challenge.created");
+      expect(event.outcome).toBe("success");
+    });
+
+    it("security event contains userId and challengeId as UUIDs", async () => {
+      const repo = createFakeRepository();
+      const auth = createAuthService({ repo, now: () => fixedNow });
+      const result = await auth.startLogin("user@example.com");
+      if ("error" in result) throw new Error("startLogin failed");
+
+      const event = repo._securityEvents[0]!;
+      const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+      expect(event.userId).toMatch(uuidRe);
+      expect(event.challengeId).toMatch(uuidRe);
+      expect(event.userId).toBe([...repo._users.keys()][0]);
+      expect(event.challengeId).toBe([...repo._challenges.keys()][0]);
+    });
+
+    it("security event metadata does not contain raw code", async () => {
+      const repo = createFakeRepository();
+      const auth = createAuthService({ repo, now: () => fixedNow });
+      const result = await auth.startLogin("user@example.com");
+      if ("error" in result) throw new Error("startLogin failed");
+
+      const event = repo._securityEvents[0]!;
+      expect(event.metadata).toEqual({ method: "email_code" });
+      assertNoSecrets(event.metadata);
+      expect(JSON.stringify(event.metadata)).not.toContain(result.rawCode);
+    });
+
+    it("propagates request context to security event", async () => {
+      const repo = createFakeRepository();
+      const ctx = { requestId: "req_abc123", ip: "203.0.113.42", userAgent: "TestAgent/1.0" };
+      const auth = createAuthService({ repo, now: () => fixedNow, ctx });
+      const result = await auth.startLogin("user@example.com");
+      if ("error" in result) throw new Error("startLogin failed");
+
+      const event = repo._securityEvents[0]!;
+      expect(event.requestId).toBe("req_abc123");
+      expect(event.ip).toBe("203.0.113.42");
+      expect(event.userAgent).toBe("TestAgent/1.0");
+    });
+
+    it("returns internal_error when event recording fails", async () => {
+      const repo = createFakeRepository();
+      repo.recordSecurityEvent = async () => ({ ok: false, error: { kind: "internal" as const, message: "db error" } });
+      const auth = createAuthService({ repo, now: () => fixedNow });
+      const result = await auth.startLogin("user@example.com");
+
+      expect("error" in result).toBe(true);
+      if (!("error" in result)) return;
+      expect(result.error).toBe("internal_error");
     });
   });
 
@@ -351,6 +276,168 @@ describe("Auth Service", () => {
         expect(s.tokenHash.length).toBe(64);
       }
     });
+
+    it("records session.created security event on success", async () => {
+      const repo = createFakeRepository();
+      const auth = createAuthService({ repo, now: () => fixedNow });
+
+      const start = await auth.startLogin("user@example.com");
+      if ("error" in start) throw new Error("startLogin failed");
+      const result = await auth.completeLogin(start.challengeId, start.rawCode);
+      if ("error" in result) throw new Error("completeLogin failed");
+
+      const sessionEvent = repo._securityEvents.find((e) => e.eventType === "session.created");
+      expect(sessionEvent).toBeDefined();
+      expect(sessionEvent!.outcome).toBe("success");
+    });
+
+    it("session.created event contains userId, sessionId, and challengeId UUIDs", async () => {
+      const repo = createFakeRepository();
+      const auth = createAuthService({ repo, now: () => fixedNow });
+
+      const start = await auth.startLogin("user@example.com");
+      if ("error" in start) throw new Error("startLogin failed");
+      await auth.completeLogin(start.challengeId, start.rawCode);
+
+      const event = repo._securityEvents.find((e) => e.eventType === "session.created")!;
+      const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+      expect(event.userId).toMatch(uuidRe);
+      expect(event.sessionId).toMatch(uuidRe);
+      expect(event.challengeId).toMatch(uuidRe);
+      expect(event.userId).toBe([...repo._users.keys()][0]);
+      expect(event.sessionId).toBe([...repo._sessions.keys()][0]);
+    });
+
+    it("session.created event metadata does not contain secrets", async () => {
+      const repo = createFakeRepository();
+      const auth = createAuthService({ repo, now: () => fixedNow });
+
+      const start = await auth.startLogin("user@example.com");
+      if ("error" in start) throw new Error("startLogin failed");
+      const result = await auth.completeLogin(start.challengeId, start.rawCode);
+      if ("error" in result) throw new Error("completeLogin failed");
+
+      const event = repo._securityEvents.find((e) => e.eventType === "session.created")!;
+      const json = JSON.stringify(event.metadata);
+      expect(json).not.toContain(start.rawCode);
+      expect(json).not.toContain(result.token);
+      assertNoSecrets(event.metadata);
+      expect(event.metadata).not.toHaveProperty("code");
+      expect(event.metadata).not.toHaveProperty("codeHash");
+      expect(event.metadata).not.toHaveProperty("tokenHash");
+      expect(event.metadata).not.toHaveProperty("tokenSecret");
+      expect(event.metadata).not.toHaveProperty("secret");
+    });
+
+    it("records login.complete.failed event for wrong code", async () => {
+      const repo = createFakeRepository();
+      const auth = createAuthService({ repo, now: () => fixedNow });
+
+      const start = await auth.startLogin("user@example.com");
+      if ("error" in start) throw new Error("startLogin failed");
+
+      await auth.completeLogin(start.challengeId, "000000");
+
+      const failEvent = repo._securityEvents.find((e) => e.eventType === "login.complete.failed");
+      expect(failEvent).toBeDefined();
+      expect(failEvent!.outcome).toBe("invalid_code_or_challenge");
+      expect(failEvent!.challengeId).toBe(parseChallengePublicId(start.challengeId));
+    });
+
+    it("records login.complete.failed event for expired challenge", async () => {
+      const repo = createFakeRepository();
+      let currentTime = fixedNow;
+      const auth = createAuthService({ repo, now: () => currentTime });
+
+      const start = await auth.startLogin("user@example.com");
+      if ("error" in start) throw new Error("startLogin failed");
+
+      currentTime = new Date(fixedNow.getTime() + 11 * 60 * 1000);
+      await auth.completeLogin(start.challengeId, start.rawCode);
+
+      const failEvent = repo._securityEvents.find((e) => e.eventType === "login.complete.failed");
+      expect(failEvent).toBeDefined();
+      expect(failEvent!.outcome).toBe("expired_challenge");
+    });
+
+    it("records login.complete.failed event for already consumed challenge", async () => {
+      const repo = createFakeRepository();
+      const auth = createAuthService({ repo, now: () => fixedNow });
+
+      const start = await auth.startLogin("user@example.com");
+      if ("error" in start) throw new Error("startLogin failed");
+
+      await auth.completeLogin(start.challengeId, start.rawCode);
+      await auth.completeLogin(start.challengeId, start.rawCode);
+
+      const failEvents = repo._securityEvents.filter((e) => e.eventType === "login.complete.failed");
+      expect(failEvents).toHaveLength(1);
+      expect(failEvents[0]!.outcome).toBe("already_consumed");
+    });
+
+    it("records login.complete.failed event for invalid challenge format", async () => {
+      const repo = createFakeRepository();
+      const auth = createAuthService({ repo, now: () => fixedNow });
+
+      await auth.completeLogin("invalid_id", "123456");
+
+      const failEvent = repo._securityEvents.find((e) => e.eventType === "login.complete.failed");
+      expect(failEvent).toBeDefined();
+      expect(failEvent!.outcome).toBe("invalid_challenge_format");
+      expect(failEvent!.challengeId).toBeNull();
+    });
+
+    it("failed event metadata does not contain raw code or secrets", async () => {
+      const repo = createFakeRepository();
+      const auth = createAuthService({ repo, now: () => fixedNow });
+
+      const start = await auth.startLogin("user@example.com");
+      if ("error" in start) throw new Error("startLogin failed");
+
+      const wrongCode = "999999";
+      await auth.completeLogin(start.challengeId, wrongCode);
+
+      const failEvent = repo._securityEvents.find((e) => e.eventType === "login.complete.failed")!;
+      const json = JSON.stringify(failEvent.metadata);
+      expect(json).not.toContain(wrongCode);
+      expect(json).not.toContain(start.rawCode);
+      assertNoSecrets(failEvent.metadata);
+      expect(failEvent.metadata).not.toHaveProperty("code");
+      expect(failEvent.metadata).not.toHaveProperty("codeHash");
+      expect(failEvent.metadata).not.toHaveProperty("tokenHash");
+      expect(failEvent.metadata).not.toHaveProperty("secret");
+    });
+
+    it("propagates request context to security events", async () => {
+      const repo = createFakeRepository();
+      const ctx = { requestId: "req_xyz789", ip: "198.51.100.1", userAgent: "Mozilla/5.0" };
+      const auth = createAuthService({ repo, now: () => fixedNow, ctx });
+
+      const start = await auth.startLogin("user@example.com");
+      if ("error" in start) throw new Error("startLogin failed");
+      await auth.completeLogin(start.challengeId, start.rawCode);
+
+      for (const event of repo._securityEvents) {
+        expect(event.requestId).toBe("req_xyz789");
+        expect(event.ip).toBe("198.51.100.1");
+        expect(event.userAgent).toBe("Mozilla/5.0");
+      }
+    });
+
+    it("returns internal_error when session.created event recording fails", async () => {
+      const repo = createFakeRepository();
+      const auth = createAuthService({ repo, now: () => fixedNow });
+
+      const start = await auth.startLogin("user@example.com");
+      if ("error" in start) throw new Error("startLogin failed");
+
+      repo.recordSecurityEvent = async () => ({ ok: false, error: { kind: "internal" as const, message: "db error" } });
+
+      const result = await auth.completeLogin(start.challengeId, start.rawCode);
+      expect("error" in result).toBe(true);
+      if (!("error" in result)) return;
+      expect(result.error).toBe("internal_error");
+    });
   });
 
   describe("getSession", () => {
@@ -425,6 +512,20 @@ describe("Auth Service", () => {
       expect(result.error).toBe("unauthenticated");
       expect(result.message).toContain("revoked");
     });
+
+    it("does not record security events for read-only session check", async () => {
+      const repo = createFakeRepository();
+      const auth = createAuthService({ repo, now: () => fixedNow });
+
+      const start = await auth.startLogin("user@example.com");
+      if ("error" in start) throw new Error("startLogin failed");
+      const complete = await auth.completeLogin(start.challengeId, start.rawCode);
+      if ("error" in complete) throw new Error("completeLogin failed");
+
+      const eventCountBefore = repo._securityEvents.length;
+      await auth.getSession(complete.token);
+      expect(repo._securityEvents.length).toBe(eventCountBefore);
+    });
   });
 
   describe("logout", () => {
@@ -464,6 +565,112 @@ describe("Auth Service", () => {
       expect("error" in result).toBe(true);
       if (!("error" in result)) return;
       expect(result.error).toBe("unauthenticated");
+    });
+
+    it("records session.revoked security event", async () => {
+      const repo = createFakeRepository();
+      const auth = createAuthService({ repo, now: () => fixedNow });
+
+      const start = await auth.startLogin("user@example.com");
+      if ("error" in start) throw new Error("startLogin failed");
+      const complete = await auth.completeLogin(start.challengeId, start.rawCode);
+      if ("error" in complete) throw new Error("completeLogin failed");
+
+      await auth.logout(complete.token);
+
+      const revokeEvent = repo._securityEvents.find((e) => e.eventType === "session.revoked");
+      expect(revokeEvent).toBeDefined();
+      expect(revokeEvent!.outcome).toBe("success");
+    });
+
+    it("session.revoked event contains userId and sessionId UUIDs", async () => {
+      const repo = createFakeRepository();
+      const auth = createAuthService({ repo, now: () => fixedNow });
+
+      const start = await auth.startLogin("user@example.com");
+      if ("error" in start) throw new Error("startLogin failed");
+      const complete = await auth.completeLogin(start.challengeId, start.rawCode);
+      if ("error" in complete) throw new Error("completeLogin failed");
+
+      await auth.logout(complete.token);
+
+      const event = repo._securityEvents.find((e) => e.eventType === "session.revoked")!;
+      const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+      expect(event.userId).toMatch(uuidRe);
+      expect(event.sessionId).toMatch(uuidRe);
+      expect(event.userId).toBe([...repo._users.keys()][0]);
+      expect(event.sessionId).toBe([...repo._sessions.keys()][0]);
+    });
+
+    it("does not record duplicate event for already-revoked session", async () => {
+      const repo = createFakeRepository();
+      const auth = createAuthService({ repo, now: () => fixedNow });
+
+      const start = await auth.startLogin("user@example.com");
+      if ("error" in start) throw new Error("startLogin failed");
+      const complete = await auth.completeLogin(start.challengeId, start.rawCode);
+      if ("error" in complete) throw new Error("completeLogin failed");
+
+      await auth.logout(complete.token);
+      const countAfterFirst = repo._securityEvents.filter((e) => e.eventType === "session.revoked").length;
+      await auth.logout(complete.token);
+      const countAfterSecond = repo._securityEvents.filter((e) => e.eventType === "session.revoked").length;
+      expect(countAfterSecond).toBe(countAfterFirst);
+    });
+
+    it("session.revoked event does not contain secrets", async () => {
+      const repo = createFakeRepository();
+      const auth = createAuthService({ repo, now: () => fixedNow });
+
+      const start = await auth.startLogin("user@example.com");
+      if ("error" in start) throw new Error("startLogin failed");
+      const complete = await auth.completeLogin(start.challengeId, start.rawCode);
+      if ("error" in complete) throw new Error("completeLogin failed");
+
+      await auth.logout(complete.token);
+
+      const event = repo._securityEvents.find((e) => e.eventType === "session.revoked")!;
+      const json = JSON.stringify(event);
+      expect(json).not.toContain(complete.token);
+      expect(json).not.toContain(start.rawCode);
+      expect(event.metadata).not.toHaveProperty("token");
+      expect(event.metadata).not.toHaveProperty("tokenHash");
+      expect(event.metadata).not.toHaveProperty("secret");
+    });
+
+    it("returns internal_error when event recording fails", async () => {
+      const repo = createFakeRepository();
+      const auth = createAuthService({ repo, now: () => fixedNow });
+
+      const start = await auth.startLogin("user@example.com");
+      if ("error" in start) throw new Error("startLogin failed");
+      const complete = await auth.completeLogin(start.challengeId, start.rawCode);
+      if ("error" in complete) throw new Error("completeLogin failed");
+
+      repo.recordSecurityEvent = async () => ({ ok: false, error: { kind: "internal" as const, message: "db error" } });
+
+      const result = await auth.logout(complete.token);
+      expect("error" in result).toBe(true);
+      if (!("error" in result)) return;
+      expect(result.error).toBe("internal_error");
+    });
+
+    it("propagates request context to session.revoked event", async () => {
+      const repo = createFakeRepository();
+      const ctx = { requestId: "req_logout1", ip: "10.0.0.1", userAgent: "CLI/2.0" };
+      const auth = createAuthService({ repo, now: () => fixedNow, ctx });
+
+      const start = await auth.startLogin("user@example.com");
+      if ("error" in start) throw new Error("startLogin failed");
+      const complete = await auth.completeLogin(start.challengeId, start.rawCode);
+      if ("error" in complete) throw new Error("completeLogin failed");
+
+      await auth.logout(complete.token);
+
+      const event = repo._securityEvents.find((e) => e.eventType === "session.revoked")!;
+      expect(event.requestId).toBe("req_logout1");
+      expect(event.ip).toBe("10.0.0.1");
+      expect(event.userAgent).toBe("CLI/2.0");
     });
   });
 });

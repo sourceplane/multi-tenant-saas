@@ -4,6 +4,7 @@ import { createSqlExecutor } from "@saas/db/hyperdrive";
 import { createIdentityRepository } from "@saas/db/identity";
 import { createAuthService } from "../services/auth.js";
 import { successResponse, errorResponse, validationError } from "../http.js";
+import { extractRequestContext } from "../request-context.js";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -31,7 +32,8 @@ export async function handleLoginStart(request: Request, env: Env, requestId: st
   const executor = createSqlExecutor(env.SOURCEPLANE_DB);
   try {
     const repo = createIdentityRepository(executor);
-    const auth = createAuthService({ repo, now: () => new Date() });
+    const ctx = extractRequestContext(request, requestId);
+    const auth = createAuthService({ repo, now: () => new Date(), ctx });
     const result = await auth.startLogin(email);
 
     if ("error" in result) {

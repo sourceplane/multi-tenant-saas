@@ -5,6 +5,7 @@ import {
   generateSessionId,
   generateChallengeId,
   generateAuthIdentityId,
+  generateSecurityEventId,
   generateCode,
   generateTokenSecret,
   buildSessionToken,
@@ -15,9 +16,16 @@ import {
   parseChallengePublicId,
 } from "../ids.js";
 
+export interface RequestContext {
+  requestId?: string | null;
+  ip?: string | null;
+  userAgent?: string | null;
+}
+
 export interface AuthServiceDeps {
   repo: IdentityRepository;
   now: () => Date;
+  ctx?: RequestContext;
 }
 
 export interface StartLoginResult {
@@ -54,7 +62,7 @@ export interface GetSessionError {
 }
 
 export interface LogoutError {
-  error: "unauthenticated";
+  error: "unauthenticated" | "internal_error";
   message: string;
 }
 
@@ -68,7 +76,17 @@ function emailHint(email: string): string {
 }
 
 export function createAuthService(deps: AuthServiceDeps) {
-  const { repo, now } = deps;
+  const { repo, now, ctx } = deps;
+
+  function eventBase() {
+    return {
+      id: generateSecurityEventId(),
+      requestId: ctx?.requestId ?? null,
+      ip: ctx?.ip ?? null,
+      userAgent: ctx?.userAgent ?? null,
+      occurredAt: now(),
+    };
+  }
 
   async function resolveOrCreateUser(email: string, emailLower: string): Promise<IdentityResult<User>> {
     const existing = await repo.getUserByEmail(emailLower);
@@ -126,6 +144,19 @@ export function createAuthService(deps: AuthServiceDeps) {
         return { error: "internal_error", message: "Failed to create login challenge" };
       }
 
+      const eventResult = await repo.recordSecurityEvent({
+        ...eventBase(),
+        eventType: "login.challenge.created",
+        outcome: "success",
+        userId: userResult.value.id,
+        challengeId: challengeUuid,
+        metadata: { method: "email_code" },
+      });
+
+      if (!eventResult.ok) {
+        return { error: "internal_error", message: "Failed to record security event" };
+      }
+
       return {
         challengeId: challengePublicId(challengeUuid),
         expiresAt,
@@ -137,6 +168,12 @@ export function createAuthService(deps: AuthServiceDeps) {
     async completeLogin(challengeId: string, code: string): Promise<CompleteLoginResult | CompleteLoginError> {
       const challengeUuid = parseChallengePublicId(challengeId);
       if (!challengeUuid) {
+        await repo.recordSecurityEvent({
+          ...eventBase(),
+          eventType: "login.complete.failed",
+          outcome: "invalid_challenge_format",
+          metadata: { method: "email_code" },
+        });
         return { error: "not_found", message: "Challenge not found or code is invalid" };
       }
 
@@ -144,6 +181,19 @@ export function createAuthService(deps: AuthServiceDeps) {
       const consumeResult = await repo.consumeLoginChallenge(challengeUuid, codeHash, now());
 
       if (!consumeResult.ok) {
+        const outcomeMap: Record<string, string> = {
+          not_found: "invalid_code_or_challenge",
+          expired: "expired_challenge",
+          already_consumed: "already_consumed",
+        };
+        await repo.recordSecurityEvent({
+          ...eventBase(),
+          eventType: "login.complete.failed",
+          outcome: outcomeMap[consumeResult.error.kind] ?? "internal_error",
+          challengeId: challengeUuid,
+          metadata: { method: "email_code" },
+        });
+
         switch (consumeResult.error.kind) {
           case "not_found":
             return { error: "not_found", message: "Challenge not found or code is invalid" };
@@ -178,6 +228,20 @@ export function createAuthService(deps: AuthServiceDeps) {
 
       if (!sessionResult.ok) {
         return { error: "internal_error", message: "Failed to create session" };
+      }
+
+      const eventResult = await repo.recordSecurityEvent({
+        ...eventBase(),
+        eventType: "session.created",
+        outcome: "success",
+        userId: challenge.userId,
+        sessionId: sessionUuid,
+        challengeId: challengeUuid,
+        metadata: { method: "email_code" },
+      });
+
+      if (!eventResult.ok) {
+        return { error: "internal_error", message: "Failed to record security event" };
       }
 
       const user = userResult.value;
@@ -237,6 +301,19 @@ export function createAuthService(deps: AuthServiceDeps) {
       const session = sessionResult.value;
       if (session.revokedAt === null) {
         await repo.revokeSession(session.id, now());
+
+        const eventResult = await repo.recordSecurityEvent({
+          ...eventBase(),
+          eventType: "session.revoked",
+          outcome: "success",
+          userId: session.userId,
+          sessionId: session.id,
+          metadata: {},
+        });
+
+        if (!eventResult.ok) {
+          return { error: "internal_error", message: "Failed to record security event" };
+        }
       }
 
       return { success: true };

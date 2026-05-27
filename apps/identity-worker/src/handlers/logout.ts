@@ -3,6 +3,7 @@ import { createSqlExecutor } from "@saas/db/hyperdrive";
 import { createIdentityRepository } from "@saas/db/identity";
 import { createAuthService } from "../services/auth.js";
 import { successResponse, errorResponse, extractBearerToken } from "../http.js";
+import { extractRequestContext } from "../request-context.js";
 
 export async function handleLogout(request: Request, env: Env, requestId: string): Promise<Response> {
   const token = extractBearerToken(request);
@@ -17,11 +18,13 @@ export async function handleLogout(request: Request, env: Env, requestId: string
   const executor = createSqlExecutor(env.SOURCEPLANE_DB);
   try {
     const repo = createIdentityRepository(executor);
-    const auth = createAuthService({ repo, now: () => new Date() });
+    const ctx = extractRequestContext(request, requestId);
+    const auth = createAuthService({ repo, now: () => new Date(), ctx });
     const result = await auth.logout(token);
 
     if ("error" in result) {
-      return errorResponse(result.error, result.message, 401, requestId);
+      const status = result.error === "internal_error" ? 500 : 401;
+      return errorResponse(result.error, result.message, status, requestId);
     }
 
     return successResponse({ success: true }, requestId, 200);

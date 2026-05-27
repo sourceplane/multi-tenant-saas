@@ -5,10 +5,14 @@ import type {
   AuthIdentity,
   LoginChallenge,
   Session,
+  SecurityEvent,
   CreateUserInput,
   CreateAuthIdentityInput,
   CreateLoginChallengeInput,
   CreateSessionInput,
+  CreateSecurityEventInput,
+  SecurityEventPageQueryParams,
+  SecurityEventPagedResult,
 } from "@saas/db/identity";
 
 interface StoredChallenge extends LoginChallenge {
@@ -24,22 +28,26 @@ export function createFakeRepository(): IdentityRepository & {
   _authIdentities: Map<string, AuthIdentity>;
   _challenges: Map<string, StoredChallenge>;
   _sessions: Map<string, StoredSession>;
+  _securityEvents: SecurityEvent[];
 } {
   const users = new Map<string, User>();
   const authIdentities = new Map<string, AuthIdentity>();
   const challenges = new Map<string, StoredChallenge>();
   const sessions = new Map<string, StoredSession>();
+  const securityEvents: SecurityEvent[] = [];
 
   const repo: IdentityRepository & {
     _users: Map<string, User>;
     _authIdentities: Map<string, AuthIdentity>;
     _challenges: Map<string, StoredChallenge>;
     _sessions: Map<string, StoredSession>;
+    _securityEvents: SecurityEvent[];
   } = {
     _users: users,
     _authIdentities: authIdentities,
     _challenges: challenges,
     _sessions: sessions,
+    _securityEvents: securityEvents,
 
     async createUser(input: CreateUserInput): Promise<IdentityResult<User>> {
       if (users.has(input.id)) {
@@ -155,6 +163,58 @@ export function createFakeRepository(): IdentityRepository & {
       if (!s) return { ok: false, error: { kind: "not_found" } };
       s.revokedAt = revokedAt;
       return { ok: true, value: s };
+    },
+
+    async recordSecurityEvent(input: CreateSecurityEventInput): Promise<IdentityResult<SecurityEvent>> {
+      const event: SecurityEvent = {
+        id: input.id,
+        eventType: input.eventType,
+        outcome: input.outcome,
+        userId: input.userId ?? null,
+        sessionId: input.sessionId ?? null,
+        challengeId: input.challengeId ?? null,
+        requestId: input.requestId ?? null,
+        correlationId: input.correlationId ?? null,
+        ip: input.ip ?? null,
+        userAgent: input.userAgent ?? null,
+        occurredAt: input.occurredAt ?? new Date(),
+        createdAt: new Date(),
+        metadata: input.metadata ?? {},
+        redactPaths: input.redactPaths ?? [],
+      };
+      securityEvents.push(event);
+      return { ok: true, value: event };
+    },
+
+    async querySecurityEventsByUser(params: SecurityEventPageQueryParams): Promise<IdentityResult<SecurityEventPagedResult>> {
+      const userEvents = securityEvents
+        .filter((e) => e.userId === params.userId)
+        .sort((a, b) => {
+          const timeDiff = b.occurredAt.getTime() - a.occurredAt.getTime();
+          if (timeDiff !== 0) return timeDiff;
+          return b.id < a.id ? -1 : b.id > a.id ? 1 : 0;
+        });
+
+      let filtered = userEvents;
+      if (params.cursor) {
+        const cursorTime = new Date(params.cursor.occurredAt).getTime();
+        filtered = userEvents.filter((e) => {
+          const t = e.occurredAt.getTime();
+          return t < cursorTime || (t === cursorTime && e.id < params.cursor!.id);
+        });
+      }
+
+      const fetchLimit = params.limit + 1;
+      const page = filtered.slice(0, fetchLimit);
+
+      let nextCursor = null;
+      if (page.length > params.limit) {
+        page.pop();
+        const last = page[page.length - 1]!;
+        nextCursor = { occurredAt: last.occurredAt.toISOString(), id: last.id };
+      }
+
+      return { ok: true, value: { items: page, nextCursor } };
     },
   };
 

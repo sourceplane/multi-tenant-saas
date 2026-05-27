@@ -3,6 +3,7 @@ import { createSqlExecutor } from "@saas/db/hyperdrive";
 import { createIdentityRepository } from "@saas/db/identity";
 import { createAuthService } from "../services/auth.js";
 import { successResponse, errorResponse, validationError } from "../http.js";
+import { extractRequestContext } from "../request-context.js";
 
 const CODE_RE = /^\d{6}$/;
 
@@ -39,7 +40,8 @@ export async function handleLoginComplete(request: Request, env: Env, requestId:
   const executor = createSqlExecutor(env.SOURCEPLANE_DB);
   try {
     const repo = createIdentityRepository(executor);
-    const auth = createAuthService({ repo, now: () => new Date() });
+    const ctx = extractRequestContext(request, requestId);
+    const auth = createAuthService({ repo, now: () => new Date(), ctx });
     const result = await auth.completeLogin(challengeId as string, code as string);
 
     if ("error" in result) {
