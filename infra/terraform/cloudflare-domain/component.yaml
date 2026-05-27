@@ -9,7 +9,7 @@ metadata:
     scope: dns-and-custom-domains
 
 spec:
-  type: cloudflare-domain
+  type: terraform
   domain: infra
 
   parameters:
@@ -20,9 +20,6 @@ spec:
     baseDomain: sourceplane.ai
     zoneMode: existing
     pagesProjectPrefix: sourceplane-web-console
-    awsRegion: us-east-1
-    owner: sourceplane
-    repo: multi-tenant-saas
 
   env:
     AWS_EC2_METADATA_DISABLED: "true"
