@@ -197,6 +197,35 @@ h4 { font-size: 14px; font-weight: 600; margin-bottom: 6px; }
   color: var(--primary);
 }
 
+/* Security Events */
+.security-event .security-event-type {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--primary);
+}
+
+.security-outcome-success {
+  color: var(--success);
+  font-weight: 500;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.security-outcome-failure {
+  color: var(--danger);
+  font-weight: 500;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.security-event-details {
+  display: block;
+  width: 100%;
+  margin-top: 2px;
+  font-size: 11px;
+  word-break: break-all;
+}
+
 /* Responsive */
 @media (max-width: 640px) {
   #app { padding: 0 8px; }
