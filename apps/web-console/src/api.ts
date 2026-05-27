@@ -182,8 +182,8 @@ export class ApiClient {
     return this.wrapOk(inv, r.meta);
   }
 
-  async acceptInvitation(token: string): Promise<ApiResult<{ invitation: PublicInvitation; membership: unknown }>> {
-    const r = await this.raw("POST", "/v1/invitations/accept", { token });
+  async acceptInvitation(orgId: string, token: string): Promise<ApiResult<{ invitation: PublicInvitation; membership: unknown }>> {
+    const r = await this.raw("POST", `/v1/organizations/${orgId}/invitations/accept`, { token });
     if ("error" in r) return this.wrapErr(r.error);
     return this.wrapOk(r.json as unknown as { invitation: PublicInvitation; membership: unknown }, r.meta);
   }

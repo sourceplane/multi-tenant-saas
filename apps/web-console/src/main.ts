@@ -511,7 +511,11 @@ async function handleAcceptInvitation(): Promise<void> {
   if (!token) return;
   const container = $("accept-result");
   clear(container);
-  const result = await state.client.acceptInvitation(token);
+  if (!state.orgId) {
+    container.appendChild(h("p", { class: "error" }, "No organization selected."));
+    return;
+  }
+  const result = await state.client.acceptInvitation(state.orgId, token);
   if (!result.ok) {
     showError(result, container);
     return;
