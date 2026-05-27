@@ -35,7 +35,8 @@ Own all facts about who a user is and how an actor proves identity to the platfo
 - API keys and service-principal credentials
 - account bootstrap and profile basics
 - account security settings
-- security events owned by identity, with audit copies emitted through the events component
+- security events owned by identity, with org-scoped audit copies emitted
+  through the events component only when organization context exists
 
 ## Out Of Scope
 
@@ -167,6 +168,17 @@ Example success envelope for `GET /v1/auth/api-keys`:
 ```
 
 ### Events
+
+Identity owns security-event source facts for users, sessions, API keys, and
+service principals. These records may be user-scoped and pre-organization, such
+as login challenge creation, session creation, failed login attempts, or logout
+before a user has selected or created an organization.
+
+Pre-organization identity security history is not represented by an org-less
+shared audit/event envelope. The shared event envelope remains org-scoped. When
+organization context is available, identity must emit a normal org-scoped
+event/audit copy through the events component using the existing envelope
+contract.
 
 This component must emit:
 

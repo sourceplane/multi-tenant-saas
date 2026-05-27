@@ -174,6 +174,27 @@ Last updated: 2026-05-26
   initial `membership.added` event/audit rows in the membership-worker
   transaction. Raw UUIDs remain canonical persistence IDs; public IDs stay at
   the API/payload boundary.
+- Identity security-event scope is decided: use identity-owned user-scoped
+  security-event source records for pre-organization identity activity. Do not
+  change the shared events/audit envelope to allow org-less audit events.
+  Organization audit history remains org-scoped and requires `org_id`; identity
+  emits normal org-scoped audit/event copies only when organization context
+  exists. Implementation is deferred until after the web-console work.
+- Task 0040 establishes the next focus as a live-test web console. The console
+  must remain a replaceable client of the public `api-edge`; any browser access
+  blocker should be solved through a narrow public API CORS seam, not by calling
+  internal Workers directly.
+- Task 0040 CORS policy: `api-edge` allows only the Pages production origin
+  (`https://sourceplane-web-console.pages.dev`), Pages preview subdomains
+  (`*.sourceplane-web-console.pages.dev`), and localhost/127.0.0.1 for dev.
+  No wildcard origins. `Vary: Origin` on all responses. Preflight handled before
+  route dispatch; CORS headers applied to all responses including errors.
+- Web-console hosting should be environment-specific after Task 0040: stage and
+  prod must have separate Pages deployments and distinct URLs. Canonical target
+  names for Task 0041 are `sourceplane-web-console-stage` and
+  `sourceplane-web-console-prod`; each deployed console should be locked to its
+  matching `api-edge` environment, and CORS should allow matching console/API
+  pairs rather than a cross-environment console origin.
 
 ## Pending Decisions
 

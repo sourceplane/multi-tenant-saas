@@ -17,6 +17,8 @@ Status: Normative
 - `Invoice`: mirrored provider invoice/payment state.
 - `UsageEvent`: normalized metering event.
 - `UsageRollup`: queryable usage summary by time bucket and scope.
+- `IdentitySecurityEvent`: user-scoped identity security history owned by
+  identity; may exist before organization context.
 - `AuditEvent`: immutable security, membership, billing, and project mutation record.
 - `WebhookEndpoint`: tenant-owned outgoing webhook destination.
 - `NotificationPreference`: user or organization delivery preference.
@@ -30,7 +32,12 @@ Status: Normative
 - An environment belongs to exactly one project and inherits its organization.
 - API keys and service principals must be bound to an organization.
 - Billing customer state belongs to an organization, not to a project in V1.
-- Audit events must always include an organization. Project and environment IDs are included when applicable.
+- Organization audit events must always include an organization. Project and
+  environment IDs are included when applicable.
+- Pre-organization identity security events are identity-owned user-scoped
+  records, not org-less audit records. When organization context exists,
+  identity emits a normal org-scoped audit/event copy using the shared event
+  envelope.
 
 ## Project Isolation Invariant
 
@@ -47,6 +54,7 @@ The V1 relational model must have owned storage for:
 - users
 - auth identities
 - sessions or session indexes
+- identity security events
 - service principals
 - api keys
 - organizations
@@ -78,6 +86,10 @@ Every meaningful mutation SHOULD emit:
 - one domain event
 - one audit event when user, security, membership, billing, project, API key, webhook, config, or support state changes
 - one usage event when the mutation consumes billable or quota-tracked capacity
+
+For identity activity before organization context exists, the identity component
+records user-scoped security history first. It emits shared org-scoped audit
+events only when the operation has organization context.
 
 Domain events and source-of-truth state changes should commit atomically where possible. If they cannot, the component must document its outbox or recovery behavior.
 
