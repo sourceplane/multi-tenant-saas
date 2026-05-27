@@ -98,7 +98,9 @@ The web console is a client of the platform, not part of the platform core. It m
 The web console is deployed as environment-specific Cloudflare Pages projects:
 
 - **Stage**: `sourceplane-web-console-stage` at `https://sourceplane-web-console-stage.pages.dev/`
+  - Custom domain: `https://stage.sourceplane.ai/` (from `CONSOLE_CUSTOM_DOMAIN` env var)
 - **Prod**: `sourceplane-web-console-prod` at `https://sourceplane-web-console-prod.pages.dev/`
+  - Custom domain: `https://prod.sourceplane.ai/` (from `CONSOLE_CUSTOM_DOMAIN` env var)
 
 Each deployed console is locked to a single API edge environment at build time
 via the `VITE_DEPLOY_ENV` variable. The stage console calls only the stage
@@ -109,3 +111,10 @@ deployed builds.
 The `cloudflare-pages-turbo` composition supports this via
 `environmentAwareProjectName: true`, which appends the Orun environment name as
 a suffix to the base `projectName`.
+
+Custom domains are managed by the `cloudflare-domain` infrastructure component
+(`infra/terraform/cloudflare-domain`). The domain component depends on
+`web-console` to ensure Pages projects exist before attaching custom domains.
+The source of truth for hostname assignments is `intent.yaml` →
+each environment's `env.CONSOLE_CUSTOM_DOMAIN` declaration. To change domains,
+update the environment variable values in `intent.yaml` and re-deploy.

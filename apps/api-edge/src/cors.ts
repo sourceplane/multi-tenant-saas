@@ -1,15 +1,15 @@
 import type { Env } from "./env";
 
-const STAGE_ORIGINS = [
-  "https://sourceplane-web-console-stage.pages.dev",
-];
+const PAGES_ORIGINS: Record<string, string> = {
+  stage: "https://sourceplane-web-console-stage.pages.dev",
+  prod: "https://sourceplane-web-console-prod.pages.dev",
+};
 
-const PROD_ORIGINS = [
-  "https://sourceplane-web-console-prod.pages.dev",
-];
+const PREVIEW_RE: Record<string, RegExp> = {
+  stage: /^https:\/\/[a-z0-9-]+\.sourceplane-web-console-stage\.pages\.dev$/,
+  prod: /^https:\/\/[a-z0-9-]+\.sourceplane-web-console-prod\.pages\.dev$/,
+};
 
-const STAGE_PREVIEW_RE = /^https:\/\/[a-z0-9-]+\.sourceplane-web-console-stage\.pages\.dev$/;
-const PROD_PREVIEW_RE = /^https:\/\/[a-z0-9-]+\.sourceplane-web-console-prod\.pages\.dev$/;
 const LOCALHOST_RE = /^https?:\/\/localhost(:\d+)?$/;
 const VITE_DEV_RE = /^https?:\/\/127\.0\.0\.1(:\d+)?$/;
 
@@ -35,23 +35,22 @@ export function isAllowedOrigin(origin: string | null, env: Env): boolean {
   if (VITE_DEV_RE.test(origin)) return true;
 
   const environment = env.ENVIRONMENT;
+  const customDomain = env.CONSOLE_CUSTOM_DOMAIN;
 
-  if (environment === "stage") {
-    if (STAGE_ORIGINS.includes(origin)) return true;
-    if (STAGE_PREVIEW_RE.test(origin)) return true;
+  if (environment === "stage" || environment === "prod") {
+    if (customDomain && origin === `https://${customDomain}`) return true;
+    if (origin === PAGES_ORIGINS[environment]) return true;
+    if (PREVIEW_RE[environment]?.test(origin)) return true;
     return false;
   }
 
-  if (environment === "prod") {
-    if (PROD_ORIGINS.includes(origin)) return true;
-    if (PROD_PREVIEW_RE.test(origin)) return true;
-    return false;
+  if (customDomain && origin === `https://${customDomain}`) return true;
+  for (const pagesOrigin of Object.values(PAGES_ORIGINS)) {
+    if (origin === pagesOrigin) return true;
   }
-
-  if (STAGE_ORIGINS.includes(origin)) return true;
-  if (PROD_ORIGINS.includes(origin)) return true;
-  if (STAGE_PREVIEW_RE.test(origin)) return true;
-  if (PROD_PREVIEW_RE.test(origin)) return true;
+  for (const re of Object.values(PREVIEW_RE)) {
+    if (re.test(origin)) return true;
+  }
 
   return false;
 }

@@ -127,9 +127,17 @@ The API edge enforces an environment-aware CORS allowlist. Each deployed
 
 | API Environment | Allowed Console Origins |
 |----------------|-------------------------|
-| stage | `https://sourceplane-web-console-stage.pages.dev`, stage preview subdomains, localhost |
-| prod | `https://sourceplane-web-console-prod.pages.dev`, prod preview subdomains, localhost |
+| stage | `https://${CONSOLE_CUSTOM_DOMAIN}`, `https://sourceplane-web-console-stage.pages.dev`, stage preview subdomains, localhost |
+| prod | `https://${CONSOLE_CUSTOM_DOMAIN}`, `https://sourceplane-web-console-prod.pages.dev`, prod preview subdomains, localhost |
 
-Cross-environment requests (e.g. stage console calling prod API) are rejected.
+The custom domain origin is read from the `CONSOLE_CUSTOM_DOMAIN` environment
+variable (set in `wrangler.jsonc` per environment, sourced from `intent.yaml`
+environment-level `env` declarations). This ensures domain names are never
+hardcoded in application code and can be changed by updating `intent.yaml`.
+
+Cross-environment requests (e.g. stage console calling prod API, or
+`prod.sourceplane.ai` calling stage API) are rejected. Custom domain origins
+follow the same environment isolation.
+
 Localhost and 127.0.0.1 are allowed in all environments for local development.
 Wildcard origins are never used.

@@ -5,17 +5,20 @@
   "main": "src/index.ts",
   "minify": false,
   "vars": {
-    "ENVIRONMENT": "local"
+    "ENVIRONMENT": "local",
+    "CONSOLE_CUSTOM_DOMAIN": ""
   },
   "env": {
     "dev": {
       "vars": {
-        "ENVIRONMENT": "dev"
+        "ENVIRONMENT": "dev",
+        "CONSOLE_CUSTOM_DOMAIN": ""
       }
     },
     "stage": {
       "vars": {
-        "ENVIRONMENT": "stage"
+        "ENVIRONMENT": "stage",
+        "CONSOLE_CUSTOM_DOMAIN": "stage.sourceplane.ai"
       },
       "hyperdrive": [
         {
@@ -44,7 +47,8 @@
     },
     "prod": {
       "vars": {
-        "ENVIRONMENT": "prod"
+        "ENVIRONMENT": "prod",
+        "CONSOLE_CUSTOM_DOMAIN": "prod.sourceplane.ai"
       },
       "hyperdrive": [
         {

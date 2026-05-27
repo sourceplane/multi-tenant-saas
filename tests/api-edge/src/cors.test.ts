@@ -1,12 +1,16 @@
 import { handlePreflight, applyCorsHeaders, isAllowedOrigin } from "@api-edge/cors";
 import type { Env } from "@api-edge/env";
 
-const stageEnv: Env = { ENVIRONMENT: "stage" };
-const prodEnv: Env = { ENVIRONMENT: "prod" };
+const stageEnv: Env = { ENVIRONMENT: "stage", CONSOLE_CUSTOM_DOMAIN: "stage.sourceplane.ai" };
+const prodEnv: Env = { ENVIRONMENT: "prod", CONSOLE_CUSTOM_DOMAIN: "prod.sourceplane.ai" };
 const testEnv: Env = { ENVIRONMENT: "test" };
 
 describe("api-edge cors", () => {
   describe("isAllowedOrigin — stage environment", () => {
+    it("allows the stage custom domain origin", () => {
+      expect(isAllowedOrigin("https://stage.sourceplane.ai", stageEnv)).toBe(true);
+    });
+
     it("allows the stage console origin", () => {
       expect(isAllowedOrigin("https://sourceplane-web-console-stage.pages.dev", stageEnv)).toBe(true);
     });
@@ -14,6 +18,10 @@ describe("api-edge cors", () => {
     it("allows stage preview origins", () => {
       expect(isAllowedOrigin("https://abc123.sourceplane-web-console-stage.pages.dev", stageEnv)).toBe(true);
       expect(isAllowedOrigin("https://feat-branch-42.sourceplane-web-console-stage.pages.dev", stageEnv)).toBe(true);
+    });
+
+    it("rejects the prod custom domain origin", () => {
+      expect(isAllowedOrigin("https://prod.sourceplane.ai", stageEnv)).toBe(false);
     });
 
     it("rejects the prod console origin", () => {
@@ -40,12 +48,20 @@ describe("api-edge cors", () => {
   });
 
   describe("isAllowedOrigin — prod environment", () => {
+    it("allows the prod custom domain origin", () => {
+      expect(isAllowedOrigin("https://prod.sourceplane.ai", prodEnv)).toBe(true);
+    });
+
     it("allows the prod console origin", () => {
       expect(isAllowedOrigin("https://sourceplane-web-console-prod.pages.dev", prodEnv)).toBe(true);
     });
 
     it("allows prod preview origins", () => {
       expect(isAllowedOrigin("https://abc123.sourceplane-web-console-prod.pages.dev", prodEnv)).toBe(true);
+    });
+
+    it("rejects the stage custom domain origin", () => {
+      expect(isAllowedOrigin("https://stage.sourceplane.ai", prodEnv)).toBe(false);
     });
 
     it("rejects the stage console origin", () => {
@@ -70,6 +86,16 @@ describe("api-edge cors", () => {
   });
 
   describe("isAllowedOrigin — fallback (test/unknown environment)", () => {
+    it("rejects custom domain origins when CONSOLE_CUSTOM_DOMAIN is not set", () => {
+      expect(isAllowedOrigin("https://stage.sourceplane.ai", testEnv)).toBe(false);
+      expect(isAllowedOrigin("https://prod.sourceplane.ai", testEnv)).toBe(false);
+    });
+
+    it("allows custom domain origin when CONSOLE_CUSTOM_DOMAIN is set", () => {
+      const envWithDomain: Env = { ENVIRONMENT: "test", CONSOLE_CUSTOM_DOMAIN: "custom.example.com" };
+      expect(isAllowedOrigin("https://custom.example.com", envWithDomain)).toBe(true);
+    });
+
     it("allows both stage and prod console origins", () => {
       expect(isAllowedOrigin("https://sourceplane-web-console-stage.pages.dev", testEnv)).toBe(true);
       expect(isAllowedOrigin("https://sourceplane-web-console-prod.pages.dev", testEnv)).toBe(true);
@@ -109,6 +135,20 @@ describe("api-edge cors", () => {
       expect(handlePreflight(req, stageEnv)).toBeNull();
     });
 
+    it("returns 204 with CORS headers for allowed stage custom domain", () => {
+      const req = new Request("https://api.test/v1/auth/session", {
+        method: "OPTIONS",
+        headers: { origin: "https://stage.sourceplane.ai" },
+      });
+      const res = handlePreflight(req, stageEnv);
+      expect(res).not.toBeNull();
+      expect(res!.status).toBe(204);
+      expect(res!.headers.get("access-control-allow-origin")).toBe(
+        "https://stage.sourceplane.ai",
+      );
+      expect(res!.headers.get("access-control-allow-credentials")).toBe("true");
+    });
+
     it("returns 204 with CORS headers for allowed stage origin", () => {
       const req = new Request("https://api.test/v1/auth/session", {
         method: "OPTIONS",
@@ -129,6 +169,17 @@ describe("api-edge cors", () => {
       expect(res!.headers.get("access-control-allow-headers")).toContain("idempotency-key");
       expect(res!.headers.get("access-control-allow-credentials")).toBe("true");
       expect(res!.headers.get("vary")).toBe("Origin");
+    });
+
+    it("returns 204 without CORS headers when prod custom domain hits stage API", () => {
+      const req = new Request("https://api.test/v1/auth/session", {
+        method: "OPTIONS",
+        headers: { origin: "https://prod.sourceplane.ai" },
+      });
+      const res = handlePreflight(req, stageEnv);
+      expect(res).not.toBeNull();
+      expect(res!.status).toBe(204);
+      expect(res!.headers.get("access-control-allow-origin")).toBeNull();
     });
 
     it("returns 204 without CORS headers when prod origin hits stage API", () => {
@@ -165,6 +216,21 @@ describe("api-edge cors", () => {
   });
 
   describe("applyCorsHeaders", () => {
+    it("adds CORS headers for stage custom domain on stage env", () => {
+      const req = new Request("https://api.test/v1/auth/session", {
+        headers: { origin: "https://stage.sourceplane.ai" },
+      });
+      const original = Response.json({ data: {} }, { status: 200 });
+      const res = applyCorsHeaders(original, req, stageEnv);
+
+      expect(res.status).toBe(200);
+      expect(res.headers.get("access-control-allow-origin")).toBe(
+        "https://stage.sourceplane.ai",
+      );
+      expect(res.headers.get("access-control-allow-credentials")).toBe("true");
+      expect(res.headers.get("vary")).toBe("Origin");
+    });
+
     it("adds CORS headers for allowed stage origin on stage env", () => {
       const req = new Request("https://api.test/v1/auth/session", {
         headers: { origin: "https://sourceplane-web-console-stage.pages.dev" },
@@ -180,12 +246,32 @@ describe("api-edge cors", () => {
       expect(res.headers.get("vary")).toBe("Origin");
     });
 
+    it("does not add CORS headers for prod custom domain on stage env", () => {
+      const req = new Request("https://api.test/v1/auth/session", {
+        headers: { origin: "https://prod.sourceplane.ai" },
+      });
+      const original = Response.json({ data: {} }, { status: 200 });
+      const res = applyCorsHeaders(original, req, stageEnv);
+
+      expect(res.headers.get("access-control-allow-origin")).toBeNull();
+    });
+
     it("does not add CORS headers for prod origin on stage env", () => {
       const req = new Request("https://api.test/v1/auth/session", {
         headers: { origin: "https://sourceplane-web-console-prod.pages.dev" },
       });
       const original = Response.json({ data: {} }, { status: 200 });
       const res = applyCorsHeaders(original, req, stageEnv);
+
+      expect(res.headers.get("access-control-allow-origin")).toBeNull();
+    });
+
+    it("does not add CORS headers for stage custom domain on prod env", () => {
+      const req = new Request("https://api.test/v1/auth/session", {
+        headers: { origin: "https://stage.sourceplane.ai" },
+      });
+      const original = Response.json({ data: {} }, { status: 200 });
+      const res = applyCorsHeaders(original, req, prodEnv);
 
       expect(res.headers.get("access-control-allow-origin")).toBeNull();
     });

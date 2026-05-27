@@ -1,0 +1,44 @@
+apiVersion: sourceplane.io/v1
+kind: Component
+
+metadata:
+  name: cloudflare-domain
+  description: Manages the Cloudflare zone and attaches custom domains to environment-specific Pages projects
+  labels:
+    domain: infra
+    scope: dns-and-custom-domains
+
+spec:
+  type: terraform
+  domain: infra
+
+  parameters:
+    orgName: sourceplane
+    stackName: cloudflare-domain
+    terraformDir: terraform
+    terraformVersion: "1.15.3"
+    baseDomain: sourceplane.ai
+    zoneMode: existing
+    pagesProjectPrefix: sourceplane-web-console
+
+  env:
+    AWS_EC2_METADATA_DISABLED: "true"
+
+  dependsOn:
+    - component: web-console
+
+  subscribe:
+    environments:
+      - name: stage
+        profile: plan-only
+        profileRules:
+          - profile: apply
+            when:
+              triggerRef: github-push-main
+
+      - name: prod
+        profile: plan-only
+        profileRules:
+          - profile: apply
+            when:
+              triggerRef: github-push-main
