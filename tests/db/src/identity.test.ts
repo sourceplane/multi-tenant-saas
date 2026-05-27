@@ -69,6 +69,23 @@ const SAMPLE_SESSION_ROW = {
   last_seen_at: NOW.toISOString(),
 };
 
+const SAMPLE_SECURITY_EVENT_ROW = {
+  id: "se-001",
+  event_type: "login.completed",
+  outcome: "success",
+  user_id: "u-001",
+  session_id: "sess-001",
+  challenge_id: "ch-001",
+  request_id: "req-001",
+  correlation_id: "cor-001",
+  ip: "192.168.1.1",
+  user_agent: "Mozilla/5.0",
+  occurred_at: NOW.toISOString(),
+  created_at: NOW.toISOString(),
+  metadata: JSON.stringify({ provider: "email" }),
+  redact_paths: JSON.stringify(["/metadata/provider"]),
+};
+
 describe("IdentityRepository", () => {
   describe("createUser", () => {
     it("uses parameterized query for user creation", async () => {
@@ -561,6 +578,368 @@ describe("IdentityRepository", () => {
       expect(exportKeys).not.toContain("PgAdapter");
       expect(exportKeys).not.toContain("loadSecret");
       expect(exportKeys).not.toContain("SupabaseApiAdapter");
+    });
+  });
+
+  describe("recordSecurityEvent", () => {
+    it("uses parameterized query for insert", async () => {
+      const { executor, queries } = createFakeExecutor({ rows: [SAMPLE_SECURITY_EVENT_ROW] });
+      const repo = createIdentityRepository(executor);
+
+      await repo.recordSecurityEvent({
+        id: "se-001",
+        eventType: "login.completed",
+        outcome: "success",
+        userId: "u-001",
+        sessionId: "sess-001",
+        challengeId: "ch-001",
+        requestId: "req-001",
+        correlationId: "cor-001",
+        ip: "192.168.1.1",
+        userAgent: "Mozilla/5.0",
+        occurredAt: NOW,
+        metadata: { provider: "email" },
+        redactPaths: ["/metadata/provider"],
+      });
+
+      expect(queries).toHaveLength(1);
+      expect(queries[0]!.text).toContain("$1");
+      expect(queries[0]!.text).toContain("$13");
+      expect(queries[0]!.text).toContain("identity.security_events");
+      expect(queries[0]!.params[0]).toBe("se-001");
+      expect(queries[0]!.params[1]).toBe("login.completed");
+      expect(queries[0]!.params[2]).toBe("success");
+      expect(queries[0]!.params[3]).toBe("u-001");
+    });
+
+    it("maps returned row to SecurityEvent type", async () => {
+      const { executor } = createFakeExecutor({ rows: [SAMPLE_SECURITY_EVENT_ROW] });
+      const repo = createIdentityRepository(executor);
+
+      const result = await repo.recordSecurityEvent({
+        id: "se-001",
+        eventType: "login.completed",
+        outcome: "success",
+        occurredAt: NOW,
+      });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value.id).toBe("se-001");
+        expect(result.value.eventType).toBe("login.completed");
+        expect(result.value.outcome).toBe("success");
+        expect(result.value.userId).toBe("u-001");
+        expect(result.value.sessionId).toBe("sess-001");
+        expect(result.value.challengeId).toBe("ch-001");
+        expect(result.value.ip).toBe("192.168.1.1");
+        expect(result.value.occurredAt).toEqual(NOW);
+        expect(result.value.createdAt).toEqual(NOW);
+      }
+    });
+
+    it("serializes metadata as JSON", async () => {
+      const { executor, queries } = createFakeExecutor({ rows: [SAMPLE_SECURITY_EVENT_ROW] });
+      const repo = createIdentityRepository(executor);
+
+      await repo.recordSecurityEvent({
+        id: "se-001",
+        eventType: "login.completed",
+        outcome: "success",
+        metadata: { provider: "email", extra: 42 },
+      });
+
+      const metadataParam = queries[0]!.params[11];
+      expect(typeof metadataParam).toBe("string");
+      expect(JSON.parse(metadataParam as string)).toEqual({ provider: "email", extra: 42 });
+    });
+
+    it("parses JSONB metadata from returned row", async () => {
+      const { executor } = createFakeExecutor({
+        rows: [{ ...SAMPLE_SECURITY_EVENT_ROW, metadata: JSON.stringify({ deep: { nested: true } }) }],
+      });
+      const repo = createIdentityRepository(executor);
+
+      const result = await repo.recordSecurityEvent({
+        id: "se-001",
+        eventType: "login.completed",
+        outcome: "success",
+      });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value.metadata).toEqual({ deep: { nested: true } });
+      }
+    });
+
+    it("parses redact_paths from returned row", async () => {
+      const { executor } = createFakeExecutor({ rows: [SAMPLE_SECURITY_EVENT_ROW] });
+      const repo = createIdentityRepository(executor);
+
+      const result = await repo.recordSecurityEvent({
+        id: "se-001",
+        eventType: "login.completed",
+        outcome: "success",
+      });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value.redactPaths).toEqual(["/metadata/provider"]);
+      }
+    });
+
+    it("defaults nullable fields to null", async () => {
+      const { executor, queries } = createFakeExecutor({
+        rows: [{
+          ...SAMPLE_SECURITY_EVENT_ROW,
+          user_id: null,
+          session_id: null,
+          challenge_id: null,
+          ip: null,
+          user_agent: null,
+          correlation_id: null,
+        }],
+      });
+      const repo = createIdentityRepository(executor);
+
+      const result = await repo.recordSecurityEvent({
+        id: "se-002",
+        eventType: "login.started",
+        outcome: "pending",
+      });
+
+      expect(queries[0]!.params[3]).toBeNull();
+      expect(queries[0]!.params[4]).toBeNull();
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value.userId).toBeNull();
+        expect(result.value.sessionId).toBeNull();
+        expect(result.value.challengeId).toBeNull();
+        expect(result.value.ip).toBeNull();
+        expect(result.value.userAgent).toBeNull();
+      }
+    });
+
+    it("returns conflict on unique violation", async () => {
+      const { executor } = createFakeExecutor({
+        error: Object.assign(new Error("unique_violation"), { code: "23505" }),
+      });
+      const repo = createIdentityRepository(executor);
+
+      const result = await repo.recordSecurityEvent({
+        id: "se-001",
+        eventType: "login.completed",
+        outcome: "success",
+      });
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.kind).toBe("conflict");
+    });
+
+    it("maps generic errors to safe internal error", async () => {
+      const { executor } = createFakeExecutor({
+        error: new Error("connection to host 10.0.0.1:5432 refused"),
+      });
+      const repo = createIdentityRepository(executor);
+
+      const result = await repo.recordSecurityEvent({
+        id: "se-001",
+        eventType: "login.completed",
+        outcome: "success",
+      });
+
+      expect(result.ok).toBe(false);
+      if (!result.ok && result.error.kind === "internal") {
+        expect(result.error.message).not.toContain("10.0.0.1");
+        expect(result.error.message).not.toContain("5432");
+        expect(result.error.message).toBe("Failed to record security event");
+      }
+    });
+
+    it("does not store raw secret values in params", async () => {
+      const { executor, queries } = createFakeExecutor({ rows: [SAMPLE_SECURITY_EVENT_ROW] });
+      const repo = createIdentityRepository(executor);
+
+      await repo.recordSecurityEvent({
+        id: "se-001",
+        eventType: "login.completed",
+        outcome: "success",
+        metadata: { safe_field: "visible" },
+      });
+
+      const allParams = JSON.stringify(queries[0]!.params);
+      expect(allParams).not.toContain("token_hash");
+      expect(allParams).not.toContain("code_hash");
+      expect(allParams).not.toContain("bearer_token");
+    });
+  });
+
+  describe("querySecurityEventsByUser", () => {
+    it("uses parameterized query with user_id", async () => {
+      const { executor, queries } = createFakeExecutor({ rows: [SAMPLE_SECURITY_EVENT_ROW] });
+      const repo = createIdentityRepository(executor);
+
+      await repo.querySecurityEventsByUser({
+        userId: "u-001",
+        limit: 10,
+        cursor: null,
+      });
+
+      expect(queries).toHaveLength(1);
+      expect(queries[0]!.text).toContain("user_id = $1");
+      expect(queries[0]!.params[0]).toBe("u-001");
+      expect(queries[0]!.params[1]).toBe(11);
+    });
+
+    it("returns items with correct mapping", async () => {
+      const { executor } = createFakeExecutor({ rows: [SAMPLE_SECURITY_EVENT_ROW] });
+      const repo = createIdentityRepository(executor);
+
+      const result = await repo.querySecurityEventsByUser({
+        userId: "u-001",
+        limit: 10,
+        cursor: null,
+      });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value.items).toHaveLength(1);
+        expect(result.value.items[0]!.id).toBe("se-001");
+        expect(result.value.items[0]!.eventType).toBe("login.completed");
+      }
+    });
+
+    it("orders by occurred_at DESC, id DESC", async () => {
+      const { executor, queries } = createFakeExecutor({ rows: [] });
+      const repo = createIdentityRepository(executor);
+
+      await repo.querySecurityEventsByUser({
+        userId: "u-001",
+        limit: 10,
+        cursor: null,
+      });
+
+      expect(queries[0]!.text).toContain("ORDER BY occurred_at DESC, id DESC");
+    });
+
+    it("returns null nextCursor when items fit within limit", async () => {
+      const { executor } = createFakeExecutor({ rows: [SAMPLE_SECURITY_EVENT_ROW] });
+      const repo = createIdentityRepository(executor);
+
+      const result = await repo.querySecurityEventsByUser({
+        userId: "u-001",
+        limit: 10,
+        cursor: null,
+      });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value.nextCursor).toBeNull();
+      }
+    });
+
+    it("returns nextCursor when more items exist (limit+1 pattern)", async () => {
+      const rows = [
+        { ...SAMPLE_SECURITY_EVENT_ROW, id: "se-001", occurred_at: "2026-01-15T10:03:00Z" },
+        { ...SAMPLE_SECURITY_EVENT_ROW, id: "se-002", occurred_at: "2026-01-15T10:02:00Z" },
+        { ...SAMPLE_SECURITY_EVENT_ROW, id: "se-003", occurred_at: "2026-01-15T10:01:00Z" },
+      ];
+      const { executor } = createFakeExecutor({ rows });
+      const repo = createIdentityRepository(executor);
+
+      const result = await repo.querySecurityEventsByUser({
+        userId: "u-001",
+        limit: 2,
+        cursor: null,
+      });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value.items).toHaveLength(2);
+        expect(result.value.nextCursor).not.toBeNull();
+        expect(result.value.nextCursor!.id).toBe("se-002");
+        expect(result.value.nextCursor!.occurredAt).toBe(new Date("2026-01-15T10:02:00Z").toISOString());
+      }
+    });
+
+    it("applies cursor filter with tuple comparison", async () => {
+      const { executor, queries } = createFakeExecutor({ rows: [] });
+      const repo = createIdentityRepository(executor);
+
+      await repo.querySecurityEventsByUser({
+        userId: "u-001",
+        limit: 10,
+        cursor: { occurredAt: "2026-01-15T10:00:00Z", id: "se-005" },
+      });
+
+      expect(queries[0]!.text).toContain("(occurred_at, id) < ($3, $4)");
+      expect(queries[0]!.params[2]).toBe("2026-01-15T10:00:00Z");
+      expect(queries[0]!.params[3]).toBe("se-005");
+    });
+
+    it("maps generic errors to safe internal error", async () => {
+      const { executor } = createFakeExecutor({
+        error: new Error("relation does not exist"),
+      });
+      const repo = createIdentityRepository(executor);
+
+      const result = await repo.querySecurityEventsByUser({
+        userId: "u-001",
+        limit: 10,
+        cursor: null,
+      });
+
+      expect(result.ok).toBe(false);
+      if (!result.ok && result.error.kind === "internal") {
+        expect(result.error.message).toBe("Failed to query security events");
+        expect(result.error.message).not.toContain("relation");
+      }
+    });
+  });
+
+  describe("security event secret safety", () => {
+    it("never includes secret columns in security event type", async () => {
+      const { executor } = createFakeExecutor({ rows: [SAMPLE_SECURITY_EVENT_ROW] });
+      const repo = createIdentityRepository(executor);
+
+      const result = await repo.recordSecurityEvent({
+        id: "se-001",
+        eventType: "login.completed",
+        outcome: "success",
+      });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        const serialized = JSON.stringify(result.value);
+        expect(serialized).not.toContain("tokenHash");
+        expect(serialized).not.toContain("codeHash");
+        expect(serialized).not.toContain("bearerToken");
+        expect(serialized).not.toContain("apiKey");
+        expect(result.value).not.toHaveProperty("tokenHash");
+        expect(result.value).not.toHaveProperty("codeHash");
+        expect(result.value).not.toHaveProperty("bearerToken");
+        expect(result.value).not.toHaveProperty("secret");
+      }
+    });
+
+    it("never exposes secrets in error output for security events", async () => {
+      const { executor } = createFakeExecutor({
+        error: new Error("duplicate key value (token_hash)=(abc123secret)"),
+      });
+      const repo = createIdentityRepository(executor);
+
+      const result = await repo.recordSecurityEvent({
+        id: "se-001",
+        eventType: "login.completed",
+        outcome: "success",
+      });
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        const serialized = JSON.stringify(result.error);
+        expect(serialized).not.toContain("abc123secret");
+        expect(serialized).not.toContain("token_hash");
+      }
     });
   });
 });

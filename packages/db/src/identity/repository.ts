@@ -3,11 +3,15 @@ import type {
   AuthIdentity,
   CreateAuthIdentityInput,
   CreateLoginChallengeInput,
+  CreateSecurityEventInput,
   CreateSessionInput,
   CreateUserInput,
   IdentityRepository,
   IdentityResult,
   LoginChallenge,
+  SecurityEvent,
+  SecurityEventPagedResult,
+  SecurityEventPageQueryParams,
   Session,
   User,
 } from "./types.js";
@@ -55,6 +59,25 @@ function mapSession(row: Record<string, unknown>): Session {
     revokedAt: row.revoked_at ? new Date(row.revoked_at as string) : null,
     createdAt: new Date(row.created_at as string),
     lastSeenAt: new Date(row.last_seen_at as string),
+  };
+}
+
+function mapSecurityEvent(row: Record<string, unknown>): SecurityEvent {
+  return {
+    id: row.id as string,
+    eventType: row.event_type as string,
+    outcome: row.outcome as string,
+    userId: (row.user_id as string) ?? null,
+    sessionId: (row.session_id as string) ?? null,
+    challengeId: (row.challenge_id as string) ?? null,
+    requestId: (row.request_id as string) ?? null,
+    correlationId: (row.correlation_id as string) ?? null,
+    ip: (row.ip as string) ?? null,
+    userAgent: (row.user_agent as string) ?? null,
+    occurredAt: new Date(row.occurred_at as string),
+    createdAt: new Date(row.created_at as string),
+    metadata: (typeof row.metadata === "string" ? JSON.parse(row.metadata) : row.metadata ?? {}) as Record<string, unknown>,
+    redactPaths: (typeof row.redact_paths === "string" ? JSON.parse(row.redact_paths) : row.redact_paths ?? []) as string[],
   };
 }
 
@@ -276,6 +299,78 @@ export function createIdentityRepository(executor: SqlExecutor): IdentityReposit
         return { ok: true, value: mapSession(result.rows[0]!) };
       } catch {
         return safeError("Failed to revoke session");
+      }
+    },
+
+    async recordSecurityEvent(input: CreateSecurityEventInput): Promise<IdentityResult<SecurityEvent>> {
+      try {
+        const occurredAt = input.occurredAt ?? new Date();
+        const result = await executor.execute<Record<string, unknown>>(
+          `INSERT INTO identity.security_events (id, event_type, outcome, user_id, session_id, challenge_id, request_id, correlation_id, ip, user_agent, occurred_at, metadata, redact_paths)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+           RETURNING *`,
+          [
+            input.id,
+            input.eventType,
+            input.outcome,
+            input.userId ?? null,
+            input.sessionId ?? null,
+            input.challengeId ?? null,
+            input.requestId ?? null,
+            input.correlationId ?? null,
+            input.ip ?? null,
+            input.userAgent ?? null,
+            occurredAt.toISOString(),
+            JSON.stringify(input.metadata ?? {}),
+            JSON.stringify(input.redactPaths ?? []),
+          ],
+        );
+        if (result.rowCount === 0) {
+          return { ok: false, error: { kind: "conflict", entity: "security_event" } };
+        }
+        return { ok: true, value: mapSecurityEvent(result.rows[0]!) };
+      } catch (err: unknown) {
+        if (isUniqueViolation(err)) {
+          return { ok: false, error: { kind: "conflict", entity: "security_event" } };
+        }
+        return safeError("Failed to record security event");
+      }
+    },
+
+    async querySecurityEventsByUser(params: SecurityEventPageQueryParams): Promise<IdentityResult<SecurityEventPagedResult>> {
+      try {
+        const fetchLimit = params.limit + 1;
+        let sql: string;
+        let values: unknown[];
+
+        if (params.cursor) {
+          sql = `SELECT * FROM identity.security_events
+           WHERE user_id = $1
+             AND (occurred_at, id) < ($3, $4)
+           ORDER BY occurred_at DESC, id DESC
+           LIMIT $2`;
+          values = [params.userId, fetchLimit, params.cursor.occurredAt, params.cursor.id];
+        } else {
+          sql = `SELECT * FROM identity.security_events
+           WHERE user_id = $1
+           ORDER BY occurred_at DESC, id DESC
+           LIMIT $2`;
+          values = [params.userId, fetchLimit];
+        }
+
+        const result = await executor.execute<Record<string, unknown>>(sql, values);
+        const rows = result.rows.map(mapSecurityEvent);
+
+        let nextCursor: import("./types.js").SecurityEventCursorPosition | null = null;
+        if (rows.length > params.limit) {
+          rows.pop();
+          const last = rows[rows.length - 1]!;
+          nextCursor = { occurredAt: last.occurredAt.toISOString(), id: last.id };
+        }
+
+        return { ok: true, value: { items: rows, nextCursor } };
+      } catch {
+        return safeError("Failed to query security events");
       }
     },
   };

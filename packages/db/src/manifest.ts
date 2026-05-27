@@ -48,5 +48,14 @@ export const manifest: MigrationManifest = {
       description:
         "Projects persistence foundation — projects and environments tables with tenant isolation",
     },
+    {
+      id: "050_identity_security_events",
+      context: "identity",
+      path: "050_identity_security_events/up.sql",
+      checksum:
+        "a1bb9f50075ea93e389feb7c7282bdbd5b5ebf6671f789b0f7a707110ae74ca2",
+      description:
+        "Identity-owned security-event source facts — pre-organization user activity log",
+    },
   ],
 };

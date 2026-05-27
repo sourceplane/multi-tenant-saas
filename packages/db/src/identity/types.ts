@@ -83,6 +83,55 @@ export interface CreateSessionInput {
   createdAt: Date;
 }
 
+export interface SecurityEvent {
+  id: string;
+  eventType: string;
+  outcome: string;
+  userId: string | null;
+  sessionId: string | null;
+  challengeId: string | null;
+  requestId: string | null;
+  correlationId: string | null;
+  ip: string | null;
+  userAgent: string | null;
+  occurredAt: Date;
+  createdAt: Date;
+  metadata: Record<string, unknown>;
+  redactPaths: string[];
+}
+
+export interface CreateSecurityEventInput {
+  id: string;
+  eventType: string;
+  outcome: string;
+  userId?: string | null;
+  sessionId?: string | null;
+  challengeId?: string | null;
+  requestId?: string | null;
+  correlationId?: string | null;
+  ip?: string | null;
+  userAgent?: string | null;
+  occurredAt?: Date;
+  metadata?: Record<string, unknown>;
+  redactPaths?: string[];
+}
+
+export interface SecurityEventCursorPosition {
+  occurredAt: string;
+  id: string;
+}
+
+export interface SecurityEventPageQueryParams {
+  userId: string;
+  limit: number;
+  cursor: SecurityEventCursorPosition | null;
+}
+
+export interface SecurityEventPagedResult {
+  items: SecurityEvent[];
+  nextCursor: SecurityEventCursorPosition | null;
+}
+
 export interface IdentityRepository {
   createUser(input: CreateUserInput): Promise<IdentityResult<User>>;
   getUserById(id: string): Promise<IdentityResult<User>>;
@@ -98,4 +147,7 @@ export interface IdentityRepository {
   createSession(input: CreateSessionInput): Promise<IdentityResult<Session>>;
   getSessionByTokenHash(tokenHash: string): Promise<IdentityResult<Session>>;
   revokeSession(id: string, revokedAt: Date): Promise<IdentityResult<Session>>;
+
+  recordSecurityEvent(input: CreateSecurityEventInput): Promise<IdentityResult<SecurityEvent>>;
+  querySecurityEventsByUser(params: SecurityEventPageQueryParams): Promise<IdentityResult<SecurityEventPagedResult>>;
 }
