@@ -1,0 +1,94 @@
+import type { Env } from "./env.js";
+import { errorResponse } from "./http.js";
+import { resolveActor } from "./resolve-actor.js";
+
+// Organization-scoped config
+const ORG_CONFIG_SETTINGS_RE = /^\/v1\/organizations\/[^/]+\/config\/settings$/;
+const ORG_CONFIG_FLAGS_RE = /^\/v1\/organizations\/[^/]+\/config\/feature-flags$/;
+const ORG_CONFIG_SECRETS_RE = /^\/v1\/organizations\/[^/]+\/config\/secrets$/;
+
+// Project-scoped config
+const PRJ_CONFIG_SETTINGS_RE = /^\/v1\/organizations\/[^/]+\/projects\/[^/]+\/config\/settings$/;
+const PRJ_CONFIG_FLAGS_RE = /^\/v1\/organizations\/[^/]+\/projects\/[^/]+\/config\/feature-flags$/;
+const PRJ_CONFIG_SECRETS_RE = /^\/v1\/organizations\/[^/]+\/projects\/[^/]+\/config\/secrets$/;
+
+// Environment-scoped config
+const ENV_CONFIG_SETTINGS_RE = /^\/v1\/organizations\/[^/]+\/projects\/[^/]+\/environments\/[^/]+\/config\/settings$/;
+const ENV_CONFIG_FLAGS_RE = /^\/v1\/organizations\/[^/]+\/projects\/[^/]+\/environments\/[^/]+\/config\/feature-flags$/;
+const ENV_CONFIG_SECRETS_RE = /^\/v1\/organizations\/[^/]+\/projects\/[^/]+\/environments\/[^/]+\/config\/secrets$/;
+
+const FORWARDED_HEADERS = [
+  "content-type",
+  "x-request-id",
+  "traceparent",
+  "idempotency-key",
+];
+
+export function isConfigRoute(pathname: string): boolean {
+  return (
+    ORG_CONFIG_SETTINGS_RE.test(pathname) ||
+    ORG_CONFIG_FLAGS_RE.test(pathname) ||
+    ORG_CONFIG_SECRETS_RE.test(pathname) ||
+    PRJ_CONFIG_SETTINGS_RE.test(pathname) ||
+    PRJ_CONFIG_FLAGS_RE.test(pathname) ||
+    PRJ_CONFIG_SECRETS_RE.test(pathname) ||
+    ENV_CONFIG_SETTINGS_RE.test(pathname) ||
+    ENV_CONFIG_FLAGS_RE.test(pathname) ||
+    ENV_CONFIG_SECRETS_RE.test(pathname)
+  );
+}
+
+export async function handleConfigRoute(
+  request: Request,
+  env: Env,
+  requestId: string,
+  pathname: string,
+): Promise<Response> {
+  // All config routes are GET-only (read-only surface)
+  if (request.method !== "GET") {
+    return errorResponse("unsupported", "Method not allowed", 405, requestId);
+  }
+
+  if (!env.IDENTITY_WORKER) {
+    return errorResponse("internal_error", "Authentication service unavailable", 503, requestId);
+  }
+
+  if (!env.CONFIG_WORKER) {
+    return errorResponse("internal_error", "Config service unavailable", 503, requestId);
+  }
+
+  const sessionResult = await resolveActor(request, env, requestId);
+  if ("error" in sessionResult) {
+    return sessionResult.error;
+  }
+
+  const headers = new Headers();
+  headers.set("x-request-id", requestId);
+  headers.set("x-actor-subject-id", sessionResult.subjectId);
+  headers.set("x-actor-subject-type", sessionResult.subjectType);
+  headers.set("x-actor-email", sessionResult.email);
+  if (sessionResult.orgId) {
+    headers.set("x-actor-org-id", sessionResult.orgId);
+  }
+  for (const name of FORWARDED_HEADERS) {
+    if (name === "x-request-id") continue;
+    const value = request.headers.get(name);
+    if (value) headers.set(name, value);
+  }
+
+  const url = new URL(request.url);
+  const target = new URL(pathname + url.search, "https://config.internal");
+
+  try {
+    const downstream = await env.CONFIG_WORKER.fetch(target.toString(), {
+      method: "GET",
+      headers,
+    });
+    return new Response(downstream.body, {
+      status: downstream.status,
+      headers: downstream.headers,
+    });
+  } catch {
+    return errorResponse("internal_error", "Config service unavailable", 503, requestId);
+  }
+}
