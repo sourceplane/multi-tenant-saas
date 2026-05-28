@@ -456,10 +456,21 @@ Last updated: 2026-05-28
 - Key durable outcome: Webhooks bounded context foundation on main — migration 080_webhooks_core (endpoints/subscriptions/delivery_attempts in `webhooks` schema), WebhookRepository with full CRUD + cursor pagination + secret-safe reads, @saas/contracts/webhooks public types. 51 new tests (37 db + 14 contract). No plaintext secret exposure.
 - Reports: `ai/reports/task-0067-implementer.md`, `ai/reports/task-0067-verifier.md`
 
+### Task 0068 — Webhooks Management Runtime
+
+- Agent: Implementer → Verifier
+- Prompt: `ai/tasks/task-0068.md`
+- Verifier prompt: `ai/tasks/task-0068-verifier.md`
+- PR #111 (`task-0068/webhooks-worker`) **MERGED** at commit `7b482b8` (2026-05-28).
+- PR URL: `https://github.com/sourceplane/multi-tenant-saas/pull/111`
+- PR CI run: `26597212512` (30/30 SUCCESS).
+- Key durable outcome: Dedicated `apps/webhooks-worker` bounded context with full endpoint/subscription/delivery-attempt management, AES-256-GCM secret encryption, api-edge webhooks facade with WEBHOOKS_WORKER binding, policy actions (organization.webhook.read/write, project.webhook.read/write), deny-by-default authorization, event/audit writes for all mutations. 523 tests passing.
+- Reports: `ai/reports/task-0068-implementer.md`, `ai/reports/task-0068-verifier.md`
+
 ## Current Task
 
-Task 0067 verified PASS and merged via PR #110 at `ca8c871`.
+Task 0068 verified PASS and merged via PR #111 at `7b482b8`.
 
-Key durable outcome: Webhooks core persistence layer — migration, repository, and contracts — providing the foundation for future webhook delivery, API routes, and worker implementation.
+Key durable outcome: Webhooks management runtime on main — worker, api-edge facade, policy actions, encryption, and comprehensive test coverage.
 
-Tasks 0001–0067 are completed and verified. Next orchestrator cycle should evaluate the next task per roadmap.
+Tasks 0001–0068 are completed and verified. Next orchestrator cycle should evaluate the next task per roadmap.

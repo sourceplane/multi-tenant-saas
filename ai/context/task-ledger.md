@@ -1382,6 +1382,19 @@ Last updated: 2026-05-28
 |- Scope boundary: packages/db (migration 080_webhooks_core, webhooks repository/types/index, manifest, BoundedContext union), packages/contracts (webhooks types, index re-export), tests/db and tests/contracts webhook test suites, package.json exports.
 |- Durable outcome: Webhooks bounded context foundation on main — migration 080_webhooks_core with 3 tables in `webhooks` schema (endpoints, subscriptions, delivery_attempts), WebhookRepository with full CRUD + cursor pagination + secret-safe reads (secret_ciphertext write-only), @saas/contracts/webhooks public types. 51 new tests (37 db + 14 contract). All queries parameterized and org-scoped. No cross-context FKs. Verifier fix: committed implementer report to PR branch.
 
+### Task 0068
+
+|- Agent: Implementer → Verifier
+|- Prompt: `ai/tasks/task-0068.md`
+|- Verifier prompt: `ai/tasks/task-0068-verifier.md`
+|- Status: verified PASS
+|- Implementation: PR #111 (`task-0068/webhooks-worker`), merged at `7b482b8` (2026-05-28)
+|- PR CI run: `26597212512` (30/30 SUCCESS)
+|- Reports: `ai/reports/task-0068-implementer.md`, `ai/reports/task-0068-verifier.md`
+|- Objective: Add webhooks management runtime — dedicated worker, api-edge facade, policy actions, and AES-256-GCM secret encryption.
+|- Scope boundary: apps/webhooks-worker (new), apps/api-edge (facade + binding), packages/contracts (policy actions), packages/policy-engine (role grants), tests (webhooks-worker, api-edge facade, policy-engine).
+|- Durable outcome: Webhooks management runtime on main — apps/webhooks-worker with full endpoint/subscription/delivery-attempt CRUD, AES-256-GCM signing-secret encryption, membership+policy authorization (fail-closed, safe 404s), event/audit writes for all mutations. Api-edge webhooks facade with WEBHOOKS_WORKER binding, safe header forwarding, no bearer/cookie leakage. Policy actions (organization.webhook.read/write, project.webhook.read/write) with deny-by-default. 523 tests passing across all affected packages.
+
 ## Historical Notes
 
 - PR #1 split product-specific V2 Git catalog work away from the reusable SaaS
