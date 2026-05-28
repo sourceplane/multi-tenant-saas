@@ -58,6 +58,7 @@ describe("Migration Manifest Verifier", () => {
       "events",
       "config",
       "webhooks",
+      "metering",
     ];
 
     it("each migration declares a valid bounded context", () => {

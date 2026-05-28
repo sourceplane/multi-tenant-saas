@@ -35,6 +35,7 @@
       "^@saas/db/projects$": "<rootDir>/../../packages/db/src/projects/index.ts",
       "^@saas/db/config$": "<rootDir>/../../packages/db/src/config/index.ts",
       "^@saas/db/webhooks$": "<rootDir>/../../packages/db/src/webhooks/index.ts",
+      "^@saas/db/metering$": "<rootDir>/../../packages/db/src/metering/index.ts",
       "^@saas/db/manifest$": "<rootDir>/../../packages/db/src/manifest.ts",
       "^@saas/db/(.*)$": "<rootDir>/../../packages/db/src/$1.ts"
     },
