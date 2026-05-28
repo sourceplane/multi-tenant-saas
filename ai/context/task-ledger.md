@@ -1146,6 +1146,19 @@ Last updated: 2026-05-27
 |- Scope: 3 policy actions (organization.service_principal.binding.{create,list,revoke}), 3 internal membership routes, shared subject-ID helpers (@saas/contracts/service-principal), focused tests.
 |- Durable outcome: Internal membership seam for SP role bindings on main. Owner/admin-only policy gating. Canonical sp_<hex32> subject-ID shape shared across contracts. Handlers fail closed on malformed input. 373 tests green.
 
+### Task 0050 — V1 Public API-Key Admin Contract Reconciliation
+
+|- Agent: Implementer → Verifier
+|- Prompt: `ai/tasks/task-0050.md`
+|- Verifier prompt: `ai/tasks/task-0050-verifier.md`
+|- Status: verified PASS
+|- Implementation: PR #93, branch `codex/task-0050-api-key-admin-contract`, merge commit `77cba75`
+|- PR CI run: `26554942026` (plan=SUCCESS, matrix=SKIPPED — docs-only)
+|- Reports: `ai/reports/task-0050-implementer.md`, `ai/reports/task-0050-verifier.md`
+|- Objective: Reconcile V1 public API-key admin contract to tenant-scoped routes, removing the stale /v1/auth/api-keys contradiction.
+|- Scope boundary: specs-only — 01-edge-api, 02-identity, 04-organizations-membership, api-guidelines. No runtime, no migrations, no TS contracts.
+|- Durable outcome: Active spec pack consistently presents V1 public API-key admin as POST/GET/DELETE `/v1/organizations/{orgId}/api-keys[/{apiKeyId}]`. `/v1/auth/api-keys` deprecated. Bounded-context ownership documented (identity=keys+SPs, membership=role bindings, policy=authz). One-time secret return, hash-only persistence, and security-event expectations specified.
+
 ## Historical Notes
 
 - PR #1 split product-specific V2 Git catalog work away from the reusable SaaS

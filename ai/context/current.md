@@ -1,6 +1,6 @@
 # Current Context
 
-Last updated: 2026-05-27
+Last updated: 2026-05-28
 
 ## Repo Reality
 
@@ -278,3 +278,15 @@ Last updated: 2026-05-27
 - Key durable outcome: Membership-owned internal seam for service-principal role bindings. Three internal routes (create/list/revoke) at `/v1/internal/membership/service-principal-bindings`. Three policy actions (`organization.service_principal.binding.{create,list,revoke}`) restricted to owner/admin. Shared `@saas/contracts/service-principal` helpers enforce canonical `sp_<hex32>` subject-ID shape matching Task 0048 actor forwarding. Handlers fail closed on malformed IDs, invalid role/scope combos, and cross-org mismatches.
 - 373 tests passing (141 policy-engine + 212 membership-worker + 20 policy-worker).
 - Reports: `ai/reports/task-0049-implementer.md`, `ai/reports/task-0049-verifier.md`
+
+**Task 0050 (Verifier) — COMPLETE ✅**
+
+- Prompt: `ai/tasks/task-0050.md`
+- Verifier prompt: `ai/tasks/task-0050-verifier.md`
+- PR #93 (`codex/task-0050-api-key-admin-contract`) **MERGED** at commit `77cba75` (2026-05-28T04:44Z).
+- PR URL: `https://github.com/sourceplane/multi-tenant-saas/pull/93`
+- PR CI run: `26554942026` (plan=SUCCESS, matrix=SKIPPED — docs-only).
+- Key durable outcome: Active spec pack consistently presents V1 public API-key admin as tenant-scoped POST/GET/DELETE `/v1/organizations/{orgId}/api-keys[/{apiKeyId}]`. `/v1/auth/api-keys` deprecated. Bounded-context ownership documented. One-time secret return, hash-only persistence, and security-event expectations specified.
+- Reports: `ai/reports/task-0050-implementer.md`, `ai/reports/task-0050-verifier.md`
+
+**Next phase**: Runtime implementation of V1 public API-key admin routes in identity-worker and api-edge, consuming the internal membership SP role-binding seam.
