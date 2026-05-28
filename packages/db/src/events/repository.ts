@@ -348,5 +348,29 @@ export function createEventsRepository(executor: SqlExecutor): EventsRepository 
         return safeError("Failed to query audit by target");
       }
     },
+
+    async queryEventsByOrg(orgId: string, afterOccurredAt: string | null, afterEventId: string | null, limit: number): Promise<EventsResult<StoredEvent[]>> {
+      try {
+        let sql: string;
+        let values: unknown[];
+        if (afterOccurredAt && afterEventId) {
+          sql = `SELECT * FROM events.event_log
+                 WHERE org_id = $1 AND (occurred_at, id) > ($2, $3)
+                 ORDER BY occurred_at ASC, id ASC
+                 LIMIT $4`;
+          values = [orgId, afterOccurredAt, afterEventId, limit];
+        } else {
+          sql = `SELECT * FROM events.event_log
+                 WHERE org_id = $1
+                 ORDER BY occurred_at ASC, id ASC
+                 LIMIT $2`;
+          values = [orgId, limit];
+        }
+        const result = await executor.execute<Record<string, unknown>>(sql, values);
+        return { ok: true, value: result.rows.map(mapEvent) };
+      } catch {
+        return safeError("Failed to query events by org");
+      }
+    },
   };
 }

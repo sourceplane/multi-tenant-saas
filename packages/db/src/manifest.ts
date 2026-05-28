@@ -84,5 +84,14 @@ export const manifest: MigrationManifest = {
       description:
         "Webhook persistence foundation — endpoints, subscriptions, and delivery attempts",
     },
+    {
+      id: "090_webhooks_delivery",
+      context: "webhooks",
+      path: "090_webhooks_delivery/up.sql",
+      checksum:
+        "a881356b376afd2cccbf326a9bfb7e393e073cd88b3923a38d34907457c39021",
+      description:
+        "Webhook delivery runtime — fixes event_id type, adds dispatch cursor and delivery indexes",
+    },
   ],
 };

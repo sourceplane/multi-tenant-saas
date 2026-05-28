@@ -17,6 +17,9 @@ export type {
   CreateDeliveryAttemptInput,
   UpdateDeliveryAttemptInput,
   WebhookRepository,
+  EndpointForDelivery,
+  MatchedSubscription,
+  DispatchCursor,
 } from "./types.js";
 
 export { createWebhookRepository } from "./repository.js";

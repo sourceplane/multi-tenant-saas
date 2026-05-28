@@ -140,6 +140,36 @@ export interface UpdateDeliveryAttemptInput {
   completedAt?: Date | null;
 }
 
+// ── Delivery runtime types ───────────────────────────────────
+
+/** Endpoint data needed for delivery — includes secret_ciphertext for signing */
+export interface EndpointForDelivery {
+  id: string;
+  orgId: string;
+  url: string;
+  status: WebhookEndpointStatus;
+  secretCiphertext: string | null;
+  secretVersion: number;
+}
+
+/** Subscription matched during fanout */
+export interface MatchedSubscription {
+  id: string;
+  orgId: string;
+  endpointId: string;
+  projectId: string | null;
+  eventType: string;
+}
+
+/** Dispatch cursor position */
+export interface DispatchCursor {
+  orgId: string;
+  subscriberLane: string;
+  lastEventId: string | null;
+  lastOccurredAt: string | null;
+  updatedAt: Date;
+}
+
 // ── Repository interface ────────────────────────────────────
 
 export interface WebhookRepository {
@@ -164,4 +194,14 @@ export interface WebhookRepository {
   updateDeliveryAttempt(orgId: string, attemptId: string, input: UpdateDeliveryAttemptInput): Promise<WebhookResult<WebhookDeliveryAttempt>>;
   getDeliveryAttempt(orgId: string, attemptId: string): Promise<WebhookResult<WebhookDeliveryAttempt>>;
   listDeliveryAttempts(orgId: string, endpointId: string, params: PageQueryParams): Promise<WebhookResult<PagedResult<WebhookDeliveryAttempt>>>;
+
+  // Delivery runtime
+  getEndpointForDelivery(orgId: string, endpointId: string): Promise<WebhookResult<EndpointForDelivery>>;
+  findMatchingSubscriptions(orgId: string, eventType: string): Promise<WebhookResult<MatchedSubscription[]>>;
+  listRetryableDeliveries(limit: number): Promise<WebhookResult<WebhookDeliveryAttempt[]>>;
+
+  // Dispatch cursor
+  getDispatchCursor(orgId: string, lane?: string): Promise<WebhookResult<DispatchCursor>>;
+  advanceDispatchCursor(orgId: string, lastEventId: string, lastOccurredAt: string, lane?: string): Promise<WebhookResult<DispatchCursor>>;
+  listActiveOrgIds(): Promise<WebhookResult<string[]>>;
 }

@@ -15,6 +15,9 @@ import type {
   CursorPosition,
   PageQueryParams,
   PagedResult,
+  EndpointForDelivery,
+  MatchedSubscription,
+  DispatchCursor,
 } from "./types.js";
 
 // ── Row mappers ────────────────────────────────────────────
@@ -480,6 +483,156 @@ export function createWebhookRepository(executor: SqlExecutor): WebhookRepositor
         params,
         mapDeliveryAttempt,
       );
+    },
+
+    // ── Delivery runtime ────────────────────────────────────
+
+    async getEndpointForDelivery(orgId: string, endpointId: string): Promise<WebhookResult<EndpointForDelivery>> {
+      try {
+        const result = await executor.execute<Record<string, unknown>>(
+          `SELECT id, org_id, url, status, secret_ciphertext, secret_version
+           FROM webhooks.webhook_endpoints WHERE org_id = $1 AND id = $2`,
+          [orgId, endpointId],
+        );
+        if (result.rowCount === 0) {
+          return { ok: false, error: { kind: "not_found" } };
+        }
+        const row = result.rows[0]!;
+        return {
+          ok: true,
+          value: {
+            id: row.id as string,
+            orgId: row.org_id as string,
+            url: row.url as string,
+            status: row.status as EndpointForDelivery["status"],
+            secretCiphertext: (row.secret_ciphertext as string) ?? null,
+            secretVersion: row.secret_version as number,
+          },
+        };
+      } catch {
+        return safeError("Failed to get endpoint for delivery");
+      }
+    },
+
+    async findMatchingSubscriptions(orgId: string, eventType: string): Promise<WebhookResult<MatchedSubscription[]>> {
+      try {
+        // Match exact event type OR wildcard subscriptions (e.g. "project.*" matches "project.created")
+        const result = await executor.execute<Record<string, unknown>>(
+          `SELECT s.id, s.org_id, s.endpoint_id, s.project_id, s.event_type
+           FROM webhooks.webhook_subscriptions s
+           JOIN webhooks.webhook_endpoints e ON e.id = s.endpoint_id AND e.org_id = s.org_id
+           WHERE s.org_id = $1 AND s.enabled = true AND e.status = 'active'
+             AND (s.event_type = $2 OR s.event_type = '*'
+                  OR ($2 LIKE s.event_type || '.%' AND s.event_type LIKE '%.*'))`,
+          [orgId, eventType],
+        );
+        const subs: MatchedSubscription[] = result.rows.map((row) => ({
+          id: row.id as string,
+          orgId: row.org_id as string,
+          endpointId: row.endpoint_id as string,
+          projectId: (row.project_id as string) ?? null,
+          eventType: row.event_type as string,
+        }));
+        return { ok: true, value: subs };
+      } catch {
+        return safeError("Failed to find matching subscriptions");
+      }
+    },
+
+    async listRetryableDeliveries(limit: number): Promise<WebhookResult<WebhookDeliveryAttempt[]>> {
+      try {
+        const result = await executor.execute<Record<string, unknown>>(
+          `SELECT * FROM webhooks.webhook_delivery_attempts
+           WHERE status = 'retrying' AND next_retry_at IS NOT NULL AND next_retry_at <= now()
+           ORDER BY next_retry_at ASC
+           LIMIT $1`,
+          [limit],
+        );
+        return { ok: true, value: result.rows.map(mapDeliveryAttempt) };
+      } catch {
+        return safeError("Failed to list retryable deliveries");
+      }
+    },
+
+    // ── Dispatch cursor ─────────────────────────────────────
+
+    async getDispatchCursor(orgId: string, lane = "webhooks"): Promise<WebhookResult<DispatchCursor>> {
+      try {
+        const result = await executor.execute<Record<string, unknown>>(
+          `SELECT org_id, subscriber_lane, last_event_id, last_occurred_at, updated_at
+           FROM webhooks.webhook_dispatch_cursor
+           WHERE org_id = $1 AND subscriber_lane = $2`,
+          [orgId, lane],
+        );
+        if (result.rowCount === 0) {
+          // Return a "zero" cursor — org hasn't been dispatched yet
+          return {
+            ok: true,
+            value: {
+              orgId,
+              subscriberLane: lane,
+              lastEventId: null,
+              lastOccurredAt: null,
+              updatedAt: new Date(0),
+            },
+          };
+        }
+        const row = result.rows[0]!;
+        return {
+          ok: true,
+          value: {
+            orgId: row.org_id as string,
+            subscriberLane: row.subscriber_lane as string,
+            lastEventId: (row.last_event_id as string) ?? null,
+            lastOccurredAt: (row.last_occurred_at as string) ?? null,
+            updatedAt: new Date(row.updated_at as string),
+          },
+        };
+      } catch {
+        return safeError("Failed to get dispatch cursor");
+      }
+    },
+
+    async advanceDispatchCursor(orgId: string, lastEventId: string, lastOccurredAt: string, lane = "webhooks"): Promise<WebhookResult<DispatchCursor>> {
+      try {
+        const result = await executor.execute<Record<string, unknown>>(
+          `INSERT INTO webhooks.webhook_dispatch_cursor (org_id, subscriber_lane, last_event_id, last_occurred_at, updated_at)
+           VALUES ($1, $2, $3, $4, now())
+           ON CONFLICT (org_id, subscriber_lane)
+           DO UPDATE SET last_event_id = $3, last_occurred_at = $4, updated_at = now()
+           RETURNING *`,
+          [orgId, lane, lastEventId, lastOccurredAt],
+        );
+        const row = result.rows[0]!;
+        return {
+          ok: true,
+          value: {
+            orgId: row.org_id as string,
+            subscriberLane: row.subscriber_lane as string,
+            lastEventId: (row.last_event_id as string) ?? null,
+            lastOccurredAt: (row.last_occurred_at as string) ?? null,
+            updatedAt: new Date(row.updated_at as string),
+          },
+        };
+      } catch {
+        return safeError("Failed to advance dispatch cursor");
+      }
+    },
+
+    async listActiveOrgIds(): Promise<WebhookResult<string[]>> {
+      try {
+        // Orgs that have at least one enabled subscription with an active endpoint
+        const result = await executor.execute<Record<string, unknown>>(
+          `SELECT DISTINCT s.org_id
+           FROM webhooks.webhook_subscriptions s
+           JOIN webhooks.webhook_endpoints e ON e.id = s.endpoint_id AND e.org_id = s.org_id
+           WHERE s.enabled = true AND e.status = 'active'`,
+          [],
+        );
+        return { ok: true, value: result.rows.map((row) => row.org_id as string) };
+      } catch {
+        return safeError("Failed to list active org IDs");
+      }
     },
   };
 }
