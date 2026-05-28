@@ -19,6 +19,23 @@ const RETRY_BASE_SECONDS = 30;
 const DELIVERY_TIMEOUT_MS = 10_000;
 const MAX_RETRY_BATCH = 100;
 
+/**
+ * V1 threshold: after this many consecutive terminal delivery failures
+ * for the same endpoint, the endpoint is automatically disabled.
+ */
+export const AUTO_DISABLE_FAILURE_THRESHOLD = 5;
+
+/**
+ * Event types that are suppressed from webhook delivery fanout to prevent
+ * recursive loops. Delivering these events could produce new delivery attempts
+ * which in turn emit new lifecycle events, creating unbounded recursion.
+ */
+export const WEBHOOK_LIFECYCLE_EVENT_TYPES = new Set([
+  "webhook.delivery_succeeded",
+  "webhook.delivery_failed",
+  "webhook.disabled",
+]);
+
 // ── Signing ──────────────────────────────────────────────────
 
 /**
@@ -52,9 +69,126 @@ function nextRetryAt(attemptNumber: number): Date | null {
   return new Date(Date.now() + delaySeconds * 1000);
 }
 
+// ── Lifecycle event helpers ──────────────────────────────────
+
+/**
+ * Check whether an event type is a webhook lifecycle event that must be
+ * excluded from delivery fanout to prevent recursion.
+ */
+export function isWebhookLifecycleEvent(eventType: string): boolean {
+  return WEBHOOK_LIFECYCLE_EVENT_TYPES.has(eventType);
+}
+
+/**
+ * Build a safe metadata payload for a delivery lifecycle event.
+ * Excludes secrets, raw responses, stack traces, and customer data.
+ */
+export function buildDeliveryLifecyclePayload(attempt: WebhookDeliveryAttempt): Record<string, unknown> {
+  return {
+    delivery_attempt_id: attempt.id,
+    endpoint_id: attempt.endpointId,
+    subscription_id: attempt.subscriptionId,
+    source_event_id: attempt.eventId,
+    source_event_type: attempt.eventType,
+    http_status_code: attempt.httpStatusCode ?? null,
+    failure_reason: attempt.failureReason ?? null,
+    attempt_number: attempt.attemptNumber,
+    completed_at: attempt.completedAt?.toISOString() ?? null,
+  };
+}
+
+/**
+ * Emit a delivery lifecycle event (success or failure).
+ * Failures in event emission are swallowed — they must never cause
+ * an additional customer HTTP call or duplicate delivery attempt.
+ */
+async function emitDeliveryLifecycleEvent(
+  ctx: DeliveryContext,
+  attempt: WebhookDeliveryAttempt,
+  type: "webhook.delivery_succeeded" | "webhook.delivery_failed",
+): Promise<void> {
+  try {
+    const now = new Date();
+    await ctx.eventsRepo.appendEvent({
+      id: crypto.randomUUID(),
+      type,
+      version: 1,
+      source: "webhooks-worker",
+      occurredAt: now,
+      actorType: "system",
+      actorId: "webhooks-worker",
+      orgId: attempt.orgId,
+      subjectKind: "webhook_delivery_attempt",
+      subjectId: attempt.id,
+      requestId: crypto.randomUUID(),
+      causationId: attempt.eventId,
+      idempotencyKey: `${type}:${attempt.id}`,
+      payload: buildDeliveryLifecyclePayload(attempt),
+    });
+  } catch {
+    // Lifecycle event append failure must not affect delivery.
+    // Swallow error — the delivery attempt status is already recorded.
+  }
+}
+
+/**
+ * Check whether an endpoint should be auto-disabled based on consecutive
+ * terminal failures, and if so, disable it and emit an auditable event.
+ * Idempotent: if the endpoint is already disabled, this is a no-op.
+ */
+async function maybeAutoDisableEndpoint(
+  ctx: DeliveryContext,
+  orgId: string,
+  endpointId: string,
+): Promise<void> {
+  try {
+    const streakResult = await ctx.webhookRepo.countConsecutiveEndpointFailures(orgId, endpointId);
+    if (!streakResult.ok || streakResult.value < AUTO_DISABLE_FAILURE_THRESHOLD) return;
+
+    // Disable endpoint — disableEndpoint already guards status = 'active',
+    // so concurrent/repeated calls for an already-disabled endpoint are no-ops (returns not_found).
+    const disableResult = await ctx.webhookRepo.disableEndpoint(orgId, endpointId, {
+      reason: "repeated_delivery_failures",
+    });
+    if (!disableResult.ok) return; // Already disabled or not found — idempotent
+
+    // Emit auditable webhook.disabled event
+    const now = new Date();
+    const eventId = crypto.randomUUID();
+    await ctx.eventsRepo.appendEventWithAudit({
+      event: {
+        id: eventId,
+        type: "webhook.disabled",
+        version: 1,
+        source: "webhooks-worker",
+        occurredAt: now,
+        actorType: "system",
+        actorId: "webhooks-worker",
+        orgId,
+        subjectKind: "webhook_endpoint",
+        subjectId: endpointId,
+        requestId: crypto.randomUUID(),
+        idempotencyKey: `webhook.disabled:auto:${endpointId}`,
+        payload: {
+          endpoint_id: endpointId,
+          reason: "repeated_delivery_failures",
+          failure_threshold: AUTO_DISABLE_FAILURE_THRESHOLD,
+        },
+      },
+      audit: {
+        id: crypto.randomUUID(),
+        category: "webhooks",
+        description: `Webhook endpoint auto-disabled after ${AUTO_DISABLE_FAILURE_THRESHOLD} consecutive delivery failures`,
+      },
+    });
+  } catch {
+    // Auto-disable failure must not affect delivery processing.
+  }
+}
+
 // ── Delivery ─────────────────────────────────────────────────
 
-interface DeliveryContext {
+export interface DeliveryContext {
   webhookRepo: WebhookRepository;
   eventsRepo: EventsRepository;
   encryption: EncryptionAdapter | null;
@@ -133,17 +267,21 @@ async function deliverAttempt(
     clearTimeout(timeoutId);
 
     if (response.status >= 200 && response.status < 300) {
-      await ctx.webhookRepo.updateDeliveryAttempt(attempt.orgId, attempt.id, {
+      const updatedResult = await ctx.webhookRepo.updateDeliveryAttempt(attempt.orgId, attempt.id, {
         status: "success",
         httpStatusCode: response.status,
         attemptNumber: attempt.attemptNumber,
         completedAt: new Date(),
         nextRetryAt: null,
       });
+      // Emit success lifecycle event
+      if (updatedResult.ok) {
+        await emitDeliveryLifecycleEvent(ctx, updatedResult.value, "webhook.delivery_succeeded");
+      }
     } else {
       // Non-2xx — schedule retry or fail permanently
       const retry = nextRetryAt(attempt.attemptNumber);
-      await ctx.webhookRepo.updateDeliveryAttempt(attempt.orgId, attempt.id, {
+      const updatedResult = await ctx.webhookRepo.updateDeliveryAttempt(attempt.orgId, attempt.id, {
         status: retry ? "retrying" : "failed",
         httpStatusCode: response.status,
         failureReason: `HTTP ${response.status}`,
@@ -151,18 +289,28 @@ async function deliverAttempt(
         nextRetryAt: retry,
         completedAt: retry ? null : new Date(),
       });
+      // If terminal failure, emit failure lifecycle event and check auto-disable
+      if (!retry && updatedResult.ok) {
+        await emitDeliveryLifecycleEvent(ctx, updatedResult.value, "webhook.delivery_failed");
+        await maybeAutoDisableEndpoint(ctx, attempt.orgId, attempt.endpointId);
+      }
     }
   } catch (err) {
     const reason = err instanceof Error ? err.message : "unknown_error";
     const isTimeout = reason.includes("abort");
     const retry = nextRetryAt(attempt.attemptNumber);
-    await ctx.webhookRepo.updateDeliveryAttempt(attempt.orgId, attempt.id, {
+    const updatedResult = await ctx.webhookRepo.updateDeliveryAttempt(attempt.orgId, attempt.id, {
       status: retry ? "retrying" : "failed",
       failureReason: isTimeout ? "timeout" : reason,
       attemptNumber: attempt.attemptNumber + 1,
       nextRetryAt: retry,
       completedAt: retry ? null : new Date(),
     });
+    // If terminal failure, emit failure lifecycle event and check auto-disable
+    if (!retry && updatedResult.ok) {
+      await emitDeliveryLifecycleEvent(ctx, updatedResult.value, "webhook.delivery_failed");
+      await maybeAutoDisableEndpoint(ctx, attempt.orgId, attempt.endpointId);
+    }
   }
 }
 
@@ -195,6 +343,14 @@ export async function dispatchNewEvents(ctx: DeliveryContext): Promise<{ dispatc
     let lastEvent: StoredEvent | null = null;
 
     for (const event of eventsResult.value) {
+      // ── Recursion guard: skip webhook lifecycle events to prevent unbounded loops ──
+      // Delivering webhook.delivery_succeeded, webhook.delivery_failed, or webhook.disabled
+      // would create new delivery attempts → new lifecycle events → infinite recursion.
+      if (isWebhookLifecycleEvent(event.type)) {
+        lastEvent = event; // still advance cursor past lifecycle events
+        continue;
+      }
+
       // 4. Find matching subscriptions
       const subsResult = await ctx.webhookRepo.findMatchingSubscriptions(orgId, event.type);
       if (!subsResult.ok) { errors++; continue; }

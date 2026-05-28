@@ -2,7 +2,14 @@
  * Tests for webhook delivery runtime — signing, dispatch, retry.
  */
 
-import { dispatchNewEvents, retryFailedDeliveries } from "@webhooks-worker/delivery";
+import {
+  dispatchNewEvents,
+  retryFailedDeliveries,
+  isWebhookLifecycleEvent,
+  buildDeliveryLifecyclePayload,
+  AUTO_DISABLE_FAILURE_THRESHOLD,
+  WEBHOOK_LIFECYCLE_EVENT_TYPES,
+} from "@webhooks-worker/delivery";
 import { createEncryptionAdapter, type CiphertextEnvelope } from "@webhooks-worker/encryption";
 import type {
   WebhookRepository,
@@ -17,7 +24,7 @@ import type {
   WebhookEndpoint,
   WebhookSubscription,
 } from "@saas/db/webhooks";
-import type { EventsRepository, StoredEvent, EventsResult } from "@saas/db/events";
+import type { EventsRepository, StoredEvent, EventsResult, AppendEventInput, AppendEventWithAuditInput } from "@saas/db/events";
 
 // ── Test constants ──────────────────────────────────────────
 
@@ -62,6 +69,8 @@ interface MockWebhookRepo extends WebhookRepository {
   _createdAttempts: CreateDeliveryAttemptInput[];
   _updatedAttempts: Array<{ orgId: string; attemptId: string; input: UpdateDeliveryAttemptInput }>;
   _advancedCursors: Array<{ orgId: string; lastEventId: string; lastOccurredAt: string }>;
+  _disabledEndpoints: Array<{ orgId: string; endpointId: string; reason: string }>;
+  _consecutiveFailures: number;
 }
 
 function createMockWebhookRepo(overrides?: {
@@ -70,16 +79,20 @@ function createMockWebhookRepo(overrides?: {
   endpoint?: EndpointForDelivery | null;
   cursor?: DispatchCursor;
   retryable?: WebhookDeliveryAttempt[];
+  consecutiveFailures?: number;
 }): MockWebhookRepo {
   const created: CreateDeliveryAttemptInput[] = [];
   const updated: Array<{ orgId: string; attemptId: string; input: UpdateDeliveryAttemptInput }> = [];
   const advanced: Array<{ orgId: string; lastEventId: string; lastOccurredAt: string }> = [];
+  const disabled: Array<{ orgId: string; endpointId: string; reason: string }> = [];
   let attemptCounter = 0;
 
   return {
     _createdAttempts: created,
     _updatedAttempts: updated,
     _advancedCursors: advanced,
+    _disabledEndpoints: disabled,
+    _consecutiveFailures: overrides?.consecutiveFailures ?? 0,
 
     // Delivery runtime methods
     async listActiveOrgIds() {
@@ -185,7 +198,27 @@ function createMockWebhookRepo(overrides?: {
     async getEndpoint() { throw new Error("not called"); },
     async listEndpoints() { throw new Error("not called"); },
     async updateEndpoint() { throw new Error("not called"); },
-    async disableEndpoint() { throw new Error("not called"); },
+    async disableEndpoint(orgId: string, endpointId: string, input: { reason?: string }) {
+      disabled.push({ orgId, endpointId, reason: input.reason ?? "" });
+      return {
+        ok: true,
+        value: {
+          id: endpointId,
+          orgId,
+          projectId: null,
+          url: "https://example.com/webhook",
+          name: null,
+          description: null,
+          status: "disabled" as const,
+          disabledReason: input.reason ?? null,
+          disabledAt: new Date(),
+          secretVersion: 1,
+          secretLastRotatedAt: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      };
+    },
     async deleteEndpoint() { throw new Error("not called"); },
     async rotateEndpointSecret() { throw new Error("not called"); },
     async createSubscription() { throw new Error("not called"); },
@@ -195,19 +228,37 @@ function createMockWebhookRepo(overrides?: {
     async deleteSubscription() { throw new Error("not called"); },
     async getDeliveryAttempt() { throw new Error("not called"); },
     async listDeliveryAttempts() { throw new Error("not called"); },
+    async countConsecutiveEndpointFailures() {
+      return { ok: true, value: overrides?.consecutiveFailures ?? 0 };
+    },
   } as unknown as MockWebhookRepo;
 }
 
-function createMockEventsRepo(events: StoredEvent[] = []): EventsRepository {
+interface MockEventsRepo extends EventsRepository {
+  _appendedEvents: AppendEventInput[];
+  _appendedEventsWithAudit: AppendEventWithAuditInput[];
+}
+
+function createMockEventsRepo(events: StoredEvent[] = []): MockEventsRepo {
+  const appendedEvents: AppendEventInput[] = [];
+  const appendedEventsWithAudit: AppendEventWithAuditInput[] = [];
   return {
+    _appendedEvents: appendedEvents,
+    _appendedEventsWithAudit: appendedEventsWithAudit,
     async queryEventsByOrg() {
       return { ok: true, value: events } as EventsResult<StoredEvent[]>;
     },
-    async appendEvent() { throw new Error("not called"); },
-    async appendEventWithAudit() { throw new Error("not called"); },
+    async appendEvent(input: AppendEventInput) {
+      appendedEvents.push(input);
+      return { ok: true, value: { ...input, createdAt: new Date(), redactPaths: input.redactPaths ?? [], actorSessionId: null, actorIp: null, projectId: null, environmentId: null, subjectName: null, correlationId: null, causationId: input.causationId ?? null, idempotencyKey: input.idempotencyKey ?? null } } as EventsResult<StoredEvent>;
+    },
+    async appendEventWithAudit(input: AppendEventWithAuditInput) {
+      appendedEventsWithAudit.push(input);
+      return { ok: true, value: { event: { ...input.event, createdAt: new Date(), redactPaths: [], actorSessionId: null, actorIp: null, projectId: null, environmentId: null, subjectName: null, correlationId: null, causationId: null, idempotencyKey: null }, audit: { id: input.audit.id, eventId: input.event.id, orgId: input.event.orgId, actorType: input.event.actorType, actorId: input.event.actorId, eventType: input.event.type, eventVersion: input.event.version, source: input.event.source, subjectKind: input.event.subjectKind, subjectId: input.event.subjectId, subjectName: null, projectId: null, environmentId: null, category: input.audit.category ?? "webhooks", description: input.audit.description ?? "", occurredAt: input.event.occurredAt, requestId: input.event.requestId, correlationId: null, payload: input.event.payload, redactPaths: [], createdAt: new Date() } } } as any;
+    },
     async queryAuditByOrg() { throw new Error("not called"); },
     async queryAuditByTarget() { throw new Error("not called"); },
-  } as unknown as EventsRepository;
+  } as unknown as MockEventsRepo;
 }
 
 // ── Encryption tests ────────────────────────────────────────
@@ -546,5 +597,401 @@ describe("delivery payload structure", () => {
     expect(lastHeaders["User-Agent"]).toBe("Sourceplane-Webhooks/1.0");
     expect(lastHeaders["X-Webhook-ID"]).toBeTruthy();
     expect(lastHeaders["X-Webhook-Timestamp"]).toBeTruthy();
+  });
+});
+
+// ── Delivery lifecycle event tests ───────────────────────────
+
+describe("delivery lifecycle events", () => {
+  let originalFetch: typeof globalThis.fetch;
+
+  beforeEach(() => {
+    originalFetch = globalThis.fetch;
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it("emits webhook.delivery_succeeded on successful delivery", async () => {
+    globalThis.fetch = async () => new Response("OK", { status: 200 });
+
+    const event = makeStoredEvent();
+    const webhookRepo = createMockWebhookRepo();
+    const eventsRepo = createMockEventsRepo([event]);
+
+    await dispatchNewEvents({ webhookRepo, eventsRepo, encryption: null });
+
+    expect(eventsRepo._appendedEvents).toHaveLength(1);
+    expect(eventsRepo._appendedEvents[0]!.type).toBe("webhook.delivery_succeeded");
+    expect(eventsRepo._appendedEvents[0]!.source).toBe("webhooks-worker");
+    expect(eventsRepo._appendedEvents[0]!.actorType).toBe("system");
+  });
+
+  it("emits webhook.delivery_failed on terminal failure (retry exhausted)", async () => {
+    globalThis.fetch = async () => new Response("Error", { status: 500 });
+
+    // Attempt at max retries (attemptNumber >= MAX_RETRIES=5 → no retry → terminal)
+    const retryable: WebhookDeliveryAttempt = {
+      id: "terminal-fail-1",
+      orgId: TEST_ORG_UUID,
+      endpointId: TEST_ENDPOINT_UUID,
+      subscriptionId: TEST_SUBSCRIPTION_UUID,
+      eventId: TEST_EVENT_ID,
+      eventType: "project.created",
+      status: "retrying",
+      attemptNumber: 5, // At MAX_RETRIES, no more retries
+      httpStatusCode: 500,
+      failureReason: "HTTP 500",
+      idempotencyKey: null,
+      nextRetryAt: new Date(Date.now() - 1000),
+      completedAt: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    const webhookRepo = createMockWebhookRepo({ retryable: [retryable] });
+    const eventsRepo = createMockEventsRepo();
+
+    await retryFailedDeliveries({ webhookRepo, eventsRepo, encryption: null });
+
+    // Should emit webhook.delivery_failed
+    const failEvents = eventsRepo._appendedEvents.filter(e => e.type === "webhook.delivery_failed");
+    expect(failEvents).toHaveLength(1);
+    expect(failEvents[0]!.subjectKind).toBe("webhook_delivery_attempt");
+    expect(failEvents[0]!.causationId).toBe(TEST_EVENT_ID);
+  });
+
+  it("success lifecycle event payload contains only safe metadata", async () => {
+    globalThis.fetch = async () => new Response("OK", { status: 200 });
+
+    const event = makeStoredEvent();
+    const webhookRepo = createMockWebhookRepo();
+    const eventsRepo = createMockEventsRepo([event]);
+
+    await dispatchNewEvents({ webhookRepo, eventsRepo, encryption: null });
+
+    const lifecycleEvent = eventsRepo._appendedEvents[0]!;
+    const payload = lifecycleEvent.payload;
+
+    // Must have safe fields
+    expect(payload).toHaveProperty("delivery_attempt_id");
+    expect(payload).toHaveProperty("endpoint_id");
+    expect(payload).toHaveProperty("subscription_id");
+    expect(payload).toHaveProperty("source_event_id");
+    expect(payload).toHaveProperty("source_event_type");
+    expect(payload).toHaveProperty("attempt_number");
+
+    // Must NOT have secret/unsafe fields
+    expect(payload).not.toHaveProperty("secret_ciphertext");
+    expect(payload).not.toHaveProperty("signing_secret");
+    expect(payload).not.toHaveProperty("response_body");
+    expect(payload).not.toHaveProperty("stack_trace");
+    expect(payload).not.toHaveProperty("bearer_token");
+  });
+
+  it("lifecycle event append failure does not cause duplicate delivery", async () => {
+    let fetchCallCount = 0;
+    globalThis.fetch = async () => {
+      fetchCallCount++;
+      return new Response("OK", { status: 200 });
+    };
+
+    const event = makeStoredEvent();
+    const webhookRepo = createMockWebhookRepo();
+    const eventsRepo = createMockEventsRepo([event]);
+    // Make appendEvent throw to simulate failure
+    eventsRepo.appendEvent = async () => { throw new Error("DB failure"); };
+
+    const result = await dispatchNewEvents({ webhookRepo, eventsRepo, encryption: null });
+
+    // Delivery should still succeed despite lifecycle event failure
+    expect(result.dispatched).toBe(1);
+    expect(fetchCallCount).toBe(1); // Only one HTTP call, no duplicate
+    expect(webhookRepo._updatedAttempts[0]!.input.status).toBe("success");
+  });
+});
+
+// ── Recursion guard tests ────────────────────────────────────
+
+describe("webhook lifecycle event recursion prevention", () => {
+  let originalFetch: typeof globalThis.fetch;
+  let fetchCalls: Array<{ url: string }>;
+
+  beforeEach(() => {
+    fetchCalls = [];
+    originalFetch = globalThis.fetch;
+    globalThis.fetch = async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url;
+      fetchCalls.push({ url });
+      return new Response("OK", { status: 200 });
+    };
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it("isWebhookLifecycleEvent correctly identifies lifecycle event types", () => {
+    expect(isWebhookLifecycleEvent("webhook.delivery_succeeded")).toBe(true);
+    expect(isWebhookLifecycleEvent("webhook.delivery_failed")).toBe(true);
+    expect(isWebhookLifecycleEvent("webhook.disabled")).toBe(true);
+    expect(isWebhookLifecycleEvent("project.created")).toBe(false);
+    expect(isWebhookLifecycleEvent("webhook.created")).toBe(false);
+    expect(isWebhookLifecycleEvent("webhook_endpoint.created")).toBe(false);
+  });
+
+  it("does not deliver webhook lifecycle events to subscriptions (prevents recursion)", async () => {
+    // Create a lifecycle event that would match a wildcard subscription
+    const lifecycleEvent = makeStoredEvent({
+      id: "evt_lifecycle_1",
+      type: "webhook.delivery_succeeded",
+    });
+
+    const webhookRepo = createMockWebhookRepo({
+      matchingSubs: [{
+        id: TEST_SUBSCRIPTION_UUID,
+        orgId: TEST_ORG_UUID,
+        endpointId: TEST_ENDPOINT_UUID,
+        projectId: null,
+        eventType: "*", // Wildcard — would match everything without the guard
+      }],
+    });
+    const eventsRepo = createMockEventsRepo([lifecycleEvent]);
+
+    const result = await dispatchNewEvents({ webhookRepo, eventsRepo, encryption: null });
+
+    // No delivery attempts should be created for lifecycle events
+    expect(webhookRepo._createdAttempts).toHaveLength(0);
+    expect(fetchCalls).toHaveLength(0);
+    expect(result.dispatched).toBe(0);
+
+    // Cursor should still advance past the lifecycle event
+    expect(webhookRepo._advancedCursors).toHaveLength(1);
+    expect(webhookRepo._advancedCursors[0]!.lastEventId).toBe("evt_lifecycle_1");
+  });
+
+  it("does not deliver webhook.disabled events", async () => {
+    const disabledEvent = makeStoredEvent({
+      id: "evt_disabled_1",
+      type: "webhook.disabled",
+    });
+    const webhookRepo = createMockWebhookRepo();
+    const eventsRepo = createMockEventsRepo([disabledEvent]);
+
+    await dispatchNewEvents({ webhookRepo, eventsRepo, encryption: null });
+
+    expect(webhookRepo._createdAttempts).toHaveLength(0);
+    expect(fetchCalls).toHaveLength(0);
+  });
+
+  it("delivers non-lifecycle events normally alongside lifecycle events", async () => {
+    const normalEvent = makeStoredEvent({ id: "evt_normal", type: "project.created" });
+    const lifecycleEvent = makeStoredEvent({ id: "evt_lifecycle", type: "webhook.delivery_succeeded" });
+
+    const webhookRepo = createMockWebhookRepo();
+    const eventsRepo = createMockEventsRepo([normalEvent, lifecycleEvent]);
+
+    const result = await dispatchNewEvents({ webhookRepo, eventsRepo, encryption: null });
+
+    // Only the normal event should be delivered
+    expect(result.dispatched).toBe(1);
+    expect(webhookRepo._createdAttempts).toHaveLength(1);
+    expect(webhookRepo._createdAttempts[0]!.eventId).toBe("evt_normal");
+    // Cursor should advance past both
+    expect(webhookRepo._advancedCursors[0]!.lastEventId).toBe("evt_lifecycle");
+  });
+});
+
+// ── Auto-disable tests ──────────────────────────────────────
+
+describe("auto-disable endpoint after repeated failures", () => {
+  let originalFetch: typeof globalThis.fetch;
+
+  beforeEach(() => {
+    originalFetch = globalThis.fetch;
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it("disables endpoint when failure count reaches threshold", async () => {
+    globalThis.fetch = async () => new Response("Error", { status: 500 });
+
+    // Terminal failure attempt (at MAX_RETRIES)
+    const retryable: WebhookDeliveryAttempt = {
+      id: "fail-threshold-1",
+      orgId: TEST_ORG_UUID,
+      endpointId: TEST_ENDPOINT_UUID,
+      subscriptionId: TEST_SUBSCRIPTION_UUID,
+      eventId: TEST_EVENT_ID,
+      eventType: "project.created",
+      status: "retrying",
+      attemptNumber: 5, // MAX_RETRIES → terminal
+      httpStatusCode: 500,
+      failureReason: "HTTP 500",
+      idempotencyKey: null,
+      nextRetryAt: new Date(Date.now() - 1000),
+      completedAt: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    const webhookRepo = createMockWebhookRepo({
+      retryable: [retryable],
+      consecutiveFailures: AUTO_DISABLE_FAILURE_THRESHOLD, // At threshold
+    });
+    const eventsRepo = createMockEventsRepo();
+
+    await retryFailedDeliveries({ webhookRepo, eventsRepo, encryption: null });
+
+    // Endpoint should be disabled
+    expect(webhookRepo._disabledEndpoints).toHaveLength(1);
+    expect(webhookRepo._disabledEndpoints[0]!.reason).toBe("repeated_delivery_failures");
+
+    // webhook.disabled audit event should be emitted
+    expect(eventsRepo._appendedEventsWithAudit).toHaveLength(1);
+    expect(eventsRepo._appendedEventsWithAudit[0]!.event.type).toBe("webhook.disabled");
+    expect(eventsRepo._appendedEventsWithAudit[0]!.event.payload).toHaveProperty("reason", "repeated_delivery_failures");
+    expect(eventsRepo._appendedEventsWithAudit[0]!.event.payload).toHaveProperty("failure_threshold", AUTO_DISABLE_FAILURE_THRESHOLD);
+  });
+
+  it("does not disable endpoint when below threshold", async () => {
+    globalThis.fetch = async () => new Response("Error", { status: 500 });
+
+    const retryable: WebhookDeliveryAttempt = {
+      id: "below-threshold-1",
+      orgId: TEST_ORG_UUID,
+      endpointId: TEST_ENDPOINT_UUID,
+      subscriptionId: TEST_SUBSCRIPTION_UUID,
+      eventId: TEST_EVENT_ID,
+      eventType: "project.created",
+      status: "retrying",
+      attemptNumber: 5,
+      httpStatusCode: 500,
+      failureReason: "HTTP 500",
+      idempotencyKey: null,
+      nextRetryAt: new Date(Date.now() - 1000),
+      completedAt: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    const webhookRepo = createMockWebhookRepo({
+      retryable: [retryable],
+      consecutiveFailures: AUTO_DISABLE_FAILURE_THRESHOLD - 1, // Below threshold
+    });
+    const eventsRepo = createMockEventsRepo();
+
+    await retryFailedDeliveries({ webhookRepo, eventsRepo, encryption: null });
+
+    // Should NOT disable
+    expect(webhookRepo._disabledEndpoints).toHaveLength(0);
+    expect(eventsRepo._appendedEventsWithAudit).toHaveLength(0);
+  });
+
+  it("already-disabled endpoint does not receive HTTP delivery", async () => {
+    let fetchCallCount = 0;
+    globalThis.fetch = async () => {
+      fetchCallCount++;
+      return new Response("OK", { status: 200 });
+    };
+
+    const event = makeStoredEvent();
+    const webhookRepo = createMockWebhookRepo({
+      endpoint: {
+        id: TEST_ENDPOINT_UUID,
+        orgId: TEST_ORG_UUID,
+        url: "https://example.com/webhook",
+        status: "disabled",
+        secretCiphertext: null,
+        secretVersion: 1,
+      },
+    });
+    const eventsRepo = createMockEventsRepo([event]);
+
+    await dispatchNewEvents({ webhookRepo, eventsRepo, encryption: null });
+
+    expect(fetchCallCount).toBe(0);
+    expect(webhookRepo._updatedAttempts[0]!.input.status).toBe("failed");
+    expect(webhookRepo._updatedAttempts[0]!.input.failureReason).toBe("endpoint_disabled");
+  });
+
+  it("auto-disable is idempotent for already-disabled endpoints", async () => {
+    globalThis.fetch = async () => new Response("Error", { status: 500 });
+
+    const retryable: WebhookDeliveryAttempt = {
+      id: "idempotent-disable-1",
+      orgId: TEST_ORG_UUID,
+      endpointId: TEST_ENDPOINT_UUID,
+      subscriptionId: TEST_SUBSCRIPTION_UUID,
+      eventId: TEST_EVENT_ID,
+      eventType: "project.created",
+      status: "retrying",
+      attemptNumber: 5,
+      httpStatusCode: 500,
+      failureReason: "HTTP 500",
+      idempotencyKey: null,
+      nextRetryAt: new Date(Date.now() - 1000),
+      completedAt: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    const webhookRepo = createMockWebhookRepo({
+      retryable: [retryable],
+      consecutiveFailures: AUTO_DISABLE_FAILURE_THRESHOLD,
+    });
+    // Make disableEndpoint return not_found (already disabled)
+    webhookRepo.disableEndpoint = async () => ({ ok: false as const, error: { kind: "not_found" as const } });
+    const eventsRepo = createMockEventsRepo();
+
+    await retryFailedDeliveries({ webhookRepo, eventsRepo, encryption: null });
+
+    // No webhook.disabled event should be emitted for already-disabled endpoint
+    expect(eventsRepo._appendedEventsWithAudit).toHaveLength(0);
+  });
+});
+
+// ── buildDeliveryLifecyclePayload tests ─────────────────────
+
+describe("buildDeliveryLifecyclePayload", () => {
+  it("returns safe metadata without secrets", () => {
+    const attempt: WebhookDeliveryAttempt = {
+      id: "attempt-1",
+      orgId: TEST_ORG_UUID,
+      endpointId: TEST_ENDPOINT_UUID,
+      subscriptionId: TEST_SUBSCRIPTION_UUID,
+      eventId: TEST_EVENT_ID,
+      eventType: "project.created",
+      status: "success",
+      attemptNumber: 1,
+      httpStatusCode: 200,
+      failureReason: null,
+      idempotencyKey: "key-1",
+      nextRetryAt: null,
+      completedAt: new Date("2026-05-29T12:00:00Z"),
+      createdAt: new Date("2026-05-29T11:00:00Z"),
+      updatedAt: new Date("2026-05-29T12:00:00Z"),
+    };
+
+    const payload = buildDeliveryLifecyclePayload(attempt);
+
+    expect(payload.delivery_attempt_id).toBe("attempt-1");
+    expect(payload.endpoint_id).toBe(TEST_ENDPOINT_UUID);
+    expect(payload.subscription_id).toBe(TEST_SUBSCRIPTION_UUID);
+    expect(payload.source_event_id).toBe(TEST_EVENT_ID);
+    expect(payload.source_event_type).toBe("project.created");
+    expect(payload.http_status_code).toBe(200);
+    expect(payload.failure_reason).toBeNull();
+    expect(payload.attempt_number).toBe(1);
+    expect(payload.completed_at).toBe("2026-05-29T12:00:00.000Z");
+
+    // No secret-like fields
+    const keys = Object.keys(payload);
+    expect(keys).not.toContain("secret_ciphertext");
+    expect(keys).not.toContain("response_body");
+    expect(keys).not.toContain("stack_trace");
   });
 });

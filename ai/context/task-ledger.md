@@ -1278,122 +1278,15 @@ Last updated: 2026-05-28
 
 ## Task 0060
 
-- Agent: Implementer → Verifier
-- Prompt: `ai/tasks/task-0060.md`
-- Verifier prompt: `ai/tasks/task-0060-verifier.md`
-- Status: verified and merged
-- PR: #103 (`impl/task-0060-scope-enforcement`), squash-merged at `f680f54`
-- PR CI run: `26574711168` (11/11 SUCCESS)
-- Objective: Enforce exact requested-route-scope matching for config setting and feature-flag PATCH item routes before authorization or mutation succeeds.
-- Scope: config-worker router, update-setting, update-feature-flag handlers, scope-match helper, mutation-handler tests.
-- Reports: `ai/reports/task-0060-implementer.md`, `ai/reports/task-0060-verifier.md`
-- Durable outcome: `scopeMatchesRequested()` shared helper enforces stored row scope exactly matches requested URL path scope (org/project/environment). Prevents same-org cross-project/cross-environment alias attacks. Mismatches return safe 404 without authorization or mutation. 106 config-worker tests, 223 api-edge tests.
-
-## Task 0061
-
-- Agent: Implementer → Verifier
-- Prompt: `ai/tasks/task-0061.md`
-- Verifier prompt: `ai/tasks/task-0061-verifier.md`
-- Status: verified and merged
-- PR: #104 (`task-0061-config-mutation-ui`), squash-merged at `2dbd390`
-- PR CI runs: `26576854698` (rerun after external setup-node@v6 404, all pass), `26577790736` (post-verifier-report, 4/4 SUCCESS)
-- Objective: Add safe web-console mutation controls for non-secret config settings and feature flags through public api-edge POST/PATCH routes at explicit organization/project/environment scope.
-- Scope: web-console public client only (api.ts, main.ts, style.css).
-- Reports: `ai/reports/task-0061-implementer.md`, `ai/reports/task-0061-verifier.md`
-- Durable outcome: Web-console config mutation UI live. Create and inline-edit forms for settings and feature flags at org/project/environment scope. JSON value validation. Secret metadata remains read-only. All values rendered as safe text nodes. No localStorage/sessionStorage persistence. `configPath()` helper and `configScopeOpts()` ensure scope-correct API calls.
-
-### Task 0062
-
-- Agent: Implementer
-- Verifier: this session
-- Prompt: `ai/tasks/task-0062.md`
-- Verifier prompt: `ai/tasks/task-0062-verifier.md`
-- Status: verified and merged
-- PR: #105 (`task-0062-figma-ui-shell`), squash-merged at `3200d3c`
-- PR CI runs: `26579885750` (initial, 4/4 SUCCESS), `26580718351` (post-reports, 4/4 SUCCESS)
-- Objective: Update web-console UI shell and page styling to align with Figma design reference, preserving all live SaaS starter workflows and public API behavior.
-- Scope: web-console presentation only (main.ts, style.css).
-- Reports: `ai/reports/task-0062-implementer.md`, `ai/reports/task-0062-verifier.md`
-- Durable outcome: Web-console has Figma-inspired app shell with sidebar navigation (collapsible), topbar context bar with user avatar, scrollable content area. CSS tokens aligned with Figma oklch dark theme. Responsive breakpoints for tablet/mobile. All existing workflows preserved. No backend, API, or dependency changes.
-
-## Task 0063
-
-- Agent: Implementer
-- Verifier: this session
-- Prompt: `ai/tasks/task-0063.md`
-- Verifier prompt: `ai/tasks/task-0063-verifier.md`
-- Status: verified and merged
-- PR: #106 (`task-0063/web-console-ui-polish`), squash-merged at `0ed171c`
-- PR CI runs: `26581998947` (initial, 4/4 SUCCESS), `26582816383` (post-implementer-report, 4/4 SUCCESS)
-- Post-merge main CI run: `26583005845` (in progress at merge time)
-- Objective: Polish the existing web-console workspace/account page internals using `referance/figma/` visual cues, following Task 0062's shell refresh while preserving all live SaaS starter workflows and public API behavior.
-- Scope: web-console presentation only (main.ts, style.css).
-- Reports: `ai/reports/task-0063-implementer.md`, `ai/reports/task-0063-verifier.md`
-- Durable outcome: Web-console page internals polished with Figma-inspired components: page headers, action bars, member rows with avatars, invitation rows with status badges, project cards, audit log table with headers, animated loading indicators, structured empty states. All existing workflows preserved. No backend, API, or dependency changes.
-
-## Task 0064
-
 |- Agent: Implementer -> Verifier
-|- Prompt: `ai/tasks/task-0064.md`
-|- Verifier prompt: `ai/tasks/task-0064-verifier.md`
-|- Status: verified and merged
-|- PR: #107 (`impl/task-0064-secret-metadata-mutations`), squash-merged
-|- Reports: `ai/reports/task-0064-implementer.md`, `ai/reports/task-0064-verifier.md`
-|- Objective: Add metadata-only secret create, rotate, and revoke runtime for config secrets through config-worker and api-edge.
-|- Scope boundary: config-worker secret metadata mutation handlers/routes, api-edge forwarding, focused contracts/helpers, and tests. No encrypted payload storage, no plaintext reveal/read flow, no UI, no infrastructure.
-|- Durable outcome: Secret metadata create/rotate/revoke mutations are live at organization, project, and environment scope. Responses/events/audit payloads remain metadata-only; exact route-scope enforcement prevents cross-scope secret mutation; api-edge forwards routes without raw bearer tokens. 24/24 PR CI checks passed. Verifier committed missing implementer report before merge.
-
-## Task 0065
-
-|- Agent: Implementer -> Verifier
-|- Prompt: `ai/tasks/task-0065.md`
-|- Verifier prompt: `ai/tasks/task-0065-verifier.md`
-|- Status: verified PASS and merged (2026-05-28)
-|- PR: #108 (`impl/task-0065-encrypted-secret-storage`), squash-merged at `ef9e122`
-|- PR CI run: `26587745219` (17/17 checks SUCCESS)
-|- Reports: `ai/reports/task-0065-implementer.md`, `ai/reports/task-0065-verifier.md`
-|- Objective: Add encrypted, write-only secret payload storage for config secrets through config-worker while preserving metadata-only reads and no reveal API.
-|- Scope boundary: config-worker encryption adapter, config repository write-only ciphertext persistence, create/rotate secret handler semantics, safe contract request types, and focused config-worker/api-edge/contracts/db tests.
-|- Durable outcome: Config-worker now supports encrypted write-only secret payload storage using AES-256-GCM via Web Crypto. Create and rotate handlers accept optional `value` field, encrypt before DB mutation, persist only `ciphertext_envelope`, and return only safe `PublicSecretMetadata`. Missing `SECRET_ENCRYPTION_KEY` fails closed with 503. No verifier fixes required. 174 config-worker tests, 230 api-edge tests.
-
-## Task 0066
-
-|- Agent: Implementer -> Verifier
-|- Prompt: `ai/tasks/task-0066.md`
-|- Verifier prompt: `ai/tasks/task-0066-verifier.md`
-|- Status: verified PASS and merged (2026-05-28)
-|- PR: #109 (`impl/task-0066-secret-management-ui`), squash-merged at `5a9fa72`
-|- PR CI run: `26589177552` (4/4 checks SUCCESS)
-|- Reports: `ai/reports/task-0066-implementer.md`, `ai/reports/task-0066-verifier.md`
-|- Objective: Add secret create, rotate, and revoke UI to the web-console Config tab using existing public api-edge secret routes.
-|- Scope boundary: web-console api.ts client methods, main.ts UI forms/actions, style.css secret styles. No backend, infra, or contract changes.
-|- Durable outcome: Web-console Config tab now supports full secret lifecycle management — create, rotate, revoke — via public api-edge routes. Secret values are write-only (password inputs, cleared after submission, never persisted/logged/revealed). Revoke requires explicit confirmation. Existing settings and feature-flag mutation flows preserved. No verifier fixes required.
-
-## Task 0067
-
-|- Agent: Implementer (varahul) -> Verifier
-|- Prompt: `ai/tasks/task-0067.md`
-|- Verifier prompt: `ai/tasks/task-0067-verifier.md`
-|- Status: verified PASS and merged (2026-05-28)
-|- PR: #110 (`impl/task-0067-webhooks-core`), squash-merged at `ca8c871`
-|- PR CI run: `26591802397` (11/11 checks SUCCESS)
-|- Reports: `ai/reports/task-0067-implementer.md`, `ai/reports/task-0067-verifier.md`
-|- Objective: Add webhooks core persistence layer — migration, repository, and contract types for webhook endpoints, subscriptions, and delivery attempts.
-|- Scope boundary: packages/db (migration 080_webhooks_core, webhooks repository/types/index, manifest, BoundedContext union), packages/contracts (webhooks types, index re-export), tests/db and tests/contracts webhook test suites, package.json exports.
-|- Durable outcome: Webhooks bounded context foundation on main — migration 080_webhooks_core with 3 tables in `webhooks` schema (endpoints, subscriptions, delivery_attempts), WebhookRepository with full CRUD + cursor pagination + secret-safe reads (secret_ciphertext write-only), @saas/contracts/webhooks public types. 51 new tests (37 db + 14 contract). All queries parameterized and org-scoped. No cross-context FKs. Verifier fix: committed implementer report to PR branch.
-
-### Task 0068
-
-|- Agent: Implementer → Verifier
-|- Prompt: `ai/tasks/task-0068.md`
-|- Verifier prompt: `ai/tasks/task-0068-verifier.md`
-|- Status: verified PASS
-|- Implementation: PR #111 (`task-0068/webhooks-worker`), merged at `7b482b8` (2026-05-28)
-|- PR CI run: `26597212512` (30/30 SUCCESS)
-|- Reports: `ai/reports/task-0068-implementer.md`, `ai/reports/task-0068-verifier.md`
-|- Objective: Add webhooks management runtime — dedicated worker, api-edge facade, policy actions, and AES-256-GCM secret encryption.
-|- Scope boundary: apps/webhooks-worker (new), apps/api-edge (facade + binding), packages/contracts (policy actions), packages/policy-engine (role grants), tests (webhooks-worker, api-edge facade, policy-engine).
-|- Durable outcome: Webhooks management runtime on main — apps/webhooks-worker with full endpoint/subscription/delivery-attempt CRUD, AES-256-GCM signing-secret encryption, membership+policy authorization (fail-closed, safe 404s), event/audit writes for all mutations. Api-edge webhooks facade with WEBHOOKS_WORKER binding, safe header forwarding, no bearer/cookie leakage. Policy actions (organization.webhook.read/write, project.webhook.read/write) with deny-by-default. 523 tests passing across all affected packages.
+|- Prompt: `ai/tasks/task-0060.md`
+|- Verifier prompt: `ai/tasks/task-0060-verifier.md`
+|- Status: verifier scoped and ready (2026-05-28)
+|- Implementation: PR #103 (`impl/task-0060-scope-enforcement`), open with merge state CLEAN and PR CI run `26574711168` green at orchestration time.
+|- Objective: harden config setting and feature-flag PATCH item routes so the requested public route scope must exactly match the stored row scope before authorization or mutation succeeds.
+|- Scope boundary: config-worker router/handlers and focused tests only; no web-console mutation UI, secret mutation/encryption path, database migration, policy expansion, Terraform, infrastructure, or `specs-v2/**` work.
+|- Acceptance: verifier inspects PR #103 code paths and tests, runs local config-worker/api-edge checks plus Orun validate/component/changed-plan/dry-run, reviews CI logs, confirms no secret or unrelated file churn, and merges only on PASS with green CI.
+|- Expected outcome: if PASS, PR #103 merged and `ai/reports/task-0060-verifier.md` records verification evidence; if FAIL, PR remains open with blockers.
 
 ## Historical Notes
 

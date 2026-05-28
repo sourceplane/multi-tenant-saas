@@ -619,6 +619,28 @@ export function createWebhookRepository(executor: SqlExecutor): WebhookRepositor
       }
     },
 
+    async countConsecutiveEndpointFailures(orgId: string, endpointId: string): Promise<WebhookResult<number>> {
+      try {
+        // Count consecutive terminal failures from the most recent completed attempts.
+        // Finds the latest success (if any) and counts failures after it.
+        const result = await executor.execute<Record<string, unknown>>(
+          `SELECT COUNT(*) AS streak
+           FROM webhooks.webhook_delivery_attempts
+           WHERE org_id = $1 AND endpoint_id = $2 AND status = 'failed'
+             AND completed_at > COALESCE(
+               (SELECT MAX(completed_at) FROM webhooks.webhook_delivery_attempts
+                WHERE org_id = $1 AND endpoint_id = $2 AND status = 'success'),
+               '1970-01-01'::timestamptz
+             )`,
+          [orgId, endpointId],
+        );
+        const streak = parseInt(result.rows[0]?.streak as string ?? "0", 10);
+        return { ok: true, value: streak };
+      } catch {
+        return safeError("Failed to count consecutive endpoint failures");
+      }
+    },
+
     async listActiveOrgIds(): Promise<WebhookResult<string[]>> {
       try {
         // Orgs that have at least one enabled subscription with an active endpoint
