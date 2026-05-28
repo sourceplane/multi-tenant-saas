@@ -1238,6 +1238,20 @@ Last updated: 2026-05-28
 |- Scope boundary: `apps/config-worker`, `api-edge` config facade, contracts, policy-engine config actions, tests; no mutations, no UI, no Terraform.
 |- Durable outcome: Read-only config API live on main. 9 GET routes (3 resources × 3 scopes), fail-closed auth, billing_admin excluded, secret metadata safe (no plaintext/ciphertext). 55 config-worker tests, 222 api-edge tests.
 
+## Task 0057
+
+|- Agent: Implementer + Verifier
+|- Prompt: `ai/tasks/task-0057.md`
+|- Verifier prompt: `ai/tasks/task-0057-verifier.md`
+|- Status: verified PASS (2026-05-28)
+|- Implementation: PR #100, branch `impl/task-0057-config-worker-deploy-fix`, merge commit `fa0e2de`
+|- PR CI run: `26569227047` (20/20 SUCCESS)
+|- Post-merge main CI run: `26570117470` (SUCCESS)
+|- Reports: `ai/reports/task-0057-implementer.md`, `ai/reports/task-0057-verifier.md`
+|- Objective: Fix post-merge Task 0056 deployment blocker — replace config-worker placeholder Hyperdrive IDs, add api-edge→config-worker dependency edge.
+|- Scope boundary: `apps/config-worker/wrangler.jsonc`, `apps/api-edge/component.yaml`, deployment-config regression tests; no Workers code, no Terraform, no UI.
+|- Durable outcome: Config-worker stage/prod deploy with verified Hyperdrive IDs. api-edge deploy ordering respects config-worker dependency. 13 regression tests prevent placeholder recurrence. Repo health green.
+
 ## Historical Notes
 
 - PR #1 split product-specific V2 Git catalog work away from the reusable SaaS
