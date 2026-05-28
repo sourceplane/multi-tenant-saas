@@ -11,7 +11,7 @@ export default {
     return route(request, env);
   },
 
-  async scheduled(_event: ScheduledEvent, env: Env, _ctx: ExecutionContext): Promise<void> {
+  async scheduled(_controller: ScheduledController, env: Env, _ctx: ExecutionContext): Promise<void> {
     if (!env.SOURCEPLANE_DB) {
       console.error("[scheduled] SOURCEPLANE_DB binding missing");
       return;
