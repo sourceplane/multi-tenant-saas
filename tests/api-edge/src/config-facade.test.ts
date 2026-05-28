@@ -124,6 +124,31 @@ describe("api-edge config facade", () => {
       expect(isConfigRoute("/v1/organizations/org_abc/config/settings/stg_abc")).toBe(true);
       expect(isConfigRoute("/v1/organizations/org_abc/config/feature-flags/flg_abc")).toBe(true);
     });
+
+    // Secret item routes
+    it("matches secret item route (org scope)", () => {
+      expect(isConfigRoute("/v1/organizations/org_abc/config/secrets/sec_abc")).toBe(true);
+    });
+
+    it("matches secret item route (project scope)", () => {
+      expect(isConfigRoute("/v1/organizations/org_abc/projects/prj_def/config/secrets/sec_abc")).toBe(true);
+    });
+
+    it("matches secret item route (environment scope)", () => {
+      expect(isConfigRoute("/v1/organizations/org_a/projects/prj_b/environments/env_c/config/secrets/sec_abc")).toBe(true);
+    });
+
+    it("matches secret rotate route", () => {
+      expect(isConfigRoute("/v1/organizations/org_abc/config/secrets/sec_abc/rotate")).toBe(true);
+    });
+
+    it("matches project-scoped secret rotate route", () => {
+      expect(isConfigRoute("/v1/organizations/org_abc/projects/prj_def/config/secrets/sec_abc/rotate")).toBe(true);
+    });
+
+    it("matches environment-scoped secret rotate route", () => {
+      expect(isConfigRoute("/v1/organizations/org_a/projects/prj_b/environments/env_c/config/secrets/sec_abc/rotate")).toBe(true);
+    });
   });
 
   describe("handleConfigRoute", () => {
@@ -139,10 +164,27 @@ describe("api-edge config facade", () => {
       expect([200, 503]).toContain(res.status);
     });
 
-    it("returns 405 for DELETE (unsupported method)", async () => {
+    it("forwards DELETE to config-worker for secret revoke", async () => {
+      const { fetcher: identityFetcher } = createSessionFetcher("usr_test");
+      const { fetcher: configFetcher, calls: configCalls } = createFakeFetcher();
+      const env = createEnv({
+        IDENTITY_WORKER: identityFetcher,
+        CONFIG_WORKER: configFetcher,
+      });
+      const req = new Request("https://api-edge/v1/organizations/org_abc/config/secrets/sec_abc", {
+        method: "DELETE",
+        headers: { authorization: "Bearer tok_test" },
+      });
+      const res = await handleConfigRoute(req, env as never, "req_test", "/v1/organizations/org_abc/config/secrets/sec_abc");
+      expect(res.status).toBe(200);
+      expect(configCalls.length).toBe(1);
+      expect(configCalls[0]!.init.method).toBe("DELETE");
+    });
+
+    it("returns 405 for PUT (unsupported method)", async () => {
       const env = createEnv();
       const req = new Request("https://api-edge/v1/organizations/org_abc/config/settings", {
-        method: "DELETE",
+        method: "PUT",
         headers: { authorization: "Bearer tok_test" },
       });
       const res = await handleConfigRoute(req, env as never, "req_test", "/v1/organizations/org_abc/config/settings");

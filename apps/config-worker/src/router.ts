@@ -8,8 +8,11 @@ import { handleCreateSetting } from "./handlers/create-setting.js";
 import { handleUpdateSetting } from "./handlers/update-setting.js";
 import { handleCreateFeatureFlag } from "./handlers/create-feature-flag.js";
 import { handleUpdateFeatureFlag } from "./handlers/update-feature-flag.js";
+import { handleCreateSecret } from "./handlers/create-secret.js";
+import { handleRotateSecret } from "./handlers/rotate-secret.js";
+import { handleRevokeSecret } from "./handlers/revoke-secret.js";
 import { errorResponse, notFound, methodNotAllowed } from "./http.js";
-import { generateRequestId, parseOrgPublicId, parseProjectPublicId, parseEnvironmentPublicId, parseSettingPublicId, parseFeatureFlagPublicId } from "./ids.js";
+import { generateRequestId, parseOrgPublicId, parseProjectPublicId, parseEnvironmentPublicId, parseSettingPublicId, parseFeatureFlagPublicId, parseSecretMetadataPublicId } from "./ids.js";
 
 const REQUEST_ID_RE = /^[\w-]{1,128}$/;
 
@@ -47,13 +50,22 @@ const ENV_SETTINGS_RE = /^\/v1\/organizations\/([^/]+)\/projects\/([^/]+)\/envir
 const ENV_FEATURE_FLAGS_RE = /^\/v1\/organizations\/([^/]+)\/projects\/([^/]+)\/environments\/([^/]+)\/config\/feature-flags$/;
 const ENV_SECRETS_RE = /^\/v1\/organizations\/([^/]+)\/projects\/([^/]+)\/environments\/([^/]+)\/config\/secrets$/;
 
-// Item-level routes (PATCH)
+// Item-level routes (PATCH for settings/flags)
 const ORG_SETTING_ITEM_RE = /^\/v1\/organizations\/([^/]+)\/config\/settings\/([^/]+)$/;
 const ORG_FLAG_ITEM_RE = /^\/v1\/organizations\/([^/]+)\/config\/feature-flags\/([^/]+)$/;
 const PRJ_SETTING_ITEM_RE = /^\/v1\/organizations\/([^/]+)\/projects\/([^/]+)\/config\/settings\/([^/]+)$/;
 const PRJ_FLAG_ITEM_RE = /^\/v1\/organizations\/([^/]+)\/projects\/([^/]+)\/config\/feature-flags\/([^/]+)$/;
 const ENV_SETTING_ITEM_RE = /^\/v1\/organizations\/([^/]+)\/projects\/([^/]+)\/environments\/([^/]+)\/config\/settings\/([^/]+)$/;
 const ENV_FLAG_ITEM_RE = /^\/v1\/organizations\/([^/]+)\/projects\/([^/]+)\/environments\/([^/]+)\/config\/feature-flags\/([^/]+)$/;
+
+// Item-level secret routes (rotate: POST .../secrets/{id}/rotate, revoke: DELETE .../secrets/{id})
+const ORG_SECRET_ITEM_RE = /^\/v1\/organizations\/([^/]+)\/config\/secrets\/([^/]+)$/;
+const PRJ_SECRET_ITEM_RE = /^\/v1\/organizations\/([^/]+)\/projects\/([^/]+)\/config\/secrets\/([^/]+)$/;
+const ENV_SECRET_ITEM_RE = /^\/v1\/organizations\/([^/]+)\/projects\/([^/]+)\/environments\/([^/]+)\/config\/secrets\/([^/]+)$/;
+
+const ORG_SECRET_ROTATE_RE = /^\/v1\/organizations\/([^/]+)\/config\/secrets\/([^/]+)\/rotate$/;
+const PRJ_SECRET_ROTATE_RE = /^\/v1\/organizations\/([^/]+)\/projects\/([^/]+)\/config\/secrets\/([^/]+)\/rotate$/;
+const ENV_SECRET_ROTATE_RE = /^\/v1\/organizations\/([^/]+)\/projects\/([^/]+)\/environments\/([^/]+)\/config\/secrets\/([^/]+)\/rotate$/;
 
 type ConfigResource = "settings" | "feature-flags" | "secrets";
 
@@ -208,6 +220,72 @@ function matchItemRoute(pathname: string): MatchedItemRoute | null {
   return null;
 }
 
+interface MatchedSecretItemRoute {
+  scope: Scope;
+  secretId: string;
+  action: "rotate" | "revoke";
+}
+
+function matchSecretItemRoute(pathname: string): MatchedSecretItemRoute | null {
+  // Rotate routes (POST .../secrets/{id}/rotate)
+  let m = pathname.match(ENV_SECRET_ROTATE_RE);
+  if (m) {
+    const orgId = parseOrgPublicId(m[1]!);
+    const projectId = parseProjectPublicId(m[2]!);
+    const environmentId = parseEnvironmentPublicId(m[3]!);
+    const secretId = parseSecretMetadataPublicId(m[4]!);
+    if (!orgId || !projectId || !environmentId || !secretId) return null;
+    return { scope: { kind: "environment", orgId, projectId, environmentId }, secretId, action: "rotate" };
+  }
+
+  m = pathname.match(PRJ_SECRET_ROTATE_RE);
+  if (m) {
+    const orgId = parseOrgPublicId(m[1]!);
+    const projectId = parseProjectPublicId(m[2]!);
+    const secretId = parseSecretMetadataPublicId(m[3]!);
+    if (!orgId || !projectId || !secretId) return null;
+    return { scope: { kind: "project", orgId, projectId }, secretId, action: "rotate" };
+  }
+
+  m = pathname.match(ORG_SECRET_ROTATE_RE);
+  if (m) {
+    const orgId = parseOrgPublicId(m[1]!);
+    const secretId = parseSecretMetadataPublicId(m[2]!);
+    if (!orgId || !secretId) return null;
+    return { scope: { kind: "organization", orgId }, secretId, action: "rotate" };
+  }
+
+  // Revoke routes (DELETE .../secrets/{id})
+  m = pathname.match(ENV_SECRET_ITEM_RE);
+  if (m) {
+    const orgId = parseOrgPublicId(m[1]!);
+    const projectId = parseProjectPublicId(m[2]!);
+    const environmentId = parseEnvironmentPublicId(m[3]!);
+    const secretId = parseSecretMetadataPublicId(m[4]!);
+    if (!orgId || !projectId || !environmentId || !secretId) return null;
+    return { scope: { kind: "environment", orgId, projectId, environmentId }, secretId, action: "revoke" };
+  }
+
+  m = pathname.match(PRJ_SECRET_ITEM_RE);
+  if (m) {
+    const orgId = parseOrgPublicId(m[1]!);
+    const projectId = parseProjectPublicId(m[2]!);
+    const secretId = parseSecretMetadataPublicId(m[3]!);
+    if (!orgId || !projectId || !secretId) return null;
+    return { scope: { kind: "project", orgId, projectId }, secretId, action: "revoke" };
+  }
+
+  m = pathname.match(ORG_SECRET_ITEM_RE);
+  if (m) {
+    const orgId = parseOrgPublicId(m[1]!);
+    const secretId = parseSecretMetadataPublicId(m[2]!);
+    if (!orgId || !secretId) return null;
+    return { scope: { kind: "organization", orgId }, secretId, action: "revoke" };
+  }
+
+  return null;
+}
+
 export async function route(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   const requestId = resolveRequestId(request);
@@ -219,8 +297,9 @@ export async function route(request: Request, env: Env): Promise<Response> {
 
     const matched = matchRoute(url.pathname);
     const matchedItem = matched ? null : matchItemRoute(url.pathname);
+    const matchedSecretItem = (matched || matchedItem) ? null : matchSecretItemRoute(url.pathname);
 
-    if (!matched && !matchedItem) {
+    if (!matched && !matchedItem && !matchedSecretItem) {
       return notFound(requestId, url.pathname);
     }
 
@@ -229,7 +308,23 @@ export async function route(request: Request, env: Env): Promise<Response> {
       return errorResponse("unauthenticated", "Authentication required", 401, requestId);
     }
 
-    // Item-level routes (PATCH only)
+    // Secret item-level routes (rotate: POST, revoke: DELETE)
+    if (matchedSecretItem) {
+      if (matchedSecretItem.action === "rotate") {
+        if (request.method !== "POST") {
+          return methodNotAllowed(requestId);
+        }
+        return handleRotateSecret(request, env, requestId, actor, matchedSecretItem.scope, matchedSecretItem.secretId);
+      }
+      if (matchedSecretItem.action === "revoke") {
+        if (request.method !== "DELETE") {
+          return methodNotAllowed(requestId);
+        }
+        return handleRevokeSecret(request, env, requestId, actor, matchedSecretItem.scope, matchedSecretItem.secretId);
+      }
+    }
+
+    // Item-level routes (PATCH only for settings/flags)
     if (matchedItem) {
       if (request.method !== "PATCH") {
         return methodNotAllowed(requestId);
@@ -261,7 +356,7 @@ export async function route(request: Request, env: Env): Promise<Response> {
         case "feature-flags":
           return handleCreateFeatureFlag(request, env, requestId, actor, matched!.scope);
         case "secrets":
-          return methodNotAllowed(requestId); // secrets creation not in this task
+          return handleCreateSecret(request, env, requestId, actor, matched!.scope);
       }
     }
 

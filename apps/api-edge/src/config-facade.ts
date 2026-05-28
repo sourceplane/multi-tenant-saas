@@ -5,17 +5,17 @@ import { resolveActor } from "./resolve-actor.js";
 // Organization-scoped config
 const ORG_CONFIG_SETTINGS_RE = /^\/v1\/organizations\/[^/]+\/config\/settings(\/[^/]+)?$/;
 const ORG_CONFIG_FLAGS_RE = /^\/v1\/organizations\/[^/]+\/config\/feature-flags(\/[^/]+)?$/;
-const ORG_CONFIG_SECRETS_RE = /^\/v1\/organizations\/[^/]+\/config\/secrets$/;
+const ORG_CONFIG_SECRETS_RE = /^\/v1\/organizations\/[^/]+\/config\/secrets(\/[^/]+(\/rotate)?)?$/;
 
 // Project-scoped config
 const PRJ_CONFIG_SETTINGS_RE = /^\/v1\/organizations\/[^/]+\/projects\/[^/]+\/config\/settings(\/[^/]+)?$/;
 const PRJ_CONFIG_FLAGS_RE = /^\/v1\/organizations\/[^/]+\/projects\/[^/]+\/config\/feature-flags(\/[^/]+)?$/;
-const PRJ_CONFIG_SECRETS_RE = /^\/v1\/organizations\/[^/]+\/projects\/[^/]+\/config\/secrets$/;
+const PRJ_CONFIG_SECRETS_RE = /^\/v1\/organizations\/[^/]+\/projects\/[^/]+\/config\/secrets(\/[^/]+(\/rotate)?)?$/;
 
 // Environment-scoped config
 const ENV_CONFIG_SETTINGS_RE = /^\/v1\/organizations\/[^/]+\/projects\/[^/]+\/environments\/[^/]+\/config\/settings(\/[^/]+)?$/;
 const ENV_CONFIG_FLAGS_RE = /^\/v1\/organizations\/[^/]+\/projects\/[^/]+\/environments\/[^/]+\/config\/feature-flags(\/[^/]+)?$/;
-const ENV_CONFIG_SECRETS_RE = /^\/v1\/organizations\/[^/]+\/projects\/[^/]+\/environments\/[^/]+\/config\/secrets$/;
+const ENV_CONFIG_SECRETS_RE = /^\/v1\/organizations\/[^/]+\/projects\/[^/]+\/environments\/[^/]+\/config\/secrets(\/[^/]+(\/rotate)?)?$/;
 
 const FORWARDED_HEADERS = [
   "content-type",
@@ -44,8 +44,8 @@ export async function handleConfigRoute(
   requestId: string,
   pathname: string,
 ): Promise<Response> {
-  // Config routes: GET (list), POST (create), PATCH (update)
-  const allowedMethods = ["GET", "POST", "PATCH"];
+  // Config routes: GET (list), POST (create/rotate), PATCH (update), DELETE (revoke)
+  const allowedMethods = ["GET", "POST", "PATCH", "DELETE"];
   if (!allowedMethods.includes(request.method)) {
     return errorResponse("unsupported", "Method not allowed", 405, requestId);
   }
