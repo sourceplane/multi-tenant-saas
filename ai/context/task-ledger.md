@@ -1133,6 +1133,19 @@ Last updated: 2026-05-27
 |- Scope: auth contract extension (ActorContext, BearerResolutionResponse), identity resolveBearer(), GET /v1/auth/resolve, api-edge resolveActor() unified module, facade deduplication, focused tests.
 |- Durable outcome: Identity resolves both session tokens and API keys. api-edge forwards x-actor-subject-id/type for service_principal actors. No raw bearer tokens forwarded downstream. 88+193 tests green.
 
+### Task 0049 — Service-Principal Role-Binding Foundation
+
+|- Agent: Implementer → Verifier
+|- Prompt: `ai/tasks/task-0049.md`
+|- Verifier prompt: `ai/tasks/task-0049-verifier.md`
+|- Status: verified PASS
+|- Implementation: PR #92, branch `codex/task-0049-service-principal-role-bindings`, merge commit `c216fa1`
+|- PR CI run: `26553711720` (15/15 SUCCESS)
+|- Reports: `ai/reports/task-0049-implementer.md`, `ai/reports/task-0049-verifier.md`
+|- Objective: Add membership/policy foundation for service-principal role bindings so SP actors can participate in authorization pipeline.
+|- Scope: 3 policy actions (organization.service_principal.binding.{create,list,revoke}), 3 internal membership routes, shared subject-ID helpers (@saas/contracts/service-principal), focused tests.
+|- Durable outcome: Internal membership seam for SP role bindings on main. Owner/admin-only policy gating. Canonical sp_<hex32> subject-ID shape shared across contracts. Handlers fail closed on malformed input. 373 tests green.
+
 ## Historical Notes
 
 - PR #1 split product-specific V2 Git catalog work away from the reusable SaaS

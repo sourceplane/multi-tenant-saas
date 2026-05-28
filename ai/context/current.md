@@ -266,4 +266,15 @@ Last updated: 2026-05-27
 - 88 identity-worker tests, 193 api-edge tests, all green.
 - Reports: `ai/reports/task-0048-implementer.md`, `ai/reports/task-0048-verifier.md`
 
-**Next phase**: API-key admin routes, SP RBAC policy, or next orchestrator cycle decision.
+**Next phase**: Public API-key administration — identity-worker orchestration consuming the internal membership seam, api-edge routes, policy-gated authorization, and event/audit writes.
+
+**Task 0049 (Verifier) — COMPLETE ✅**
+
+- Prompt: `ai/tasks/task-0049.md`
+- Verifier prompt: `ai/tasks/task-0049-verifier.md`
+- PR #92 (`codex/task-0049-service-principal-role-bindings`) **MERGED** at commit `c216fa1` (2026-05-28T09:40Z).
+- PR URL: `https://github.com/sourceplane/multi-tenant-saas/pull/92`
+- PR CI run: `26553711720` (15/15 checks SUCCESS).
+- Key durable outcome: Membership-owned internal seam for service-principal role bindings. Three internal routes (create/list/revoke) at `/v1/internal/membership/service-principal-bindings`. Three policy actions (`organization.service_principal.binding.{create,list,revoke}`) restricted to owner/admin. Shared `@saas/contracts/service-principal` helpers enforce canonical `sp_<hex32>` subject-ID shape matching Task 0048 actor forwarding. Handlers fail closed on malformed IDs, invalid role/scope combos, and cross-org mismatches.
+- 373 tests passing (141 policy-engine + 212 membership-worker + 20 policy-worker).
+- Reports: `ai/reports/task-0049-implementer.md`, `ai/reports/task-0049-verifier.md`

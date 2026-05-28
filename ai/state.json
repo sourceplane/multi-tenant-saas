@@ -1,6 +1,6 @@
 {
   "goal": "Supabase/Postgres-backed multi-organization Orun SaaS control plane",
-  "current_task": "0048",
+  "current_task": "0049",
   "completed": [
     "0001",
     "0001.1",
@@ -54,18 +54,20 @@
     "0045",
     "0046",
     "0047",
-    "0048"
+    "0048",
+    "0049"
   ],
   "repo_health": "green",
-  "next_focus": "api-key-admin-routes-or-sp-rbac-policy",
-  "last_verified": "2026-05-28T04:00Z",
+  "next_focus": "public-api-key-administration",
+  "last_verified": "2026-05-28T09:40Z",
   "waiting_for_input": "false",
-  "task_agent": "/ai/tasks/task-0048-verifier.md",
+  "task_agent": "/ai/tasks/task-0049-verifier.md",
   "notes": [
-    "Task 0048 PASS: PR #91 merged at 2a78a5d. API key bearer resolution for service_principal auth.",
-    "Identity resolveBearer() handles both session tokens and API keys. api-edge resolveActor() unified module.",
-    "3 facade files (org/project/audit) deduplicated via shared resolveActor(). 88+193 tests green.",
-    "CI runs 26551391669, 26551799366, 26551978574 all green (27 jobs each).",
+    "Task 0049 PASS: PR #92 merged at c216fa1. Service-principal role-binding foundation.",
+    "Membership-owned internal seam: create/list/revoke SP bindings via 3 internal routes.",
+    "Policy actions: organization.service_principal.binding.{create,list,revoke} — owner/admin only.",
+    "Shared subject-ID helpers in @saas/contracts/service-principal (sp_<hex32> shape).",
+    "CI run 26553711720 all 15 checks green. 373 tests passing across 3 test suites.",
     "Node.js 20 deprecation warning in CI — actions need update before September 2026 runner cutoff."
   ]
 }
