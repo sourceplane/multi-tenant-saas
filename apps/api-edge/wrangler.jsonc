@@ -46,6 +46,10 @@
         {
           "binding": "CONFIG_WORKER",
           "service": "config-worker-stage"
+        },
+        {
+          "binding": "WEBHOOKS_WORKER",
+          "service": "webhooks-worker-stage"
         }
       ]
     },
@@ -80,6 +84,10 @@
         {
           "binding": "CONFIG_WORKER",
           "service": "config-worker-prod"
+        },
+        {
+          "binding": "WEBHOOKS_WORKER",
+          "service": "webhooks-worker-prod"
         }
       ]
     }

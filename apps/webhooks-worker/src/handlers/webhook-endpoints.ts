@@ -1,0 +1,573 @@
+import type { Env } from "../env.js";
+import type { ActorContext } from "../router.js";
+import { createWebhookRepository } from "@saas/db/webhooks";
+import { createEventsRepository } from "@saas/db/events";
+import { createSqlExecutor } from "@saas/db/hyperdrive";
+import { fetchAuthorizationContext } from "../membership-client.js";
+import { authorizeViaPolicy } from "../policy-client.js";
+import { errorResponse, successResponse, listResponse, validationError } from "../http.js";
+import { toPublicWebhookEndpoint } from "../mappers.js";
+import { parsePageParams, encodeCursor } from "../pagination.js";
+import { parseWebhookEndpointPublicId } from "../ids.js";
+import type { PolicyResource } from "@saas/contracts/policy";
+import type { UpdateWebhookEndpointInput, DisableWebhookEndpointInput } from "@saas/db/webhooks";
+
+const URL_RE = /^https:\/\/.{1,2048}$/;
+
+function randomHex(bytes: number): string {
+  const buf = new Uint8Array(bytes);
+  crypto.getRandomValues(buf);
+  let hex = "";
+  for (let i = 0; i < buf.length; i++) {
+    hex += buf[i]!.toString(16).padStart(2, "0");
+  }
+  return hex;
+}
+
+// ── Authorization helper ─────────────────────────────────────
+
+async function authorizeWebhook(
+  env: Env,
+  actor: ActorContext,
+  orgId: string,
+  projectId: string | null | undefined,
+  action: "organization.webhook.read" | "organization.webhook.write" | "project.webhook.read" | "project.webhook.write",
+  requestId: string,
+): Promise<Response | null> {
+  const contextResult = await fetchAuthorizationContext(
+    env.MEMBERSHIP_WORKER!,
+    actor.subjectId,
+    actor.subjectType,
+    orgId,
+    requestId,
+  );
+  if (!contextResult.ok) {
+    return errorResponse("not_found", "Not found", 404, requestId);
+  }
+
+  const resource: PolicyResource = projectId
+    ? { kind: "project", orgId, projectId }
+    : { kind: "organization", orgId };
+
+  const policyResult = await authorizeViaPolicy(
+    env.POLICY_WORKER!,
+    actor.subjectId,
+    actor.subjectType,
+    action,
+    resource,
+    contextResult.memberships,
+    requestId,
+  );
+  if (!policyResult.allow) {
+    return errorResponse("not_found", "Not found", 404, requestId);
+  }
+
+  return null; // authorized
+}
+
+// ── Encrypt signing secret ───────────────────────────────────
+
+async function encryptSigningSecret(env: Env): Promise<string | undefined> {
+  if (!env.SECRET_ENCRYPTION_KEY) return undefined;
+
+  const secret = randomHex(32);
+  const { createEncryptionAdapter } = await import("../encryption.js");
+  const adapter = await createEncryptionAdapter(env.SECRET_ENCRYPTION_KEY);
+  if (!adapter) return undefined;
+
+  const envelope = await adapter.encrypt(secret);
+  return JSON.stringify(envelope);
+}
+
+// ── Create ───────────────────────────────────────────────────
+
+export async function handleCreateWebhookEndpoint(
+  request: Request,
+  env: Env,
+  requestId: string,
+  actor: ActorContext,
+  orgId: string,
+): Promise<Response> {
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return errorResponse("bad_request", "Invalid JSON body", 400, requestId);
+  }
+
+  if (!body || typeof body !== "object") {
+    return validationError(requestId, { body: ["Request body must be a JSON object"] });
+  }
+
+  const { url, name, description, projectId } = body as {
+    url?: unknown; name?: unknown; description?: unknown; projectId?: unknown;
+  };
+  const fields: Record<string, string[]> = {};
+
+  if (typeof url !== "string" || !URL_RE.test(url)) {
+    fields.url = ["A valid HTTPS URL is required"];
+  }
+  if (name !== undefined && name !== null && typeof name !== "string") {
+    fields.name = ["Name must be a string or null"];
+  }
+  if (description !== undefined && description !== null && typeof description !== "string") {
+    fields.description = ["Description must be a string or null"];
+  }
+  if (projectId !== undefined && projectId !== null && typeof projectId !== "string") {
+    fields.projectId = ["Project ID must be a string or null"];
+  }
+  if (Object.keys(fields).length > 0) {
+    return validationError(requestId, fields);
+  }
+
+  // Resolve project public ID if provided
+  let resolvedProjectId: string | null = null;
+  if (typeof projectId === "string") {
+    const parsed = parseWebhookEndpointPublicId(projectId);
+    resolvedProjectId = parsed ?? (projectId as string);
+  }
+
+  // Authorization
+  const policyAction = resolvedProjectId
+    ? "project.webhook.write" as const
+    : "organization.webhook.write" as const;
+  const denied = await authorizeWebhook(env, actor, orgId, resolvedProjectId, policyAction, requestId);
+  if (denied) return denied;
+
+  const endpointId = crypto.randomUUID();
+
+  const secretCiphertext = await encryptSigningSecret(env);
+
+  const executor = createSqlExecutor(env.SOURCEPLANE_DB!);
+  try {
+    const repo = createWebhookRepository(executor);
+    const eventsRepo = createEventsRepository(executor);
+
+    const createInput: import("@saas/db/webhooks").CreateWebhookEndpointInput = {
+      id: endpointId,
+      orgId,
+      projectId: resolvedProjectId,
+      url: url as string,
+      name: (name as string) ?? null,
+      description: (description as string) ?? null,
+    };
+    if (secretCiphertext !== undefined) {
+      createInput.secretCiphertext = secretCiphertext;
+    }
+
+    const result = await repo.createEndpoint(createInput);
+
+    if (!result.ok) {
+      if (result.error.kind === "conflict") {
+        return errorResponse("conflict", "Webhook endpoint already exists", 409, requestId);
+      }
+      return errorResponse("internal_error", "Service unavailable", 503, requestId);
+    }
+
+    await eventsRepo.appendEventWithAudit({
+      event: {
+        id: randomHex(16),
+        type: "webhook_endpoint.created",
+        version: 1,
+        source: "webhooks-worker",
+        occurredAt: new Date(),
+        actorType: actor.subjectType,
+        actorId: actor.subjectId,
+        orgId,
+        projectId: resolvedProjectId,
+        subjectKind: "webhook_endpoint",
+        subjectId: endpointId,
+        requestId,
+        payload: { url: url as string, name: name ?? null },
+      },
+      audit: {
+        id: randomHex(16),
+        category: "webhooks",
+        description: `Webhook endpoint created: ${url as string}`,
+        projectId: resolvedProjectId,
+      },
+    });
+
+    return successResponse({ endpoint: toPublicWebhookEndpoint(result.value) }, requestId, 201);
+  } catch {
+    return errorResponse("internal_error", "Service unavailable", 503, requestId);
+  } finally {
+    await executor.dispose();
+  }
+}
+
+// ── Get ──────────────────────────────────────────────────────
+
+export async function handleGetWebhookEndpoint(
+  _request: Request,
+  env: Env,
+  requestId: string,
+  actor: ActorContext,
+  orgId: string,
+  endpointId: string,
+): Promise<Response> {
+  const executor = createSqlExecutor(env.SOURCEPLANE_DB!);
+  try {
+    const repo = createWebhookRepository(executor);
+    const result = await repo.getEndpoint(orgId, endpointId);
+    if (!result.ok) {
+      return errorResponse("not_found", "Webhook endpoint not found", 404, requestId);
+    }
+
+    const policyAction = result.value.projectId
+      ? "project.webhook.read" as const
+      : "organization.webhook.read" as const;
+    const denied = await authorizeWebhook(env, actor, orgId, result.value.projectId, policyAction, requestId);
+    if (denied) return denied;
+
+    return successResponse({ endpoint: toPublicWebhookEndpoint(result.value) }, requestId);
+  } catch {
+    return errorResponse("internal_error", "Service unavailable", 503, requestId);
+  } finally {
+    await executor.dispose();
+  }
+}
+
+// ── List ─────────────────────────────────────────────────────
+
+export async function handleListWebhookEndpoints(
+  request: Request,
+  env: Env,
+  requestId: string,
+  actor: ActorContext,
+  orgId: string,
+  projectId: string | null,
+): Promise<Response> {
+  const policyAction = projectId
+    ? "project.webhook.read" as const
+    : "organization.webhook.read" as const;
+  const denied = await authorizeWebhook(env, actor, orgId, projectId, policyAction, requestId);
+  if (denied) return denied;
+
+  const pageResult = parsePageParams(new URL(request.url));
+  if (!pageResult.ok) {
+    return validationError(requestId, { [pageResult.field]: [pageResult.reason] });
+  }
+
+  const { limit, cursor } = pageResult.value;
+  const dbCursor = cursor ? { createdAt: cursor.createdAt, id: cursor.id } : null;
+
+  const executor = createSqlExecutor(env.SOURCEPLANE_DB!);
+  try {
+    const repo = createWebhookRepository(executor);
+    const result = await repo.listEndpoints(orgId, { limit, cursor: dbCursor }, projectId);
+    if (!result.ok) {
+      return errorResponse("internal_error", "Service unavailable", 503, requestId);
+    }
+
+    const endpoints = result.value.items.map(toPublicWebhookEndpoint);
+    const nextCursor = result.value.nextCursor
+      ? encodeCursor(result.value.nextCursor.createdAt, result.value.nextCursor.id)
+      : null;
+
+    return listResponse({ endpoints }, requestId, nextCursor);
+  } catch {
+    return errorResponse("internal_error", "Service unavailable", 503, requestId);
+  } finally {
+    await executor.dispose();
+  }
+}
+
+// ── Update ───────────────────────────────────────────────────
+
+export async function handleUpdateWebhookEndpoint(
+  request: Request,
+  env: Env,
+  requestId: string,
+  actor: ActorContext,
+  orgId: string,
+  endpointId: string,
+): Promise<Response> {
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return errorResponse("bad_request", "Invalid JSON body", 400, requestId);
+  }
+
+  if (!body || typeof body !== "object") {
+    return validationError(requestId, { body: ["Request body must be a JSON object"] });
+  }
+
+  const { url, name, description } = body as { url?: unknown; name?: unknown; description?: unknown };
+  const fields: Record<string, string[]> = {};
+
+  if (url !== undefined && (typeof url !== "string" || !URL_RE.test(url))) {
+    fields.url = ["A valid HTTPS URL is required"];
+  }
+  if (name !== undefined && name !== null && typeof name !== "string") {
+    fields.name = ["Name must be a string or null"];
+  }
+  if (description !== undefined && description !== null && typeof description !== "string") {
+    fields.description = ["Description must be a string or null"];
+  }
+  if (Object.keys(fields).length > 0) {
+    return validationError(requestId, fields);
+  }
+
+  const executor = createSqlExecutor(env.SOURCEPLANE_DB!);
+  try {
+    const repo = createWebhookRepository(executor);
+    const eventsRepo = createEventsRepository(executor);
+
+    const existing = await repo.getEndpoint(orgId, endpointId);
+    if (!existing.ok) {
+      return errorResponse("not_found", "Webhook endpoint not found", 404, requestId);
+    }
+
+    const policyAction = existing.value.projectId
+      ? "project.webhook.write" as const
+      : "organization.webhook.write" as const;
+    const denied = await authorizeWebhook(env, actor, orgId, existing.value.projectId, policyAction, requestId);
+    if (denied) return denied;
+
+    const input: UpdateWebhookEndpointInput = {};
+    if (typeof url === "string") input.url = url;
+    if (name !== undefined) input.name = (name as string) ?? null;
+    if (description !== undefined) input.description = (description as string) ?? null;
+
+    const result = await repo.updateEndpoint(orgId, endpointId, input);
+    if (!result.ok) {
+      return errorResponse("internal_error", "Service unavailable", 503, requestId);
+    }
+
+    await eventsRepo.appendEventWithAudit({
+      event: {
+        id: randomHex(16),
+        type: "webhook_endpoint.updated",
+        version: 1,
+        source: "webhooks-worker",
+        occurredAt: new Date(),
+        actorType: actor.subjectType,
+        actorId: actor.subjectId,
+        orgId,
+        projectId: existing.value.projectId,
+        subjectKind: "webhook_endpoint",
+        subjectId: endpointId,
+        requestId,
+        payload: { url, name, description },
+      },
+      audit: {
+        id: randomHex(16),
+        category: "webhooks",
+        description: "Webhook endpoint updated",
+        projectId: existing.value.projectId,
+      },
+    });
+
+    return successResponse({ endpoint: toPublicWebhookEndpoint(result.value) }, requestId);
+  } catch {
+    return errorResponse("internal_error", "Service unavailable", 503, requestId);
+  } finally {
+    await executor.dispose();
+  }
+}
+
+// ── Disable ──────────────────────────────────────────────────
+
+export async function handleDisableWebhookEndpoint(
+  request: Request,
+  env: Env,
+  requestId: string,
+  actor: ActorContext,
+  orgId: string,
+  endpointId: string,
+): Promise<Response> {
+  let body: Record<string, unknown> = {};
+  try {
+    body = (await request.json()) as Record<string, unknown>;
+  } catch {
+    // body is optional for disable
+  }
+
+  const executor = createSqlExecutor(env.SOURCEPLANE_DB!);
+  try {
+    const repo = createWebhookRepository(executor);
+    const eventsRepo = createEventsRepository(executor);
+
+    const existing = await repo.getEndpoint(orgId, endpointId);
+    if (!existing.ok) {
+      return errorResponse("not_found", "Webhook endpoint not found", 404, requestId);
+    }
+
+    const policyAction = existing.value.projectId
+      ? "project.webhook.write" as const
+      : "organization.webhook.write" as const;
+    const denied = await authorizeWebhook(env, actor, orgId, existing.value.projectId, policyAction, requestId);
+    if (denied) return denied;
+
+    const input: DisableWebhookEndpointInput = {};
+    if (typeof body.reason === "string") input.reason = body.reason;
+
+    const result = await repo.disableEndpoint(orgId, endpointId, input);
+    if (!result.ok) {
+      if (result.error.kind === "not_found") {
+        return errorResponse("not_found", "Webhook endpoint not found or already disabled", 404, requestId);
+      }
+      return errorResponse("internal_error", "Service unavailable", 503, requestId);
+    }
+
+    await eventsRepo.appendEventWithAudit({
+      event: {
+        id: randomHex(16),
+        type: "webhook_endpoint.disabled",
+        version: 1,
+        source: "webhooks-worker",
+        occurredAt: new Date(),
+        actorType: actor.subjectType,
+        actorId: actor.subjectId,
+        orgId,
+        projectId: existing.value.projectId,
+        subjectKind: "webhook_endpoint",
+        subjectId: endpointId,
+        requestId,
+        payload: { reason: input.reason ?? null },
+      },
+      audit: {
+        id: randomHex(16),
+        category: "webhooks",
+        description: "Webhook endpoint disabled",
+        projectId: existing.value.projectId,
+      },
+    });
+
+    return successResponse({ endpoint: toPublicWebhookEndpoint(result.value) }, requestId);
+  } catch {
+    return errorResponse("internal_error", "Service unavailable", 503, requestId);
+  } finally {
+    await executor.dispose();
+  }
+}
+
+// ── Delete ───────────────────────────────────────────────────
+
+export async function handleDeleteWebhookEndpoint(
+  _request: Request,
+  env: Env,
+  requestId: string,
+  actor: ActorContext,
+  orgId: string,
+  endpointId: string,
+): Promise<Response> {
+  const executor = createSqlExecutor(env.SOURCEPLANE_DB!);
+  try {
+    const repo = createWebhookRepository(executor);
+    const eventsRepo = createEventsRepository(executor);
+
+    const existing = await repo.getEndpoint(orgId, endpointId);
+    if (!existing.ok) {
+      return errorResponse("not_found", "Webhook endpoint not found", 404, requestId);
+    }
+
+    const policyAction = existing.value.projectId
+      ? "project.webhook.write" as const
+      : "organization.webhook.write" as const;
+    const denied = await authorizeWebhook(env, actor, orgId, existing.value.projectId, policyAction, requestId);
+    if (denied) return denied;
+
+    const result = await repo.deleteEndpoint(orgId, endpointId);
+    if (!result.ok) {
+      return errorResponse("internal_error", "Service unavailable", 503, requestId);
+    }
+
+    await eventsRepo.appendEventWithAudit({
+      event: {
+        id: randomHex(16),
+        type: "webhook_endpoint.deleted",
+        version: 1,
+        source: "webhooks-worker",
+        occurredAt: new Date(),
+        actorType: actor.subjectType,
+        actorId: actor.subjectId,
+        orgId,
+        projectId: existing.value.projectId,
+        subjectKind: "webhook_endpoint",
+        subjectId: endpointId,
+        requestId,
+        payload: {},
+      },
+      audit: {
+        id: randomHex(16),
+        category: "webhooks",
+        description: "Webhook endpoint deleted",
+        projectId: existing.value.projectId,
+      },
+    });
+
+    return successResponse({ deleted: true }, requestId);
+  } catch {
+    return errorResponse("internal_error", "Service unavailable", 503, requestId);
+  } finally {
+    await executor.dispose();
+  }
+}
+
+// ── Rotate signing secret ────────────────────────────────────
+
+export async function handleRotateWebhookSecret(
+  _request: Request,
+  env: Env,
+  requestId: string,
+  actor: ActorContext,
+  orgId: string,
+  endpointId: string,
+): Promise<Response> {
+  const executor = createSqlExecutor(env.SOURCEPLANE_DB!);
+  try {
+    const repo = createWebhookRepository(executor);
+    const eventsRepo = createEventsRepository(executor);
+
+    const existing = await repo.getEndpoint(orgId, endpointId);
+    if (!existing.ok) {
+      return errorResponse("not_found", "Webhook endpoint not found", 404, requestId);
+    }
+
+    const policyAction = existing.value.projectId
+      ? "project.webhook.write" as const
+      : "organization.webhook.write" as const;
+    const denied = await authorizeWebhook(env, actor, orgId, existing.value.projectId, policyAction, requestId);
+    if (denied) return denied;
+
+    const secretCiphertext = await encryptSigningSecret(env);
+
+    const result = await repo.rotateEndpointSecret(orgId, endpointId, secretCiphertext);
+    if (!result.ok) {
+      return errorResponse("internal_error", "Service unavailable", 503, requestId);
+    }
+
+    await eventsRepo.appendEventWithAudit({
+      event: {
+        id: randomHex(16),
+        type: "webhook_endpoint.secret_rotated",
+        version: 1,
+        source: "webhooks-worker",
+        occurredAt: new Date(),
+        actorType: actor.subjectType,
+        actorId: actor.subjectId,
+        orgId,
+        projectId: existing.value.projectId,
+        subjectKind: "webhook_endpoint",
+        subjectId: endpointId,
+        requestId,
+        payload: { secretVersion: result.value.secretVersion },
+      },
+      audit: {
+        id: randomHex(16),
+        category: "webhooks",
+        description: "Webhook endpoint signing secret rotated",
+        projectId: existing.value.projectId,
+      },
+    });
+
+    return successResponse({ endpoint: toPublicWebhookEndpoint(result.value) }, requestId);
+  } catch {
+    return errorResponse("internal_error", "Service unavailable", 503, requestId);
+  } finally {
+    await executor.dispose();
+  }
+}

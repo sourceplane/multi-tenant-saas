@@ -113,7 +113,13 @@ export const ORGANIZATION_ACTIONS = [
   "billing.read",
   "billing.manage",
   "organization.config.read",
+  "organization.config.write",
+  "organization.webhook.read",
+  "organization.webhook.write",
   "project.config.read",
+  "project.config.write",
+  "project.webhook.read",
+  "project.webhook.write",
 ] as const;
 
 export type OrganizationAction = (typeof ORGANIZATION_ACTIONS)[number];

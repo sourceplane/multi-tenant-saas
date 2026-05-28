@@ -44,8 +44,12 @@ const ORG_ROLE_PERMISSIONS: Record<OrganizationRole, readonly string[]> = {
     "billing.manage",
     "organization.config.read",
     "organization.config.write",
+    "organization.webhook.read",
+    "organization.webhook.write",
     "project.config.read",
     "project.config.write",
+    "project.webhook.read",
+    "project.webhook.write",
   ],
   admin: [
     "organization.read",
@@ -74,8 +78,12 @@ const ORG_ROLE_PERMISSIONS: Record<OrganizationRole, readonly string[]> = {
     "audit.read",
     "organization.config.read",
     "organization.config.write",
+    "organization.webhook.read",
+    "organization.webhook.write",
     "project.config.read",
     "project.config.write",
+    "project.webhook.read",
+    "project.webhook.write",
   ],
   builder: [
     "organization.read",
@@ -87,7 +95,9 @@ const ORG_ROLE_PERMISSIONS: Record<OrganizationRole, readonly string[]> = {
     "environment.read",
     "environment.update",
     "organization.config.read",
+    "organization.webhook.read",
     "project.config.read",
+    "project.webhook.read",
   ],
   viewer: [
     "organization.read",
@@ -95,7 +105,9 @@ const ORG_ROLE_PERMISSIONS: Record<OrganizationRole, readonly string[]> = {
     "project.read",
     "environment.read",
     "organization.config.read",
+    "organization.webhook.read",
     "project.config.read",
+    "project.webhook.read",
   ],
   billing_admin: [
     "organization.read",
@@ -118,6 +130,8 @@ const PROJECT_ROLE_PERMISSIONS: Record<ProjectRole, readonly string[]> = {
     "organization.api_key.revoke",
     "project.config.read",
     "project.config.write",
+    "project.webhook.read",
+    "project.webhook.write",
   ],
   project_builder: [
     "project.read",
@@ -126,11 +140,13 @@ const PROJECT_ROLE_PERMISSIONS: Record<ProjectRole, readonly string[]> = {
     "environment.read",
     "environment.update",
     "project.config.read",
+    "project.webhook.read",
   ],
   project_viewer: [
     "project.read",
     "environment.read",
     "project.config.read",
+    "project.webhook.read",
   ],
 };
 
@@ -198,8 +214,12 @@ const ALL_KNOWN_ACTIONS: ReadonlySet<string> = new Set([
   "billing.manage",
   "organization.config.read",
   "organization.config.write",
+  "organization.webhook.read",
+  "organization.webhook.write",
   "project.config.read",
   "project.config.write",
+  "project.webhook.read",
+  "project.webhook.write",
 ]);
 
 function isOrgRole(role: string): role is OrganizationRole {
