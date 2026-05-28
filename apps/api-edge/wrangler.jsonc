@@ -50,6 +50,10 @@
         {
           "binding": "WEBHOOKS_WORKER",
           "service": "webhooks-worker-stage"
+        },
+        {
+          "binding": "METERING_WORKER",
+          "service": "metering-worker-stage"
         }
       ]
     },
@@ -88,6 +92,10 @@
         {
           "binding": "WEBHOOKS_WORKER",
           "service": "webhooks-worker-prod"
+        },
+        {
+          "binding": "METERING_WORKER",
+          "service": "metering-worker-prod"
         }
       ]
     }
