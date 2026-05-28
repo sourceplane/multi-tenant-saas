@@ -416,10 +416,39 @@ Last updated: 2026-05-28
 - Key durable outcome: Web-console UI shell refreshed with Figma-inspired dark theme. Sidebar navigation with collapsible state, topbar context badges with user avatar, scrollable content area. CSS tokens aligned with Figma oklch-derived palette. Responsive breakpoints for tablet (collapsed sidebar) and mobile (hidden sidebar). All existing workflows preserved. No backend, API, or dependency changes.
 - Reports: `ai/reports/task-0062-implementer.md`, `ai/reports/task-0062-verifier.md`
 
+**Task 0063 (Verifier) — COMPLETE ✅**
+
+- Prompt: `ai/tasks/task-0063.md`
+- Verifier prompt: `ai/tasks/task-0063-verifier.md`
+- Merged via earlier cycle.
+
+**Task 0064 (Verifier) — COMPLETE ✅**
+
+- Prompt: `ai/tasks/task-0064.md`
+- Verifier prompt: `ai/tasks/task-0064-verifier.md`
+- Merged via earlier cycle.
+
+**Task 0065 (Verifier) — COMPLETE ✅**
+
+- Prompt: `ai/tasks/task-0065.md`
+- Verifier prompt: `ai/tasks/task-0065-verifier.md`
+- PR #108 (`impl/task-0065-encrypted-secret-payloads`) **MERGED** at commit `ef9e122`.
+- Key durable outcome: Config-worker encrypted write-only secret payload storage using AES-256-GCM via Web Crypto.
+
+**Task 0066 (Verifier) — COMPLETE ✅**
+
+- Prompt: `ai/tasks/task-0066.md`
+- Verifier prompt: `ai/tasks/task-0066-verifier.md`
+- PR #109 (`impl/task-0066-secret-management-ui`) **MERGED** at commit `5a9fa72` (2026-05-28).
+- PR URL: `https://github.com/sourceplane/multi-tenant-saas/pull/109`
+- PR CI run: `26589177552` (4/4 SUCCESS: plan + 3× web-console Verify deploy).
+- Key durable outcome: Web-console Config tab now supports full secret lifecycle management — create, rotate, and revoke — via public api-edge routes. Secret values are write-only (password inputs, cleared after submission, never persisted/logged/revealed). Revoke requires explicit confirmation. Existing settings and feature-flag mutation flows preserved.
+- Reports: `ai/reports/task-0066-implementer.md`, `ai/reports/task-0066-verifier.md`
+
 ## Current Task
 
-Task 0065 verified PASS and merged via PR #108 at `ef9e122`.
+Task 0066 verified PASS and merged via PR #109 at `5a9fa72`.
 
-Key durable outcome: Config-worker now supports encrypted write-only secret payload storage using AES-256-GCM via Web Crypto. Create and rotate handlers accept optional `value` field, encrypt before DB mutation, persist only `ciphertext_envelope`, and return only safe `PublicSecretMetadata`. Missing `SECRET_ENCRYPTION_KEY` fails closed with 503. Metadata-only create/rotate remains supported for backward compatibility with Task 0064.
+Key durable outcome: Web-console Config tab now supports secret create, rotate, and revoke with write-only value semantics. All existing config mutation flows preserved.
 
-Tasks 0001–0065 are completed and verified. Next orchestrator cycle should evaluate the next config task per roadmap.
+Tasks 0001–0066 are completed and verified. Next orchestrator cycle should evaluate the next task per roadmap.

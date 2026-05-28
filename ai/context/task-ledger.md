@@ -1356,6 +1356,19 @@ Last updated: 2026-05-28
 |- Scope boundary: config-worker encryption adapter, config repository write-only ciphertext persistence, create/rotate secret handler semantics, safe contract request types, and focused config-worker/api-edge/contracts/db tests.
 |- Durable outcome: Config-worker now supports encrypted write-only secret payload storage using AES-256-GCM via Web Crypto. Create and rotate handlers accept optional `value` field, encrypt before DB mutation, persist only `ciphertext_envelope`, and return only safe `PublicSecretMetadata`. Missing `SECRET_ENCRYPTION_KEY` fails closed with 503. No verifier fixes required. 174 config-worker tests, 230 api-edge tests.
 
+## Task 0066
+
+|- Agent: Implementer -> Verifier
+|- Prompt: `ai/tasks/task-0066.md`
+|- Verifier prompt: `ai/tasks/task-0066-verifier.md`
+|- Status: verified PASS and merged (2026-05-28)
+|- PR: #109 (`impl/task-0066-secret-management-ui`), squash-merged at `5a9fa72`
+|- PR CI run: `26589177552` (4/4 checks SUCCESS)
+|- Reports: `ai/reports/task-0066-implementer.md`, `ai/reports/task-0066-verifier.md`
+|- Objective: Add secret create, rotate, and revoke UI to the web-console Config tab using existing public api-edge secret routes.
+|- Scope boundary: web-console api.ts client methods, main.ts UI forms/actions, style.css secret styles. No backend, infra, or contract changes.
+|- Durable outcome: Web-console Config tab now supports full secret lifecycle management — create, rotate, revoke — via public api-edge routes. Secret values are write-only (password inputs, cleared after submission, never persisted/logged/revealed). Revoke requires explicit confirmation. Existing settings and feature-flag mutation flows preserved. No verifier fixes required.
+
 ## Historical Notes
 
 - PR #1 split product-specific V2 Git catalog work away from the reusable SaaS
