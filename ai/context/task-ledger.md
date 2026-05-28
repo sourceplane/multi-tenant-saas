@@ -1,6 +1,6 @@
 # Task Ledger
 
-Last updated: 2026-05-27
+Last updated: 2026-05-28
 
 ## Task 0001
 
@@ -1197,6 +1197,20 @@ Last updated: 2026-05-27
 |- Objective: Add self-scoped GET/PATCH /v1/auth/profile endpoints for authenticated user display name management.
 |- Scope: contracts (ProfileResponse, UpdateProfileRequest), identity repository (updateUserProfile), identity-worker profile handler/service/router, api-edge multi-method route + PATCH body forwarding, specs, 21 new tests.
 |- Durable outcome: Self-scoped GET/PATCH /v1/auth/profile live on main. Fail-closed body validation (displayName only, max 120 chars, empty→null, unsupported fields rejected). API-key/service-principal actors blocked. Safe user.profile.updated security event with changed field names only. Profile update and event recording are sequential (not transactional) — documented residual risk.
+
+
+## Task 0054
+
+|- Agent: Implementer -> Verifier
+|- Prompt: `ai/tasks/task-0054.md`
+|- Verifier prompt: `ai/tasks/task-0054-verifier.md`
+|- Status: verified PASS (2026-05-28)
+|- Implementation: PR #97, branch `impl/task-0054-profile-settings-ui`, merge commit `73f76bf`
+|- PR CI runs: `26563632783` (original, 4/4 SUCCESS), `26564017112` (post-verifier-report, 4/4 SUCCESS)
+|- Reports: `ai/reports/task-0054-implementer.md`, `ai/reports/task-0054-verifier.md`
+|- Objective: Add web-console Account Profile settings UI using the live public `GET/PATCH /v1/auth/profile` routes.
+|- Scope boundary: web-console API client, state helper, and account view/profile UI only; preserve Account Security and all workspace flows.
+|- Durable outcome: Web-console account profile settings UI live on main. Account view with Profile and Security Events tabs. Display name update/clear via PATCH with `{ displayName: string | null }` only. In-memory session and header refresh without reload. All existing workspace flows preserved.
 
 ## Historical Notes
 
