@@ -1,8 +1,9 @@
 /**
- * Config, feature-flag, and secret-metadata read-only contract types.
+ * Config, feature-flag, and secret-metadata contract types.
  *
- * These types define the public API response shapes for the config-worker
- * read-only surface. No mutation types are included in this iteration.
+ * These types define the public API request/response shapes for the config-worker
+ * surface. Mutation types are included for settings and feature flags.
+ * No secret value mutation types are included.
  */
 
 // ---------------------------------------------------------------------------
@@ -27,6 +28,29 @@ export interface ListSettingsResponse {
 }
 
 // ---------------------------------------------------------------------------
+// Setting Mutation Requests
+// ---------------------------------------------------------------------------
+
+export interface CreateSettingRequest {
+  key: string;
+  value: unknown;
+  description?: string | null;
+}
+
+export interface UpdateSettingRequest {
+  value: unknown;
+  description?: string | null;
+}
+
+export interface CreateSettingResponse {
+  setting: PublicSetting;
+}
+
+export interface UpdateSettingResponse {
+  setting: PublicSetting;
+}
+
+// ---------------------------------------------------------------------------
 // Public Feature Flag
 // ---------------------------------------------------------------------------
 
@@ -46,6 +70,31 @@ export interface PublicFeatureFlag {
 
 export interface ListFeatureFlagsResponse {
   featureFlags: PublicFeatureFlag[];
+}
+
+// ---------------------------------------------------------------------------
+// Feature Flag Mutation Requests
+// ---------------------------------------------------------------------------
+
+export interface CreateFeatureFlagRequest {
+  flagKey: string;
+  enabled?: boolean;
+  value?: unknown;
+  description?: string | null;
+}
+
+export interface UpdateFeatureFlagRequest {
+  enabled?: boolean;
+  value?: unknown;
+  description?: string | null;
+}
+
+export interface CreateFeatureFlagResponse {
+  featureFlag: PublicFeatureFlag;
+}
+
+export interface UpdateFeatureFlagResponse {
+  featureFlag: PublicFeatureFlag;
 }
 
 // ---------------------------------------------------------------------------

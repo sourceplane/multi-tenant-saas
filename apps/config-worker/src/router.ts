@@ -4,8 +4,12 @@ import { handleHealth } from "./handlers/health.js";
 import { handleListSettings } from "./handlers/list-settings.js";
 import { handleListFeatureFlags } from "./handlers/list-feature-flags.js";
 import { handleListSecrets } from "./handlers/list-secrets.js";
+import { handleCreateSetting } from "./handlers/create-setting.js";
+import { handleUpdateSetting } from "./handlers/update-setting.js";
+import { handleCreateFeatureFlag } from "./handlers/create-feature-flag.js";
+import { handleUpdateFeatureFlag } from "./handlers/update-feature-flag.js";
 import { errorResponse, notFound, methodNotAllowed } from "./http.js";
-import { generateRequestId, parseOrgPublicId, parseProjectPublicId, parseEnvironmentPublicId } from "./ids.js";
+import { generateRequestId, parseOrgPublicId, parseProjectPublicId, parseEnvironmentPublicId, parseSettingPublicId, parseFeatureFlagPublicId } from "./ids.js";
 
 const REQUEST_ID_RE = /^[\w-]{1,128}$/;
 
@@ -42,6 +46,14 @@ const PRJ_SECRETS_RE = /^\/v1\/organizations\/([^/]+)\/projects\/([^/]+)\/config
 const ENV_SETTINGS_RE = /^\/v1\/organizations\/([^/]+)\/projects\/([^/]+)\/environments\/([^/]+)\/config\/settings$/;
 const ENV_FEATURE_FLAGS_RE = /^\/v1\/organizations\/([^/]+)\/projects\/([^/]+)\/environments\/([^/]+)\/config\/feature-flags$/;
 const ENV_SECRETS_RE = /^\/v1\/organizations\/([^/]+)\/projects\/([^/]+)\/environments\/([^/]+)\/config\/secrets$/;
+
+// Item-level routes (PATCH)
+const ORG_SETTING_ITEM_RE = /^\/v1\/organizations\/([^/]+)\/config\/settings\/([^/]+)$/;
+const ORG_FLAG_ITEM_RE = /^\/v1\/organizations\/([^/]+)\/config\/feature-flags\/([^/]+)$/;
+const PRJ_SETTING_ITEM_RE = /^\/v1\/organizations\/([^/]+)\/projects\/([^/]+)\/config\/settings\/([^/]+)$/;
+const PRJ_FLAG_ITEM_RE = /^\/v1\/organizations\/([^/]+)\/projects\/([^/]+)\/config\/feature-flags\/([^/]+)$/;
+const ENV_SETTING_ITEM_RE = /^\/v1\/organizations\/([^/]+)\/projects\/([^/]+)\/environments\/([^/]+)\/config\/settings\/([^/]+)$/;
+const ENV_FLAG_ITEM_RE = /^\/v1\/organizations\/([^/]+)\/projects\/([^/]+)\/environments\/([^/]+)\/config\/feature-flags\/([^/]+)$/;
 
 type ConfigResource = "settings" | "feature-flags" | "secrets";
 
@@ -129,6 +141,67 @@ function matchRoute(pathname: string): MatchedRoute | null {
   return null;
 }
 
+interface MatchedItemRoute {
+  orgId: string;
+  itemId: string;
+  resource: "settings" | "feature-flags";
+}
+
+function matchItemRoute(pathname: string): MatchedItemRoute | null {
+  // Environment item scope
+  let m = pathname.match(ENV_SETTING_ITEM_RE);
+  if (m) {
+    const orgId = parseOrgPublicId(m[1]!);
+    const itemId = parseSettingPublicId(m[4]!);
+    if (!orgId || !itemId) return null;
+    return { orgId, itemId, resource: "settings" };
+  }
+
+  m = pathname.match(ENV_FLAG_ITEM_RE);
+  if (m) {
+    const orgId = parseOrgPublicId(m[1]!);
+    const itemId = parseFeatureFlagPublicId(m[4]!);
+    if (!orgId || !itemId) return null;
+    return { orgId, itemId, resource: "feature-flags" };
+  }
+
+  // Project item scope
+  m = pathname.match(PRJ_SETTING_ITEM_RE);
+  if (m) {
+    const orgId = parseOrgPublicId(m[1]!);
+    const itemId = parseSettingPublicId(m[3]!);
+    if (!orgId || !itemId) return null;
+    return { orgId, itemId, resource: "settings" };
+  }
+
+  m = pathname.match(PRJ_FLAG_ITEM_RE);
+  if (m) {
+    const orgId = parseOrgPublicId(m[1]!);
+    const itemId = parseFeatureFlagPublicId(m[3]!);
+    if (!orgId || !itemId) return null;
+    return { orgId, itemId, resource: "feature-flags" };
+  }
+
+  // Org item scope
+  m = pathname.match(ORG_SETTING_ITEM_RE);
+  if (m) {
+    const orgId = parseOrgPublicId(m[1]!);
+    const itemId = parseSettingPublicId(m[2]!);
+    if (!orgId || !itemId) return null;
+    return { orgId, itemId, resource: "settings" };
+  }
+
+  m = pathname.match(ORG_FLAG_ITEM_RE);
+  if (m) {
+    const orgId = parseOrgPublicId(m[1]!);
+    const itemId = parseFeatureFlagPublicId(m[2]!);
+    if (!orgId || !itemId) return null;
+    return { orgId, itemId, resource: "feature-flags" };
+  }
+
+  return null;
+}
+
 export async function route(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   const requestId = resolveRequestId(request);
@@ -139,13 +212,10 @@ export async function route(request: Request, env: Env): Promise<Response> {
     }
 
     const matched = matchRoute(url.pathname);
-    if (!matched) {
-      return notFound(requestId, url.pathname);
-    }
+    const matchedItem = matched ? null : matchItemRoute(url.pathname);
 
-    // All config list routes are GET-only (read-only surface)
-    if (request.method !== "GET") {
-      return methodNotAllowed(requestId);
+    if (!matched && !matchedItem) {
+      return notFound(requestId, url.pathname);
     }
 
     const actor = resolveActor(request);
@@ -153,14 +223,43 @@ export async function route(request: Request, env: Env): Promise<Response> {
       return errorResponse("unauthenticated", "Authentication required", 401, requestId);
     }
 
-    switch (matched.resource) {
-      case "settings":
-        return handleListSettings(request, env, requestId, actor, matched.scope);
-      case "feature-flags":
-        return handleListFeatureFlags(request, env, requestId, actor, matched.scope);
-      case "secrets":
-        return handleListSecrets(request, env, requestId, actor, matched.scope);
+    // Item-level routes (PATCH only)
+    if (matchedItem) {
+      if (request.method !== "PATCH") {
+        return methodNotAllowed(requestId);
+      }
+      switch (matchedItem.resource) {
+        case "settings":
+          return handleUpdateSetting(request, env, requestId, actor, matchedItem.orgId, matchedItem.itemId);
+        case "feature-flags":
+          return handleUpdateFeatureFlag(request, env, requestId, actor, matchedItem.orgId, matchedItem.itemId);
+      }
     }
+
+    // Collection routes: GET (list) or POST (create)
+    if (request.method === "GET") {
+      switch (matched!.resource) {
+        case "settings":
+          return handleListSettings(request, env, requestId, actor, matched!.scope);
+        case "feature-flags":
+          return handleListFeatureFlags(request, env, requestId, actor, matched!.scope);
+        case "secrets":
+          return handleListSecrets(request, env, requestId, actor, matched!.scope);
+      }
+    }
+
+    if (request.method === "POST") {
+      switch (matched!.resource) {
+        case "settings":
+          return handleCreateSetting(request, env, requestId, actor, matched!.scope);
+        case "feature-flags":
+          return handleCreateFeatureFlag(request, env, requestId, actor, matched!.scope);
+        case "secrets":
+          return methodNotAllowed(requestId); // secrets creation not in this task
+      }
+    }
+
+    return methodNotAllowed(requestId);
   } catch {
     return errorResponse("internal_error", "Internal error", 500, requestId);
   }

@@ -47,3 +47,13 @@ export function featureFlagPublicId(uuid: string): string {
 export function secretMetadataPublicId(uuid: string): string {
   return `sec_${uuidToHex(uuid)}`;
 }
+
+export function parseSettingPublicId(publicId: string): string | null {
+  if (!publicId.startsWith("stg_")) return null;
+  return hexToUuid(publicId.slice(4));
+}
+
+export function parseFeatureFlagPublicId(publicId: string): string | null {
+  if (!publicId.startsWith("flg_")) return null;
+  return hexToUuid(publicId.slice(4));
+}

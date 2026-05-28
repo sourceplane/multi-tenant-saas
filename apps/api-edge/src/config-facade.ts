@@ -3,18 +3,18 @@ import { errorResponse } from "./http.js";
 import { resolveActor } from "./resolve-actor.js";
 
 // Organization-scoped config
-const ORG_CONFIG_SETTINGS_RE = /^\/v1\/organizations\/[^/]+\/config\/settings$/;
-const ORG_CONFIG_FLAGS_RE = /^\/v1\/organizations\/[^/]+\/config\/feature-flags$/;
+const ORG_CONFIG_SETTINGS_RE = /^\/v1\/organizations\/[^/]+\/config\/settings(\/[^/]+)?$/;
+const ORG_CONFIG_FLAGS_RE = /^\/v1\/organizations\/[^/]+\/config\/feature-flags(\/[^/]+)?$/;
 const ORG_CONFIG_SECRETS_RE = /^\/v1\/organizations\/[^/]+\/config\/secrets$/;
 
 // Project-scoped config
-const PRJ_CONFIG_SETTINGS_RE = /^\/v1\/organizations\/[^/]+\/projects\/[^/]+\/config\/settings$/;
-const PRJ_CONFIG_FLAGS_RE = /^\/v1\/organizations\/[^/]+\/projects\/[^/]+\/config\/feature-flags$/;
+const PRJ_CONFIG_SETTINGS_RE = /^\/v1\/organizations\/[^/]+\/projects\/[^/]+\/config\/settings(\/[^/]+)?$/;
+const PRJ_CONFIG_FLAGS_RE = /^\/v1\/organizations\/[^/]+\/projects\/[^/]+\/config\/feature-flags(\/[^/]+)?$/;
 const PRJ_CONFIG_SECRETS_RE = /^\/v1\/organizations\/[^/]+\/projects\/[^/]+\/config\/secrets$/;
 
 // Environment-scoped config
-const ENV_CONFIG_SETTINGS_RE = /^\/v1\/organizations\/[^/]+\/projects\/[^/]+\/environments\/[^/]+\/config\/settings$/;
-const ENV_CONFIG_FLAGS_RE = /^\/v1\/organizations\/[^/]+\/projects\/[^/]+\/environments\/[^/]+\/config\/feature-flags$/;
+const ENV_CONFIG_SETTINGS_RE = /^\/v1\/organizations\/[^/]+\/projects\/[^/]+\/environments\/[^/]+\/config\/settings(\/[^/]+)?$/;
+const ENV_CONFIG_FLAGS_RE = /^\/v1\/organizations\/[^/]+\/projects\/[^/]+\/environments\/[^/]+\/config\/feature-flags(\/[^/]+)?$/;
 const ENV_CONFIG_SECRETS_RE = /^\/v1\/organizations\/[^/]+\/projects\/[^/]+\/environments\/[^/]+\/config\/secrets$/;
 
 const FORWARDED_HEADERS = [
@@ -44,8 +44,9 @@ export async function handleConfigRoute(
   requestId: string,
   pathname: string,
 ): Promise<Response> {
-  // All config routes are GET-only (read-only surface)
-  if (request.method !== "GET") {
+  // Config routes: GET (list), POST (create), PATCH (update)
+  const allowedMethods = ["GET", "POST", "PATCH"];
+  if (!allowedMethods.includes(request.method)) {
     return errorResponse("unsupported", "Method not allowed", 405, requestId);
   }
 
@@ -80,10 +81,14 @@ export async function handleConfigRoute(
   const target = new URL(pathname + url.search, "https://config.internal");
 
   try {
-    const downstream = await env.CONFIG_WORKER.fetch(target.toString(), {
-      method: "GET",
+    const fetchInit: RequestInit = {
+      method: request.method,
       headers,
-    });
+    };
+    if (request.method === "POST" || request.method === "PATCH") {
+      fetchInit.body = request.body;
+    }
+    const downstream = await env.CONFIG_WORKER.fetch(target.toString(), fetchInit);
     return new Response(downstream.body, {
       status: downstream.status,
       headers: downstream.headers,
