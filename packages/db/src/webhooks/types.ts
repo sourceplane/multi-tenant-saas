@@ -204,4 +204,11 @@ export interface WebhookRepository {
   getDispatchCursor(orgId: string, lane?: string): Promise<WebhookResult<DispatchCursor>>;
   advanceDispatchCursor(orgId: string, lastEventId: string, lastOccurredAt: string, lane?: string): Promise<WebhookResult<DispatchCursor>>;
   listActiveOrgIds(): Promise<WebhookResult<string[]>>;
+
+  // Delivery lifecycle
+  /**
+   * Count consecutive terminal delivery failures for an endpoint,
+   * looking at the most recent completed attempts. A success resets the streak.
+   */
+  countConsecutiveEndpointFailures(orgId: string, endpointId: string): Promise<WebhookResult<number>>;
 }
