@@ -976,7 +976,7 @@ let configEnvs: { id: string; name: string }[] = [];
 
 async function renderConfigTab(container: HTMLElement): Promise<void> {
   container.appendChild(h("h3", {}, "Config"));
-  container.appendChild(h("p", { class: "muted" }, "Read-only view of settings, feature flags, and secret metadata."));
+  container.appendChild(h("p", { class: "muted" }, "Manage settings and feature flags. Secret metadata is read-only."));
 
   // Resource sub-tabs
   const resourceNav = h("div", { class: "config-resource-nav" });
@@ -1091,13 +1091,282 @@ async function renderConfigTab(container: HTMLElement): Promise<void> {
     }
   }
 
+  // Create form (settings and feature flags only, not secrets)
+  if (configResource !== "secrets") {
+    const createForm = renderConfigCreateForm();
+    container.appendChild(createForm);
+  }
+
   // Config list
   const list = h("div", { id: "config-list", class: "mt" });
   container.appendChild(list);
+
+  // Success message area
+  const msgArea = h("div", { id: "config-msg" });
+  container.appendChild(msgArea);
+
   loadConfigList();
 }
 
 let configCursor: string | null = null;
+
+function configScopeOpts(): { projectId?: string; environmentId?: string } {
+  const opts: { projectId?: string; environmentId?: string } = {};
+  if (configScope === "project" || configScope === "environment") {
+    opts.projectId = state.projectId!;
+  }
+  if (configScope === "environment" && configEnvId) {
+    opts.environmentId = configEnvId;
+  }
+  return opts;
+}
+
+function showConfigMsg(text: string, cls: string): void {
+  const msgArea = document.getElementById("config-msg");
+  if (msgArea) {
+    clear(msgArea);
+    msgArea.appendChild(h("p", { class: cls }, text));
+    setTimeout(() => { if (msgArea) clear(msgArea); }, 4000);
+  }
+}
+
+function renderConfigCreateForm(): HTMLElement {
+  const card = h("div", { class: "panel-alt config-create-card" });
+
+  if (configResource === "settings") {
+    card.appendChild(h("h4", {}, "Create Setting"));
+    const keyInput = document.createElement("input");
+    keyInput.placeholder = "Key";
+    keyInput.id = "config-create-key";
+
+    const valueArea = document.createElement("textarea");
+    valueArea.placeholder = 'Value (JSON, e.g. "hello" or 42 or {"k":"v"})';
+    valueArea.id = "config-create-value";
+    valueArea.className = "config-textarea";
+    valueArea.rows = 2;
+
+    const descInput = document.createElement("input");
+    descInput.placeholder = "Description (optional)";
+    descInput.id = "config-create-desc";
+
+    const row = h("div", { class: "config-create-fields" });
+    row.appendChild(keyInput);
+    row.appendChild(valueArea);
+    row.appendChild(descInput);
+
+    const errDiv = h("div", { id: "config-create-err" });
+
+    row.appendChild(btn("Create", async () => {
+      const key = (document.getElementById("config-create-key") as HTMLInputElement).value.trim();
+      const rawVal = (document.getElementById("config-create-value") as HTMLTextAreaElement).value;
+      const desc = (document.getElementById("config-create-desc") as HTMLInputElement).value.trim();
+      const eDiv = document.getElementById("config-create-err");
+      if (eDiv) clear(eDiv);
+
+      if (!key) { if (eDiv) eDiv.appendChild(h("p", { class: "error" }, "Key is required.")); return; }
+
+      let parsedValue: unknown;
+      try {
+        parsedValue = JSON.parse(rawVal);
+      } catch {
+        if (eDiv) eDiv.appendChild(h("p", { class: "error" }, "Value must be valid JSON (e.g. \"hello\", 42, true, {\"k\":\"v\"})."));
+        return;
+      }
+
+      const data: { key: string; value: unknown; description?: string } = { key, value: parsedValue };
+      if (desc) data.description = desc;
+
+      const result = await state.client.createSetting(state.orgId!, data, configScopeOpts());
+      if (!result.ok) {
+        if (eDiv) showError(result, eDiv);
+        return;
+      }
+      showConfigMsg("Setting created.", "success");
+      loadConfigList();
+    }, "btn-primary btn-sm"));
+
+    card.appendChild(row);
+    card.appendChild(errDiv);
+  } else if (configResource === "feature-flags") {
+    card.appendChild(h("h4", {}, "Create Feature Flag"));
+    const keyInput = document.createElement("input");
+    keyInput.placeholder = "Flag Key";
+    keyInput.id = "config-create-flag-key";
+
+    const enabledSelect = document.createElement("select");
+    enabledSelect.id = "config-create-flag-enabled";
+    const enabledOpt = document.createElement("option");
+    enabledOpt.value = "true"; enabledOpt.textContent = "Enabled"; enabledSelect.appendChild(enabledOpt);
+    const disabledOpt = document.createElement("option");
+    disabledOpt.value = "false"; disabledOpt.textContent = "Disabled"; disabledOpt.selected = true; enabledSelect.appendChild(disabledOpt);
+
+    const valueArea = document.createElement("textarea");
+    valueArea.placeholder = "Value (optional JSON)";
+    valueArea.id = "config-create-flag-value";
+    valueArea.className = "config-textarea";
+    valueArea.rows = 2;
+
+    const descInput = document.createElement("input");
+    descInput.placeholder = "Description (optional)";
+    descInput.id = "config-create-flag-desc";
+
+    const row = h("div", { class: "config-create-fields" });
+    row.appendChild(keyInput);
+    row.appendChild(enabledSelect);
+    row.appendChild(valueArea);
+    row.appendChild(descInput);
+
+    const errDiv = h("div", { id: "config-create-err" });
+
+    row.appendChild(btn("Create", async () => {
+      const flagKey = (document.getElementById("config-create-flag-key") as HTMLInputElement).value.trim();
+      const enabled = (document.getElementById("config-create-flag-enabled") as HTMLSelectElement).value === "true";
+      const rawVal = (document.getElementById("config-create-flag-value") as HTMLTextAreaElement).value.trim();
+      const desc = (document.getElementById("config-create-flag-desc") as HTMLInputElement).value.trim();
+      const eDiv = document.getElementById("config-create-err");
+      if (eDiv) clear(eDiv);
+
+      if (!flagKey) { if (eDiv) eDiv.appendChild(h("p", { class: "error" }, "Flag key is required.")); return; }
+
+      const data: { flagKey: string; enabled?: boolean; value?: unknown; description?: string } = { flagKey, enabled };
+      if (rawVal) {
+        try { data.value = JSON.parse(rawVal); } catch {
+          if (eDiv) eDiv.appendChild(h("p", { class: "error" }, "Value must be valid JSON."));
+          return;
+        }
+      }
+      if (desc) data.description = desc;
+
+      const result = await state.client.createFeatureFlag(state.orgId!, data, configScopeOpts());
+      if (!result.ok) {
+        if (eDiv) showError(result, eDiv);
+        return;
+      }
+      showConfigMsg("Feature flag created.", "success");
+      loadConfigList();
+    }, "btn-primary btn-sm"));
+
+    card.appendChild(row);
+    card.appendChild(errDiv);
+  }
+
+  return card;
+}
+
+function renderSettingEditForm(s: any, container: HTMLElement, rowEl: HTMLElement): void {
+  // Replace the row with an inline edit form
+  const form = h("div", { class: "list-item config-item config-edit-form" });
+
+  form.appendChild(h("span", { class: "config-key" }, s.key));
+
+  const valueArea = document.createElement("textarea");
+  valueArea.className = "config-textarea";
+  valueArea.rows = 3;
+  valueArea.value = typeof s.value === "string" ? JSON.stringify(s.value) : JSON.stringify(s.value, null, 2);
+
+  const descInput = document.createElement("input");
+  descInput.value = s.description ?? "";
+  descInput.placeholder = "Description (optional)";
+
+  const errDiv = h("div", {});
+
+  const actions = h("div", { class: "actions" });
+  actions.appendChild(btn("Save", async () => {
+    clear(errDiv);
+    let parsedValue: unknown;
+    try { parsedValue = JSON.parse(valueArea.value); } catch {
+      errDiv.appendChild(h("p", { class: "error" }, "Value must be valid JSON."));
+      return;
+    }
+    const data: { value: unknown; description?: string | null } = { value: parsedValue };
+    const newDesc = descInput.value.trim();
+    if (newDesc !== (s.description ?? "")) {
+      data.description = newDesc || null;
+    }
+    const result = await state.client.updateSetting(state.orgId!, s.id, data, configScopeOpts());
+    if (!result.ok) { showError(result, errDiv); return; }
+    showConfigMsg("Setting updated.", "success");
+    loadConfigList();
+  }, "btn-primary btn-xs"));
+  actions.appendChild(btn("Cancel", () => {
+    form.replaceWith(rowEl);
+  }, "btn-xs"));
+
+  form.appendChild(valueArea);
+  form.appendChild(descInput);
+  form.appendChild(errDiv);
+  form.appendChild(actions);
+
+  rowEl.replaceWith(form);
+}
+
+function renderFlagEditForm(f: any, container: HTMLElement, rowEl: HTMLElement): void {
+  const form = h("div", { class: "list-item config-item config-edit-form" });
+
+  form.appendChild(h("span", { class: "config-key" }, f.flagKey));
+
+  const enabledSelect = document.createElement("select");
+  const enOpt = document.createElement("option");
+  enOpt.value = "true"; enOpt.textContent = "Enabled"; if (f.enabled) enOpt.selected = true; enabledSelect.appendChild(enOpt);
+  const disOpt = document.createElement("option");
+  disOpt.value = "false"; disOpt.textContent = "Disabled"; if (!f.enabled) disOpt.selected = true; enabledSelect.appendChild(disOpt);
+
+  const valueArea = document.createElement("textarea");
+  valueArea.className = "config-textarea";
+  valueArea.rows = 2;
+  valueArea.placeholder = "Value (optional JSON)";
+  valueArea.value = f.value != null ? (typeof f.value === "string" ? JSON.stringify(f.value) : JSON.stringify(f.value, null, 2)) : "";
+
+  const descInput = document.createElement("input");
+  descInput.value = f.description ?? "";
+  descInput.placeholder = "Description (optional)";
+
+  const errDiv = h("div", {});
+
+  const actions = h("div", { class: "actions" });
+  actions.appendChild(btn("Save", async () => {
+    clear(errDiv);
+    const data: { enabled?: boolean; value?: unknown; description?: string | null } = {};
+    const newEnabled = enabledSelect.value === "true";
+    if (newEnabled !== f.enabled) data.enabled = newEnabled;
+
+    const rawVal = valueArea.value.trim();
+    if (rawVal) {
+      try { data.value = JSON.parse(rawVal); } catch {
+        errDiv.appendChild(h("p", { class: "error" }, "Value must be valid JSON."));
+        return;
+      }
+    } else if (f.value != null) {
+      data.value = null;
+    }
+
+    const newDesc = descInput.value.trim();
+    if (newDesc !== (f.description ?? "")) {
+      data.description = newDesc || null;
+    }
+
+    if (Object.keys(data).length === 0) {
+      errDiv.appendChild(h("p", { class: "muted" }, "No changes to save."));
+      return;
+    }
+
+    const result = await state.client.updateFeatureFlag(state.orgId!, f.id, data, configScopeOpts());
+    if (!result.ok) { showError(result, errDiv); return; }
+    showConfigMsg("Feature flag updated.", "success");
+    loadConfigList();
+  }, "btn-primary btn-xs"));
+  actions.appendChild(btn("Cancel", () => {
+    form.replaceWith(rowEl);
+  }, "btn-xs"));
+
+  form.appendChild(enabledSelect);
+  form.appendChild(valueArea);
+  form.appendChild(descInput);
+  form.appendChild(errDiv);
+  form.appendChild(actions);
+
+  rowEl.replaceWith(form);
+}
 
 async function loadConfigList(cursor?: string): Promise<void> {
   const container = document.getElementById("config-list");
@@ -1170,6 +1439,9 @@ function renderSettingsList(container: HTMLElement, settings: any[], isAppend: b
     info.appendChild(valueEl);
 
     row.appendChild(info);
+    const actions = h("span", { class: "actions" });
+    actions.appendChild(btn("Edit", () => renderSettingEditForm(s, container, row), "btn-xs"));
+    row.appendChild(actions);
     container.appendChild(row);
   }
 }
@@ -1203,6 +1475,9 @@ function renderFeatureFlagsList(container: HTMLElement, flags: any[], isAppend: 
     }
 
     row.appendChild(info);
+    const actions = h("span", { class: "actions" });
+    actions.appendChild(btn("Edit", () => renderFlagEditForm(f, container, row), "btn-xs"));
+    row.appendChild(actions);
     container.appendChild(row);
   }
 }

@@ -356,6 +356,61 @@ h4 { font-size: 14px; font-weight: 600; margin-bottom: 6px; }
   gap: 8px;
 }
 
+/* Config mutation forms */
+.config-create-card {
+  margin-top: 10px;
+}
+
+.config-create-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.config-create-fields input,
+.config-create-fields select {
+  max-width: 100%;
+}
+
+.config-textarea {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  padding: 6px 10px;
+  font-size: 13px;
+  font-family: var(--mono);
+  resize: vertical;
+  width: 100%;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.config-textarea:focus {
+  border-color: var(--primary);
+}
+
+.config-edit-form {
+  background: var(--surface-alt);
+  border: 1px solid var(--primary);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.config-edit-form input,
+.config-edit-form select {
+  max-width: 100%;
+}
+
+.config-edit-form .actions {
+  margin-left: 0;
+  align-self: flex-end;
+}
+
 /* Responsive */
 @media (max-width: 640px) {
   #app { padding: 0 8px; }
