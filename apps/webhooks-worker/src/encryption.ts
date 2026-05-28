@@ -26,6 +26,7 @@ export interface CiphertextEnvelope {
 
 export interface EncryptionAdapter {
   encrypt(plaintext: string): Promise<CiphertextEnvelope>;
+  decrypt(envelope: CiphertextEnvelope): Promise<string>;
 }
 
 // ── Helpers ──────────────────────────────────────────────────
@@ -44,6 +45,15 @@ function bytesToBase64(bytes: Uint8Array): string {
     binary += String.fromCharCode(bytes[i]!);
   }
   return btoa(binary);
+}
+
+function base64ToBytes(b64: string): Uint8Array<ArrayBuffer> {
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
 }
 
 const HEX_RE = /^[0-9a-fA-F]{64}$/;
@@ -67,7 +77,7 @@ export async function createEncryptionAdapter(keyHex: string | undefined): Promi
     keyBytes.buffer as ArrayBuffer,
     { name: "AES-GCM", length: 256 },
     false,
-    ["encrypt"],
+    ["encrypt", "decrypt"],
   );
 
   return {
@@ -88,6 +98,17 @@ export async function createEncryptionAdapter(keyHex: string | undefined): Promi
         iv: bytesToBase64(iv),
         ct: bytesToBase64(new Uint8Array(ciphertext)),
       };
+    },
+
+    async decrypt(envelope: CiphertextEnvelope): Promise<string> {
+      const iv = base64ToBytes(envelope.iv);
+      const ct = base64ToBytes(envelope.ct);
+      const plainBuffer = await crypto.subtle.decrypt(
+        { name: "AES-GCM", iv },
+        cryptoKey,
+        ct,
+      );
+      return new TextDecoder().decode(plainBuffer);
     },
   };
 }

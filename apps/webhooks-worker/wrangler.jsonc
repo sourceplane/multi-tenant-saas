@@ -7,6 +7,9 @@
   "vars": {
     "ENVIRONMENT": "local"
   },
+  "triggers": {
+    "crons": ["* * * * *"]
+  },
   "env": {
     "dev": {
       "vars": {
