@@ -1225,6 +1225,19 @@ Last updated: 2026-05-28
 |- Scope boundary: `config` schema DDL, `@saas/db/config` repository module, test suite; no API routes or UI.
 |- Durable outcome: Config persistence live on main. `config.settings`, `config.feature_flags`, `config.secret_metadata` tables with RLS and org/project scoping. Typed CRUD repository with cursor pagination, secret rotate/revoke, ciphertext-envelope never exposed. 388 tests passing.
 
+## Task 0056
+
+|- Agent: Implementer + Verifier
+|- Prompt: `ai/tasks/task-0056.md`
+|- Verifier prompt: `ai/tasks/task-0056-verifier.md`
+|- Status: verified PASS (2026-05-28)
+|- Implementation: PR #99, branch `impl/task-0056-config-worker-read-api`, merge commit `352ca71`
+|- PR CI runs: `26567374841` (original, 27/27 SUCCESS), `26567965265` (post-verifier-artifacts, 27/27 SUCCESS)
+|- Reports: `ai/reports/task-0056-implementer.md`, `ai/reports/task-0056-verifier.md`
+|- Objective: Read-only config API surface — config-worker with settings, feature flags, and secret metadata GET endpoints at org/project/env scopes.
+|- Scope boundary: `apps/config-worker`, `api-edge` config facade, contracts, policy-engine config actions, tests; no mutations, no UI, no Terraform.
+|- Durable outcome: Read-only config API live on main. 9 GET routes (3 resources × 3 scopes), fail-closed auth, billing_admin excluded, secret metadata safe (no plaintext/ciphertext). 55 config-worker tests, 222 api-edge tests.
+
 ## Historical Notes
 
 - PR #1 split product-specific V2 Git catalog work away from the reusable SaaS
