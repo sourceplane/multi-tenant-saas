@@ -1,6 +1,6 @@
 {
   "goal": "Supabase/Postgres-backed multi-organization Orun SaaS control plane",
-  "current_task": "0050",
+  "current_task": null,
   "completed": [
     "0001",
     "0001.1",
@@ -56,17 +56,18 @@
     "0047",
     "0048",
     "0049",
-"0050",
-    "0051"
+    "0050",
+    "0051",
+    "0052"
   ],
   "repo_health": "yellow",
-  "next_focus": "task-0052-scoping",
-  "last_verified": "2026-05-28T08:00Z",
+  "next_focus": "next-orchestrator-cycle",
+  "last_verified": "2026-05-28T07:25Z",
   "waiting_for_input": "false",
-  "task_agent": "",
+  "task_agent": null,
   "notes": [
-    "Task 0051 verified PASS and merged via PR #94 at d74b7f6. Public tenant-scoped API-key admin runtime is live across api-edge, identity-worker, and policy-engine.",
-    "Working tree still contains historical untracked ai/ carryover files; they are out of scope.",
-    "README.md still contains stale pre-runtime statements about Hyperdrive/Workers not being implemented; keep trusting code plus active specs until a bounded docs cleanup task is scoped."
+    "Task 0052 verified PASS and merged via PR #95 at cdd781c. Web-console API key management UI is live.",
+    "Verifier fixed: one-time secret lifecycle (cleared on tab/org navigation) + missing implementer report on PR branch.",
+    "Post-merge main CI run 26560873906 queued."
   ]
 }

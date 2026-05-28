@@ -299,4 +299,15 @@ Last updated: 2026-05-28
 - Key durable outcome: V1 public tenant-scoped API-key admin runtime is live. api-edge recognizes and forwards POST/GET/DELETE `/v1/organizations/{orgId}/api-keys[/{apiKeyId}]` to identity-worker. identity-worker orchestrates membership binding creation, policy authorization, key material generation (sk_ prefix, SHA-256 hash), and security/audit event emission. Policy engine grants `organization.api_key.{create,list,revoke}` to owner/admin; project_admin only when projectId matches via PROJECT_GRANTABLE_ACTIONS. Raw secret returned only on create. Compensating binding revoke on identity failure. 58 new tests (36 policy-engine, 7 api-edge, 15 identity-worker).
 - Reports: `ai/reports/task-0051-implementer.md`, `ai/reports/task-0051-verifier.md`
 
-**Next phase**: Next orchestrator cycle should evaluate the next task in the API-key lifecycle roadmap.
+**Task 0052 (Verifier) — COMPLETE ✅**
+
+- Prompt: `ai/tasks/task-0052.md`
+- Verifier prompt: `ai/tasks/task-0052-verifier.md`
+- PR #95 (`codex/task-0052-web-console-api-key-management-ui`) **MERGED** at commit `cdd781c` (2026-05-28T07:25Z).
+- PR URL: `https://github.com/sourceplane/multi-tenant-saas/pull/95`
+- PR CI runs: `26560148990` (original, 7/7 SUCCESS), `26560743797` (verifier fix, 7/7 SUCCESS).
+- Verifier fixes: (1) one-time secret lifecycle — `apiKeysCreatedSecret` now cleared on tab navigation away and org navigation, not just Dismiss; (2) missing implementer report committed to PR branch.
+- Key durable outcome: Web-console API key management UI is live. Authenticated org users can list, create, and revoke API keys from the workspace. API Keys tab inserted between Projects and Audit. Uses only public org-scoped API routes (POST/GET/DELETE `/v1/organizations/{orgId}/api-keys[/{apiKeyId}]`). Typed contracts at `@saas/contracts/api-keys`. One-time secret displayed immediately after create, cleared on dismiss/tab-switch/org-navigation/reload. Cursor pagination with Load More. Revoke with confirmation dialog.
+- Reports: `ai/reports/task-0052-implementer.md`, `ai/reports/task-0052-verifier.md`
+
+**Next phase**: Next orchestrator cycle should evaluate the next task on the roadmap.

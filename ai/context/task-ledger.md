@@ -1172,6 +1172,19 @@ Last updated: 2026-05-27
 |- Scope: api-edge route recognition + forwarding, identity-worker create/list/revoke handlers with membership/policy orchestration, 3 policy actions (organization.api_key.{create,list,revoke}), PROJECT_GRANTABLE_ACTIONS for project_admin, 58 new tests.
 |- Durable outcome: Public API-key admin runtime live on main. api-edge forwards POST/GET/DELETE `/v1/organizations/{orgId}/api-keys[/{apiKeyId}]` to identity-worker. Identity orchestrates membership binding, policy authorization, key material (sk_ prefix, SHA-256 hash), security events, and org audit. Raw secret returned only on create. Compensating binding revoke on failure. 480 tests green across touched suites.
 
+### Task 0052 — Web-Console API Key Management UI
+
+|- Agent: Implementer → Verifier
+|- Prompt: `ai/tasks/task-0052.md`
+|- Verifier prompt: `ai/tasks/task-0052-verifier.md`
+|- Status: verified PASS
+|- Implementation: PR #95, branch `codex/task-0052-web-console-api-key-management-ui`, merge commit `cdd781c`
+|- PR CI runs: `26560148990` (original, 7/7 SUCCESS), `26560743797` (verifier fix, 7/7 SUCCESS)
+|- Reports: `ai/reports/task-0052-implementer.md`, `ai/reports/task-0052-verifier.md`
+|- Objective: Add org-scoped API key management UI to the web console using the live public API routes.
+|- Scope: web-console API Keys tab (list/create/revoke), `@saas/contracts/api-keys` typed exports, one-time secret lifecycle, cursor pagination.
+|- Durable outcome: Web-console API key management UI live on main. Authenticated org users can list, create, and revoke API keys from the workspace. Verifier fixed secret lifecycle (cleared on tab/org navigation) and committed missing implementer report.
+
 ## Historical Notes
 
 - PR #1 split product-specific V2 Git catalog work away from the reusable SaaS
