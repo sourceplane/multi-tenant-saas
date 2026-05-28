@@ -27,6 +27,9 @@ const ORG_ROLE_PERMISSIONS: Record<OrganizationRole, readonly string[]> = {
     "organization.service_principal.binding.create",
     "organization.service_principal.binding.list",
     "organization.service_principal.binding.revoke",
+    "organization.api_key.create",
+    "organization.api_key.list",
+    "organization.api_key.revoke",
     "project.create",
     "project.list",
     "project.read",
@@ -52,6 +55,9 @@ const ORG_ROLE_PERMISSIONS: Record<OrganizationRole, readonly string[]> = {
     "organization.service_principal.binding.create",
     "organization.service_principal.binding.list",
     "organization.service_principal.binding.revoke",
+    "organization.api_key.create",
+    "organization.api_key.list",
+    "organization.api_key.revoke",
     "project.create",
     "project.list",
     "project.read",
@@ -95,6 +101,9 @@ const PROJECT_ROLE_PERMISSIONS: Record<ProjectRole, readonly string[]> = {
     "environment.read",
     "environment.update",
     "environment.delete",
+    "organization.api_key.create",
+    "organization.api_key.list",
+    "organization.api_key.revoke",
   ],
   project_builder: [
     "project.read",
@@ -133,6 +142,15 @@ const PROJECT_SCOPED_ACTIONS: ReadonlySet<string> = new Set([
   "environment.delete",
 ]);
 
+// Actions that project roles can authorize when a projectId narrows the request.
+// Unlike PROJECT_SCOPED_ACTIONS, these do NOT require projectId — they are org-level
+// actions that project-admin can perform only when explicitly scoped to their project.
+const PROJECT_GRANTABLE_ACTIONS: ReadonlySet<string> = new Set([
+  "organization.api_key.create",
+  "organization.api_key.list",
+  "organization.api_key.revoke",
+]);
+
 const ALL_KNOWN_ACTIONS: ReadonlySet<string> = new Set([
   "organization.read",
   "organization.settings.update",
@@ -145,6 +163,9 @@ const ALL_KNOWN_ACTIONS: ReadonlySet<string> = new Set([
   "organization.service_principal.binding.create",
   "organization.service_principal.binding.list",
   "organization.service_principal.binding.revoke",
+  "organization.api_key.create",
+  "organization.api_key.list",
+  "organization.api_key.revoke",
   "project.create",
   "project.list",
   "project.read",
@@ -232,7 +253,7 @@ export function authorize(input: AuthorizationRequest): AuthorizationResponse {
     if (
       fact.scope.kind === "project" &&
       isProjectRole(fact.role) &&
-      PROJECT_SCOPED_ACTIONS.has(action)
+      (PROJECT_SCOPED_ACTIONS.has(action) || PROJECT_GRANTABLE_ACTIONS.has(action))
     ) {
       if (!projectId || fact.scope.projectId !== projectId) {
         continue;

@@ -10,6 +10,7 @@
     "lint": "eslint src"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260510.1",
     "@saas/eslint-config": "workspace:*",
     "@saas/tsconfig": "workspace:*",
     "@types/jest": "^29.5.14",
@@ -24,7 +25,9 @@
   },
   "jest": {
     "preset": "ts-jest/presets/default-esm",
-    "extensionsToTreatAsEsm": [".ts"],
+    "extensionsToTreatAsEsm": [
+      ".ts"
+    ],
     "moduleNameMapper": {
       "^(\\.{1,2}/.*)\\.js$": "$1",
       "^@saas/contracts$": "<rootDir>/../../packages/contracts/src/index.ts",
@@ -32,11 +35,19 @@
       "^@saas/db$": "<rootDir>/../../packages/db/src/index.ts",
       "^@saas/db/hyperdrive$": "<rootDir>/../../packages/db/src/hyperdrive/index.ts",
       "^@saas/db/identity$": "<rootDir>/../../packages/db/src/identity/index.ts",
+      "^@saas/db/events$": "<rootDir>/../../packages/db/src/events/index.ts",
       "^@saas/db/(.*)$": "<rootDir>/../../packages/db/src/$1.ts"
     },
     "transform": {
-      "^.+\\.ts$": ["ts-jest", { "useESM": true }]
+      "^.+\\.ts$": [
+        "ts-jest",
+        {
+          "useESM": true
+        }
+      ]
     },
-    "testMatch": ["<rootDir>/src/**/*.test.ts"]
+    "testMatch": [
+      "<rootDir>/src/**/*.test.ts"
+    ]
   }
 }

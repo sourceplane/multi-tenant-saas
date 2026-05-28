@@ -404,6 +404,9 @@ importers:
         specifier: workspace:*
         version: link:../../packages/db
     devDependencies:
+      '@cloudflare/workers-types':
+        specifier: ^4.20260510.1
+        version: 4.20260510.1
       '@saas/eslint-config':
         specifier: workspace:*
         version: link:../../tooling/eslint

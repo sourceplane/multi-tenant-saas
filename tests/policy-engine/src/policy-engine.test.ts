@@ -684,7 +684,7 @@ describe("listEffectivePermissions", () => {
     expect(result.derivedScope.orgId).toBe("org_1");
 
     const allowed = result.permissions.filter((p) => p.allow);
-    expect(allowed.length).toBe(16);
+    expect(allowed.length).toBe(19);
   });
 
   it("returns limited permissions for viewer", () => {

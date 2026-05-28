@@ -6,7 +6,11 @@ import { handleSession } from "./handlers/session.js";
 import { handleResolveBearer } from "./handlers/resolve-bearer.js";
 import { handleLogout } from "./handlers/logout.js";
 import { handleSecurityEvents } from "./handlers/security-events.js";
+import { handleCreateApiKey, handleListApiKeys, handleRevokeApiKey } from "./handlers/api-key-admin.js";
 import { errorResponse, notFound, methodNotAllowed } from "./http.js";
+
+const ORG_API_KEYS_RE = /^\/v1\/organizations\/[^/]+\/api-keys$/;
+const ORG_API_KEY_ID_RE = /^\/v1\/organizations\/[^/]+\/api-keys\/[^/]+$/;
 import { generateRequestId } from "./ids.js";
 
 const REQUEST_ID_RE = /^[\w-]{1,128}$/;
@@ -54,6 +58,18 @@ export async function route(request: Request, env: Env): Promise<Response> {
     if (url.pathname === "/v1/auth/security-events") {
       if (request.method !== "GET") return methodNotAllowed(requestId);
       return handleSecurityEvents(request, env, requestId);
+    }
+
+    // API-key admin routes (forwarded from api-edge)
+    if (ORG_API_KEYS_RE.test(url.pathname)) {
+      if (request.method === "POST") return handleCreateApiKey(request, env, requestId);
+      if (request.method === "GET") return handleListApiKeys(request, env, requestId);
+      return methodNotAllowed(requestId);
+    }
+
+    if (ORG_API_KEY_ID_RE.test(url.pathname)) {
+      if (request.method === "DELETE") return handleRevokeApiKey(request, env, requestId);
+      return methodNotAllowed(requestId);
     }
 
     return notFound(requestId, url.pathname);
