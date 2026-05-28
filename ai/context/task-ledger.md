@@ -1212,6 +1212,19 @@ Last updated: 2026-05-28
 |- Scope boundary: web-console API client, state helper, and account view/profile UI only; preserve Account Security and all workspace flows.
 |- Durable outcome: Web-console account profile settings UI live on main. Account view with Profile and Security Events tabs. Display name update/clear via PATCH with `{ displayName: string | null }` only. In-memory session and header refresh without reload. All existing workspace flows preserved.
 
+## Task 0055
+
+|- Agent: Implementer -> Verifier
+|- Prompt: `ai/tasks/task-0055.md`
+|- Verifier prompt: `ai/tasks/task-0055-verifier.md`
+|- Status: verified PASS (2026-05-28)
+|- Implementation: PR #98, branch `impl/task-0055-config-settings-flags`, merge commit `d148ccf`
+|- PR CI runs: `26565113214` (original, 7/7 SUCCESS), `26565687838` (post-verifier-cleanup, 7/7 SUCCESS)
+|- Reports: `ai/reports/task-0055-implementer.md`, `ai/reports/task-0055-verifier.md`
+|- Objective: Config persistence foundation — settings, feature flags, and secret metadata tables with typed repository.
+|- Scope boundary: `config` schema DDL, `@saas/db/config` repository module, test suite; no API routes or UI.
+|- Durable outcome: Config persistence live on main. `config.settings`, `config.feature_flags`, `config.secret_metadata` tables with RLS and org/project scoping. Typed CRUD repository with cursor pagination, secret rotate/revoke, ciphertext-envelope never exposed. 388 tests passing.
+
 ## Historical Notes
 
 - PR #1 split product-specific V2 Git catalog work away from the reusable SaaS
