@@ -70,6 +70,16 @@ export interface BearerResolutionResponse {
   user?: AuthUser;
 }
 
+// Profile route contracts (self-scoped, user-session only)
+
+export interface ProfileResponse {
+  user: AuthUser;
+}
+
+export interface UpdateProfileRequest {
+  displayName: string | null;
+}
+
 export interface ApiSuccessEnvelope<T> {
   data: T;
   meta: {

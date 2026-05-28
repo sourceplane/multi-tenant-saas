@@ -202,10 +202,16 @@ export interface SecurityEventPagedResult {
   nextCursor: SecurityEventCursorPosition | null;
 }
 
+export interface UpdateUserProfileInput {
+  displayName: string | null;
+  updatedAt: Date;
+}
+
 export interface IdentityRepository {
   createUser(input: CreateUserInput): Promise<IdentityResult<User>>;
   getUserById(id: string): Promise<IdentityResult<User>>;
   getUserByEmail(emailLower: string): Promise<IdentityResult<User>>;
+  updateUserProfile(userId: string, input: UpdateUserProfileInput): Promise<IdentityResult<User>>;
 
   createAuthIdentity(input: CreateAuthIdentityInput): Promise<IdentityResult<AuthIdentity>>;
   getAuthIdentityByProviderSubject(provider: string, subject: string): Promise<IdentityResult<AuthIdentity>>;

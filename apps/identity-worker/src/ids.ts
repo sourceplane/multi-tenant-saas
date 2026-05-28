@@ -85,3 +85,8 @@ export function parseSessionToken(token: string): { sessionId: string; secret: s
 export function buildSessionToken(sessionUuid: string, secret: string): string {
   return `sps_ses_${uuidToHex(sessionUuid)}.${secret}`;
 }
+
+export function parseUserPublicId(publicId: string): string | null {
+  if (!publicId.startsWith("usr_")) return null;
+  return hexToUuid(publicId.slice(4));
+}

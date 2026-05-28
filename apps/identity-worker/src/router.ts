@@ -6,6 +6,7 @@ import { handleSession } from "./handlers/session.js";
 import { handleResolveBearer } from "./handlers/resolve-bearer.js";
 import { handleLogout } from "./handlers/logout.js";
 import { handleSecurityEvents } from "./handlers/security-events.js";
+import { handleProfile } from "./handlers/profile.js";
 import { handleCreateApiKey, handleListApiKeys, handleRevokeApiKey } from "./handlers/api-key-admin.js";
 import { errorResponse, notFound, methodNotAllowed } from "./http.js";
 
@@ -58,6 +59,11 @@ export async function route(request: Request, env: Env): Promise<Response> {
     if (url.pathname === "/v1/auth/security-events") {
       if (request.method !== "GET") return methodNotAllowed(requestId);
       return handleSecurityEvents(request, env, requestId);
+    }
+
+    if (url.pathname === "/v1/auth/profile") {
+      if (request.method !== "GET" && request.method !== "PATCH") return methodNotAllowed(requestId);
+      return handleProfile(request, env, requestId);
     }
 
     // API-key admin routes (forwarded from api-edge)
