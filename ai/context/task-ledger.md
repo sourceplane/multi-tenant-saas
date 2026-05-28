@@ -1314,6 +1314,20 @@ Last updated: 2026-05-28
 |- Scope boundary: apps/metering-worker, api-edge metering facade, policy-engine metering actions, focused tests; no billing, UI, scheduler, Analytics Engine, KV cache.
 |- Durable outcome: 5 metering routes (usage record/batch/summary, quota check, violations list) behind api-edge with fail-closed authorization, idempotency, metadata safety, batch limits, and 25 focused tests proven on main.
 
+## Task 0073
+
+|- Agent: Implementer -> Verifier
+|- Prompt: `ai/tasks/task-0073.md`
+|- Verifier prompt: `ai/tasks/task-0073-verifier.md`
+|- Status: verified PASS, merged (2026-05-29)
+|- Implementation: PR #116 (`impl/task-0073-calm-editorial-design`), merge commit `5cde36db`
+|- PR CI run: `26607828400` — 4/4 SUCCESS (plan, web-console dev/stage/prod Verify deploy)
+|- Post-merge main CI run: `26607911105` — SUCCESS
+|- Reports: `ai/reports/task-0073-implementer.md`, `ai/reports/task-0073-verifier.md`
+|- Objective: refresh the web-console design language to a calm, warm, editorial workspace inspired by `referance/figma/` and the user direction.
+|- Scope boundary: CSS-only rewrite of `apps/web-console/src/style.css`; no markup/behavior/API/dependency/backend changes; no new fake product surfaces; no React/Tailwind/shadcn migration.
+|- Durable outcome: parchment/sand/fog/stone token system with terracotta/clay/sage/olive/rust accents, editorial serif headings, monospace reserved for identifiers, calmer status pills, gentler motion with `prefers-reduced-motion` support, warmer sidebar with terracotta active rail, parchment topbar, and responsive collapse at 1024/768/480 — all expressed across existing class hooks emitted by `main.ts` with the runtime/DOM unchanged.
+
 ## Historical Notes
 
 - PR #1 split product-specific V2 Git catalog work away from the reusable SaaS

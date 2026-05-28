@@ -1,6 +1,6 @@
 # Current Context
 
-Last updated: 2026-05-28
+Last updated: 2026-05-29
 
 ## Repo Reality
 
@@ -425,9 +425,11 @@ Task 0060 Verifier is scoped and ready.
 
 ## Current State
 
+- Task 0073 verified PASS and merged via PR #116 at `5cde36db` (2026-05-29).
+- Web-console calm editorial parchment design refresh: CSS-only rewrite of `apps/web-console/src/style.css` (+851/-426). No behavior, markup, API, dependency, or backend changes. Class taxonomy emitted by `main.ts` preserved 1:1; tokens evolved to a parchment/sand/fog/stone palette with terracotta/clay/sage/olive/rust accents, editorial serif headings, calm status pills, gentle motion, and `prefers-reduced-motion` support. Post-merge main CI run `26607911105` succeeded across plan + web-console dev/stage/prod verify-deploy.
 - Task 0072 verified PASS and merged via PR #115 at `b4ced6bc` (2026-05-28).
 - Metering Worker runtime: `apps/metering-worker` with 5 routes (usage record, batch, summary, quota check, violations list), api-edge metering facade, policy-engine metering read/write/quota.check actions, 25 focused tests. Uses @saas/db/metering + @saas/contracts/metering.
-- Tasks 0001–0072 are complete and verified.
+- Tasks 0001–0073 are complete and verified.
 
 ## Next Task
 
