@@ -1319,12 +1319,17 @@ Last updated: 2026-05-28
 ## Task 0063
 
 - Agent: Implementer
+- Verifier: this session
 - Prompt: `ai/tasks/task-0063.md`
-- Status: scoped and ready to begin (2026-05-28)
+- Verifier prompt: `ai/tasks/task-0063-verifier.md`
+- Status: verified and merged
+- PR: #106 (`task-0063/web-console-ui-polish`), squash-merged at `0ed171c`
+- PR CI runs: `26581998947` (initial, 4/4 SUCCESS), `26582816383` (post-implementer-report, 4/4 SUCCESS)
+- Post-merge main CI run: `26583005845` (in progress at merge time)
 - Objective: Polish the existing web-console workspace/account page internals using `referance/figma/` visual cues, following Task 0062's shell refresh while preserving all live SaaS starter workflows and public API behavior.
-- Scope boundary: frontend presentation only in `apps/web-console` (`src/main.ts`, `src/style.css`, and the implementer report). No backend, contracts, migrations, Terraform, Orun components, packages/dependencies, or API route changes. No React/Tailwind/shadcn migration and no fake Figma product surfaces.
-- Acceptance: `pnpm --filter @saas/web-console typecheck`, `build`, and `lint`; Orun validate/component/changed-plan/dry-run; PR CI green; dynamic values remain safe text/form values; secret metadata remains read-only; API key one-time secret lifecycle remains constrained.
-- Expected outcome: live web-console pages/tabs have consistent Figma-inspired headers, cards, rows, tabs, forms, action bars, and empty/loading/error/success states without altering behavior.
+- Scope: web-console presentation only (main.ts, style.css).
+- Reports: `ai/reports/task-0063-implementer.md`, `ai/reports/task-0063-verifier.md`
+- Durable outcome: Web-console page internals polished with Figma-inspired components: page headers, action bars, member rows with avatars, invitation rows with status badges, project cards, audit log table with headers, animated loading indicators, structured empty states. All existing workflows preserved. No backend, API, or dependency changes.
 
 ## Historical Notes
 
