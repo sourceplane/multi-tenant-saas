@@ -301,6 +301,170 @@ describe("Metering Repository", () => {
     });
   });
 
+  describe("materializeUsageRollups", () => {
+    const WIN_START = new Date("2026-03-15T11:00:00.000Z");
+    const WIN_END = new Date("2026-03-15T13:00:00.000Z");
+
+    it("aggregates raw usage into rollups grouped by org/project/env/metric/bucket with date_trunc", async () => {
+      const executor = createMockExecutor(() => ({ rows: [], rowCount: 4 }));
+      const repo = createMeteringRepository(executor);
+
+      const result = await repo.materializeUsageRollups({
+        bucketType: "hour",
+        start: WIN_START,
+        end: WIN_END,
+      });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value.bucketType).toBe("hour");
+        expect(result.value.rollupsWritten).toBe(4);
+        expect(result.value.windowStart).toEqual(WIN_START);
+        expect(result.value.windowEnd).toEqual(WIN_END);
+      }
+
+      const call = executor.calls[0]!;
+      // Grouping must include org_id + project_id + environment_id + metric + bucket
+      expect(call.sql).toMatch(/GROUP BY\s+org_id,\s*project_id,\s*environment_id,\s*metric,\s*date_trunc/i);
+      // Window is parameter-bound, not interpolated
+      expect(call.sql).toContain("recorded_at >= $2");
+      expect(call.sql).toContain("recorded_at <  $3");
+      expect(call.params[0]).toBe("hour");
+      expect(call.params[1]).toBe(WIN_START.toISOString());
+      expect(call.params[2]).toBe(WIN_END.toISOString());
+    });
+
+    it("supports both hour and day bucket types via the same seam", async () => {
+      const executor = createMockExecutor(() => ({ rows: [], rowCount: 0 }));
+      const repo = createMeteringRepository(executor);
+
+      await repo.materializeUsageRollups({
+        bucketType: "day",
+        start: new Date("2026-03-14T00:00:00.000Z"),
+        end: new Date("2026-03-16T00:00:00.000Z"),
+      });
+
+      expect(executor.calls[0]!.params[0]).toBe("day");
+    });
+
+    it("is idempotent — issues an INSERT ... ON CONFLICT ... DO UPDATE upsert", async () => {
+      const executor = createMockExecutor(() => ({ rows: [], rowCount: 0 }));
+      const repo = createMeteringRepository(executor);
+
+      await repo.materializeUsageRollups({
+        bucketType: "hour",
+        start: WIN_START,
+        end: WIN_END,
+      });
+
+      const sql = executor.calls[0]!.sql;
+      expect(sql).toMatch(/INSERT INTO metering\.usage_rollups/i);
+      expect(sql).toMatch(/ON CONFLICT[\s\S]*DO UPDATE SET/i);
+      // The conflict key must mirror the unique index on the table:
+      // (org_id, COALESCE(project_id,''), COALESCE(environment_id,''), metric, bucket_type, bucket_start)
+      expect(sql).toMatch(/ON CONFLICT[\s\S]*org_id[\s\S]*COALESCE\(project_id/i);
+      expect(sql).toMatch(/ON CONFLICT[\s\S]*COALESCE\(environment_id/i);
+      expect(sql).toMatch(/ON CONFLICT[\s\S]*metric[\s\S]*bucket_type[\s\S]*bucket_start/i);
+      // Updated columns are the aggregate values + updated_at, not the id.
+      expect(sql).toMatch(/quantity\s*=\s*EXCLUDED\.quantity/i);
+      expect(sql).toMatch(/record_count\s*=\s*EXCLUDED\.record_count/i);
+      expect(sql).toMatch(/updated_at\s*=\s*now\(\)/i);
+    });
+
+    it("emits a deterministic id derived from the full aggregation key (org + project + env + metric + bucket_type + bucket_start)", async () => {
+      const executor = createMockExecutor(() => ({ rows: [], rowCount: 0 }));
+      const repo = createMeteringRepository(executor);
+
+      await repo.materializeUsageRollups({
+        bucketType: "hour",
+        start: WIN_START,
+        end: WIN_END,
+      });
+
+      const sql = executor.calls[0]!.sql;
+      // The id is a hash of the aggregation key — same inputs produce same id on re-run.
+      expect(sql).toMatch(/md5\(/i);
+      expect(sql).toMatch(/org_id\s*\|\|/i);
+      expect(sql).toMatch(/COALESCE\(project_id,\s*''\)\s*\|\|/i);
+      expect(sql).toMatch(/COALESCE\(environment_id,\s*''\)\s*\|\|/i);
+      expect(sql).toMatch(/metric\s*\|\|/i);
+      expect(sql).toMatch(/bucket_start::text/i);
+    });
+
+    it("never aggregates across organizations — org_id is always in GROUP BY", async () => {
+      const executor = createMockExecutor(() => ({ rows: [], rowCount: 0 }));
+      const repo = createMeteringRepository(executor);
+
+      await repo.materializeUsageRollups({
+        bucketType: "hour",
+        start: WIN_START,
+        end: WIN_END,
+      });
+
+      const sql = executor.calls[0]!.sql;
+      const groupBy = sql.match(/GROUP BY[^)]*\)?/i)?.[0] ?? "";
+      expect(groupBy.toLowerCase()).toContain("org_id");
+    });
+
+    it("uses parameterized SQL only — window bounds are not interpolated", async () => {
+      const executor = createMockExecutor((sql) => {
+        expect(sql).not.toContain(WIN_START.toISOString());
+        expect(sql).not.toContain(WIN_END.toISOString());
+        return { rows: [], rowCount: 0 };
+      });
+      const repo = createMeteringRepository(executor);
+      await repo.materializeUsageRollups({
+        bucketType: "hour",
+        start: WIN_START,
+        end: WIN_END,
+      });
+    });
+
+    it("rejects an invalid bucket_type without issuing SQL", async () => {
+      const executor = createMockExecutor(() => ({ rows: [], rowCount: 0 }));
+      const repo = createMeteringRepository(executor);
+      const result = await repo.materializeUsageRollups({
+        bucketType: "minute" as unknown as "hour",
+        start: WIN_START,
+        end: WIN_END,
+      });
+      expect(result.ok).toBe(false);
+      expect(executor.calls).toHaveLength(0);
+    });
+
+    it("rejects an inverted/empty window without issuing SQL", async () => {
+      const executor = createMockExecutor(() => ({ rows: [], rowCount: 0 }));
+      const repo = createMeteringRepository(executor);
+      const result = await repo.materializeUsageRollups({
+        bucketType: "hour",
+        start: WIN_END,
+        end: WIN_START,
+      });
+      expect(result.ok).toBe(false);
+      expect(executor.calls).toHaveLength(0);
+    });
+
+    it("returns a safe internal error on executor failure — no raw error leaked", async () => {
+      const executor = createMockExecutor(() => {
+        throw new Error("connection refused to host db.internal:5432");
+      });
+      const repo = createMeteringRepository(executor);
+      const result = await repo.materializeUsageRollups({
+        bucketType: "hour",
+        start: WIN_START,
+        end: WIN_END,
+      });
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.kind).toBe("internal");
+        if (result.error.kind === "internal") {
+          expect(result.error.message).not.toContain("db.internal");
+          expect(result.error.message).not.toContain("connection refused");
+        }
+      }
+    });
+  });
+
   describe("listUsageRollups", () => {
     it("paginates rollups by org", async () => {
       const executor = createMockExecutor(() => ({

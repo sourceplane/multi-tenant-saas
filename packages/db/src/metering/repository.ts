@@ -9,6 +9,8 @@ import type {
   UsageRollup,
   UsageSummary,
   UsageSummaryQuery,
+  RollupMaterializationWindow,
+  RollupMaterializationResult,
   QuotaCheckResult,
   QuotaViolation,
   ListViolationsQuery,
@@ -247,6 +249,98 @@ export function createMeteringRepository(executor: SqlExecutor): MeteringReposit
         params.cursor,
         mapUsageRollup,
       );
+    },
+
+    async materializeUsageRollups(
+      window: RollupMaterializationWindow,
+    ): Promise<MeteringResult<RollupMaterializationResult>> {
+      if (window.bucketType !== "hour" && window.bucketType !== "day") {
+        return safeError("Invalid bucket_type");
+      }
+      if (!(window.start instanceof Date) || !(window.end instanceof Date)) {
+        return safeError("Invalid window bounds");
+      }
+      if (window.end.getTime() <= window.start.getTime()) {
+        return safeError("Window end must be greater than start");
+      }
+
+      // Aggregate raw usage records into the target bucket and upsert into
+      // metering.usage_rollups. The unique index is on
+      // (org_id, COALESCE(project_id, ''), COALESCE(environment_id, ''), metric, bucket_type, bucket_start)
+      // — the ON CONFLICT target must mirror those expressions exactly.
+      //
+      // The synthesized id is a deterministic md5 of the aggregation key so
+      // repeated materializations of the same bucket produce stable ids; on
+      // conflict we keep the existing row id and overwrite quantity/record_count.
+      //
+      // All values are passed via $-parameters; no user input is interpolated.
+      const sql = `
+        WITH agg AS (
+          SELECT
+            org_id,
+            project_id,
+            environment_id,
+            metric,
+            date_trunc($1, recorded_at) AS bucket_start,
+            SUM(quantity)::BIGINT       AS quantity,
+            COUNT(*)::BIGINT            AS record_count
+          FROM metering.usage_records
+          WHERE recorded_at >= $2
+            AND recorded_at <  $3
+          GROUP BY org_id, project_id, environment_id, metric, date_trunc($1, recorded_at)
+        )
+        INSERT INTO metering.usage_rollups (
+          id, org_id, project_id, environment_id, metric,
+          bucket_type, bucket_start, quantity, record_count,
+          created_at, updated_at
+        )
+        SELECT
+          md5(
+            org_id || '|' ||
+            COALESCE(project_id, '') || '|' ||
+            COALESCE(environment_id, '') || '|' ||
+            metric || '|' ||
+            $1::text || '|' ||
+            bucket_start::text
+          ) AS id,
+          org_id, project_id, environment_id, metric,
+          $1::text       AS bucket_type,
+          bucket_start,
+          quantity,
+          record_count,
+          now(), now()
+        FROM agg
+        ON CONFLICT (
+          org_id,
+          (COALESCE(project_id, '')),
+          (COALESCE(environment_id, '')),
+          metric,
+          bucket_type,
+          bucket_start
+        ) DO UPDATE SET
+          quantity     = EXCLUDED.quantity,
+          record_count = EXCLUDED.record_count,
+          updated_at   = now()
+      `;
+
+      try {
+        const result = await executor.execute<Record<string, unknown>>(sql, [
+          window.bucketType,
+          window.start.toISOString(),
+          window.end.toISOString(),
+        ]);
+        return {
+          ok: true,
+          value: {
+            bucketType: window.bucketType,
+            windowStart: window.start,
+            windowEnd: window.end,
+            rollupsWritten: result.rowCount,
+          },
+        };
+      } catch {
+        return safeError("Failed to materialize usage rollups");
+      }
     },
 
     async checkQuota(
