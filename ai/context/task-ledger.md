@@ -1185,6 +1185,19 @@ Last updated: 2026-05-27
 |- Scope: web-console API Keys tab (list/create/revoke), `@saas/contracts/api-keys` typed exports, one-time secret lifecycle, cursor pagination.
 |- Durable outcome: Web-console API key management UI live on main. Authenticated org users can list, create, and revoke API keys from the workspace. Verifier fixed secret lifecycle (cleared on tab/org navigation) and committed missing implementer report.
 
+### Task 0053 — Self-Scoped Account Profile API
+
+|- Agent: Implementer → Verifier
+|- Prompt: `ai/tasks/task-0053.md`
+|- Verifier prompt: `ai/tasks/task-0053-verifier.md`
+|- Status: verified PASS
+|- Implementation: PR #96, branch `codex/task-0053-account-profile-api`, merge commit `c2b467b`
+|- PR CI runs: `26562137078` (original, 27/27 SUCCESS), `26562767336` (post-implementer-report, 27/27 SUCCESS)
+|- Reports: `ai/reports/task-0053-implementer.md`, `ai/reports/task-0053-verifier.md`
+|- Objective: Add self-scoped GET/PATCH /v1/auth/profile endpoints for authenticated user display name management.
+|- Scope: contracts (ProfileResponse, UpdateProfileRequest), identity repository (updateUserProfile), identity-worker profile handler/service/router, api-edge multi-method route + PATCH body forwarding, specs, 21 new tests.
+|- Durable outcome: Self-scoped GET/PATCH /v1/auth/profile live on main. Fail-closed body validation (displayName only, max 120 chars, empty→null, unsupported fields rejected). API-key/service-principal actors blocked. Safe user.profile.updated security event with changed field names only. Profile update and event recording are sequential (not transactional) — documented residual risk.
+
 ## Historical Notes
 
 - PR #1 split product-specific V2 Git catalog work away from the reusable SaaS
