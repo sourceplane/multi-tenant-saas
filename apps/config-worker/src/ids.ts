@@ -57,3 +57,8 @@ export function parseFeatureFlagPublicId(publicId: string): string | null {
   if (!publicId.startsWith("flg_")) return null;
   return hexToUuid(publicId.slice(4));
 }
+
+export function parseSecretMetadataPublicId(publicId: string): string | null {
+  if (!publicId.startsWith("sec_")) return null;
+  return hexToUuid(publicId.slice(4));
+}

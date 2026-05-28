@@ -558,7 +558,7 @@ describe("config-worker router - mutations", () => {
     expect(res.status).toBe(503);
   });
 
-  it("returns 405 for POST to secrets (not supported)", async () => {
+  it("routes POST to org secrets (create) — returns 503 without DB", async () => {
     const req = new Request(
       `https://config-worker/v1/organizations/${TEST_ORG_PUBLIC}/config/secrets`,
       {
@@ -574,7 +574,7 @@ describe("config-worker router - mutations", () => {
     );
     const env = {} as Env;
     const res = await route(req, env);
-    expect(res.status).toBe(405);
+    expect(res.status).toBe(503);
   });
 
   it("returns 401 for POST without actor headers", async () => {

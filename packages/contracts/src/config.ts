@@ -124,3 +124,28 @@ export interface PublicSecretMetadata {
 export interface ListSecretMetadataResponse {
   secrets: PublicSecretMetadata[];
 }
+
+// ---------------------------------------------------------------------------
+// Secret Metadata Mutation Requests
+// ---------------------------------------------------------------------------
+// NOTE: No value, plaintext, secret, ciphertext, ciphertextEnvelope, hash,
+// or any secret-material field is accepted. Validation must reject them.
+
+export interface CreateSecretMetadataRequest {
+  secretKey: string;
+  displayName?: string | null;
+  rotationPolicy?: string | null;
+  expiresAt?: string | null;
+}
+
+export interface CreateSecretMetadataResponse {
+  secret: PublicSecretMetadata;
+}
+
+export interface RotateSecretMetadataResponse {
+  secret: PublicSecretMetadata;
+}
+
+export interface RevokeSecretMetadataResponse {
+  secret: PublicSecretMetadata;
+}
