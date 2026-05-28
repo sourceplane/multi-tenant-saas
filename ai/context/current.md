@@ -289,4 +289,14 @@ Last updated: 2026-05-28
 - Key durable outcome: Active spec pack consistently presents V1 public API-key admin as tenant-scoped POST/GET/DELETE `/v1/organizations/{orgId}/api-keys[/{apiKeyId}]`. `/v1/auth/api-keys` deprecated. Bounded-context ownership documented. One-time secret return, hash-only persistence, and security-event expectations specified.
 - Reports: `ai/reports/task-0050-implementer.md`, `ai/reports/task-0050-verifier.md`
 
-**Next phase**: Runtime implementation of V1 public API-key admin routes in identity-worker and api-edge, consuming the internal membership SP role-binding seam.
+**Task 0051 (Verifier) — COMPLETE ✅**
+
+- Prompt: `ai/tasks/task-0051.md`
+- Verifier prompt: `ai/tasks/task-0051-verifier.md`
+- PR #94 (`codex/task-0051-public-api-key-admin-runtime`) **MERGED** at commit `d74b7f6` (2026-05-28T08:00Z).
+- PR URL: `https://github.com/sourceplane/multi-tenant-saas/pull/94`
+- PR CI run: `26558427095` (28/28 checks SUCCESS).
+- Key durable outcome: V1 public tenant-scoped API-key admin runtime is live. api-edge recognizes and forwards POST/GET/DELETE `/v1/organizations/{orgId}/api-keys[/{apiKeyId}]` to identity-worker. identity-worker orchestrates membership binding creation, policy authorization, key material generation (sk_ prefix, SHA-256 hash), and security/audit event emission. Policy engine grants `organization.api_key.{create,list,revoke}` to owner/admin; project_admin only when projectId matches via PROJECT_GRANTABLE_ACTIONS. Raw secret returned only on create. Compensating binding revoke on identity failure. 58 new tests (36 policy-engine, 7 api-edge, 15 identity-worker).
+- Reports: `ai/reports/task-0051-implementer.md`, `ai/reports/task-0051-verifier.md`
+
+**Next phase**: Next orchestrator cycle should evaluate the next task in the API-key lifecycle roadmap.

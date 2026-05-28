@@ -56,20 +56,17 @@
     "0047",
     "0048",
     "0049",
-    "0050"
+"0050",
+    "0051"
   ],
-  "repo_health": "green",
-  "next_focus": "public-api-key-admin-runtime",
-  "last_verified": "2026-05-28T04:44Z",
+  "repo_health": "yellow",
+  "next_focus": "task-0052-scoping",
+  "last_verified": "2026-05-28T08:00Z",
   "waiting_for_input": "false",
-  "task_agent": "/ai/tasks/task-0050-verifier.md",
+  "task_agent": "",
   "notes": [
-    "Task 0050 PASS: PR #93 merged at 77cba75. V1 public API-key admin contract reconciled.",
-    "Specs consistently present tenant-scoped /v1/organizations/{orgId}/api-keys routes.",
-    "/v1/auth/api-keys deprecated as public admin surface.",
-    "Bounded-context ownership preserved: identity=keys+SPs, membership=role bindings, policy=authz.",
-    "One-time secret return, hash-only persistence, security-event expectations documented.",
-    "No runtime implementation yet \u2014 next task should implement the actual routes.",
-    "Node.js 20 deprecation warning in CI \u2014 actions need update before September 2026 runner cutoff."
+    "Task 0051 verified PASS and merged via PR #94 at d74b7f6. Public tenant-scoped API-key admin runtime is live across api-edge, identity-worker, and policy-engine.",
+    "Working tree still contains historical untracked ai/ carryover files; they are out of scope.",
+    "README.md still contains stale pre-runtime statements about Hyperdrive/Workers not being implemented; keep trusting code plus active specs until a bounded docs cleanup task is scoped."
   ]
 }

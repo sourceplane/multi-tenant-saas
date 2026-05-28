@@ -1,59 +1,65 @@
 # Task 0051 — Verifier Report
 
-**PR:** #94 (`codex/task-0051-public-api-key-admin-runtime`)
-**Verdict:** PASS
-**Verifier commit:** `baece8a` (fix(task-0051): verifier fixes)
+## Result: PASS
 
-## Summary
-
-PR #94 implements the public API-key admin runtime endpoints (create, list, revoke) for tenant-scoped `POST/GET/DELETE /v1/organizations/{orgId}/api-keys[/{apiKeyId}]`. The implementation correctly wires api-edge routing, identity-worker handlers, policy-engine authorization, and membership-client SP binding — satisfying the V1 contract established in Task 0050.
-
-Three bugs were found and fixed during verification. All fixes are safe (no new features).
-
-## Bugs Found & Fixed
-
-### 1. List Pagination Cursor Dropped (Correctness)
-**File:** `apps/identity-worker/src/handlers/api-key-admin.ts` (list handler)
-**Issue:** The `successResponse()` helper hardcodes `meta.cursor: null`, so `nextCursor` from the repository was silently dropped. Clients would never see a next page.
-**Fix:** Replaced `successResponse()` with inline `Response.json()` that passes `result.value.nextCursor` into `meta.cursor`.
-
-### 2. Revoke Handler Missing Transaction (Atomicity)
-**File:** `apps/identity-worker/src/handlers/api-key-admin.ts` (revoke handler)
-**Issue:** Revoke + security-event + audit-log were three sequential calls without a transaction wrapper. A failure after revoke but before audit would leave inconsistent state.
-**Fix:** Wrapped all three operations in `executor.transaction()` using the same `doRevoke` pattern as the create handler's `doCreate`.
-
-### 3. Cloudflare Workers Types in Shared tsconfig (Test Breakage)
-**File:** `tests/identity-worker/tsconfig.json`
-**Issue:** PR added `@cloudflare/workers-types` to the shared `types` array, causing `crypto` type conflicts that broke 4 pre-existing tests across identity-worker, api-edge, and policy-engine test suites.
-**Fix:** Reverted from shared types array; added `/// <reference types="@cloudflare/workers-types" />` triple-slash directive only in the test file that needs it.
-
-## Verification Checklist
+## Checks
 
 | Check | Result |
 |-------|--------|
-| api-edge routes (POST/GET/DELETE) wired correctly | PASS |
-| Policy-engine actions registered (api_key:create, api_key:list, api_key:revoke) | PASS |
-| Authorization: owner/admin-only via policy check | PASS |
-| Membership-client SP binding on create | PASS |
-| Security event + audit log on create and revoke | PASS |
-| Pagination (cursor-based, configurable limit) | PASS (after fix) |
-| Revoke transactional atomicity | PASS (after fix) |
-| Contract envelope matches Task 0050 spec | PASS |
-| No secret leakage (key prefix only in list, full key only on create response) | PASS |
-| identity-worker tests: 103/103 | PASS |
-| api-edge tests: 200/200 | PASS |
-| policy-engine tests: 177/177 | PASS |
-| Orun intent validation | PASS |
-| Orun dry-run plan (11 components × 3 envs = 27 jobs) | PASS |
-| CI: 28/28 checks green (run 26558205255) | PASS |
+| PR #94 maps to Task 0051 only | ✅ 17 files, all within PR boundary |
+| Implementer report on PR branch | ✅ Confirmed via git ls-tree |
+| Public route family tenant-scoped only | ✅ POST/GET /v1/organizations/{orgId}/api-keys, DELETE .../api-keys/{apiKeyId} |
+| api-edge forwards to IDENTITY_WORKER | ✅ Correct routing with method validation (405) |
+| Actor headers forwarded, no bearer leak | ✅ x-actor-subject-id/type set, Authorization not forwarded |
+| Idempotency-key/traceparent/x-request-id forwarded | ✅ Via FORWARDED_HEADERS |
+| Policy surface deny-by-default | ✅ organization.api_key.{create,list,revoke} granted to owner/admin; project_admin only with matching projectId |
+| PROJECT_GRANTABLE_ACTIONS distinction | ✅ Separate from PROJECT_SCOPED_ACTIONS |
+| Identity owns credentials, membership owns bindings, policy owns auth | ✅ Proper orchestration across bounded contexts |
+| Create returns raw secret once | ✅ sk_ prefix + hex secret in 201 response only |
+| List never returns raw key material | ✅ Only prefix, metadata, SP summary |
+| Revoke does not expose secrets | ✅ Returns only id/label/prefix/revokedAt |
+| Security events + org audit for create/revoke | ✅ recordSecurityEvent + appendEventWithAudit |
+| Cursor pagination on list | ✅ cursor + limit (max 100, default 20) |
+| Fail-closed on ambiguous state | ✅ 503 on errors, deny-by-default policy |
+| Compensating binding revoke on identity failure | ✅ catch block revokes binding if created |
+| policy-engine-tests | ✅ 177 passed (2 suites) |
+| identity-worker-tests | ✅ 103 passed (5 suites) |
+| api-edge-tests | ✅ 200 passed (6 suites) |
+| Orun validate | ✅ All validation passed |
+| Orun plan --changed | ✅ 27 jobs across 11 components |
+| Orun dry-run | ✅ All jobs simulated successfully |
+| PR CI run 26558427095 | ✅ All 28 checks passed |
+| mergeStateStatus | ✅ CLEAN |
 
-## Architectural Notes (Non-blocking)
+## Issues
 
-- The revoke handler uses `listApiKeysByOrg` with limit 1000 to find a key by ID (no `getApiKeyById` repository method exists). This works but is O(n) in the number of org keys. A future task should add a direct lookup.
+None blocking. One cosmetic note: `org-facade.ts` catch block error message says "Membership service unavailable" even when the failed call was to IDENTITY_WORKER. Non-blocking — no user-facing impact.
 
-## Files Modified by Verifier
+## CI Log Review
 
-1. `apps/identity-worker/src/handlers/api-key-admin.ts` — cursor pagination fix + revoke transaction wrapper
-2. `tests/identity-worker/tsconfig.json` — reverted workers-types from shared types
-3. `tests/identity-worker/src/api-key-admin.test.ts` — added triple-slash reference directive
-4. `ai/reports/task-0051-implementer.md` — added implementer report to PR branch
+CI run 26558427095 — all 28 jobs passed including plan, api-edge-tests, identity-worker-tests, policy-engine-tests, contracts verify, and all worker verify-deploy jobs across dev/stage/prod.
+
+## Secret Handling Review
+
+- Raw API key secret (`sk_` + hex) returned only in create 201 response
+- SHA-256 hash stored in DB, never included in any response
+- Prefix (first 12 chars) stored for display, used in list/revoke responses
+- No bearer tokens, hashes, or secrets in test fixtures, logs, or reports
+
+## Risk Notes
+
+- Compensating binding revoke is best-effort (catch block, no retry). If membership-worker is down during compensation, an orphaned binding may persist. Low risk — binding without a valid API key is inert.
+- `handleListApiKeys` defaults role to "unknown" when SP/binding lookup fails rather than failing the entire list. Acceptable fail-safe for display purposes.
+
+## Spec Proposals
+
+None required.
+
+## Recommended Next Move
+
+Task 0051 complete. Next orchestrator cycle should evaluate the next task in the API-key lifecycle roadmap.
+
+## PR Number
+
+**#94** — https://github.com/sourceplane/multi-tenant-saas/pull/94
+Merge commit: `d74b7f6`
