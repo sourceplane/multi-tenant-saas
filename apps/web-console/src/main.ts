@@ -50,6 +50,38 @@ function btn(text: string, onclick: () => void, className?: string): HTMLElement
   return b;
 }
 
+function loadingIndicator(text = "Loading..."): HTMLElement {
+  const el = h("div", { class: "loading-indicator" },
+    h("span", { class: "loading-dot" }),
+    h("span", { class: "loading-dot" }),
+    h("span", { class: "loading-dot" }),
+    h("span", {}, text),
+  );
+  return el;
+}
+
+function emptyState(icon: string, title: string, desc: string): HTMLElement {
+  return h("div", { class: "empty-state" },
+    h("div", { class: "empty-state-icon" }, icon),
+    h("div", { class: "empty-state-title" }, title),
+    h("div", { class: "empty-state-desc" }, desc),
+  );
+}
+
+function pageHeader(title: string, subtitle: string): HTMLElement {
+  const header = h("div", { class: "page-header" });
+  header.appendChild(h("h2", {}, title));
+  header.appendChild(h("p", { class: "page-subtitle" }, subtitle));
+  return header;
+}
+
+function actionBar(title: string, actionEl?: HTMLElement): HTMLElement {
+  const bar = h("div", { class: "action-bar" });
+  bar.appendChild(h("h3", {}, title));
+  if (actionEl) bar.appendChild(actionEl);
+  return bar;
+}
+
 let sidebarCollapsed = false;
 
 function render(): void {
@@ -317,7 +349,7 @@ async function handleLogout(): Promise<void> {
 
 function renderOrgSelectView(): HTMLElement {
   const section = h("section", { class: "panel" });
-  section.appendChild(h("h2", {}, "Organizations"));
+  section.appendChild(pageHeader("Organizations", "Select or create an organization to get started."));
 
   const list = h("div", { id: "org-list", class: "mt" });
   section.appendChild(list);
@@ -342,7 +374,7 @@ function renderOrgSelectView(): HTMLElement {
 async function loadOrgs(): Promise<void> {
   const container = $("org-list");
   clear(container);
-  container.appendChild(h("p", { class: "muted" }, "Loading..."));
+  container.appendChild(loadingIndicator("Loading organizations..."));
 
   const result = await state.client.listOrganizations();
   clear(container);
@@ -354,7 +386,7 @@ async function loadOrgs(): Promise<void> {
 
   const orgs = result.data;
   if (!orgs.length) {
-    container.appendChild(h("p", { class: "muted" }, "No organizations. Create one below."));
+    container.appendChild(emptyState("🏢", "No organizations", "Create your first organization below to get started."));
     return;
   }
 
@@ -455,10 +487,10 @@ function renderTab(tab: string): void {
 // --- Members Tab ---
 
 async function renderMembersTab(container: HTMLElement): Promise<void> {
-  container.appendChild(h("h3", {}, "Members"));
+  container.appendChild(actionBar("Team Members"));
   const list = h("div", { id: "members-list" });
   container.appendChild(list);
-  list.appendChild(h("p", { class: "muted" }, "Loading..."));
+  list.appendChild(loadingIndicator("Loading members..."));
 
   const result = await state.client.listMembers(state.orgId!);
   clear(list);
@@ -469,10 +501,19 @@ async function renderMembersTab(container: HTMLElement): Promise<void> {
   }
 
   for (const member of result.data) {
-    const row = h("div", { class: "list-item" });
+    const row = h("div", { class: "member-row" });
+    const email = (member as any).email ?? member.subjectId;
     const roles = member.roles?.map((r) => r.role).join(", ") ?? "unknown";
-    row.appendChild(h("span", {}, `${(member as any).email ?? member.subjectId} — ${roles}`));
-    row.appendChild(h("small", { class: "muted" }, ` (${member.id})`));
+    const initials = email.charAt(0).toUpperCase();
+
+    const info = h("div", { class: "member-info" });
+    info.appendChild(h("div", { class: "member-avatar" }, initials));
+    const details = h("div", { class: "member-details" });
+    details.appendChild(h("span", { class: "member-name" }, email));
+    details.appendChild(h("span", { class: "member-meta" }, `ID: ${member.id}`));
+    info.appendChild(details);
+    info.appendChild(h("span", { class: "member-role" }, roles));
+    row.appendChild(info);
 
     const actions = h("span", { class: "actions" });
     actions.appendChild(btn("Change Role", () => promptRoleChange(member.id), "btn-xs"));
@@ -482,7 +523,7 @@ async function renderMembersTab(container: HTMLElement): Promise<void> {
   }
 
   if (!result.data.length) {
-    list.appendChild(h("p", { class: "muted" }, "No members found."));
+    list.appendChild(emptyState("👥", "No members yet", "Members of this organization will appear here."));
   }
 }
 
@@ -514,9 +555,11 @@ async function handleRemoveMember(memberId: string): Promise<void> {
 // --- Invitations Tab ---
 
 async function renderInvitationsTab(container: HTMLElement): Promise<void> {
-  container.appendChild(h("h3", {}, "Invitations"));
+  container.appendChild(actionBar("Invitations"));
 
-  const createDiv = h("div", { class: "form-group" });
+  const createDiv = h("div", { class: "panel-alt" });
+  createDiv.appendChild(h("h4", {}, "Send Invitation"));
+  const formRow = h("div", { class: "form-group" });
   const emailInput = document.createElement("input");
   emailInput.placeholder = "Email to invite";
   emailInput.id = "invite-email";
@@ -528,25 +571,28 @@ async function renderInvitationsTab(container: HTMLElement): Promise<void> {
     opt.textContent = r;
     roleSelect.appendChild(opt);
   }
-  createDiv.appendChild(emailInput);
-  createDiv.appendChild(roleSelect);
-  createDiv.appendChild(btn("Send Invite", handleCreateInvitation, "btn-primary"));
+  formRow.appendChild(emailInput);
+  formRow.appendChild(roleSelect);
+  formRow.appendChild(btn("Send Invite", handleCreateInvitation, "btn-primary"));
+  createDiv.appendChild(formRow);
   createDiv.appendChild(h("div", { id: "invite-result" }));
   container.appendChild(createDiv);
 
-  const acceptDiv = h("div", { class: "form-group mt" });
+  const acceptDiv = h("div", { class: "panel-alt mt" });
   acceptDiv.appendChild(h("h4", {}, "Accept Invitation"));
+  const acceptRow = h("div", { class: "form-group" });
   const tokenInput = document.createElement("input");
   tokenInput.placeholder = "Invitation token";
   tokenInput.id = "accept-token";
-  acceptDiv.appendChild(tokenInput);
-  acceptDiv.appendChild(btn("Accept", handleAcceptInvitation, "btn-secondary"));
+  acceptRow.appendChild(tokenInput);
+  acceptRow.appendChild(btn("Accept", handleAcceptInvitation, "btn-secondary"));
+  acceptDiv.appendChild(acceptRow);
   acceptDiv.appendChild(h("div", { id: "accept-result" }));
   container.appendChild(acceptDiv);
 
   const list = h("div", { id: "invitations-list", class: "mt" });
   container.appendChild(list);
-  list.appendChild(h("p", { class: "muted" }, "Loading..."));
+  list.appendChild(loadingIndicator("Loading invitations..."));
 
   const result = await state.client.listInvitations(state.orgId!);
   clear(list);
@@ -557,10 +603,15 @@ async function renderInvitationsTab(container: HTMLElement): Promise<void> {
   }
 
   for (const inv of result.data) {
-    const row = h("div", { class: "list-item" },
-      h("span", {}, `${inv.email} — ${inv.status} (${inv.role})`),
-      h("small", { class: "muted" }, ` expires: ${inv.expiresAt}`),
-    );
+    const row = h("div", { class: "invitation-row" });
+    const info = h("div", { class: "invitation-info" });
+    info.appendChild(h("span", { class: "invitation-email" }, inv.email));
+    info.appendChild(h("span", { class: "invitation-meta" }, `Role: ${inv.role} · Expires: ${formatTimestamp(inv.expiresAt)}`));
+    row.appendChild(info);
+
+    const statusCls = `badge badge-${inv.status}`;
+    row.appendChild(h("span", { class: statusCls }, inv.status.toUpperCase()));
+
     if (inv.status === "pending") {
       row.appendChild(btn("Revoke", () => handleRevokeInvitation(inv.id), "btn-xs btn-danger"));
     }
@@ -568,7 +619,7 @@ async function renderInvitationsTab(container: HTMLElement): Promise<void> {
   }
 
   if (!result.data.length) {
-    list.appendChild(h("p", { class: "muted" }, "No invitations."));
+    list.appendChild(emptyState("✉️", "No invitations", "Send invitations above to add members."));
   }
 }
 
@@ -623,29 +674,34 @@ async function handleAcceptInvitation(): Promise<void> {
 // --- Projects Tab ---
 
 async function renderProjectsTab(container: HTMLElement): Promise<void> {
-  container.appendChild(h("h3", {}, "Projects"));
-
   if (state.projectId) {
     await renderProjectDetail(container);
     return;
   }
 
-  const createDiv = h("div", { class: "form-group" });
+  container.appendChild(actionBar("Projects", btn("Create Project", () => {
+    const createDiv = document.getElementById("create-project-form");
+    if (createDiv) createDiv.style.display = createDiv.style.display === "none" ? "block" : "none";
+  }, "btn-primary btn-sm")));
+
+  const createDiv = h("div", { id: "create-project-form", class: "panel-alt", style: "display:none" });
+  const formRow = h("div", { class: "form-group" });
   const nameInput = document.createElement("input");
   nameInput.placeholder = "New project name";
   nameInput.id = "new-project-name";
   const slugInput = document.createElement("input");
   slugInput.placeholder = "Slug (optional)";
   slugInput.id = "new-project-slug";
-  createDiv.appendChild(nameInput);
-  createDiv.appendChild(slugInput);
-  createDiv.appendChild(btn("Create Project", handleCreateProject, "btn-primary"));
+  formRow.appendChild(nameInput);
+  formRow.appendChild(slugInput);
+  formRow.appendChild(btn("Create", handleCreateProject, "btn-primary"));
+  createDiv.appendChild(formRow);
   createDiv.appendChild(h("div", { id: "create-project-result" }));
   container.appendChild(createDiv);
 
   const list = h("div", { id: "projects-list", class: "mt" });
   container.appendChild(list);
-  list.appendChild(h("p", { class: "muted" }, "Loading..."));
+  list.appendChild(loadingIndicator("Loading projects..."));
 
   const result = await state.client.listProjects(state.orgId!);
   clear(list);
@@ -656,10 +712,14 @@ async function renderProjectsTab(container: HTMLElement): Promise<void> {
   }
 
   for (const proj of result.data) {
-    const row = h("div", { class: "list-item" },
-      h("span", {}, `${proj.name} `),
-      h("small", { class: "muted" }, `(${proj.id}) — ${proj.status}`),
-    );
+    const row = h("div", { class: "project-card" });
+    const info = h("div", { class: "project-info" });
+    info.appendChild(h("span", { class: "project-name" }, proj.name));
+    info.appendChild(h("span", { class: "project-meta" }, `ID: ${proj.id}`));
+    row.appendChild(info);
+
+    row.appendChild(h("span", { class: `badge badge-${proj.status}` }, proj.status.toUpperCase()));
+
     const actions = h("span", { class: "actions" });
     actions.appendChild(btn("Select", () => {
       state = selectProject(state, proj.id, proj.name);
@@ -673,7 +733,7 @@ async function renderProjectsTab(container: HTMLElement): Promise<void> {
   }
 
   if (!result.data.length) {
-    list.appendChild(h("p", { class: "muted" }, "No projects. Create one above."));
+    list.appendChild(emptyState("📁", "No projects", "Create your first project to get started."));
   }
 }
 
@@ -701,7 +761,7 @@ async function renderProjectDetail(container: HTMLElement): Promise<void> {
 
   const list = h("div", { id: "envs-list", class: "mt" });
   container.appendChild(list);
-  list.appendChild(h("p", { class: "muted" }, "Loading..."));
+  list.appendChild(loadingIndicator("Loading environments..."));
 
   const result = await state.client.listEnvironments(state.orgId!, state.projectId!);
   clear(list);
@@ -723,7 +783,7 @@ async function renderProjectDetail(container: HTMLElement): Promise<void> {
   }
 
   if (!result.data.length) {
-    list.appendChild(h("p", { class: "muted" }, "No environments. Create one above."));
+    list.appendChild(emptyState("🌍", "No environments", "Create an environment above to get started."));
   }
 }
 
@@ -789,8 +849,8 @@ let apiKeysCursor: string | null = null;
 let apiKeysCreatedSecret: { label: string; secret: string; prefix: string } | null = null;
 
 async function renderApiKeysTab(container: HTMLElement): Promise<void> {
-  container.appendChild(h("h3", {}, "API Keys"));
-  container.appendChild(h("p", { class: "muted" }, "Organization-scoped API key administration. Keys authenticate service principals via the public API."));
+  container.appendChild(actionBar("API Keys"));
+  container.appendChild(h("p", { class: "page-subtitle" }, "Organization-scoped API key administration. Keys authenticate service principals via the public API."));
 
   // Show one-time secret if just created
   if (apiKeysCreatedSecret) {
@@ -955,7 +1015,7 @@ async function loadApiKeys(cursor?: string): Promise<void> {
   }
 
   if (!result.data.length && !cursor) {
-    container.appendChild(h("p", { class: "muted" }, "No API keys. Create one above."));
+    container.appendChild(emptyState("🔑", "No API keys", "Create an API key above to authenticate service principals."));
   }
 
   apiKeysCursor = result.meta.cursor;
@@ -979,7 +1039,7 @@ async function handleRevokeApiKey(apiKeyId: string, label: string): Promise<void
 // --- Audit Tab ---
 
 async function renderAuditTab(container: HTMLElement): Promise<void> {
-  container.appendChild(h("h3", {}, "Audit Log"));
+  container.appendChild(actionBar("Audit Log"));
 
   const filterDiv = h("div", { class: "form-group" });
   const catInput = document.createElement("input");
@@ -1000,7 +1060,7 @@ async function loadAudit(cursor?: string): Promise<void> {
   const container = document.getElementById("audit-list");
   if (!container) return;
   if (!cursor) clear(container);
-  container.appendChild(h("p", { class: "muted" }, "Loading..."));
+  container.appendChild(loadingIndicator("Loading audit log..."));
 
   const categoryVal = (document.getElementById("audit-category") as HTMLInputElement)?.value.trim();
   const opts: { category?: string; cursor?: string } = {};
@@ -1016,20 +1076,37 @@ async function loadAudit(cursor?: string): Promise<void> {
     return;
   }
 
-  for (const entry of result.data) {
-    const row = h("div", { class: "list-item audit-entry" },
-      h("span", { class: "audit-action" }, entry.eventType),
-      h("span", {}, ` — ${entry.actorId}`),
-      h("small", { class: "muted" }, ` ${entry.occurredAt}`),
+  // Build table if first page
+  let tbody = container.querySelector("tbody") as HTMLTableSectionElement | null;
+  if (!tbody) {
+    const table = h("table", { class: "audit-table" });
+    const thead = h("thead", {});
+    const headRow = h("tr", {},
+      h("th", {}, "Event"),
+      h("th", {}, "Actor"),
+      h("th", {}, "Subject"),
+      h("th", {}, "Time"),
     );
-    if (entry.subject) {
-      row.appendChild(h("small", { class: "muted" }, ` [${entry.subject.kind}:${entry.subject.id}]`));
-    }
-    container.appendChild(row);
+    thead.appendChild(headRow);
+    table.appendChild(thead);
+    tbody = document.createElement("tbody");
+    table.appendChild(tbody);
+    container.appendChild(table);
+  }
+
+  for (const entry of result.data) {
+    const subjectText = entry.subject ? `${entry.subject.kind}:${entry.subject.id}` : "—";
+    const tr = h("tr", {},
+      h("td", {}, h("span", { class: "audit-action" }, entry.eventType)),
+      h("td", {}, entry.actorId),
+      h("td", { class: "muted" }, subjectText),
+      h("td", { class: "muted" }, formatTimestamp(entry.occurredAt)),
+    );
+    tbody.appendChild(tr);
   }
 
   if (!result.data.length && !cursor) {
-    container.appendChild(h("p", { class: "muted" }, "No audit entries."));
+    container.appendChild(emptyState("📋", "No audit entries", "Activity for this organization will appear here."));
   }
 
   auditCursor = result.meta.cursor;
@@ -1051,8 +1128,8 @@ let configEnvName: string | null = null;
 let configEnvs: { id: string; name: string }[] = [];
 
 async function renderConfigTab(container: HTMLElement): Promise<void> {
-  container.appendChild(h("h3", {}, "Config"));
-  container.appendChild(h("p", { class: "muted" }, "Manage settings and feature flags. Secret metadata is read-only."));
+  container.appendChild(actionBar("Config"));
+  container.appendChild(h("p", { class: "page-subtitle" }, "Manage settings and feature flags. Secret metadata is read-only."));
 
   // Resource sub-tabs
   const resourceNav = h("div", { class: "config-resource-nav" });
