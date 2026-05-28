@@ -57,5 +57,14 @@ export const manifest: MigrationManifest = {
       description:
         "Identity-owned security-event source facts — pre-organization user activity log",
     },
+    {
+      id: "060_identity_api_keys",
+      context: "identity",
+      path: "060_identity_api_keys/up.sql",
+      checksum:
+        "834e71e40f729cdf1cd4db32a4071b62c09fd63c9ea4bbf0c035c15c94ff99a1",
+      description:
+        "Identity-owned service principals and API keys — org-bound automation actors and credential persistence",
+    },
   ],
 };
