@@ -10,6 +10,7 @@ import type { Scope, Setting, FeatureFlag } from "@saas/db/config";
 // ── Constants ──────────────────────────────────────────────
 const TEST_ORG_UUID = "11111111-1111-1111-1111-111111111111";
 const TEST_PROJECT_UUID = "22222222-2222-2222-2222-222222222222";
+const TEST_ENV_UUID = "44444444-4444-4444-4444-444444444444";
 const TEST_USER_ID = "usr_aabbccdd";
 const FIXED_NOW = new Date("2026-05-01T00:00:00Z");
 const FIXED_ID = "deadbeef01234567";
@@ -150,14 +151,14 @@ describe("handleUpdateSetting", () => {
   const SETTING_UUID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 
   it("returns 400 for invalid JSON", async () => {
-    const res = await handleUpdateSetting(makeBadRequest(), FAKE_ENV, "req1", ACTOR, TEST_ORG_UUID, SETTING_UUID, {
+    const res = await handleUpdateSetting(makeBadRequest(), FAKE_ENV, "req1", ACTOR, ORG_SCOPE, SETTING_UUID, {
       repo: { getSetting: (() => {}) as any, updateSetting: (() => {}) as any },
     });
     expect(res.status).toBe(400);
   });
 
   it("returns validation error when no fields provided", async () => {
-    const res = await handleUpdateSetting(makeJsonRequest({}), FAKE_ENV, "req1", ACTOR, TEST_ORG_UUID, SETTING_UUID, {
+    const res = await handleUpdateSetting(makeJsonRequest({}), FAKE_ENV, "req1", ACTOR, ORG_SCOPE, SETTING_UUID, {
       repo: { getSetting: (() => {}) as any, updateSetting: (() => {}) as any },
     });
     expect(res.status).toBe(422);
@@ -168,7 +169,7 @@ describe("handleUpdateSetting", () => {
     const eventsRepo = fakeEventsRepo();
     const res = await handleUpdateSetting(
       makeJsonRequest({ value: 200 }),
-      FAKE_ENV, "req1", ACTOR, TEST_ORG_UUID, SETTING_UUID,
+      FAKE_ENV, "req1", ACTOR, ORG_SCOPE, SETTING_UUID,
       {
         repo: {
           getSetting: (() => Promise.resolve({ ok: true, value: fakeSetting() })) as any,
@@ -188,11 +189,100 @@ describe("handleUpdateSetting", () => {
   it("returns 404 when setting not found", async () => {
     const res = await handleUpdateSetting(
       makeJsonRequest({ value: 200 }),
-      FAKE_ENV, "req1", ACTOR, TEST_ORG_UUID, SETTING_UUID,
+      FAKE_ENV, "req1", ACTOR, ORG_SCOPE, SETTING_UUID,
       {
         repo: {
-          getSetting: (() => Promise.resolve({ ok: true, value: fakeSetting() })) as any,
+          getSetting: (() => Promise.resolve({ ok: false, error: { kind: "not_found" } })) as any,
           updateSetting: (() => Promise.resolve({ ok: false, error: { kind: "not_found" } })) as any,
+        },
+        generateId: () => FIXED_ID,
+        now: () => FIXED_NOW,
+      },
+    );
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 404 when org route targets project-scoped setting", async () => {
+    const projectSetting = fakeSetting({ scopeKind: "project", projectId: TEST_PROJECT_UUID });
+    const res = await handleUpdateSetting(
+      makeJsonRequest({ value: 200 }),
+      FAKE_ENV, "req1", ACTOR, ORG_SCOPE, SETTING_UUID,
+      {
+        repo: {
+          getSetting: (() => Promise.resolve({ ok: true, value: projectSetting })) as any,
+          updateSetting: (() => Promise.resolve({ ok: true, value: projectSetting })) as any,
+        },
+        generateId: () => FIXED_ID,
+        now: () => FIXED_NOW,
+      },
+    );
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 404 when project route targets org-scoped setting", async () => {
+    const orgSetting = fakeSetting();
+    const res = await handleUpdateSetting(
+      makeJsonRequest({ value: 200 }),
+      FAKE_ENV, "req1", ACTOR, PRJ_SCOPE, SETTING_UUID,
+      {
+        repo: {
+          getSetting: (() => Promise.resolve({ ok: true, value: orgSetting })) as any,
+          updateSetting: (() => Promise.resolve({ ok: true, value: orgSetting })) as any,
+        },
+        generateId: () => FIXED_ID,
+        now: () => FIXED_NOW,
+      },
+    );
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 404 when project route has mismatched projectId", async () => {
+    const OTHER_PROJECT = "33333333-3333-3333-3333-333333333333";
+    const projectSetting = fakeSetting({ scopeKind: "project", projectId: OTHER_PROJECT });
+    const res = await handleUpdateSetting(
+      makeJsonRequest({ value: 200 }),
+      FAKE_ENV, "req1", ACTOR, PRJ_SCOPE, SETTING_UUID,
+      {
+        repo: {
+          getSetting: (() => Promise.resolve({ ok: true, value: projectSetting })) as any,
+          updateSetting: (() => Promise.resolve({ ok: true, value: projectSetting })) as any,
+        },
+        generateId: () => FIXED_ID,
+        now: () => FIXED_NOW,
+      },
+    );
+    expect(res.status).toBe(404);
+  });
+
+  it("succeeds when project route matches project-scoped setting", async () => {
+    const projectSetting = fakeSetting({ scopeKind: "project", projectId: TEST_PROJECT_UUID });
+    const eventsRepo = fakeEventsRepo();
+    const res = await handleUpdateSetting(
+      makeJsonRequest({ value: 200 }),
+      FAKE_ENV, "req1", ACTOR, PRJ_SCOPE, SETTING_UUID,
+      {
+        repo: {
+          getSetting: (() => Promise.resolve({ ok: true, value: projectSetting })) as any,
+          updateSetting: (() => Promise.resolve({ ok: true, value: { ...projectSetting, value: 200 } })) as any,
+        },
+        eventsRepo,
+        generateId: () => FIXED_ID,
+        now: () => FIXED_NOW,
+      },
+    );
+    expect(res.status).toBe(200);
+  });
+
+  it("returns 404 when environment route targets project-scoped setting", async () => {
+    const projectSetting = fakeSetting({ scopeKind: "project", projectId: TEST_PROJECT_UUID });
+    const ENV_SCOPE: Scope = { kind: "environment", orgId: TEST_ORG_UUID, projectId: TEST_PROJECT_UUID, environmentId: TEST_ENV_UUID };
+    const res = await handleUpdateSetting(
+      makeJsonRequest({ value: 200 }),
+      FAKE_ENV, "req1", ACTOR, ENV_SCOPE, SETTING_UUID,
+      {
+        repo: {
+          getSetting: (() => Promise.resolve({ ok: true, value: projectSetting })) as any,
+          updateSetting: (() => Promise.resolve({ ok: true, value: projectSetting })) as any,
         },
         generateId: () => FIXED_ID,
         now: () => FIXED_NOW,
@@ -270,21 +360,21 @@ describe("handleUpdateFeatureFlag", () => {
   const FLAG_UUID = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
 
   it("returns 400 for invalid JSON", async () => {
-    const res = await handleUpdateFeatureFlag(makeBadRequest(), FAKE_ENV, "req1", ACTOR, TEST_ORG_UUID, FLAG_UUID, {
+    const res = await handleUpdateFeatureFlag(makeBadRequest(), FAKE_ENV, "req1", ACTOR, ORG_SCOPE, FLAG_UUID, {
       repo: { getFeatureFlag: (() => {}) as any, updateFeatureFlag: (() => {}) as any },
     });
     expect(res.status).toBe(400);
   });
 
   it("returns validation error when no fields provided", async () => {
-    const res = await handleUpdateFeatureFlag(makeJsonRequest({}), FAKE_ENV, "req1", ACTOR, TEST_ORG_UUID, FLAG_UUID, {
+    const res = await handleUpdateFeatureFlag(makeJsonRequest({}), FAKE_ENV, "req1", ACTOR, ORG_SCOPE, FLAG_UUID, {
       repo: { getFeatureFlag: (() => {}) as any, updateFeatureFlag: (() => {}) as any },
     });
     expect(res.status).toBe(422);
   });
 
   it("returns validation error for non-boolean enabled", async () => {
-    const res = await handleUpdateFeatureFlag(makeJsonRequest({ enabled: "nope" }), FAKE_ENV, "req1", ACTOR, TEST_ORG_UUID, FLAG_UUID, {
+    const res = await handleUpdateFeatureFlag(makeJsonRequest({ enabled: "nope" }), FAKE_ENV, "req1", ACTOR, ORG_SCOPE, FLAG_UUID, {
       repo: { getFeatureFlag: (() => {}) as any, updateFeatureFlag: (() => {}) as any },
     });
     expect(res.status).toBe(422);
@@ -295,7 +385,7 @@ describe("handleUpdateFeatureFlag", () => {
     const eventsRepo = fakeEventsRepo();
     const res = await handleUpdateFeatureFlag(
       makeJsonRequest({ enabled: true }),
-      FAKE_ENV, "req1", ACTOR, TEST_ORG_UUID, FLAG_UUID,
+      FAKE_ENV, "req1", ACTOR, ORG_SCOPE, FLAG_UUID,
       {
         repo: {
           getFeatureFlag: (() => Promise.resolve({ ok: true, value: fakeFlag() })) as any,
@@ -315,11 +405,64 @@ describe("handleUpdateFeatureFlag", () => {
   it("returns 404 when flag not found", async () => {
     const res = await handleUpdateFeatureFlag(
       makeJsonRequest({ enabled: true }),
-      FAKE_ENV, "req1", ACTOR, TEST_ORG_UUID, FLAG_UUID,
+      FAKE_ENV, "req1", ACTOR, ORG_SCOPE, FLAG_UUID,
       {
         repo: {
-          getFeatureFlag: (() => Promise.resolve({ ok: true, value: fakeFlag() })) as any,
+          getFeatureFlag: (() => Promise.resolve({ ok: false, error: { kind: "not_found" } })) as any,
           updateFeatureFlag: (() => Promise.resolve({ ok: false, error: { kind: "not_found" } })) as any,
+        },
+        generateId: () => FIXED_ID,
+        now: () => FIXED_NOW,
+      },
+    );
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 404 when org route targets project-scoped flag", async () => {
+    const projectFlag = fakeFlag({ scopeKind: "project", projectId: TEST_PROJECT_UUID });
+    const res = await handleUpdateFeatureFlag(
+      makeJsonRequest({ enabled: true }),
+      FAKE_ENV, "req1", ACTOR, ORG_SCOPE, FLAG_UUID,
+      {
+        repo: {
+          getFeatureFlag: (() => Promise.resolve({ ok: true, value: projectFlag })) as any,
+          updateFeatureFlag: (() => Promise.resolve({ ok: true, value: projectFlag })) as any,
+        },
+        generateId: () => FIXED_ID,
+        now: () => FIXED_NOW,
+      },
+    );
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 404 when project route has mismatched projectId", async () => {
+    const OTHER_PROJECT = "33333333-3333-3333-3333-333333333333";
+    const projectFlag = fakeFlag({ scopeKind: "project", projectId: OTHER_PROJECT });
+    const res = await handleUpdateFeatureFlag(
+      makeJsonRequest({ enabled: true }),
+      FAKE_ENV, "req1", ACTOR, PRJ_SCOPE, FLAG_UUID,
+      {
+        repo: {
+          getFeatureFlag: (() => Promise.resolve({ ok: true, value: projectFlag })) as any,
+          updateFeatureFlag: (() => Promise.resolve({ ok: true, value: projectFlag })) as any,
+        },
+        generateId: () => FIXED_ID,
+        now: () => FIXED_NOW,
+      },
+    );
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 404 when environment route targets org-scoped flag", async () => {
+    const orgFlag = fakeFlag();
+    const ENV_SCOPE: Scope = { kind: "environment", orgId: TEST_ORG_UUID, projectId: TEST_PROJECT_UUID, environmentId: TEST_ENV_UUID };
+    const res = await handleUpdateFeatureFlag(
+      makeJsonRequest({ enabled: true }),
+      FAKE_ENV, "req1", ACTOR, ENV_SCOPE, FLAG_UUID,
+      {
+        repo: {
+          getFeatureFlag: (() => Promise.resolve({ ok: true, value: orgFlag })) as any,
+          updateFeatureFlag: (() => Promise.resolve({ ok: true, value: orgFlag })) as any,
         },
         generateId: () => FIXED_ID,
         now: () => FIXED_NOW,

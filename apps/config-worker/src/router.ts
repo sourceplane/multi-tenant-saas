@@ -142,7 +142,7 @@ function matchRoute(pathname: string): MatchedRoute | null {
 }
 
 interface MatchedItemRoute {
-  orgId: string;
+  scope: Scope;
   itemId: string;
   resource: "settings" | "feature-flags";
 }
@@ -152,34 +152,40 @@ function matchItemRoute(pathname: string): MatchedItemRoute | null {
   let m = pathname.match(ENV_SETTING_ITEM_RE);
   if (m) {
     const orgId = parseOrgPublicId(m[1]!);
+    const projectId = parseProjectPublicId(m[2]!);
+    const environmentId = parseEnvironmentPublicId(m[3]!);
     const itemId = parseSettingPublicId(m[4]!);
-    if (!orgId || !itemId) return null;
-    return { orgId, itemId, resource: "settings" };
+    if (!orgId || !projectId || !environmentId || !itemId) return null;
+    return { scope: { kind: "environment", orgId, projectId, environmentId }, itemId, resource: "settings" };
   }
 
   m = pathname.match(ENV_FLAG_ITEM_RE);
   if (m) {
     const orgId = parseOrgPublicId(m[1]!);
+    const projectId = parseProjectPublicId(m[2]!);
+    const environmentId = parseEnvironmentPublicId(m[3]!);
     const itemId = parseFeatureFlagPublicId(m[4]!);
-    if (!orgId || !itemId) return null;
-    return { orgId, itemId, resource: "feature-flags" };
+    if (!orgId || !projectId || !environmentId || !itemId) return null;
+    return { scope: { kind: "environment", orgId, projectId, environmentId }, itemId, resource: "feature-flags" };
   }
 
   // Project item scope
   m = pathname.match(PRJ_SETTING_ITEM_RE);
   if (m) {
     const orgId = parseOrgPublicId(m[1]!);
+    const projectId = parseProjectPublicId(m[2]!);
     const itemId = parseSettingPublicId(m[3]!);
-    if (!orgId || !itemId) return null;
-    return { orgId, itemId, resource: "settings" };
+    if (!orgId || !projectId || !itemId) return null;
+    return { scope: { kind: "project", orgId, projectId }, itemId, resource: "settings" };
   }
 
   m = pathname.match(PRJ_FLAG_ITEM_RE);
   if (m) {
     const orgId = parseOrgPublicId(m[1]!);
+    const projectId = parseProjectPublicId(m[2]!);
     const itemId = parseFeatureFlagPublicId(m[3]!);
-    if (!orgId || !itemId) return null;
-    return { orgId, itemId, resource: "feature-flags" };
+    if (!orgId || !projectId || !itemId) return null;
+    return { scope: { kind: "project", orgId, projectId }, itemId, resource: "feature-flags" };
   }
 
   // Org item scope
@@ -188,7 +194,7 @@ function matchItemRoute(pathname: string): MatchedItemRoute | null {
     const orgId = parseOrgPublicId(m[1]!);
     const itemId = parseSettingPublicId(m[2]!);
     if (!orgId || !itemId) return null;
-    return { orgId, itemId, resource: "settings" };
+    return { scope: { kind: "organization", orgId }, itemId, resource: "settings" };
   }
 
   m = pathname.match(ORG_FLAG_ITEM_RE);
@@ -196,7 +202,7 @@ function matchItemRoute(pathname: string): MatchedItemRoute | null {
     const orgId = parseOrgPublicId(m[1]!);
     const itemId = parseFeatureFlagPublicId(m[2]!);
     if (!orgId || !itemId) return null;
-    return { orgId, itemId, resource: "feature-flags" };
+    return { scope: { kind: "organization", orgId }, itemId, resource: "feature-flags" };
   }
 
   return null;
@@ -230,9 +236,9 @@ export async function route(request: Request, env: Env): Promise<Response> {
       }
       switch (matchedItem.resource) {
         case "settings":
-          return handleUpdateSetting(request, env, requestId, actor, matchedItem.orgId, matchedItem.itemId);
+          return handleUpdateSetting(request, env, requestId, actor, matchedItem.scope, matchedItem.itemId);
         case "feature-flags":
-          return handleUpdateFeatureFlag(request, env, requestId, actor, matchedItem.orgId, matchedItem.itemId);
+          return handleUpdateFeatureFlag(request, env, requestId, actor, matchedItem.scope, matchedItem.itemId);
       }
     }
 

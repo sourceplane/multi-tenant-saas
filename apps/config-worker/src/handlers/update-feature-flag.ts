@@ -1,6 +1,6 @@
 import type { Env } from "../env.js";
 import type { ActorContext } from "../router.js";
-import type { ConfigRepository } from "@saas/db/config";
+import type { ConfigRepository, Scope } from "@saas/db/config";
 import type { EventsRepository } from "@saas/db/events";
 import { createConfigRepository } from "@saas/db/config";
 import { createEventsRepository } from "@saas/db/events";
@@ -9,6 +9,7 @@ import { fetchAuthorizationContext } from "../membership-client.js";
 import { authorizeViaPolicy } from "../policy-client.js";
 import { errorResponse, successResponse, validationError } from "../http.js";
 import { toPublicFeatureFlag } from "../mappers.js";
+import { scopeMatchesRequested } from "../scope-match.js";
 import type { PolicyResource } from "@saas/contracts/policy";
 
 export interface UpdateFeatureFlagDeps {
@@ -33,10 +34,11 @@ export async function handleUpdateFeatureFlag(
   env: Env,
   requestId: string,
   actor: ActorContext,
-  orgId: string,
+  requestedScope: Scope,
   flagId: string,
   deps?: UpdateFeatureFlagDeps,
 ): Promise<Response> {
+  const orgId = requestedScope.orgId;
   let body: unknown;
   try {
     body = await request.json();
@@ -92,6 +94,11 @@ export async function handleUpdateFeatureFlag(
         const existing = await txRepo.getFeatureFlag(orgId, flagId);
         if (!existing.ok) {
           return { result: existing };
+        }
+
+        // Verify requested route scope matches stored row scope
+        if (!scopeMatchesRequested(existing.value, requestedScope)) {
+          return { result: { ok: false as const, error: { kind: "not_found" as const } } };
         }
 
         const flag = existing.value;
@@ -185,6 +192,20 @@ export async function handleUpdateFeatureFlag(
 
     // Non-transactional path (deps injection for tests)
     if (deps) {
+      // Scope match check: get the existing row and verify route scope matches
+      const existing = await deps.repo.getFeatureFlag(orgId, flagId);
+      if (!existing.ok) {
+        const err = existing.error;
+        if (err.kind === "not_found") {
+          return errorResponse("not_found", "Feature flag not found", 404, requestId);
+        }
+        return errorResponse("internal_error", "Service unavailable", 503, requestId);
+      }
+
+      if (!scopeMatchesRequested(existing.value, requestedScope)) {
+        return errorResponse("not_found", "Feature flag not found", 404, requestId);
+      }
+
       const updateInput2: Record<string, unknown> = {};
       if (enabled !== undefined) updateInput2.enabled = enabled as boolean;
       if (value !== undefined) updateInput2.value = value;
