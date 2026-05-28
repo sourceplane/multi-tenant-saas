@@ -48,10 +48,10 @@ function createSessionFetcher(userId: string): { fetcher: Fetcher; calls: FetchC
     fetch(input: string | Request | URL, init?: RequestInit): Promise<Response> {
       const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
       calls.push({ url, init: init ?? {} });
-      if (url.includes("/v1/auth/session")) {
+      if (url.includes("/v1/auth/resolve")) {
         return Promise.resolve(
           Response.json({
-            data: { session: { id: "ses_abc", expiresAt: "2026-12-01T00:00:00Z", createdAt: "2026-01-01T00:00:00Z" }, user: { id: userId, email: "user@test.com", displayName: "Test" } },
+            data: { actor: { actorType: "user", actorId: userId, email: "user@test.com" }, session: { id: "ses_abc", expiresAt: "2026-12-01T00:00:00Z", createdAt: "2026-01-01T00:00:00Z" }, user: { id: userId, email: "user@test.com", displayName: "Test" } },
             meta: { requestId: "req_inner", cursor: null },
           }),
         );
@@ -88,7 +88,7 @@ describe("api-edge project facade", () => {
     });
 
     it("does not match auth routes", () => {
-      expect(isProjectRoute("/v1/auth/session")).toBe(false);
+      expect(isProjectRoute("/v1/auth/resolve")).toBe(false);
     });
   });
 
@@ -114,7 +114,7 @@ describe("api-edge project facade", () => {
 
       expect(response.status).toBe(201);
       expect(identityCalls).toHaveLength(1);
-      expect(identityCalls[0]!.url).toContain("/v1/auth/session");
+      expect(identityCalls[0]!.url).toContain("/v1/auth/resolve");
       expect(projectsCalls).toHaveLength(1);
       expect(projectsCalls[0]!.url).toContain("/v1/organizations/org_abc123/projects");
       expect(projectsCalls[0]!.init.method).toBe("POST");

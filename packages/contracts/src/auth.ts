@@ -45,6 +45,31 @@ export interface LogoutResponse {
   success: true;
 }
 
+// Actor context returned by bearer resolution.
+// Backward-compatible: user-session flows return actorType "user";
+// API-key flows return actorType "service_principal".
+export interface ActorContext {
+  actorType: "user" | "service_principal";
+  actorId: string;
+  orgId?: string;
+  projectId?: string | null;
+  displayName?: string | null;
+  email?: string | null;
+}
+
+// Extended session response with optional actor context.
+// When `actor` is absent, the caller should infer actorType "user"
+// from the existing `user` field for backward compatibility.
+export interface BearerResolutionResponse {
+  actor: ActorContext;
+  session?: {
+    id: string;
+    expiresAt: string;
+    createdAt: string;
+  };
+  user?: AuthUser;
+}
+
 export interface ApiSuccessEnvelope<T> {
   data: T;
   meta: {

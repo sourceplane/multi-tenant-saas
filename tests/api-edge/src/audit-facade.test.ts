@@ -39,10 +39,10 @@ function createSessionFetcher(userId: string): { fetcher: Fetcher; calls: FetchC
     fetch(input: string | Request | URL, init?: RequestInit): Promise<Response> {
       const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
       calls.push({ url, init: init ?? {} });
-      if (url.includes("/v1/auth/session")) {
+      if (url.includes("/v1/auth/resolve")) {
         return Promise.resolve(
           Response.json({
-            data: { session: { id: "ses_abc" }, user: { id: userId, email: "user@test.com", displayName: "Test" } },
+            data: { actor: { actorType: "user", actorId: userId, email: "user@test.com" }, session: { id: "ses_abc" }, user: { id: userId, email: "user@test.com", displayName: "Test" } },
             meta: { requestId: "req_inner", cursor: null },
           }),
         );
