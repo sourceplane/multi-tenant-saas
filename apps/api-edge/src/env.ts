@@ -5,6 +5,7 @@ export interface Env {
   PROJECTS_WORKER?: Fetcher;
   EVENTS_WORKER?: Fetcher;
   CONFIG_WORKER?: Fetcher;
+  WEBHOOKS_WORKER?: Fetcher;
   ENVIRONMENT: string;
   CONSOLE_CUSTOM_DOMAIN?: string;
 }

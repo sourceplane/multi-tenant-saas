@@ -684,7 +684,7 @@ describe("listEffectivePermissions", () => {
     expect(result.derivedScope.orgId).toBe("org_1");
 
     const allowed = result.permissions.filter((p) => p.allow);
-    expect(allowed.length).toBe(19);
+    expect(allowed.length).toBe(25);
   });
 
   it("returns limited permissions for viewer", () => {
@@ -695,10 +695,12 @@ describe("listEffectivePermissions", () => {
     };
     const result = listEffectivePermissions(input);
     const allowed = result.permissions.filter((p) => p.allow);
-    expect(allowed.length).toBe(2);
     expect(allowed.map((p) => p.action).sort()).toEqual([
+      "organization.config.read",
       "organization.read",
+      "organization.webhook.read",
       "project.list",
+      "project.webhook.read",
     ]);
   });
 

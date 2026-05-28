@@ -8,6 +8,7 @@ import { isOrgRoute, handleOrgRoute } from "./org-facade";
 import { isProjectRoute, handleProjectRoute } from "./project-facade";
 import { isAuditRoute, handleAuditRoute } from "./audit-facade";
 import { isConfigRoute, handleConfigRoute } from "./config-facade";
+import { isWebhooksRoute, handleWebhooksRoute } from "./webhooks-facade";
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -27,6 +28,8 @@ export default {
       response = await handleAuditRoute(request, env, requestId, url.pathname);
     } else if (isConfigRoute(url.pathname)) {
       response = await handleConfigRoute(request, env, requestId, url.pathname);
+    } else if (isWebhooksRoute(url.pathname)) {
+      response = await handleWebhooksRoute(request, env, requestId, url.pathname);
     } else if (isProjectRoute(url.pathname)) {
       response = await handleProjectRoute(request, env, requestId, url.pathname);
     } else if (isOrgRoute(url.pathname)) {
