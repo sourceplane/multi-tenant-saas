@@ -1345,13 +1345,17 @@ Last updated: 2026-05-28
 
 ## Task 0065
 
-|- Agent: Implementer
+|- Agent: Implementer -> Verifier
 |- Prompt: `ai/tasks/task-0065.md`
-|- Status: scoped and ready to begin (2026-05-28)
+|- Verifier prompt: `ai/tasks/task-0065-verifier.md`
+|- Status: implementation PR open; verifier scoped and ready (2026-05-28)
+|- PR: #108 (`impl/task-0065-encrypted-secret-storage`), open
+|- Reports: `ai/reports/task-0065-implementer.md`; verifier report pending
 |- Objective: Add encrypted, write-only secret payload storage for config secrets through config-worker while preserving metadata-only reads and no reveal API.
 |- Scope boundary: config-worker encryption adapter, config repository write-only ciphertext persistence, create/rotate secret handler semantics, safe contract request types, and focused config-worker/api-edge/contracts/db tests. No web-console UI, no reveal/read API, no Terraform/live secret provisioning, no KV/effective config/versioning work.
 |- Acceptance: targeted config-worker/api-edge/contracts/db tests pass; Orun validate/changed-plan/dry-run pass; secret payloads are encrypted before persistence; `ciphertext_envelope` is never exposed through safe read/list/get/public response/event/audit/error paths; missing/invalid encryption key binding fails closed; implementer report committed to the PR with a real PR number.
 |- Expected outcome: Config secrets become real encrypted write-only storage primitives, unlocking later secret management UI and effective config resolution work.
+|- Verifier focus: inspect PR #108 for no plaintext/ciphertext leakage, fail-closed key binding behavior, safe repository projections, metadata-only events/audit/responses, local checks, and GitHub Actions logs before merge.
 
 ## Historical Notes
 

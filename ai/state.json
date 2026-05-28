@@ -1,6 +1,6 @@
 {
   "goal": "Supabase/Postgres-backed multi-organization Orun SaaS control plane",
-  "current_task": "0065",
+  "current_task": "0065-verifier",
   "completed": [
     "0001",
     "0001.1",
@@ -73,12 +73,13 @@
     "0064"
   ],
   "repo_health": "green",
-  "next_focus": "encrypted-secret-payload-storage",
+  "next_focus": "verify-encrypted-secret-payload-storage",
   "last_verified": "2026-05-28T16:30:00Z",
   "waiting_for_input": "false",
-  "task_agent": "ai/tasks/task-0065.md",
+  "task_agent": "ai/tasks/task-0065-verifier.md",
   "notes": [
-    "Task 0064 verified and merged via PR #107 (squash). Secret metadata create/rotate/revoke metadata-only mutations complete.",
-    "Task 0065 scoped as next Implementer task: encrypted write-only secret payload storage for config-worker, preserving metadata-only reads and no reveal API."
+    "Task 0065 implementation PR #108 is open: encrypted write-only config secret payload storage through config-worker.",
+    "Verifier must inspect PR #108 against ai/tasks/task-0065.md and ai/reports/task-0065-implementer.md, run local checks, inspect CI logs, and merge only if local verification and GitHub Actions are green.",
+    "No human input requested; current handoff is ai/tasks/task-0065-verifier.md."
   ]
 }
