@@ -418,28 +418,22 @@ Last updated: 2026-05-28
 
 ## Current Task
 
-Task 0064 is scoped and ready for Implementer.
+Task 0064 Verifier is scoped and ready to verify PR #107.
 
-Objective: add metadata-only secret create, rotate, and revoke runtime for the config bounded context through config-worker and api-edge, without encrypted payload storage or any plaintext reveal/read flow.
+Objective: verify the metadata-only secret create, rotate, and revoke runtime implemented by PR #107 (`impl/task-0064-secret-metadata-mutations`) before merge.
 
-PR boundary:
+PR boundary under verification:
 - Config-worker routing/handlers for `POST .../config/secrets`, `POST .../config/secrets/{secretId}/rotate`, and `DELETE .../config/secrets/{secretId}` at organization, project, and environment scope.
 - api-edge facade forwarding for the same public routes, preserving actor headers and never forwarding raw bearer tokens downstream.
 - Contract/helper additions only as needed for public secret metadata mutation request/response shapes.
 - Tests for metadata-only validation, exact route-scope enforcement, policy denial, fail-closed malformed dependency envelopes, event/audit safety, and api-edge forwarding.
 
-Constraints:
-- Metadata-only: no plaintext secret values, ciphertext envelopes, hashes, or reveal/read flow.
-- Rotate means metadata rotation only using the existing repository version/lastRotatedAt seam.
-- Revoke is soft status change, not hard delete.
-- Event/audit writes must be safe and atomically coupled with metadata mutations in production paths.
+Task 0064 verified PASS and merged via PR #107 (squash merge). 12 files changed, +1694 lines. 24/24 CI checks passed. Secret metadata create/rotate/revoke mutations are live.
 
 Current repo checkpoint:
-- `main` is at `1f26e17` after Task 0063 docs/state follow-up.
-- PR #106 merged at `0ed171c`.
-- Post-merge main CI run `26583005845` completed successfully.
-- No open GitHub PRs were found during orchestration.
+- `origin/main` includes PR #107 squash merge.
+- Tasks 0001–0064 are completed and verified.
 
 ## Next Task
 
-After Task 0064 is implemented, generate a Verifier task for PR #TBD before moving to new feature scope. The verifier must inspect transaction atomicity, exact route-scope enforcement, api-edge no-bearer forwarding, secret-safety invariants, local test results, and PR CI logs before merging.
+Generate the next Implementer task for the config/secrets roadmap. Likely next scope: encrypted secret payload storage/write-only API semantics, secret management UI, or next item from the roadmap — selected after reading updated repo state and specs.
