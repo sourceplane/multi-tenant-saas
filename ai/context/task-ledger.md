@@ -1301,6 +1301,19 @@ Last updated: 2026-05-28
 |- Scope boundary: packages/db metering module + migration, packages/contracts metering types, focused tests; no Worker runtime, routes, billing state, or infrastructure.
 |- Durable outcome: 4 metering tables (usage_records, usage_rollups, quota_definitions, quota_violations) with org-scoped tenancy, idempotent usage ingestion, structured quota checks, and 22 tests proven on main.
 
+## Task 0072
+
+|- Agent: Implementer -> Verifier
+|- Prompt: `ai/tasks/task-0072.md`
+|- Verifier prompt: `ai/tasks/task-0072-verifier.md`
+|- Status: verified PASS, merged (2026-05-28)
+|- Implementation: PR #115 (`impl/task-0072-metering-worker`), merge commit `b4ced6bc`
+|- PR CI run: `26605633952` — 33/33 SUCCESS
+|- Reports: `ai/reports/task-0072-implementer.md`, `ai/reports/task-0072-verifier.md`
+|- Objective: create metering Worker runtime API surface backed by Task 0071 repository/contracts, with api-edge facade and policy-engine authorization.
+|- Scope boundary: apps/metering-worker, api-edge metering facade, policy-engine metering actions, focused tests; no billing, UI, scheduler, Analytics Engine, KV cache.
+|- Durable outcome: 5 metering routes (usage record/batch/summary, quota check, violations list) behind api-edge with fail-closed authorization, idempotency, metadata safety, batch limits, and 25 focused tests proven on main.
+
 ## Historical Notes
 
 - PR #1 split product-specific V2 Git catalog work away from the reusable SaaS

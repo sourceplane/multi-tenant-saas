@@ -425,10 +425,10 @@ Task 0060 Verifier is scoped and ready.
 
 ## Current State
 
-- Task 0071 verified PASS and merged via PR #114 at `f4d3802` (2026-05-28).
-- Metering persistence and contract foundation: `metering` bounded-context schema with 4 tables (usage_records, usage_rollups, quota_definitions, quota_violations), typed `@saas/db/metering` repository, `@saas/contracts` metering types. 22 focused tests.
-- Tasks 0001–0071 are complete and verified.
+- Task 0072 verified PASS and merged via PR #115 at `b4ced6bc` (2026-05-28).
+- Metering Worker runtime: `apps/metering-worker` with 5 routes (usage record, batch, summary, quota check, violations list), api-edge metering facade, policy-engine metering read/write/quota.check actions, 25 focused tests. Uses @saas/db/metering + @saas/contracts/metering.
+- Tasks 0001–0072 are complete and verified.
 
 ## Next Task
 
-- Next orchestrator cycle should evaluate the next task per roadmap. Candidates include metering Worker runtime, billing persistence foundation, or other roadmap priorities.
+- Next orchestrator cycle should evaluate the next task per roadmap. Candidates include rollup scheduling, billing persistence foundation, Analytics Engine ingestion, or other roadmap priorities.
