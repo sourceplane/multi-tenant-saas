@@ -112,6 +112,8 @@ export const ORGANIZATION_ACTIONS = [
   "audit.read",
   "billing.read",
   "billing.manage",
+  "organization.config.read",
+  "project.config.read",
 ] as const;
 
 export type OrganizationAction = (typeof ORGANIZATION_ACTIONS)[number];

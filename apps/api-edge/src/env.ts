@@ -4,6 +4,7 @@ export interface Env {
   MEMBERSHIP_WORKER?: Fetcher;
   PROJECTS_WORKER?: Fetcher;
   EVENTS_WORKER?: Fetcher;
+  CONFIG_WORKER?: Fetcher;
   ENVIRONMENT: string;
   CONSOLE_CUSTOM_DOMAIN?: string;
 }

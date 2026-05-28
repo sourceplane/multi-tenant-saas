@@ -42,6 +42,8 @@ const ORG_ROLE_PERMISSIONS: Record<OrganizationRole, readonly string[]> = {
     "audit.read",
     "billing.read",
     "billing.manage",
+    "organization.config.read",
+    "project.config.read",
   ],
   admin: [
     "organization.read",
@@ -68,6 +70,8 @@ const ORG_ROLE_PERMISSIONS: Record<OrganizationRole, readonly string[]> = {
     "environment.update",
     "environment.delete",
     "audit.read",
+    "organization.config.read",
+    "project.config.read",
   ],
   builder: [
     "organization.read",
@@ -78,12 +82,16 @@ const ORG_ROLE_PERMISSIONS: Record<OrganizationRole, readonly string[]> = {
     "environment.create",
     "environment.read",
     "environment.update",
+    "organization.config.read",
+    "project.config.read",
   ],
   viewer: [
     "organization.read",
     "project.list",
     "project.read",
     "environment.read",
+    "organization.config.read",
+    "project.config.read",
   ],
   billing_admin: [
     "organization.read",
@@ -104,6 +112,7 @@ const PROJECT_ROLE_PERMISSIONS: Record<ProjectRole, readonly string[]> = {
     "organization.api_key.create",
     "organization.api_key.list",
     "organization.api_key.revoke",
+    "project.config.read",
   ],
   project_builder: [
     "project.read",
@@ -111,10 +120,12 @@ const PROJECT_ROLE_PERMISSIONS: Record<ProjectRole, readonly string[]> = {
     "environment.create",
     "environment.read",
     "environment.update",
+    "project.config.read",
   ],
   project_viewer: [
     "project.read",
     "environment.read",
+    "project.config.read",
   ],
 };
 
@@ -140,6 +151,7 @@ const PROJECT_SCOPED_ACTIONS: ReadonlySet<string> = new Set([
   "environment.read",
   "environment.update",
   "environment.delete",
+  "project.config.read",
 ]);
 
 // Actions that project roles can authorize when a projectId narrows the request.
@@ -178,6 +190,8 @@ const ALL_KNOWN_ACTIONS: ReadonlySet<string> = new Set([
   "audit.read",
   "billing.read",
   "billing.manage",
+  "organization.config.read",
+  "project.config.read",
 ]);
 
 function isOrgRole(role: string): role is OrganizationRole {

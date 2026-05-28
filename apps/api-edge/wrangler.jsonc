@@ -42,6 +42,10 @@
         {
           "binding": "EVENTS_WORKER",
           "service": "events-worker-stage"
+        },
+        {
+          "binding": "CONFIG_WORKER",
+          "service": "config-worker-stage"
         }
       ]
     },
@@ -72,6 +76,10 @@
         {
           "binding": "EVENTS_WORKER",
           "service": "events-worker-prod"
+        },
+        {
+          "binding": "CONFIG_WORKER",
+          "service": "config-worker-prod"
         }
       ]
     }
