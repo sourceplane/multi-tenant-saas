@@ -6,6 +6,7 @@ export interface Env {
   EVENTS_WORKER?: Fetcher;
   CONFIG_WORKER?: Fetcher;
   WEBHOOKS_WORKER?: Fetcher;
+  METERING_WORKER?: Fetcher;
   ENVIRONMENT: string;
   CONSOLE_CUSTOM_DOMAIN?: string;
 }

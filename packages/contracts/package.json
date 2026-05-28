@@ -17,7 +17,8 @@
     "./api-keys": "./src/api-keys.ts",
     "./service-principal": "./src/service-principal.ts",
     "./config": "./src/config.ts",
-    "./webhooks": "./src/webhooks.ts"
+    "./webhooks": "./src/webhooks.ts",
+    "./metering": "./src/metering.ts"
   },
   "scripts": {
     "build": "tsc --project tsconfig.build.json",
