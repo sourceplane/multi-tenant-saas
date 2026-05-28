@@ -1,3 +1,4 @@
+/// <reference types="@cloudflare/workers-types" />
 import { createFakeRepository } from "./helpers/fake-repository";
 import crypto from "node:crypto";
 

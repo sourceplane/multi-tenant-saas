@@ -475,9 +475,17 @@ export async function handleListApiKeys(
       };
     }));
 
-    return successResponse({
-      apiKeys: enriched,
-    }, requestId);
+    const nextCursor = result.value.nextCursor
+      ? encodeURIComponent(JSON.stringify(result.value.nextCursor))
+      : null;
+
+    return Response.json(
+      {
+        data: { apiKeys: enriched },
+        meta: { requestId, cursor: nextCursor },
+      },
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
   } catch {
     return errorResponse("internal_error", "Service unavailable", 503, requestId);
   } finally {
@@ -540,72 +548,89 @@ export async function handleRevokeApiKey(
     const policyResult = await authorizeViaPolicy(env.POLICY_WORKER, actor.subjectId, actor.subjectType, "organization.api_key.revoke", policyResource, contextResult.memberships, requestId);
     if (!policyResult.allow) return errorResponse("not_found", "Not found", 404, requestId);
 
-    // Revoke in transaction
-    const eventsRepo = deps?.eventsRepo ?? createEventsRepository(executor!);
+    // Revoke in transaction — revoke + security event + audit must be atomic
     const now = new Date();
 
-    const revokeResult = await identityRepo.revokeApiKey(apiKeyId, actor.subjectId, now);
-    if (!revokeResult.ok) return errorResponse("internal_error", "Service unavailable", 503, requestId);
+    const doRevoke = async (idRepo: IdentityRepository, evRepo: EventsRepository) => {
+      const revokeResult = await idRepo.revokeApiKey(apiKeyId, actor.subjectId, now);
+      if (!revokeResult.ok) throw new Error("revoke_failed");
 
-    // Record identity security event
-    await identityRepo.recordSecurityEvent({
-      id: crypto.randomUUID(),
-      eventType: "api_key.revoked",
-      outcome: "success",
-      userId: actor.subjectType === "user" ? actor.subjectId : null,
-      sessionId: null,
-      challengeId: null,
-      requestId,
-      correlationId: null,
-      ip: null,
-      userAgent: null,
-      occurredAt: now,
-      metadata: {
-        apiKeyId,
-        orgId,
-        label: apiKey.label,
-        prefix: apiKey.keyPrefix,
-      },
-      redactPaths: [],
-    });
-
-    // Write org-scoped audit/event copy
-    await eventsRepo.appendEventWithAudit({
-      event: {
+      // Record identity security event
+      const secResult = await idRepo.recordSecurityEvent({
         id: crypto.randomUUID(),
-        type: "api_key.revoked",
-        version: 1,
-        source: "identity-worker",
-        occurredAt: now,
-        actorType: actor.subjectType,
-        actorId: actor.subjectId,
-        orgId,
-        projectId,
-        subjectKind: "api_key",
-        subjectId: apiKeyId,
-        subjectName: apiKey.label,
+        eventType: "api_key.revoked",
+        outcome: "success",
+        userId: actor.subjectType === "user" ? actor.subjectId : null,
+        sessionId: null,
+        challengeId: null,
         requestId,
-        payload: {
+        correlationId: null,
+        ip: null,
+        userAgent: null,
+        occurredAt: now,
+        metadata: {
           apiKeyId,
           orgId,
           label: apiKey.label,
           prefix: apiKey.keyPrefix,
         },
-      },
-      audit: {
-        id: crypto.randomUUID(),
-        category: "api_keys",
-        description: `Revoked API key "${apiKey.label}"`,
-        projectId,
-      },
-    });
+        redactPaths: [],
+      });
+      if (!secResult.ok) throw new Error("security_event_failed");
+
+      // Write org-scoped audit/event copy
+      const eventResult = await evRepo.appendEventWithAudit({
+        event: {
+          id: crypto.randomUUID(),
+          type: "api_key.revoked",
+          version: 1,
+          source: "identity-worker",
+          occurredAt: now,
+          actorType: actor.subjectType,
+          actorId: actor.subjectId,
+          orgId,
+          projectId,
+          subjectKind: "api_key",
+          subjectId: apiKeyId,
+          subjectName: apiKey.label,
+          requestId,
+          payload: {
+            apiKeyId,
+            orgId,
+            label: apiKey.label,
+            prefix: apiKey.keyPrefix,
+          },
+        },
+        audit: {
+          id: crypto.randomUUID(),
+          category: "api_keys",
+          description: `Revoked API key "${apiKey.label}"`,
+          projectId,
+        },
+      });
+      if (!eventResult.ok) throw new Error("event_append_failed");
+
+      return revokeResult.value;
+    };
+
+    let revokedKey: import("@saas/db/identity").ApiKey;
+
+    if (deps?.identityRepo && deps?.eventsRepo) {
+      revokedKey = await doRevoke(deps.identityRepo, deps.eventsRepo);
+    } else {
+      revokedKey = await executor!.transaction(async (txExecutor) => {
+        const txIdentityRepo = createIdentityRepository(txExecutor);
+        const txEventsRepo = createEventsRepository(txExecutor);
+        return doRevoke(txIdentityRepo, txEventsRepo);
+      });
+    }
 
     return successResponse({
       apiKey: {
-        id: revokeResult.value.id,
-        label: revokeResult.value.label,
-        prefix: revokeResult.value.keyPrefix,
-        revokedAt: revokeResult.value.revokedAt ? revokeResult.value.revokedAt.toISOString() : now.toISOString(),
+        id: revokedKey.id,
+        label: revokedKey.label,
+        prefix: revokedKey.keyPrefix,
+        revokedAt: revokedKey.revokedAt ? revokedKey.revokedAt.toISOString() : now.toISOString(),
       },
     }, requestId);
   } catch {
