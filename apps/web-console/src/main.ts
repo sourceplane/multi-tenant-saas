@@ -318,7 +318,7 @@ function renderWorkspaceView(): HTMLElement {
   const container = h("div", { class: "workspace" });
 
   const nav = h("nav", { class: "workspace-nav" });
-  const tabs = ["Members", "Invitations", "Projects", "Audit"];
+  const tabs = ["Members", "Invitations", "Projects", "API Keys", "Audit"];
   const activeTab = getActiveTab();
 
   nav.appendChild(btn("\u2190 Orgs", () => {
@@ -331,8 +331,9 @@ function renderWorkspaceView(): HTMLElement {
   }, "btn-sm"));
 
   for (const tab of tabs) {
-    const cls = tab.toLowerCase() === activeTab ? "btn-sm btn-active" : "btn-sm";
-    nav.appendChild(btn(tab, () => setTab(tab.toLowerCase()), cls));
+    const tabKey = tab.toLowerCase().replace(/ /g, "-");
+    const cls = tabKey === activeTab ? "btn-sm btn-active" : "btn-sm";
+    nav.appendChild(btn(tab, () => setTab(tabKey), cls));
   }
 
   container.appendChild(nav);
@@ -362,6 +363,7 @@ function renderTab(tab: string): void {
     case "members": renderMembersTab(content); break;
     case "invitations": renderInvitationsTab(content); break;
     case "projects": renderProjectsTab(content); break;
+    case "api-keys": renderApiKeysTab(content); break;
     case "audit": renderAuditTab(content); break;
   }
 }
@@ -695,6 +697,199 @@ async function handleArchiveEnv(envId: string): Promise<void> {
     return;
   }
   renderTab("projects");
+}
+
+// --- API Keys Tab ---
+
+let apiKeysCursor: string | null = null;
+let apiKeysCreatedSecret: { label: string; secret: string; prefix: string } | null = null;
+
+async function renderApiKeysTab(container: HTMLElement): Promise<void> {
+  container.appendChild(h("h3", {}, "API Keys"));
+  container.appendChild(h("p", { class: "muted" }, "Organization-scoped API key administration. Keys authenticate service principals via the public API."));
+
+  // Show one-time secret if just created
+  if (apiKeysCreatedSecret) {
+    const secretBox = h("div", { class: "api-key-secret-box" });
+    secretBox.appendChild(h("h4", {}, `API Key Created: ${apiKeysCreatedSecret.label}`));
+    secretBox.appendChild(h("p", { class: "api-key-secret-warning" }, "Copy this secret now — it will not be shown again."));
+    const secretRow = h("div", { class: "form-group" });
+    const secretInput = document.createElement("input");
+    secretInput.type = "text";
+    secretInput.readOnly = true;
+    secretInput.value = apiKeysCreatedSecret.secret;
+    secretInput.className = "api-key-secret-value";
+    secretRow.appendChild(secretInput);
+    secretRow.appendChild(btn("Copy", () => {
+      navigator.clipboard.writeText(apiKeysCreatedSecret!.secret).then(() => {
+        alert("Secret copied to clipboard.");
+      }).catch(() => {
+        secretInput.select();
+      });
+    }, "btn-sm btn-primary"));
+    secretRow.appendChild(btn("Dismiss", () => {
+      apiKeysCreatedSecret = null;
+      renderTab("api-keys");
+    }, "btn-sm"));
+    secretBox.appendChild(secretRow);
+    container.appendChild(secretBox);
+  }
+
+  // Create form
+  const createDiv = h("div", { class: "panel-alt mt" });
+  createDiv.appendChild(h("h4", {}, "Create API Key"));
+
+  const labelInput = document.createElement("input");
+  labelInput.placeholder = "Label (e.g. CI deploy key)";
+  labelInput.id = "apikey-label";
+
+  const roleSelect = document.createElement("select");
+  roleSelect.id = "apikey-role";
+  for (const r of ["admin", "builder", "viewer", "billing_admin", "project_admin", "project_builder", "project_viewer"]) {
+    const opt = document.createElement("option");
+    opt.value = r;
+    opt.textContent = r;
+    roleSelect.appendChild(opt);
+  }
+
+  const projectInput = document.createElement("input");
+  projectInput.placeholder = "Project ID (required for project_* roles)";
+  projectInput.id = "apikey-project-id";
+
+  const expiresInput = document.createElement("input");
+  expiresInput.type = "datetime-local";
+  expiresInput.id = "apikey-expires";
+
+  const formRow1 = h("div", { class: "form-group" });
+  formRow1.appendChild(labelInput);
+  formRow1.appendChild(roleSelect);
+  createDiv.appendChild(formRow1);
+
+  const formRow2 = h("div", { class: "form-group mt" });
+  formRow2.appendChild(projectInput);
+  formRow2.appendChild(expiresInput);
+  formRow2.appendChild(btn("Create", handleCreateApiKey, "btn-primary"));
+  createDiv.appendChild(formRow2);
+
+  createDiv.appendChild(h("div", { id: "apikey-create-result", class: "mt" }));
+  container.appendChild(createDiv);
+
+  // List
+  const list = h("div", { id: "apikeys-list", class: "mt" });
+  container.appendChild(list);
+  loadApiKeys();
+}
+
+async function handleCreateApiKey(): Promise<void> {
+  const label = (document.getElementById("apikey-label") as HTMLInputElement).value.trim();
+  const role = (document.getElementById("apikey-role") as HTMLSelectElement).value;
+  const projectId = (document.getElementById("apikey-project-id") as HTMLInputElement).value.trim();
+  const expiresRaw = (document.getElementById("apikey-expires") as HTMLInputElement).value;
+
+  if (!label) {
+    alert("Label is required.");
+    return;
+  }
+
+  const container = document.getElementById("apikey-create-result");
+  if (container) { clear(container); }
+
+  const data: Record<string, string> = { label, role };
+  if (projectId) data.projectId = projectId;
+  if (expiresRaw) data.expiresAt = new Date(expiresRaw).toISOString();
+
+  const result = await state.client.createApiKey(state.orgId!, data as any);
+  if (!result.ok) {
+    if (container) showError(result, container);
+    return;
+  }
+
+  // Store one-time secret for display, then refresh
+  apiKeysCreatedSecret = {
+    label: result.data.label,
+    secret: result.data.secret,
+    prefix: result.data.prefix,
+  };
+  renderTab("api-keys");
+}
+
+async function loadApiKeys(cursor?: string): Promise<void> {
+  const container = document.getElementById("apikeys-list");
+  if (!container) return;
+  if (!cursor) {
+    clear(container);
+    apiKeysCursor = null;
+  }
+
+  // Remove existing Load More button
+  const existingBtn = container.querySelector(".apikeys-load-more");
+  if (existingBtn) existingBtn.remove();
+
+  const loadingEl = h("p", { class: "muted" }, "Loading...");
+  container.appendChild(loadingEl);
+
+  const opts: { cursor?: string; limit?: string } = { limit: "20" };
+  if (cursor) opts.cursor = cursor;
+  const result = await state.client.listApiKeys(state.orgId!, opts);
+
+  loadingEl.remove();
+
+  if (!result.ok) {
+    showError(result, container);
+    return;
+  }
+
+  for (const key of result.data) {
+    const isRevoked = !!key.revokedAt;
+    const rowCls = isRevoked ? "list-item apikey-row apikey-revoked" : "list-item apikey-row";
+    const row = h("div", { class: rowCls });
+
+    const info = h("div", { class: "apikey-info" });
+    info.appendChild(h("span", { class: "apikey-label" }, key.label));
+    info.appendChild(h("span", { class: "muted apikey-prefix" }, `${key.prefix}...`));
+
+    const meta: string[] = [];
+    meta.push(`Role: ${key.servicePrincipal.role}`);
+    if (key.servicePrincipal.projectId) meta.push(`Project: ${key.servicePrincipal.projectId}`);
+    meta.push(`Created: ${formatTimestamp(key.createdAt)}`);
+    if (key.expiresAt) meta.push(`Expires: ${formatTimestamp(key.expiresAt)}`);
+    if (key.lastUsedAt) meta.push(`Last used: ${formatTimestamp(key.lastUsedAt)}`);
+    if (key.revokedAt) meta.push(`Revoked: ${formatTimestamp(key.revokedAt)}`);
+    info.appendChild(h("small", { class: "muted apikey-meta" }, meta.join(" · ")));
+
+    row.appendChild(info);
+
+    if (!isRevoked) {
+      const actions = h("span", { class: "actions" });
+      actions.appendChild(btn("Revoke", () => handleRevokeApiKey(key.id, key.label), "btn-xs btn-danger"));
+      row.appendChild(actions);
+    } else {
+      row.appendChild(h("span", { class: "badge badge-revoked" }, "REVOKED"));
+    }
+
+    container.appendChild(row);
+  }
+
+  if (!result.data.length && !cursor) {
+    container.appendChild(h("p", { class: "muted" }, "No API keys. Create one above."));
+  }
+
+  apiKeysCursor = result.meta.cursor;
+  if (apiKeysCursor) {
+    const c = apiKeysCursor;
+    const loadMoreBtn = btn("Load More", () => loadApiKeys(c), "btn-sm mt apikeys-load-more");
+    container.appendChild(loadMoreBtn);
+  }
+}
+
+async function handleRevokeApiKey(apiKeyId: string, label: string): Promise<void> {
+  if (!confirm(`Revoke API key "${label}"? This cannot be undone.`)) return;
+  const result = await state.client.revokeApiKey(state.orgId!, apiKeyId);
+  if (!result.ok) {
+    alert(`Error: ${result.error.code} — ${result.error.message}`);
+    return;
+  }
+  renderTab("api-keys");
 }
 
 // --- Audit Tab ---
