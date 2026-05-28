@@ -11,6 +11,7 @@ import { handleListInvitations } from "./handlers/list-invitations.js";
 import { handleRevokeInvitation } from "./handlers/revoke-invitation.js";
 import { handleAcceptInvitation } from "./handlers/accept-invitation.js";
 import { handleAuthorizationContext } from "./handlers/authorization-context.js";
+import { handleCreateServicePrincipalBinding, handleListServicePrincipalBindings, handleRevokeServicePrincipalBinding } from "./handlers/service-principal-bindings.js";
 import { errorResponse, notFound, methodNotAllowed } from "./http.js";
 import { generateRequestId } from "./ids.js";
 
@@ -40,6 +41,8 @@ const ORG_MEMBER_ID_RE = /^\/v1\/organizations\/([^/]+)\/members\/([^/]+)$/;
 const ORG_INVITATIONS_ACCEPT_RE = /^\/v1\/organizations\/([^/]+)\/invitations\/accept$/;
 const ORG_INVITATIONS_RE = /^\/v1\/organizations\/([^/]+)\/invitations$/;
 const ORG_INVITATION_ID_RE = /^\/v1\/organizations\/([^/]+)\/invitations\/([^/]+)$/;
+const SP_BINDINGS_PATH = "/v1/internal/membership/service-principal-bindings";
+const SP_BINDING_ID_RE = /^\/v1\/internal\/membership\/service-principal-bindings\/([^/]+)$/;
 
 export async function route(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
@@ -53,6 +56,25 @@ export async function route(request: Request, env: Env): Promise<Response> {
     if (url.pathname === "/v1/internal/membership/authorization-context") {
       if (request.method === "POST") {
         return handleAuthorizationContext(request, env, requestId);
+      }
+      return methodNotAllowed(requestId);
+    }
+
+    // Internal service-principal binding routes
+    const spBindingIdMatch = url.pathname.match(SP_BINDING_ID_RE);
+    if (spBindingIdMatch) {
+      if (request.method === "DELETE") {
+        return handleRevokeServicePrincipalBinding(env, requestId, spBindingIdMatch[1]!, url);
+      }
+      return methodNotAllowed(requestId);
+    }
+
+    if (url.pathname === SP_BINDINGS_PATH) {
+      if (request.method === "POST") {
+        return handleCreateServicePrincipalBinding(request, env, requestId);
+      }
+      if (request.method === "GET") {
+        return handleListServicePrincipalBindings(env, requestId, url);
       }
       return methodNotAllowed(requestId);
     }

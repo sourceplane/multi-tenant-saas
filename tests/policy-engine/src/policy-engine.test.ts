@@ -684,7 +684,7 @@ describe("listEffectivePermissions", () => {
     expect(result.derivedScope.orgId).toBe("org_1");
 
     const allowed = result.permissions.filter((p) => p.allow);
-    expect(allowed.length).toBe(13);
+    expect(allowed.length).toBe(16);
   });
 
   it("returns limited permissions for viewer", () => {
@@ -896,4 +896,39 @@ describe("audit.read authorization", () => {
     expect(result.allow).toBe(false);
     expect(result.reason).toBe("no_matching_role");
   });
+});
+
+describe("service-principal binding actions", () => {
+  const spActions = [
+    "organization.service_principal.binding.create",
+    "organization.service_principal.binding.list",
+    "organization.service_principal.binding.revoke",
+  ];
+
+  for (const action of spActions) {
+    it(`owner can ${action}`, () => {
+      const result = authorize(authReq(action, "org_1", [orgFact("owner", "org_1")]));
+      expect(result.allow).toBe(true);
+    });
+
+    it(`admin can ${action}`, () => {
+      const result = authorize(authReq(action, "org_1", [orgFact("admin", "org_1")]));
+      expect(result.allow).toBe(true);
+    });
+
+    it(`builder cannot ${action}`, () => {
+      const result = authorize(authReq(action, "org_1", [orgFact("builder", "org_1")]));
+      expect(result.allow).toBe(false);
+    });
+
+    it(`viewer cannot ${action}`, () => {
+      const result = authorize(authReq(action, "org_1", [orgFact("viewer", "org_1")]));
+      expect(result.allow).toBe(false);
+    });
+
+    it(`billing_admin cannot ${action}`, () => {
+      const result = authorize(authReq(action, "org_1", [orgFact("billing_admin", "org_1")]));
+      expect(result.allow).toBe(false);
+    });
+  }
 });

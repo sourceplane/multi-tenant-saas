@@ -13,7 +13,8 @@
     "./policy": "./src/policy.ts",
     "./projects": "./src/projects.ts",
     "./events": "./src/events.ts",
-    "./security-events": "./src/security-events.ts"
+    "./security-events": "./src/security-events.ts",
+    "./service-principal": "./src/service-principal.ts"
   },
   "scripts": {
     "build": "tsc --project tsconfig.build.json",
