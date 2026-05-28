@@ -1,6 +1,6 @@
 {
   "goal": "Supabase/Postgres-backed multi-organization Orun SaaS control plane",
-  "current_task": null,
+  "current_task": "0063",
   "completed": [
     "0001",
     "0001.1",
@@ -71,12 +71,13 @@
     "0062"
   ],
   "repo_health": "green",
-  "next_focus": "scope-next-task",
+  "next_focus": "web-console-page-polish",
   "last_verified": "2026-05-28T14:45:00Z",
   "waiting_for_input": "false",
-  "task_agent": null,
+  "task_agent": "/ai/tasks/task-0063.md",
   "notes": [
-    "Task 0062 verified PASS and merged via PR #105 at 3200d3c. Web-console now has Figma-inspired app shell with sidebar navigation, topbar context bar, and dark theme token alignment.",
-    "Next candidates: secret metadata mutation/encrypted secret storage, or next roadmap task."
+    "Task 0062 verified PASS and merged via PR #105 at 3200d3c; follow-up docs/state commit b546e77 is on main and main CI run 26580938104 passed.",
+    "Task 0063 is scoped as a frontend presentation-only follow-up: polish existing web-console workspace/account page internals using referance/figma visual cues while preserving public API behavior and secret-safety constraints.",
+    "No open PRs at scoping time; local checkout has unrelated untracked historical ai/ carryover files that must not be staged for Task 0063."
   ]
 }

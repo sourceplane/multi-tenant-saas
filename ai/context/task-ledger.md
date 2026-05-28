@@ -1316,6 +1316,16 @@ Last updated: 2026-05-28
 - Reports: `ai/reports/task-0062-implementer.md`, `ai/reports/task-0062-verifier.md`
 - Durable outcome: Web-console has Figma-inspired app shell with sidebar navigation (collapsible), topbar context bar with user avatar, scrollable content area. CSS tokens aligned with Figma oklch dark theme. Responsive breakpoints for tablet/mobile. All existing workflows preserved. No backend, API, or dependency changes.
 
+## Task 0063
+
+- Agent: Implementer
+- Prompt: `ai/tasks/task-0063.md`
+- Status: scoped and ready to begin (2026-05-28)
+- Objective: Polish the existing web-console workspace/account page internals using `referance/figma/` visual cues, following Task 0062's shell refresh while preserving all live SaaS starter workflows and public API behavior.
+- Scope boundary: frontend presentation only in `apps/web-console` (`src/main.ts`, `src/style.css`, and the implementer report). No backend, contracts, migrations, Terraform, Orun components, packages/dependencies, or API route changes. No React/Tailwind/shadcn migration and no fake Figma product surfaces.
+- Acceptance: `pnpm --filter @saas/web-console typecheck`, `build`, and `lint`; Orun validate/component/changed-plan/dry-run; PR CI green; dynamic values remain safe text/form values; secret metadata remains read-only; API key one-time secret lifecycle remains constrained.
+- Expected outcome: live web-console pages/tabs have consistent Figma-inspired headers, cards, rows, tabs, forms, action bars, and empty/loading/error/success states without altering behavior.
+
 ## Historical Notes
 
 - PR #1 split product-specific V2 Git catalog work away from the reusable SaaS

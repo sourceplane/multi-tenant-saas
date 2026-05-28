@@ -416,11 +416,21 @@ Last updated: 2026-05-28
 - Key durable outcome: Web-console UI shell refreshed with Figma-inspired dark theme. Sidebar navigation with collapsible state, topbar context badges with user avatar, scrollable content area. CSS tokens aligned with Figma oklch-derived palette. Responsive breakpoints for tablet (collapsed sidebar) and mobile (hidden sidebar). All existing workflows preserved. No backend, API, or dependency changes.
 - Reports: `ai/reports/task-0062-implementer.md`, `ai/reports/task-0062-verifier.md`
 
-## Current Task
+## Current Task (0063)
 
-Awaiting next orchestrator cycle.
+Task 0063 is scoped and ready for Implementer.
 
-## Next Candidates
+- Prompt: `ai/tasks/task-0063.md`
+- Agent: Implementer
+- Objective: Polish the existing `apps/web-console` workspace and account page internals using `referance/figma/` as visual/layout reference while preserving all live SaaS starter workflows and public API behavior.
+- PR boundary: frontend presentation only in `apps/web-console` (expected `src/main.ts` and `src/style.css`, plus `ai/reports/task-0063-implementer.md`). No backend, contracts, migrations, Terraform, Orun component, package/dependency, or API route changes.
+- Design references: `referance/figma/src/app/pages/SettingsPage.tsx`, `CatalogPage.tsx`, `ComponentDetailPage.tsx`, `Sidebar.tsx`, `TopBar.tsx`, and `referance/figma/src/styles/theme.css`.
+- Constraints: use Figma for visual/layout cues only; no React/Tailwind/shadcn migration; no fake Catalog/Runs/Deployments/Repositories product surfaces; no secret metadata mutation or reveal; no unsafe HTML rendering; config drafts must not persist to localStorage/sessionStorage.
+- Acceptance: `pnpm --filter @saas/web-console typecheck`, `build`, and `lint`; Orun validate/component/changed-plan/dry-run; PR CI green before reporting complete.
 
-- Secret metadata mutation/encrypted secret storage design.
-- Next roadmap task.
+## Next Task After 0063
+
+- Generate a Task 0063 verifier prompt immediately after the Implementer opens a PR and files `ai/reports/task-0063-implementer.md` with a real PR number.
+- If Task 0063 verifies and merges cleanly, next roadmap candidates are:
+  - secret metadata mutation/encrypted secret storage design/runtime; or
+  - the next starter capability from `specs/product-overview.md` / roadmap, likely notifications, webhooks, metering, or billing depending on dependency readiness.
