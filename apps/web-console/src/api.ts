@@ -15,6 +15,7 @@ import type {
   PublicEnvironment,
 } from "@saas/contracts/projects";
 import type { PublicAuditEntry } from "@saas/contracts/events";
+import type { PublicSecurityEvent } from "@saas/contracts/security-events";
 
 export interface ApiTarget {
   name: string;
@@ -267,5 +268,18 @@ export class ApiClient {
     if ("error" in r) return this.wrapErr(r.error);
     const entries = (r.json as any).entries ?? (r.json as any).auditEntries ?? r.json;
     return this.wrapOk(Array.isArray(entries) ? entries : [], r.meta);
+  }
+
+  // Security Events (user-scoped, no orgId required)
+  async listSecurityEvents(
+    opts?: { cursor?: string; limit?: string },
+  ): Promise<ApiResult<PublicSecurityEvent[]>> {
+    const query: Record<string, string> = {};
+    if (opts?.cursor) query.cursor = opts.cursor;
+    if (opts?.limit) query.limit = opts.limit;
+    const r = await this.raw("GET", "/v1/auth/security-events", undefined, query);
+    if ("error" in r) return this.wrapErr(r.error);
+    const events = (r.json as any).securityEvents ?? r.json;
+    return this.wrapOk(Array.isArray(events) ? events : [], r.meta);
   }
 }

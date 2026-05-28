@@ -12,6 +12,7 @@ import {
 } from "./state";
 
 let state = createState();
+let accountSecurityView = false;
 
 function $(id: string): HTMLElement {
   return document.getElementById(id)!;
@@ -93,6 +94,10 @@ function renderHeader(): HTMLElement {
   }
 
   if (state.authenticated) {
+    right.appendChild(btn("Account Security", () => {
+      accountSecurityView = true;
+      render();
+    }, accountSecurityView ? "btn-sm btn-active" : "btn-sm"));
     right.appendChild(btn("Logout", handleLogout, "btn-sm btn-danger"));
   }
 
@@ -107,6 +112,8 @@ function renderMain(): HTMLElement {
 
   if (!state.authenticated) {
     main.appendChild(renderAuthView());
+  } else if (accountSecurityView) {
+    main.appendChild(renderAccountSecurityView());
   } else if (!state.orgId) {
     main.appendChild(renderOrgSelectView());
   } else {
@@ -225,6 +232,7 @@ async function handleManualToken(): Promise<void> {
 async function handleLogout(): Promise<void> {
   await state.client.logout();
   state = clearAuth(state);
+  accountSecurityView = false;
   render();
 }
 
@@ -750,6 +758,102 @@ async function loadAudit(cursor?: string): Promise<void> {
     const c = auditCursor;
     container.appendChild(btn("Load More", () => loadAudit(c), "btn-sm mt"));
   }
+}
+
+// --- Account Security View (user-scoped) ---
+
+function renderAccountSecurityView(): HTMLElement {
+  const section = h("section", { class: "panel" });
+
+  const header = h("div", { class: "form-group" });
+  header.appendChild(btn("\u2190 Back", () => {
+    accountSecurityView = false;
+    render();
+  }, "btn-sm"));
+  header.appendChild(h("h2", {}, "Account Security Events"));
+  section.appendChild(header);
+
+  section.appendChild(h("p", { class: "muted" }, "Your recent sign-in and session activity. This view is scoped to your account, not an organization."));
+
+  const list = h("div", { id: "security-events-list", class: "mt" });
+  section.appendChild(list);
+  loadSecurityEvents();
+
+  return section;
+}
+
+let securityEventsCursor: string | null = null;
+
+async function loadSecurityEvents(cursor?: string): Promise<void> {
+  const container = document.getElementById("security-events-list");
+  if (!container) return;
+  if (!cursor) {
+    clear(container);
+    securityEventsCursor = null;
+  }
+
+  // Remove any existing "Load More" button before appending loading indicator
+  const existingBtn = container.querySelector(".security-load-more");
+  if (existingBtn) existingBtn.remove();
+
+  const loadingEl = h("p", { class: "muted" }, "Loading...");
+  container.appendChild(loadingEl);
+
+  const opts: { cursor?: string; limit?: string } = { limit: "50" };
+  if (cursor) opts.cursor = cursor;
+  const result = await state.client.listSecurityEvents(opts);
+
+  loadingEl.remove();
+
+  if (!result.ok) {
+    showError(result, container);
+    return;
+  }
+
+  for (const evt of result.data) {
+    const outcomeCls = evt.outcome === "success" ? "security-outcome-success" : "security-outcome-failure";
+    const row = h("div", { class: "list-item security-event" },
+      h("span", { class: "security-event-type" }, evt.eventType),
+      h("span", { class: outcomeCls }, evt.outcome),
+      h("small", { class: "muted" }, formatTimestamp(evt.occurredAt)),
+    );
+
+    // Request context details
+    const details: string[] = [];
+    if (evt.ip) details.push(`IP: ${evt.ip}`);
+    if (evt.userAgent) details.push(`UA: ${truncate(evt.userAgent, 60)}`);
+    if (evt.requestId) details.push(`Req: ${evt.requestId}`);
+    if (evt.correlationId) details.push(`Corr: ${evt.correlationId}`);
+    if (details.length) {
+      row.appendChild(h("small", { class: "muted security-event-details" }, details.join(" · ")));
+    }
+
+    container.appendChild(row);
+  }
+
+  if (!result.data.length && !cursor) {
+    container.appendChild(h("p", { class: "muted" }, "No security events recorded yet."));
+  }
+
+  securityEventsCursor = result.meta.cursor;
+  if (securityEventsCursor) {
+    const c = securityEventsCursor;
+    const loadMoreBtn = btn("Load More", () => loadSecurityEvents(c), "btn-sm mt security-load-more");
+    container.appendChild(loadMoreBtn);
+  }
+}
+
+function formatTimestamp(iso: string): string {
+  try {
+    const d = new Date(iso);
+    return d.toLocaleString();
+  } catch {
+    return iso;
+  }
+}
+
+function truncate(s: string, max: number): string {
+  return s.length > max ? s.slice(0, max) + "\u2026" : s;
 }
 
 // --- Boot ---
