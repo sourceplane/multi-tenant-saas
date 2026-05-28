@@ -36,6 +36,11 @@ import type {
   UpdateFeatureFlagRequest,
   CreateFeatureFlagResponse,
   UpdateFeatureFlagResponse,
+  CreateSecretRequest,
+  RotateSecretRequest,
+  CreateSecretMetadataResponse,
+  RotateSecretMetadataResponse,
+  RevokeSecretMetadataResponse,
 } from "@saas/contracts/config";
 
 export interface ApiTarget {
@@ -464,6 +469,44 @@ export class ApiClient {
     if ("error" in r) return this.wrapErr(r.error);
     const featureFlag = (r.json as any).featureFlag ?? r.json;
     return this.wrapOk({ featureFlag }, r.meta);
+  }
+
+  // Config — Secret Mutations
+  async createSecret(
+    orgId: string,
+    data: CreateSecretRequest,
+    opts?: { projectId?: string; environmentId?: string },
+  ): Promise<ApiResult<CreateSecretMetadataResponse>> {
+    const path = this.configPath(orgId, "secrets", opts);
+    const r = await this.raw("POST", path, data);
+    if ("error" in r) return this.wrapErr(r.error);
+    const secret = (r.json as any).secret ?? r.json;
+    return this.wrapOk({ secret }, r.meta);
+  }
+
+  async rotateSecret(
+    orgId: string,
+    secretId: string,
+    data: RotateSecretRequest,
+    opts?: { projectId?: string; environmentId?: string },
+  ): Promise<ApiResult<RotateSecretMetadataResponse>> {
+    const path = this.configPath(orgId, "secrets", opts, secretId) + "/rotate";
+    const r = await this.raw("POST", path, data);
+    if ("error" in r) return this.wrapErr(r.error);
+    const secret = (r.json as any).secret ?? r.json;
+    return this.wrapOk({ secret }, r.meta);
+  }
+
+  async revokeSecret(
+    orgId: string,
+    secretId: string,
+    opts?: { projectId?: string; environmentId?: string },
+  ): Promise<ApiResult<RevokeSecretMetadataResponse>> {
+    const path = this.configPath(orgId, "secrets", opts, secretId);
+    const r = await this.raw("DELETE", path);
+    if ("error" in r) return this.wrapErr(r.error);
+    const secret = (r.json as any).secret ?? r.json;
+    return this.wrapOk({ secret }, r.meta);
   }
 
   // Config — Secret Metadata
