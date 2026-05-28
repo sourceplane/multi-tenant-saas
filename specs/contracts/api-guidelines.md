@@ -22,7 +22,7 @@ This document defines the public HTTP contract style and the internal service-bo
   - `/v1/organizations/{orgId}/projects`
   - `/v1/organizations/{orgId}/projects/{projectId}`
   - `/v1/organizations/{orgId}/projects/{projectId}/environments`
-  - `/v1/organizations/{orgId}/projects/{projectId}/api-keys`
+  - `/v1/organizations/{orgId}/api-keys`
   - `/v1/organizations/{orgId}/projects/{projectId}/webhooks`
   - `/v1/organizations/{orgId}/billing`
   - `/v1/organizations/{orgId}/audit`
