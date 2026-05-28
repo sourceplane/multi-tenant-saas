@@ -418,29 +418,8 @@ Last updated: 2026-05-28
 
 ## Current Task
 
-Task 0065 Verifier is scoped and ready to verify PR #108.
+Task 0065 verified PASS and merged via PR #108 at `ef9e122`.
 
-Objective: verify encrypted write-only config secret payload storage before merge. PR #108 claims config-worker now accepts secret `value` fields on create/rotate, encrypts with AES-256-GCM before DB mutation, persists only `config.secret_metadata.ciphertext_envelope`, and returns/list only safe public metadata.
+Key durable outcome: Config-worker now supports encrypted write-only secret payload storage using AES-256-GCM via Web Crypto. Create and rotate handlers accept optional `value` field, encrypt before DB mutation, persist only `ciphertext_envelope`, and return only safe `PublicSecretMetadata`. Missing `SECRET_ENCRYPTION_KEY` fails closed with 503. Metadata-only create/rotate remains supported for backward compatibility with Task 0064.
 
-Verifier prompt: `ai/tasks/task-0065-verifier.md`
-Implementer prompt: `ai/tasks/task-0065.md`
-Implementer report: `ai/reports/task-0065-implementer.md`
-PR: #108 (`impl/task-0065-encrypted-secret-storage`) — https://github.com/sourceplane/multi-tenant-saas/pull/108
-
-Selected after current repo inspection:
-- Task 0064 verified PASS and merged via PR #107. Secret metadata create/rotate/revoke metadata-only mutations are live.
-- Task 0065 implementation commit exists and PR #108 is open with the implementer report committed and updated with the real PR number.
-- Local orchestrator smoke checks passed before verifier handoff: config-worker-tests (174), api-edge-tests (230), contracts/db tests, config-worker/api-edge/contracts/db typechecks, Orun validate, changed-plan, and GitHub Actions dry-run.
-- GitHub PR CI currently reports 17 passing checks for PR #108, but verifier must still inspect successful logs before PASS or merge.
-
-PR boundary under verification:
-- Config-worker encryption adapter using Worker-compatible Web Crypto and configurable `SECRET_ENCRYPTION_KEY`; no hardcoded production key material.
-- Config repository write-only persistence methods that set `ciphertext_envelope` while preserving safe read/list/get surfaces.
-- Config-worker create/rotate secret handlers that accept secret payloads, encrypt before DB mutation, preserve authorization/exact-scope checks/transaction-coupled event-audit writes, and return only `PublicSecretMetadata`.
-- Contract request types and focused config-worker/api-edge/contracts/db tests for encryption, secret-safety, fail-closed key binding behavior, api-edge body forwarding, and no bearer forwarding.
-- No reveal/read API, no web-console UI, no Terraform/live secret provisioning, no KV/effective config/versioning work.
-
-Current repo checkpoint:
-- Local branch is `impl/task-0065-encrypted-secret-storage`; PR #108 is open and ready for verifier handoff.
-- Tasks 0001–0064 are completed and verified.
-- Main CI baseline is green; latest visible main CI runs `26585584501` and `26585656635` completed successfully.
+Tasks 0001–0065 are completed and verified. Next orchestrator cycle should evaluate the next config task per roadmap.
