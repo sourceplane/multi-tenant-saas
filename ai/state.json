@@ -1,6 +1,6 @@
 {
   "goal": "Supabase/Postgres-backed multi-organization Orun SaaS control plane",
-  "current_task": null,
+  "current_task": "0055",
   "completed": [
     "0001",
     "0001.1",
@@ -62,14 +62,19 @@
     "0053",
     "0054"
   ],
-  "repo_health": "yellow",
-  "next_focus": "next-orchestrator-cycle",
-  "last_verified": "2026-05-28T08:36Z",
+  "repo_health": "green",
+  "next_focus": "config-settings-flags-persistence-foundation",
+  "last_verified": "2026-05-28T08:41Z",
   "waiting_for_input": "false",
-  "task_agent": null,
+  "task_agent": "ai/tasks/task-0055.md",
   "notes": [
-    "Task 0054 verified PASS and merged via PR #97 at 73f76bf. Web-console account profile settings UI live.",
-    "No verifier fixes needed.",
-    "Post-merge main CI run triggered."
+    "Task 0054 verified PASS and merged via PR #97 at 73f76bf; follow-up main CI run 26564178163 passed at HEAD 1f00a0e.",
+    "No open PRs were found during the orchestrator cycle; next duty is a new Implementer task rather than a verifier task.",
+    "Task 0055 scoped: config/settings/feature-flag persistence foundation under packages/db with a new config-owned migration and @saas/db/config repository.",
+    "Scope is DB/repository/tests only: no public API, config-worker deployment, web-console UI, policy changes, plaintext secret handling, or specs-v2 work.",
+    "Secret metadata must remain metadata-only; plaintext secret values and reveal behavior are explicitly out of scope.",
+    "Project/environment scoped repository methods must require full enclosing org/project/environment scope and must not query by child IDs alone.",
+    "Implementer must create a branch, commit, push, open a GitHub PR, and file ai/reports/task-0055-implementer.md before reporting complete.",
+    "Verifier follow-up should be generated immediately after Task 0055 implementation PR is opened and CI is ready."
   ]
 }

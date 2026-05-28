@@ -1212,6 +1212,16 @@ Last updated: 2026-05-28
 |- Scope boundary: web-console API client, state helper, and account view/profile UI only; preserve Account Security and all workspace flows.
 |- Durable outcome: Web-console account profile settings UI live on main. Account view with Profile and Security Events tabs. Display name update/clear via PATCH with `{ displayName: string | null }` only. In-memory session and header refresh without reload. All existing workspace flows preserved.
 
+## Task 0055
+
+|- Agent: Implementer
+|- Prompt: `ai/tasks/task-0055.md`
+|- Status: scoped and ready to begin (2026-05-28)
+|- Objective: add the first config/settings/feature-flag persistence foundation under `packages/db`, including a config-owned migration, manifest update, `@saas/db/config` repository surface, and focused db tests.
+|- Scope boundary: DB migration/repository/tests only; no public API, no `apps/config-worker`, no web-console UI, no policy changes, no plaintext secret reveal/write flow, and no `specs-v2/**` work.
+|- Acceptance: local `@saas/db` and `@saas/db-tests` checks pass; migration manifest checksum is correct; tests prove scope and secret-safety invariants; Orun validate/changed-plan/dry-run pass; PR is opened with `ai/reports/task-0055-implementer.md`.
+|- Expected outcome: config-owned persisted foundation for organization/project/environment settings, feature flags, and secret metadata that future public APIs can consume without widening bounded-context or secret-handling boundaries.
+
 ## Historical Notes
 
 - PR #1 split product-specific V2 Git catalog work away from the reusable SaaS

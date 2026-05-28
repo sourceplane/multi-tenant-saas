@@ -12,6 +12,7 @@
     "./membership": "./src/membership/index.ts",
     "./events": "./src/events/index.ts",
     "./projects": "./src/projects/index.ts",
+    "./config": "./src/config/index.ts",
     "./runner": "./src/runner/index.ts"
   },
   "bin": {

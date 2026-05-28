@@ -329,7 +329,16 @@ Last updated: 2026-05-28
 - PR #97 (`impl/task-0054-profile-settings-ui`) **MERGED** at commit `73f76bf` (2026-05-28T08:36Z).
 - PR URL: `https://github.com/sourceplane/multi-tenant-saas/pull/97`
 - PR CI runs: `26563632783` (original, 4/4 SUCCESS), `26564017112` (post-verifier-report, 4/4 SUCCESS).
+- Follow-up docs/state commit `1f00a0e` is on `main`; latest main CI run `26564178163` passed.
 - Key durable outcome: Web-console account profile settings UI is live. Authenticated users can view email (read-only) and update/clear display name via `GET/PATCH /v1/auth/profile`. Account view with Profile and Security Events tabs replaces the old Account Security button. In-memory session and header update after save without reload. All existing workspace flows preserved.
 - Reports: `ai/reports/task-0054-implementer.md`, `ai/reports/task-0054-verifier.md`
 
-**Current Task**: Task 0054 complete. Next orchestrator cycle should evaluate the next task.
+**Task 0055 (Implementer) — SCOPED / READY**
+
+- Prompt: `ai/tasks/task-0055.md`
+- Repo state at scoping: `main` synced with `origin/main` at `1f00a0e`; no open GitHub PRs; latest main CI run `26564178163` passed.
+- Objective: add the first config/settings/feature-flag persistence foundation under `packages/db`, including a config-owned migration, manifest update, `@saas/db/config` repository surface, and focused DB tests.
+- Roadmap rationale: Weeks 0-3 tenant core and identity/security/account/API-key basics are complete through Task 0054. The next Week 3-4 starter-operations gap is config, settings, secret metadata, and feature flags from `specs/components/07-config-secrets-flags.md`.
+- PR boundary: DB migration/repository/tests only. No public API, no `apps/config-worker`, no web-console UI, no policy changes, no plaintext secret reveal/write flow, and no `specs-v2/**` work.
+- Key constraints: no cross-context FKs to membership/projects schemas; project/environment operations must require full enclosing scope; secret metadata must never expose plaintext secret values.
+- Expected next task: Task 0055.1 Verifier after the implementer opens a PR and files `ai/reports/task-0055-implementer.md`.
