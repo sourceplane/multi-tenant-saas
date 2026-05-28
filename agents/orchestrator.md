@@ -3,7 +3,7 @@
 ## Purpose
 
 The Orchestrator is the only planning agent.  
-It continuously evaluates the **real repo state** and emits the next best PR-sized task prompt for worker agents.
+It continuously evaluates the **real repo state** and emits the next best relatively large, coherent PR-sized task prompt for worker agents.
 Workers:
 
 - **Implementer** → builds task, opens PR, writes report
@@ -28,7 +28,11 @@ For every cycle:
 9. Identify production-grade gaps, integration risks, missing seams
 10. Inspect any outstanding `/ai/proposals/**` spec-change proposals
 11. Accept, revise, defer, or ask the user about proposals before baking them into new tasks
-12. Select the next highest-leverage task that can land as one coherent PR
+12. Select the next highest-leverage task that can land as one coherent PR.
+    Prefer the largest reviewable scope that still has one primary outcome,
+    one ownership boundary, clear acceptance criteria, and a safe rollback path.
+    Do not create artificially tiny tasks when adjacent changes are tightly
+    coupled, share validation, and can be reviewed together without hiding risk.
 13. Generate a detailed prompt file for exactly one PR. Every implementer task
     prompt must explicitly require branch creation or branch reuse, committing
     the task-scoped changes, pushing the branch, and opening a GitHub PR before
@@ -172,22 +176,51 @@ Preferred task prompt budget:
 
 One task equals one implementation PR.
 
+Default sizing bias: make tasks relatively large when possible. A task should
+usually cover the largest coherent unit of work a reviewer can understand and
+verify in one PR, not the smallest technically separable edit. Combine adjacent
+changes when they share the same ownership boundary, validation path, rollback
+story, and acceptance criteria.
+
 A PR-sized task has:
 
 - one primary outcome
-- one owning component, seam, contract, or infra slice
+- one owning component, seam, contract, infra slice, or tightly coupled feature
+  area
+- enough implementation breadth to be valuable on its own, avoiding
+  under-scoped "micro-PRs" that defer obvious companion work
 - explicit non-goals
 - a clear rollback path
 - tests or verification scoped to the changed surface
 - no unrelated cleanup
 
+Prefer one larger PR over multiple small PRs when the work:
+
+- touches the same files or component repeatedly
+- implements one API contract across handler, repository, tests, docs, and UI
+  surface
+- requires the same migration, Orun validation, CI workflow, or live-resource
+  verification
+- would create temporary broken, placeholder, or misleading intermediate states
+  if split
+- has one natural verifier checklist and one rollback story
+
 Split the task when it mixes:
 
 - reusable foundation and product-specific work
-- contract design and broad implementation
+- unrelated ownership boundaries or separately deployable components
+- different risk profiles where one part could safely land while another needs
+  human/product/security review
+- contract design and broad implementation that has not been validated or agreed
+  yet
 - infra provisioning and unrelated app behavior
-- refactor and feature behavior
+- refactor and feature behavior, unless the refactor is a small mechanical
+  prerequisite inside the same files and acceptance path
 - multiple bounded contexts with independent acceptance criteria
+
+When considering a split, first ask whether the split is reducing review risk or
+only producing process overhead. Prefer combining tightly coupled work; split
+only at a natural boundary a verifier can independently accept or reject.
 
 Fixes requested by verification stay in the same PR when they are required to
 complete the task. New feature scope becomes a new task and a new PR.
@@ -307,7 +340,10 @@ Must:
 
 - read prompt fully
 - inspect actual repo before coding
-- implement exactly one PR-sized task
+- implement exactly one relatively large, coherent PR-sized task
+- include obvious companion changes that share the same contract, component,
+  validation, and rollback path instead of deferring them to artificial follow-up
+  micro-tasks
 - keep all task commits on one branch and one PR
 - create or reuse a task branch before finalizing work, push that branch, and
   open a GitHub PR for the task; if a PR cannot be created, the report must mark
@@ -397,11 +433,13 @@ Planning Heuristics
 Prefer tasks that:
 
 1. Can land as one coherent PR
-2. Unlock future tasks
-3. Replace placeholders with real services
-4. Improve seams/contracts
-5. Increase production readiness
-6. Preserve architecture boundaries
+2. Are relatively large and high-leverage without crossing ownership, risk, or
+   rollback boundaries
+3. Unlock future tasks
+4. Replace placeholders with real services
+5. Improve seams/contracts
+6. Increase production readiness
+7. Preserve architecture boundaries
 
 ⸻
 

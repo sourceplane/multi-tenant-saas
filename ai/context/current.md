@@ -418,22 +418,26 @@ Last updated: 2026-05-28
 
 ## Current Task
 
-Task 0064 Verifier is scoped and ready to verify PR #107.
+Task 0065 Implementer is scoped and ready to begin.
 
-Objective: verify the metadata-only secret create, rotate, and revoke runtime implemented by PR #107 (`impl/task-0064-secret-metadata-mutations`) before merge.
+Objective: add the first production-safe encrypted secret payload storage path for config secrets. Create/rotate should become write-only secret storage operations: accept secret values, encrypt them inside config-worker before persistence, store only ciphertext envelopes in `config.secret_metadata.ciphertext_envelope`, and return/list only safe public metadata.
 
-PR boundary under verification:
-- Config-worker routing/handlers for `POST .../config/secrets`, `POST .../config/secrets/{secretId}/rotate`, and `DELETE .../config/secrets/{secretId}` at organization, project, and environment scope.
-- api-edge facade forwarding for the same public routes, preserving actor headers and never forwarding raw bearer tokens downstream.
-- Contract/helper additions only as needed for public secret metadata mutation request/response shapes.
-- Tests for metadata-only validation, exact route-scope enforcement, policy denial, fail-closed malformed dependency envelopes, event/audit safety, and api-edge forwarding.
+Task prompt: `ai/tasks/task-0065.md`
 
-Task 0064 verified PASS and merged via PR #107 (squash merge). 12 files changed, +1694 lines. 24/24 CI checks passed. Secret metadata create/rotate/revoke mutations are live.
+Selected after current repo inspection:
+- Task 0064 verified PASS and merged via PR #107. Secret metadata create/rotate/revoke metadata-only mutations are live.
+- `specs/components/07-config-secrets-flags.md` still requires encrypted tenant secrets, `putSecret`, `rotateSecret`, and write-only/metadata-listing secret APIs.
+- `config.secret_metadata` already has a nullable `ciphertext_envelope` column, but current repository/API surfaces intentionally exclude it and no encryption adapter exists.
+- Web-console secrets remain metadata-list-only; UI secret entry is intentionally deferred until encrypted storage semantics exist.
+
+PR boundary for Task 0065:
+- Config-worker encryption adapter using Worker-compatible Web Crypto and configurable key binding/secret; no hardcoded production key material.
+- Config repository write-only persistence methods that set `ciphertext_envelope` while preserving safe read/list/get surfaces.
+- Config-worker create/rotate secret handlers that accept secret payloads, encrypt before DB mutation, preserve authorization/exact-scope checks/transaction-coupled event-audit writes, and return only `PublicSecretMetadata`.
+- Contract request types and focused config-worker/api-edge/contracts/db tests for encryption, secret-safety, fail-closed key binding behavior, api-edge body forwarding, and no bearer forwarding.
+- No reveal/read API, no web-console UI, no Terraform/live secret provisioning, no KV/effective config/versioning work.
 
 Current repo checkpoint:
-- `origin/main` includes PR #107 squash merge.
+- `main` is checked out locally.
 - Tasks 0001–0064 are completed and verified.
-
-## Next Task
-
-Generate the next Implementer task for the config/secrets roadmap. Likely next scope: encrypted secret payload storage/write-only API semantics, secret management UI, or next item from the roadmap — selected after reading updated repo state and specs.
+- Main CI baseline is green; latest visible main CI runs `26585584501` and `26585656635` completed successfully.

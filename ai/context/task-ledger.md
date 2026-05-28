@@ -1333,13 +1333,25 @@ Last updated: 2026-05-28
 
 ## Task 0064
 
-|- Agent: Implementer
+|- Agent: Implementer -> Verifier
 |- Prompt: `ai/tasks/task-0064.md`
-|- Status: scoped and ready to begin (2026-05-28)
+|- Verifier prompt: `ai/tasks/task-0064-verifier.md`
+|- Status: verified and merged
+|- PR: #107 (`impl/task-0064-secret-metadata-mutations`), squash-merged
+|- Reports: `ai/reports/task-0064-implementer.md`, `ai/reports/task-0064-verifier.md`
 |- Objective: Add metadata-only secret create, rotate, and revoke runtime for config secrets through config-worker and api-edge.
 |- Scope boundary: config-worker secret metadata mutation handlers/routes, api-edge forwarding, focused contracts/helpers, and tests. No encrypted payload storage, no plaintext reveal/read flow, no UI, no infrastructure.
-|- Acceptance: targeted config-worker/api-edge/contracts tests pass; Orun validate/changed-plan/dry-run pass; metadata-only responses/events/audit contain no secret material; exact route-scope enforcement prevents cross-scope secret mutation.
-|- Expected outcome: Public secret metadata mutation surface is ready for verification, unlocking later encrypted secret payload storage and UI work.
+|- Durable outcome: Secret metadata create/rotate/revoke mutations are live at organization, project, and environment scope. Responses/events/audit payloads remain metadata-only; exact route-scope enforcement prevents cross-scope secret mutation; api-edge forwards routes without raw bearer tokens. 24/24 PR CI checks passed. Verifier committed missing implementer report before merge.
+
+## Task 0065
+
+|- Agent: Implementer
+|- Prompt: `ai/tasks/task-0065.md`
+|- Status: scoped and ready to begin (2026-05-28)
+|- Objective: Add encrypted, write-only secret payload storage for config secrets through config-worker while preserving metadata-only reads and no reveal API.
+|- Scope boundary: config-worker encryption adapter, config repository write-only ciphertext persistence, create/rotate secret handler semantics, safe contract request types, and focused config-worker/api-edge/contracts/db tests. No web-console UI, no reveal/read API, no Terraform/live secret provisioning, no KV/effective config/versioning work.
+|- Acceptance: targeted config-worker/api-edge/contracts/db tests pass; Orun validate/changed-plan/dry-run pass; secret payloads are encrypted before persistence; `ciphertext_envelope` is never exposed through safe read/list/get/public response/event/audit/error paths; missing/invalid encryption key binding fails closed; implementer report committed to the PR with a real PR number.
+|- Expected outcome: Config secrets become real encrypted write-only storage primitives, unlocking later secret management UI and effective config resolution work.
 
 ## Historical Notes
 

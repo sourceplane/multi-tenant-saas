@@ -1,6 +1,6 @@
 {
   "goal": "Supabase/Postgres-backed multi-organization Orun SaaS control plane",
-  "current_task": null,
+  "current_task": "0065",
   "completed": [
     "0001",
     "0001.1",
@@ -73,12 +73,12 @@
     "0064"
   ],
   "repo_health": "green",
-  "next_focus": "next-orchestrator-cycle",
+  "next_focus": "encrypted-secret-payload-storage",
   "last_verified": "2026-05-28T16:30:00Z",
   "waiting_for_input": "false",
-  "task_agent": null,
+  "task_agent": "ai/tasks/task-0065.md",
   "notes": [
-    "Task 0064 verified and merged via PR #107 (squash). Secret metadata create/rotate/revoke mutations complete.",
-    "12 files changed, +1694 lines. 145 config-worker tests, 230 api-edge tests, 39 new secret mutation tests."
+    "Task 0064 verified and merged via PR #107 (squash). Secret metadata create/rotate/revoke metadata-only mutations complete.",
+    "Task 0065 scoped as next Implementer task: encrypted write-only secret payload storage for config-worker, preserving metadata-only reads and no reveal API."
   ]
 }
