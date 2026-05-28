@@ -196,4 +196,114 @@ describe("Identity Migration Verification", () => {
       }
     });
   });
+
+  describe("060_identity_api_keys SQL schema validation", () => {
+    const sql = readFileSync(
+      resolve(MIGRATIONS_ROOT, "060_identity_api_keys/up.sql"),
+      "utf-8",
+    );
+
+    it("creates identity.service_principals table", () => {
+      expect(sql).toContain("identity.service_principals");
+    });
+
+    it("creates identity.api_keys table", () => {
+      expect(sql).toContain("identity.api_keys");
+    });
+
+    it("service principals have org_id NOT NULL for organization binding", () => {
+      expect(sql).toMatch(/org_id\s+UUID\s+NOT NULL/);
+    });
+
+    it("service principals have optional project_id scope", () => {
+      expect(sql).toMatch(/project_id\s+UUID/);
+      // project_id should NOT be NOT NULL
+      expect(sql).not.toMatch(/project_id\s+UUID\s+NOT NULL/);
+    });
+
+    it("enforces project scope requires org scope via CHECK constraint", () => {
+      expect(sql).toContain("service_principals_project_scope_check");
+    });
+
+    it("API keys store only hash and prefix, never raw key material", () => {
+      expect(sql).toContain("key_hash");
+      expect(sql).toContain("key_prefix");
+      // No raw key/secret/token columns
+      expect(sql).not.toMatch(/\bkey_value\b/);
+      expect(sql).not.toMatch(/\braw_key\b/);
+      expect(sql).not.toMatch(/\bsecret\b\s+TEXT/);
+      expect(sql).not.toMatch(/\bbearer_token\b/);
+    });
+
+    it("API keys have key_prefix length constraint (4-12 chars)", () => {
+      expect(sql).toContain("api_keys_prefix_length");
+    });
+
+    it("API keys have unique hash index for auth-time lookup", () => {
+      expect(sql).toContain("api_keys_key_hash_idx");
+    });
+
+    it("API keys belong to a service principal via FK", () => {
+      expect(sql).toMatch(/REFERENCES\s+identity\.service_principals/);
+    });
+
+    it("has org-scoped index for API key listing", () => {
+      expect(sql).toContain("api_keys_org_id_idx");
+    });
+
+    it("has service principal index for key listing", () => {
+      expect(sql).toContain("api_keys_service_principal_idx");
+    });
+
+    it("has prefix index for key identification", () => {
+      expect(sql).toContain("api_keys_prefix_idx");
+    });
+
+    it("uses IF NOT EXISTS for idempotency", () => {
+      const createStatements = sql.match(/CREATE\s+(TABLE|INDEX)/g) ?? [];
+      const ifNotExists = sql.match(/IF NOT EXISTS/g) ?? [];
+      expect(ifNotExists.length).toBeGreaterThanOrEqual(createStatements.length);
+    });
+
+    it("does not reference cross-context tables", () => {
+      expect(sql).not.toContain("membership.");
+      expect(sql).not.toContain("projects.");
+      expect(sql).not.toContain("billing.");
+      expect(sql).not.toContain("events.");
+    });
+
+    it("foreign keys stay within identity context", () => {
+      const fkMatches = sql.match(/REFERENCES\s+(\w+\.\w+)/g) ?? [];
+      expect(fkMatches.length).toBeGreaterThan(0);
+      for (const fk of fkMatches) {
+        expect(fk).toContain("identity.");
+      }
+    });
+
+    it("uses UUID primary keys", () => {
+      const pkMatches = sql.match(/id\s+UUID\s+PRIMARY KEY/g) ?? [];
+      expect(pkMatches.length).toBe(2); // service_principals + api_keys
+    });
+
+    it("API keys have status constraint (active/revoked/expired)", () => {
+      expect(sql).toContain("api_keys_status_check");
+    });
+
+    it("service principals have status constraint (active/suspended/deleted)", () => {
+      expect(sql).toContain("service_principals_status_check");
+    });
+
+    it("API keys support revocation tracking", () => {
+      expect(sql).toContain("revoked_at");
+      expect(sql).toContain("revoked_by");
+    });
+
+    it("API keys support expiry tracking", () => {
+      expect(sql).toContain("expires_at");
+    });
+
+    it("API keys support usage tracking", () => {
+      expect(sql).toContain("last_used_at");
+    });
+  });
 });

@@ -1,9 +1,14 @@
 import type { SqlExecutor } from "../hyperdrive/executor.js";
 import type {
+  ApiKey,
+  ApiKeyPagedResult,
+  ApiKeyPageQueryParams,
   AuthIdentity,
+  CreateApiKeyInput,
   CreateAuthIdentityInput,
   CreateLoginChallengeInput,
   CreateSecurityEventInput,
+  CreateServicePrincipalInput,
   CreateSessionInput,
   CreateUserInput,
   IdentityRepository,
@@ -12,6 +17,7 @@ import type {
   SecurityEvent,
   SecurityEventPagedResult,
   SecurityEventPageQueryParams,
+  ServicePrincipal,
   Session,
   User,
 } from "./types.js";
@@ -78,6 +84,38 @@ function mapSecurityEvent(row: Record<string, unknown>): SecurityEvent {
     createdAt: new Date(row.created_at as string),
     metadata: (typeof row.metadata === "string" ? JSON.parse(row.metadata) : row.metadata ?? {}) as Record<string, unknown>,
     redactPaths: (typeof row.redact_paths === "string" ? JSON.parse(row.redact_paths) : row.redact_paths ?? []) as string[],
+  };
+}
+
+function mapServicePrincipal(row: Record<string, unknown>): ServicePrincipal {
+  return {
+    id: row.id as string,
+    orgId: row.org_id as string,
+    projectId: (row.project_id as string) ?? null,
+    displayName: row.display_name as string,
+    description: (row.description as string) ?? null,
+    status: row.status as string,
+    createdBy: row.created_by as string,
+    createdAt: new Date(row.created_at as string),
+    updatedAt: new Date(row.updated_at as string),
+  };
+}
+
+function mapApiKey(row: Record<string, unknown>): ApiKey {
+  return {
+    id: row.id as string,
+    servicePrincipalId: row.service_principal_id as string,
+    orgId: row.org_id as string,
+    keyPrefix: row.key_prefix as string,
+    label: (row.label as string) ?? "",
+    status: row.status as string,
+    expiresAt: row.expires_at ? new Date(row.expires_at as string) : null,
+    lastUsedAt: row.last_used_at ? new Date(row.last_used_at as string) : null,
+    revokedAt: row.revoked_at ? new Date(row.revoked_at as string) : null,
+    revokedBy: (row.revoked_by as string) ?? null,
+    createdBy: row.created_by as string,
+    createdAt: new Date(row.created_at as string),
+    updatedAt: new Date(row.updated_at as string),
   };
 }
 
@@ -371,6 +409,152 @@ export function createIdentityRepository(executor: SqlExecutor): IdentityReposit
         return { ok: true, value: { items: rows, nextCursor } };
       } catch {
         return safeError("Failed to query security events");
+      }
+    },
+
+    // --- Service Principals ---
+
+    async createServicePrincipal(input: CreateServicePrincipalInput): Promise<IdentityResult<ServicePrincipal>> {
+      try {
+        const result = await executor.execute<Record<string, unknown>>(
+          `INSERT INTO identity.service_principals (id, org_id, project_id, display_name, description, created_by, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $7)
+           ON CONFLICT (id) DO NOTHING
+           RETURNING *`,
+          [input.id, input.orgId, input.projectId ?? null, input.displayName, input.description ?? null, input.createdBy, input.createdAt.toISOString()],
+        );
+        if (result.rowCount === 0) {
+          return { ok: false, error: { kind: "conflict", entity: "service_principal" } };
+        }
+        return { ok: true, value: mapServicePrincipal(result.rows[0]!) };
+      } catch (err: unknown) {
+        if (isUniqueViolation(err)) {
+          return { ok: false, error: { kind: "conflict", entity: "service_principal" } };
+        }
+        return safeError("Failed to create service principal");
+      }
+    },
+
+    async getServicePrincipalById(id: string): Promise<IdentityResult<ServicePrincipal>> {
+      try {
+        const result = await executor.execute<Record<string, unknown>>(
+          `SELECT * FROM identity.service_principals WHERE id = $1 AND status != 'deleted'`,
+          [id],
+        );
+        if (result.rowCount === 0) {
+          return { ok: false, error: { kind: "not_found" } };
+        }
+        return { ok: true, value: mapServicePrincipal(result.rows[0]!) };
+      } catch {
+        return safeError("Failed to get service principal");
+      }
+    },
+
+    async listServicePrincipalsByOrg(orgId: string): Promise<IdentityResult<ServicePrincipal[]>> {
+      try {
+        const result = await executor.execute<Record<string, unknown>>(
+          `SELECT * FROM identity.service_principals WHERE org_id = $1 AND status != 'deleted' ORDER BY created_at DESC`,
+          [orgId],
+        );
+        return { ok: true, value: result.rows.map(mapServicePrincipal) };
+      } catch {
+        return safeError("Failed to list service principals");
+      }
+    },
+
+    // --- API Keys ---
+
+    async createApiKey(input: CreateApiKeyInput): Promise<IdentityResult<ApiKey>> {
+      try {
+        const result = await executor.execute<Record<string, unknown>>(
+          `INSERT INTO identity.api_keys (id, service_principal_id, org_id, key_prefix, key_hash, label, expires_at, created_by, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9)
+           ON CONFLICT (id) DO NOTHING
+           RETURNING id, service_principal_id, org_id, key_prefix, label, status, expires_at, last_used_at, revoked_at, revoked_by, created_by, created_at, updated_at`,
+          [input.id, input.servicePrincipalId, input.orgId, input.keyPrefix, input.keyHash, input.label ?? "", input.expiresAt?.toISOString() ?? null, input.createdBy, input.createdAt.toISOString()],
+        );
+        if (result.rowCount === 0) {
+          return { ok: false, error: { kind: "conflict", entity: "api_key" } };
+        }
+        return { ok: true, value: mapApiKey(result.rows[0]!) };
+      } catch (err: unknown) {
+        if (isUniqueViolation(err)) {
+          return { ok: false, error: { kind: "conflict", entity: "api_key" } };
+        }
+        return safeError("Failed to create API key");
+      }
+    },
+
+    async getApiKeyByKeyHash(keyHash: string): Promise<IdentityResult<ApiKey>> {
+      try {
+        const result = await executor.execute<Record<string, unknown>>(
+          `SELECT id, service_principal_id, org_id, key_prefix, label, status, expires_at, last_used_at, revoked_at, revoked_by, created_by, created_at, updated_at
+           FROM identity.api_keys WHERE key_hash = $1 AND status = 'active'`,
+          [keyHash],
+        );
+        if (result.rowCount === 0) {
+          return { ok: false, error: { kind: "not_found" } };
+        }
+        return { ok: true, value: mapApiKey(result.rows[0]!) };
+      } catch {
+        return safeError("Failed to get API key by hash");
+      }
+    },
+
+    async listApiKeysByOrg(params: ApiKeyPageQueryParams): Promise<IdentityResult<ApiKeyPagedResult>> {
+      try {
+        const fetchLimit = params.limit + 1;
+        let sql: string;
+        let values: unknown[];
+
+        if (params.cursor) {
+          sql = `SELECT id, service_principal_id, org_id, key_prefix, label, status, expires_at, last_used_at, revoked_at, revoked_by, created_by, created_at, updated_at
+           FROM identity.api_keys
+           WHERE org_id = $1
+             AND (created_at, id) < ($3, $4)
+           ORDER BY created_at DESC, id DESC
+           LIMIT $2`;
+          values = [params.orgId, fetchLimit, params.cursor.createdAt, params.cursor.id];
+        } else {
+          sql = `SELECT id, service_principal_id, org_id, key_prefix, label, status, expires_at, last_used_at, revoked_at, revoked_by, created_by, created_at, updated_at
+           FROM identity.api_keys
+           WHERE org_id = $1
+           ORDER BY created_at DESC, id DESC
+           LIMIT $2`;
+          values = [params.orgId, fetchLimit];
+        }
+
+        const result = await executor.execute<Record<string, unknown>>(sql, values);
+        const rows = result.rows.map(mapApiKey);
+
+        let nextCursor: import("./types.js").ApiKeyCursorPosition | null = null;
+        if (rows.length > params.limit) {
+          rows.pop();
+          const last = rows[rows.length - 1]!;
+          nextCursor = { createdAt: last.createdAt.toISOString(), id: last.id };
+        }
+
+        return { ok: true, value: { items: rows, nextCursor } };
+      } catch {
+        return safeError("Failed to list API keys");
+      }
+    },
+
+    async revokeApiKey(id: string, revokedBy: string, revokedAt: Date): Promise<IdentityResult<ApiKey>> {
+      try {
+        const result = await executor.execute<Record<string, unknown>>(
+          `UPDATE identity.api_keys
+           SET status = 'revoked', revoked_at = $2, revoked_by = $3, updated_at = $2
+           WHERE id = $1 AND status = 'active'
+           RETURNING id, service_principal_id, org_id, key_prefix, label, status, expires_at, last_used_at, revoked_at, revoked_by, created_by, created_at, updated_at`,
+          [id, revokedAt.toISOString(), revokedBy],
+        );
+        if (result.rowCount === 0) {
+          return { ok: false, error: { kind: "not_found" } };
+        }
+        return { ok: true, value: mapApiKey(result.rows[0]!) };
+      } catch {
+        return safeError("Failed to revoke API key");
       }
     },
   };

@@ -942,4 +942,408 @@ describe("IdentityRepository", () => {
       }
     });
   });
+
+  // --- Service Principal Tests ---
+
+  const SAMPLE_SERVICE_PRINCIPAL_ROW = {
+    id: "sp-001",
+    org_id: "org-001",
+    project_id: null,
+    display_name: "CI Pipeline",
+    description: "Continuous integration automation",
+    status: "active",
+    created_by: "u-001",
+    created_at: NOW.toISOString(),
+    updated_at: NOW.toISOString(),
+  };
+
+  describe("createServicePrincipal", () => {
+    it("inserts into identity.service_principals with correct params", async () => {
+      const { executor, queries } = createFakeExecutor({ rows: [SAMPLE_SERVICE_PRINCIPAL_ROW] });
+      const repo = createIdentityRepository(executor);
+
+      const result = await repo.createServicePrincipal({
+        id: "sp-001",
+        orgId: "org-001",
+        displayName: "CI Pipeline",
+        description: "Continuous integration automation",
+        createdBy: "u-001",
+        createdAt: NOW,
+      });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value.id).toBe("sp-001");
+        expect(result.value.orgId).toBe("org-001");
+        expect(result.value.projectId).toBeNull();
+        expect(result.value.displayName).toBe("CI Pipeline");
+      }
+      expect(queries.length).toBe(1);
+      expect(queries[0]!.text).toContain("identity.service_principals");
+      expect(queries[0]!.text).toContain("INSERT INTO");
+    });
+
+    it("supports project-scoped service principals", async () => {
+      const projectRow = { ...SAMPLE_SERVICE_PRINCIPAL_ROW, project_id: "proj-001" };
+      const { executor } = createFakeExecutor({ rows: [projectRow] });
+      const repo = createIdentityRepository(executor);
+
+      const result = await repo.createServicePrincipal({
+        id: "sp-001",
+        orgId: "org-001",
+        projectId: "proj-001",
+        displayName: "CI Pipeline",
+        createdBy: "u-001",
+        createdAt: NOW,
+      });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value.projectId).toBe("proj-001");
+      }
+    });
+
+    it("returns conflict on duplicate id", async () => {
+      const { executor } = createFakeExecutor({ rows: [], rowCount: 0 });
+      const repo = createIdentityRepository(executor);
+
+      const result = await repo.createServicePrincipal({
+        id: "sp-001",
+        orgId: "org-001",
+        displayName: "CI Pipeline",
+        createdBy: "u-001",
+        createdAt: NOW,
+      });
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.kind).toBe("conflict");
+      }
+    });
+
+    it("handles unique violation", async () => {
+      const { executor } = createFakeExecutor({ error: { code: "23505" } });
+      const repo = createIdentityRepository(executor);
+
+      const result = await repo.createServicePrincipal({
+        id: "sp-001",
+        orgId: "org-001",
+        displayName: "CI Pipeline",
+        createdBy: "u-001",
+        createdAt: NOW,
+      });
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.kind).toBe("conflict");
+      }
+    });
+  });
+
+  describe("getServicePrincipalById", () => {
+    it("returns service principal by id", async () => {
+      const { executor } = createFakeExecutor({ rows: [SAMPLE_SERVICE_PRINCIPAL_ROW] });
+      const repo = createIdentityRepository(executor);
+
+      const result = await repo.getServicePrincipalById("sp-001");
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value.id).toBe("sp-001");
+        expect(result.value.orgId).toBe("org-001");
+      }
+    });
+
+    it("filters out deleted service principals", async () => {
+      const { executor, queries } = createFakeExecutor({ rows: [], rowCount: 0 });
+      const repo = createIdentityRepository(executor);
+
+      const result = await repo.getServicePrincipalById("sp-001");
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.kind).toBe("not_found");
+      }
+      expect(queries[0]!.text).toContain("status != 'deleted'");
+    });
+  });
+
+  describe("listServicePrincipalsByOrg", () => {
+    it("lists service principals for org, excluding deleted", async () => {
+      const { executor, queries } = createFakeExecutor({ rows: [SAMPLE_SERVICE_PRINCIPAL_ROW] });
+      const repo = createIdentityRepository(executor);
+
+      const result = await repo.listServicePrincipalsByOrg("org-001");
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value.length).toBe(1);
+        expect(result.value[0]!.orgId).toBe("org-001");
+      }
+      expect(queries[0]!.text).toContain("status != 'deleted'");
+      expect(queries[0]!.text).toContain("ORDER BY created_at DESC");
+    });
+  });
+
+  // --- API Key Tests ---
+
+  const SAMPLE_API_KEY_ROW = {
+    id: "ak-001",
+    service_principal_id: "sp-001",
+    org_id: "org-001",
+    key_prefix: "spk_abc1",
+    label: "Production CI key",
+    status: "active",
+    expires_at: FUTURE.toISOString(),
+    last_used_at: null,
+    revoked_at: null,
+    revoked_by: null,
+    created_by: "u-001",
+    created_at: NOW.toISOString(),
+    updated_at: NOW.toISOString(),
+  };
+
+  describe("createApiKey", () => {
+    it("inserts into identity.api_keys with correct params", async () => {
+      const { executor, queries } = createFakeExecutor({ rows: [SAMPLE_API_KEY_ROW] });
+      const repo = createIdentityRepository(executor);
+
+      const result = await repo.createApiKey({
+        id: "ak-001",
+        servicePrincipalId: "sp-001",
+        orgId: "org-001",
+        keyPrefix: "spk_abc1",
+        keyHash: "sha256hashvalue",
+        label: "Production CI key",
+        expiresAt: FUTURE,
+        createdBy: "u-001",
+        createdAt: NOW,
+      });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value.id).toBe("ak-001");
+        expect(result.value.servicePrincipalId).toBe("sp-001");
+        expect(result.value.orgId).toBe("org-001");
+        expect(result.value.keyPrefix).toBe("spk_abc1");
+        expect(result.value.label).toBe("Production CI key");
+        expect(result.value.status).toBe("active");
+      }
+      expect(queries.length).toBe(1);
+      expect(queries[0]!.text).toContain("identity.api_keys");
+      expect(queries[0]!.text).toContain("key_hash");
+      // CRITICAL: key_hash must NOT appear in RETURNING clause
+      expect(queries[0]!.text.split("RETURNING")[1]).not.toContain("key_hash");
+    });
+
+    it("never returns key_hash in the created API key", async () => {
+      const { executor } = createFakeExecutor({ rows: [SAMPLE_API_KEY_ROW] });
+      const repo = createIdentityRepository(executor);
+
+      const result = await repo.createApiKey({
+        id: "ak-001",
+        servicePrincipalId: "sp-001",
+        orgId: "org-001",
+        keyPrefix: "spk_abc1",
+        keyHash: "sha256hashvalue",
+        createdBy: "u-001",
+        createdAt: NOW,
+      });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        const serialized = JSON.stringify(result.value);
+        expect(serialized).not.toContain("keyHash");
+        expect(serialized).not.toContain("key_hash");
+        expect(serialized).not.toContain("sha256hashvalue");
+        expect(result.value).not.toHaveProperty("keyHash");
+        expect(result.value).not.toHaveProperty("key_hash");
+      }
+    });
+
+    it("returns conflict on duplicate id", async () => {
+      const { executor } = createFakeExecutor({ rows: [], rowCount: 0 });
+      const repo = createIdentityRepository(executor);
+
+      const result = await repo.createApiKey({
+        id: "ak-001",
+        servicePrincipalId: "sp-001",
+        orgId: "org-001",
+        keyPrefix: "spk_abc1",
+        keyHash: "sha256hashvalue",
+        createdBy: "u-001",
+        createdAt: NOW,
+      });
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.kind).toBe("conflict");
+      }
+    });
+  });
+
+  describe("getApiKeyByKeyHash", () => {
+    it("returns active API key by hash", async () => {
+      const { executor, queries } = createFakeExecutor({ rows: [SAMPLE_API_KEY_ROW] });
+      const repo = createIdentityRepository(executor);
+
+      const result = await repo.getApiKeyByKeyHash("sha256hashvalue");
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value.id).toBe("ak-001");
+      }
+      // Must filter by active status
+      expect(queries[0]!.text).toContain("status = 'active'");
+      // Must NOT return key_hash in SELECT
+      expect(queries[0]!.text.split("FROM")[0]).not.toContain("key_hash");
+    });
+
+    it("returns not_found for missing/revoked key", async () => {
+      const { executor } = createFakeExecutor({ rows: [], rowCount: 0 });
+      const repo = createIdentityRepository(executor);
+
+      const result = await repo.getApiKeyByKeyHash("nonexistent");
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.kind).toBe("not_found");
+      }
+    });
+  });
+
+  describe("listApiKeysByOrg", () => {
+    it("lists API keys for org with cursor pagination", async () => {
+      const { executor, queries } = createFakeExecutor({ rows: [SAMPLE_API_KEY_ROW] });
+      const repo = createIdentityRepository(executor);
+
+      const result = await repo.listApiKeysByOrg({ orgId: "org-001", limit: 50, cursor: null });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value.items.length).toBe(1);
+        expect(result.value.nextCursor).toBeNull();
+      }
+      expect(queries[0]!.text).toContain("org_id = $1");
+      expect(queries[0]!.text).toContain("ORDER BY created_at DESC");
+      // Must NOT return key_hash in SELECT
+      expect(queries[0]!.text.split("FROM")[0]).not.toContain("key_hash");
+    });
+
+    it("uses cursor for pagination", async () => {
+      const { executor, queries } = createFakeExecutor({ rows: [SAMPLE_API_KEY_ROW] });
+      const repo = createIdentityRepository(executor);
+
+      const result = await repo.listApiKeysByOrg({
+        orgId: "org-001",
+        limit: 50,
+        cursor: { createdAt: NOW.toISOString(), id: "ak-000" },
+      });
+
+      expect(result.ok).toBe(true);
+      expect(queries[0]!.text).toContain("(created_at, id) <");
+    });
+
+    it("returns nextCursor when more results exist", async () => {
+      const rows = [
+        { ...SAMPLE_API_KEY_ROW, id: "ak-001" },
+        { ...SAMPLE_API_KEY_ROW, id: "ak-002" },
+      ];
+      const { executor } = createFakeExecutor({ rows });
+      const repo = createIdentityRepository(executor);
+
+      const result = await repo.listApiKeysByOrg({ orgId: "org-001", limit: 1, cursor: null });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value.items.length).toBe(1);
+        expect(result.value.nextCursor).not.toBeNull();
+      }
+    });
+  });
+
+  describe("revokeApiKey", () => {
+    it("revokes an active API key", async () => {
+      const revokedRow = { ...SAMPLE_API_KEY_ROW, status: "revoked", revoked_at: NOW.toISOString(), revoked_by: "u-002" };
+      const { executor, queries } = createFakeExecutor({ rows: [revokedRow] });
+      const repo = createIdentityRepository(executor);
+
+      const result = await repo.revokeApiKey("ak-001", "u-002", NOW);
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value.status).toBe("revoked");
+        expect(result.value.revokedBy).toBe("u-002");
+        expect(result.value.revokedAt).not.toBeNull();
+      }
+      expect(queries[0]!.text).toContain("status = 'active'");
+      expect(queries[0]!.text).toContain("status = 'revoked'");
+      // Must NOT return key_hash in RETURNING
+      expect(queries[0]!.text.split("RETURNING")[1]).not.toContain("key_hash");
+    });
+
+    it("returns not_found for already-revoked key", async () => {
+      const { executor } = createFakeExecutor({ rows: [], rowCount: 0 });
+      const repo = createIdentityRepository(executor);
+
+      const result = await repo.revokeApiKey("ak-001", "u-002", NOW);
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.kind).toBe("not_found");
+      }
+    });
+  });
+
+  describe("API key secret safety", () => {
+    it("API key type never includes keyHash property", async () => {
+      const { executor } = createFakeExecutor({ rows: [SAMPLE_API_KEY_ROW] });
+      const repo = createIdentityRepository(executor);
+
+      const result = await repo.createApiKey({
+        id: "ak-001",
+        servicePrincipalId: "sp-001",
+        orgId: "org-001",
+        keyPrefix: "spk_abc1",
+        keyHash: "sha256hashvalue",
+        createdBy: "u-001",
+        createdAt: NOW,
+      });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        const serialized = JSON.stringify(result.value);
+        expect(serialized).not.toContain("keyHash");
+        expect(serialized).not.toContain("key_hash");
+        expect(serialized).not.toContain("secret");
+        expect(serialized).not.toContain("bearerToken");
+        expect(result.value).not.toHaveProperty("keyHash");
+        expect(result.value).not.toHaveProperty("secret");
+      }
+    });
+
+    it("never exposes secrets in error output for API keys", async () => {
+      const { executor } = createFakeExecutor({
+        error: new Error("duplicate key value (key_hash)=(sha256secrethash)"),
+      });
+      const repo = createIdentityRepository(executor);
+
+      const result = await repo.createApiKey({
+        id: "ak-001",
+        servicePrincipalId: "sp-001",
+        orgId: "org-001",
+        keyPrefix: "spk_abc1",
+        keyHash: "sha256secrethash",
+        createdBy: "u-001",
+        createdAt: NOW,
+      });
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        const serialized = JSON.stringify(result.error);
+        expect(serialized).not.toContain("sha256secrethash");
+        expect(serialized).not.toContain("key_hash");
+      }
+    });
+  });
 });

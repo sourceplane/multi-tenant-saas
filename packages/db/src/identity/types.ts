@@ -116,6 +116,76 @@ export interface CreateSecurityEventInput {
   redactPaths?: string[];
 }
 
+// --- Service Principals ---
+
+export interface ServicePrincipal {
+  id: string;
+  orgId: string;
+  projectId: string | null;
+  displayName: string;
+  description: string | null;
+  status: string;
+  createdBy: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface CreateServicePrincipalInput {
+  id: string;
+  orgId: string;
+  projectId?: string | null;
+  displayName: string;
+  description?: string | null;
+  createdBy: string;
+  createdAt: Date;
+}
+
+// --- API Keys ---
+
+export interface ApiKey {
+  id: string;
+  servicePrincipalId: string;
+  orgId: string;
+  keyPrefix: string;
+  label: string;
+  status: string;
+  expiresAt: Date | null;
+  lastUsedAt: Date | null;
+  revokedAt: Date | null;
+  revokedBy: string | null;
+  createdBy: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface CreateApiKeyInput {
+  id: string;
+  servicePrincipalId: string;
+  orgId: string;
+  keyPrefix: string;
+  keyHash: string;
+  label?: string;
+  expiresAt?: Date | null;
+  createdBy: string;
+  createdAt: Date;
+}
+
+export interface ApiKeyCursorPosition {
+  createdAt: string;
+  id: string;
+}
+
+export interface ApiKeyPageQueryParams {
+  orgId: string;
+  limit: number;
+  cursor: ApiKeyCursorPosition | null;
+}
+
+export interface ApiKeyPagedResult {
+  items: ApiKey[];
+  nextCursor: ApiKeyCursorPosition | null;
+}
+
 export interface SecurityEventCursorPosition {
   occurredAt: string;
   id: string;
@@ -150,4 +220,15 @@ export interface IdentityRepository {
 
   recordSecurityEvent(input: CreateSecurityEventInput): Promise<IdentityResult<SecurityEvent>>;
   querySecurityEventsByUser(params: SecurityEventPageQueryParams): Promise<IdentityResult<SecurityEventPagedResult>>;
+
+  // Service Principals
+  createServicePrincipal(input: CreateServicePrincipalInput): Promise<IdentityResult<ServicePrincipal>>;
+  getServicePrincipalById(id: string): Promise<IdentityResult<ServicePrincipal>>;
+  listServicePrincipalsByOrg(orgId: string): Promise<IdentityResult<ServicePrincipal[]>>;
+
+  // API Keys
+  createApiKey(input: CreateApiKeyInput): Promise<IdentityResult<ApiKey>>;
+  getApiKeyByKeyHash(keyHash: string): Promise<IdentityResult<ApiKey>>;
+  listApiKeysByOrg(params: ApiKeyPageQueryParams): Promise<IdentityResult<ApiKeyPagedResult>>;
+  revokeApiKey(id: string, revokedBy: string, revokedAt: Date): Promise<IdentityResult<ApiKey>>;
 }
