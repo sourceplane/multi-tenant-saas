@@ -142,6 +142,8 @@ export interface CreateSecretMetadataInput {
   rotationPolicy?: string;
   expiresAt?: Date;
   createdBy: string;
+  /** JSON-serialized ciphertext envelope. Write-only — never returned. */
+  ciphertextEnvelope?: string;
 }
 
 // ── Repository interface ────────────────────────────────────
@@ -163,6 +165,6 @@ export interface ConfigRepository {
   createSecretMetadata(input: CreateSecretMetadataInput): Promise<ConfigResult<SecretMetadata>>;
   listSecretMetadata(scope: Scope, params: PageQueryParams): Promise<ConfigResult<PagedResult<SecretMetadata>>>;
   getSecretMetadata(orgId: string, secretId: string): Promise<ConfigResult<SecretMetadata>>;
-  rotateSecretMetadata(orgId: string, secretId: string): Promise<ConfigResult<SecretMetadata>>;
+  rotateSecretMetadata(orgId: string, secretId: string, ciphertextEnvelope?: string): Promise<ConfigResult<SecretMetadata>>;
   revokeSecretMetadata(orgId: string, secretId: string): Promise<ConfigResult<SecretMetadata>>;
 }

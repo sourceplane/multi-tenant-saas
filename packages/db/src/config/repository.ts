@@ -324,12 +324,19 @@ export function createConfigRepository(executor: SqlExecutor): ConfigRepository 
     async createSecretMetadata(input: CreateSecretMetadataInput): Promise<ConfigResult<SecretMetadata>> {
       try {
         const sc = scopeColumns(input.scope);
-        const result = await executor.execute<Record<string, unknown>>(
-          `INSERT INTO config.secret_metadata (id, org_id, project_id, environment_id, scope_kind, secret_key, display_name, status, version, rotation_policy, expires_at, created_by, created_at, updated_at)
+        const hasCiphertext = input.ciphertextEnvelope !== undefined;
+        const sql = hasCiphertext
+          ? `INSERT INTO config.secret_metadata (id, org_id, project_id, environment_id, scope_kind, secret_key, display_name, status, version, rotation_policy, expires_at, created_by, ciphertext_envelope, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, 'active', 1, $8, $9, $10, $11, now(), now())
+           RETURNING ${SECRET_METADATA_SAFE_COLUMNS}`
+          : `INSERT INTO config.secret_metadata (id, org_id, project_id, environment_id, scope_kind, secret_key, display_name, status, version, rotation_policy, expires_at, created_by, created_at, updated_at)
            VALUES ($1, $2, $3, $4, $5, $6, $7, 'active', 1, $8, $9, $10, now(), now())
-           RETURNING ${SECRET_METADATA_SAFE_COLUMNS}`,
-          [input.id, sc.orgId, sc.projectId, sc.environmentId, sc.scopeKind, input.secretKey, input.displayName ?? null, input.rotationPolicy ?? null, input.expiresAt?.toISOString() ?? null, input.createdBy],
-        );
+           RETURNING ${SECRET_METADATA_SAFE_COLUMNS}`;
+        const params = [input.id, sc.orgId, sc.projectId, sc.environmentId, sc.scopeKind, input.secretKey, input.displayName ?? null, input.rotationPolicy ?? null, input.expiresAt?.toISOString() ?? null, input.createdBy];
+        if (hasCiphertext) {
+          params.push(input.ciphertextEnvelope!);
+        }
+        const result = await executor.execute<Record<string, unknown>>(sql, params);
         if (result.rowCount === 0) {
           return { ok: false, error: { kind: "conflict", entity: "secret_metadata" } };
         }
@@ -364,15 +371,23 @@ export function createConfigRepository(executor: SqlExecutor): ConfigRepository 
       }
     },
 
-    async rotateSecretMetadata(orgId: string, secretId: string): Promise<ConfigResult<SecretMetadata>> {
+    async rotateSecretMetadata(orgId: string, secretId: string, ciphertextEnvelope?: string): Promise<ConfigResult<SecretMetadata>> {
       try {
-        const result = await executor.execute<Record<string, unknown>>(
-          `UPDATE config.secret_metadata
+        const hasCiphertext = ciphertextEnvelope !== undefined;
+        const sql = hasCiphertext
+          ? `UPDATE config.secret_metadata
+           SET version = version + 1, last_rotated_at = now(), updated_at = now(), ciphertext_envelope = $3
+           WHERE org_id = $1 AND id = $2 AND status = 'active'
+           RETURNING ${SECRET_METADATA_SAFE_COLUMNS}`
+          : `UPDATE config.secret_metadata
            SET version = version + 1, last_rotated_at = now(), updated_at = now()
            WHERE org_id = $1 AND id = $2 AND status = 'active'
-           RETURNING ${SECRET_METADATA_SAFE_COLUMNS}`,
-          [orgId, secretId],
-        );
+           RETURNING ${SECRET_METADATA_SAFE_COLUMNS}`;
+        const params: unknown[] = [orgId, secretId];
+        if (hasCiphertext) {
+          params.push(ciphertextEnvelope);
+        }
+        const result = await executor.execute<Record<string, unknown>>(sql, params);
         if (result.rowCount === 0) {
           return { ok: false, error: { kind: "not_found" } };
         }

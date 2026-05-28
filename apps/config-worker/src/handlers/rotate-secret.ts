@@ -11,13 +11,31 @@ import { errorResponse, successResponse } from "../http.js";
 import { toPublicSecretMetadata } from "../mappers.js";
 import { scopeMatchesRequested } from "../scope-match.js";
 import type { PolicyResource } from "@saas/contracts/policy";
+import type { EncryptionAdapter } from "../encryption.js";
 
 export interface RotateSecretDeps {
   repo: Pick<ConfigRepository, "getSecretMetadata" | "rotateSecretMetadata">;
   eventsRepo?: Pick<EventsRepository, "appendEventWithAudit">;
   generateId?: () => string;
   now?: () => Date;
+  encryptionAdapter?: EncryptionAdapter | null;
 }
+
+/**
+ * Fields that must never appear in a rotate-secret request body,
+ * EXCEPT `value` which is now accepted for write-only encrypted storage.
+ */
+const SECRET_MATERIAL_FIELDS = [
+  "plaintext",
+  "secret",
+  "ciphertext",
+  "ciphertextEnvelope",
+  "ciphertext_envelope",
+  "hash",
+  "token",
+  "password",
+  "credential",
+];
 
 function randomHex(bytes: number): string {
   const buf = new Uint8Array(bytes);
@@ -40,22 +58,42 @@ export async function handleRotateSecret(
 ): Promise<Response> {
   const orgId = requestedScope.orgId;
 
-  // Rotate is POST with no body (or empty body); reject secret material if sent
+  // Parse body if JSON content-type is sent
+  let secretValue: string | null = null;
   if (request.headers.get("content-type")?.includes("application/json")) {
     try {
       const body = await request.json();
       if (body && typeof body === "object") {
         const raw = body as Record<string, unknown>;
-        const forbidden = ["value", "plaintext", "secret", "ciphertext", "ciphertextEnvelope", "ciphertext_envelope", "hash", "token", "password", "credential"];
-        for (const f of forbidden) {
+        // Reject forbidden secret-material fields (except value)
+        for (const f of SECRET_MATERIAL_FIELDS) {
           if (f in raw) {
             return errorResponse("validation_failed", "Secret material fields are not accepted on rotate", 422, requestId);
           }
+        }
+        // Accept `value` for write-only encrypted storage
+        if ("value" in raw) {
+          if (typeof raw.value !== "string" || raw.value.length === 0) {
+            return errorResponse("validation_failed", "value must be a non-empty string", 422, requestId);
+          }
+          secretValue = raw.value as string;
         }
       }
     } catch {
       // Empty body is fine for rotate
     }
+  }
+
+  // Resolve encryption adapter
+  let encryptionAdapter: EncryptionAdapter | null | undefined = deps?.encryptionAdapter;
+  if (encryptionAdapter === undefined && !deps) {
+    const { createEncryptionAdapter } = await import("../encryption.js");
+    encryptionAdapter = await createEncryptionAdapter(env.SECRET_ENCRYPTION_KEY);
+  }
+
+  // If value is provided, encryption adapter is required
+  if (secretValue && !encryptionAdapter) {
+    return errorResponse("internal_error", "Encryption is not configured", 503, requestId);
   }
 
   if (!deps && !env.SOURCEPLANE_DB) {
@@ -66,6 +104,17 @@ export async function handleRotateSecret(
   }
   if (!deps && !env.POLICY_WORKER) {
     return errorResponse("internal_error", "Service unavailable", 503, requestId);
+  }
+
+  // Encrypt value before any DB mutation
+  let ciphertextEnvelope: string | undefined;
+  if (secretValue && encryptionAdapter) {
+    try {
+      const envelope = await encryptionAdapter.encrypt(secretValue);
+      ciphertextEnvelope = JSON.stringify(envelope);
+    } catch {
+      return errorResponse("internal_error", "Encryption failed", 503, requestId);
+    }
   }
 
   const genId = deps?.generateId ?? (() => randomHex(16));
@@ -119,7 +168,7 @@ export async function handleRotateSecret(
           return { result: { ok: false as const, error: { kind: "not_found" as const } } };
         }
 
-        const result = await txRepo.rotateSecretMetadata(orgId, secretId);
+        const result = await txRepo.rotateSecretMetadata(orgId, secretId, ciphertextEnvelope);
 
         if (!result.ok) {
           return { result };
@@ -188,7 +237,7 @@ export async function handleRotateSecret(
         return errorResponse("not_found", "Secret not found", 404, requestId);
       }
 
-      const result = await deps.repo.rotateSecretMetadata(orgId, secretId);
+      const result = await deps.repo.rotateSecretMetadata(orgId, secretId, ciphertextEnvelope);
 
       if (!result.ok) {
         const err = result.error;

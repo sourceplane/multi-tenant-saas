@@ -122,7 +122,8 @@ describe("handleCreateSecret", () => {
   });
 
   it("rejects secret material fields (value, plaintext, secret, ciphertext, hash, etc.)", async () => {
-    const forbiddenFields = ["value", "plaintext", "secret", "ciphertext", "ciphertextEnvelope", "ciphertext_envelope", "hash", "token", "password", "credential"];
+    // NOTE: "value" is now accepted for write-only encrypted storage (task-0065)
+    const forbiddenFields = ["plaintext", "secret", "ciphertext", "ciphertextEnvelope", "ciphertext_envelope", "hash", "token", "password", "credential"];
     for (const field of forbiddenFields) {
       const body = { secretKey: "API_KEY", [field]: "should_be_rejected" };
       const res = await handleCreateSecret(makeJsonRequest(body), FAKE_ENV, "req1", ACTOR, ORG_SCOPE, {
@@ -342,8 +343,10 @@ describe("handleRotateSecret", () => {
   });
 
   it("rejects secret material in rotate request body", async () => {
+    // NOTE: "value" is now accepted for write-only encrypted storage (task-0065).
+    // Test with a different forbidden field instead.
     const res = await handleRotateSecret(
-      makeJsonRequest({ value: "new_secret_value" }), FAKE_ENV, "req1", ACTOR, ORG_SCOPE, SECRET_UUID,
+      makeJsonRequest({ plaintext: "new_secret_value" }), FAKE_ENV, "req1", ACTOR, ORG_SCOPE, SECRET_UUID,
       {
         repo: {
           getSecretMetadata: (() => {}) as any,
