@@ -63,16 +63,16 @@
     "0054",
     "0055",
     "0056",
-    "0057"
+    "0057",
+    "0058"
   ],
   "repo_health": "green",
   "next_focus": "next-orchestrator-cycle",
-  "last_verified": "2026-05-28T11:30Z",
+  "last_verified": "2026-05-28T12:00Z",
   "waiting_for_input": "false",
   "task_agent": null,
   "notes": [
-    "Task 0057 verified PASS and merged via PR #100 at fa0e2de. Config-worker placeholder Hyperdrive IDs replaced with verified stage/prod IDs. api-edge dependsOn config-worker added. 13 deployment-config regression tests.",
-    "Post-merge main CI run 26570117470 fully green. Config-worker and api-edge deployment path unblocked for stage/prod.",
-    "Repo health upgraded to green — all deployment paths now functional."
+    "Task 0058 verified PASS and merged via PR #101 at fb013db. Read-only Config tab added to web-console with all 9 config list routes, explicit scope selection, environment selector, cursor pagination. No mutations, no secret plaintext.",
+    "Repo health green — all deployment paths functional."
   ]
 }

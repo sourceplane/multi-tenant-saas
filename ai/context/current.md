@@ -364,4 +364,14 @@ Last updated: 2026-05-28
 - Key durable outcome: Config-worker placeholder Hyperdrive IDs replaced with verified stage/prod resource IDs. api-edge component.yaml dependsOn now includes config-worker for correct deploy ordering. 13 deployment-config regression tests prevent recurrence. Repo health upgraded to green — all deployment paths functional.
 - Reports: `ai/reports/task-0057-implementer.md`, `ai/reports/task-0057-verifier.md`
 
-**Current Task**: Task 0057 complete. Next orchestrator cycle should evaluate the next task.
+**Task 0058 (Verifier) — COMPLETE ✅**
+
+- Prompt: `ai/tasks/task-0058.md`
+- Verifier prompt: `ai/tasks/task-0058-verifier.md`
+- PR #101 (`impl/task-0058-config-ui`) **MERGED** at commit `fb013db` (2026-05-28T12:00Z).
+- PR URL: `https://github.com/sourceplane/multi-tenant-saas/pull/101`
+- PR CI run: `26571217418` (4/4 checks SUCCESS — plan + web-console dev/stage/prod verify deploy).
+- Key durable outcome: Read-only Config tab live in web-console. Authenticated org users can inspect settings, feature flags, and secret metadata through all 9 public api-edge config list routes at org/project/environment scope. Explicit scope selection with environment on-demand loading via `listEnvironments`. Cursor pagination with Load More. Secret metadata limited to safe `PublicSecretMetadata` fields — no plaintext, ciphertext, or secret values. All config values rendered as safe text nodes via `document.createTextNode()`.
+- Reports: `ai/reports/task-0058-implementer.md`, `ai/reports/task-0058-verifier.md`
+
+**Current Task**: Task 0058 complete. Next orchestrator cycle should evaluate the next task.

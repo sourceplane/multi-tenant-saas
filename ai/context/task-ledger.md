@@ -1252,6 +1252,19 @@ Last updated: 2026-05-28
 |- Scope boundary: `apps/config-worker/wrangler.jsonc`, `apps/api-edge/component.yaml`, deployment-config regression tests; no Workers code, no Terraform, no UI.
 |- Durable outcome: Config-worker stage/prod deploy with verified Hyperdrive IDs. api-edge deploy ordering respects config-worker dependency. 13 regression tests prevent placeholder recurrence. Repo health green.
 
+## Task 0058
+
+|- Agent: Implementer + Verifier
+|- Prompt: `ai/tasks/task-0058.md`
+|- Verifier prompt: `ai/tasks/task-0058-verifier.md`
+|- Status: verified PASS (2026-05-28)
+|- Implementation: PR #101, branch `impl/task-0058-config-ui`, merge commit `fb013db`
+|- PR CI run: `26571217418` (4/4 SUCCESS)
+|- Reports: `ai/reports/task-0058-implementer.md`, `ai/reports/task-0058-verifier.md`
+|- Objective: Add read-only Config tab to web-console for inspecting settings, feature flags, and secret metadata through public api-edge config routes.
+|- Scope boundary: `apps/web-console/src/api.ts`, `apps/web-console/src/main.ts`, `apps/web-console/src/style.css`; no backend, infrastructure, or config-worker changes.
+|- Durable outcome: Web-console Config tab live with all 9 config list routes, explicit org/project/environment scope selection, environment on-demand loading, cursor pagination, safe text rendering. No mutations or secret plaintext.
+
 ## Historical Notes
 
 - PR #1 split product-specific V2 Git catalog work away from the reusable SaaS
