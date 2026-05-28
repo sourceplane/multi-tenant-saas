@@ -1302,6 +1302,20 @@ Last updated: 2026-05-28
 - Reports: `ai/reports/task-0061-implementer.md`, `ai/reports/task-0061-verifier.md`
 - Durable outcome: Web-console config mutation UI live. Create and inline-edit forms for settings and feature flags at org/project/environment scope. JSON value validation. Secret metadata remains read-only. All values rendered as safe text nodes. No localStorage/sessionStorage persistence. `configPath()` helper and `configScopeOpts()` ensure scope-correct API calls.
 
+### Task 0062
+
+- Agent: Implementer
+- Verifier: this session
+- Prompt: `ai/tasks/task-0062.md`
+- Verifier prompt: `ai/tasks/task-0062-verifier.md`
+- Status: verified and merged
+- PR: #105 (`task-0062-figma-ui-shell`), squash-merged at `3200d3c`
+- PR CI runs: `26579885750` (initial, 4/4 SUCCESS), `26580718351` (post-reports, 4/4 SUCCESS)
+- Objective: Update web-console UI shell and page styling to align with Figma design reference, preserving all live SaaS starter workflows and public API behavior.
+- Scope: web-console presentation only (main.ts, style.css).
+- Reports: `ai/reports/task-0062-implementer.md`, `ai/reports/task-0062-verifier.md`
+- Durable outcome: Web-console has Figma-inspired app shell with sidebar navigation (collapsible), topbar context bar with user avatar, scrollable content area. CSS tokens aligned with Figma oklch dark theme. Responsive breakpoints for tablet/mobile. All existing workflows preserved. No backend, API, or dependency changes.
+
 ## Historical Notes
 
 - PR #1 split product-specific V2 Git catalog work away from the reusable SaaS
