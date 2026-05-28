@@ -14,6 +14,7 @@
     "./projects": "./src/projects/index.ts",
     "./config": "./src/config/index.ts",
     "./webhooks": "./src/webhooks/index.ts",
+    "./metering": "./src/metering/index.ts",
     "./runner": "./src/runner/index.ts"
   },
   "bin": {

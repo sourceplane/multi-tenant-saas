@@ -93,5 +93,14 @@ export const manifest: MigrationManifest = {
       description:
         "Webhook delivery runtime — fixes event_id type, adds dispatch cursor and delivery indexes",
     },
+    {
+      id: "100_metering_foundation",
+      context: "metering",
+      path: "100_metering_foundation/up.sql",
+      checksum:
+        "d02693e6ec3d76193d58b9038a211c877adbf1c141e4f40d9ca8bb7a78c90930",
+      description:
+        "Metering persistence foundation — usage records, rollups, quota definitions, and quota violations",
+    },
   ],
 };
