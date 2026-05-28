@@ -13,6 +13,7 @@ import type {
   CreateSecurityEventInput,
   SecurityEventPageQueryParams,
   SecurityEventPagedResult,
+  UpdateUserProfileInput,
   ApiKey,
   ServicePrincipal,
 } from "@saas/db/identity";
@@ -92,6 +93,14 @@ export function createFakeRepository(): IdentityRepository & {
         if (u.emailLower === emailLower) return { ok: true, value: u };
       }
       return { ok: false, error: { kind: "not_found" } };
+    },
+
+    async updateUserProfile(userId: string, input: UpdateUserProfileInput): Promise<IdentityResult<User>> {
+      const user = users.get(userId);
+      if (!user) return { ok: false, error: { kind: "not_found" } };
+      user.displayName = input.displayName;
+      user.updatedAt = input.updatedAt;
+      return { ok: true, value: user };
     },
 
     async createAuthIdentity(input: CreateAuthIdentityInput): Promise<IdentityResult<AuthIdentity>> {

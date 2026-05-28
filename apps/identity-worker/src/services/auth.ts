@@ -14,6 +14,7 @@ import {
   sessionPublicId,
   challengePublicId,
   parseChallengePublicId,
+  parseUserPublicId,
 } from "../ids.js";
 
 export interface RequestContext {
@@ -80,6 +81,16 @@ export interface ResolveBearerResult {
 export interface ResolveBearerError {
   error: "unauthenticated";
   message: string;
+}
+
+export interface UpdateProfileResult {
+  user: { id: string; email: string; displayName: string | null };
+}
+
+export interface UpdateProfileError {
+  error: "unauthenticated" | "forbidden" | "validation_failed" | "internal_error";
+  message: string;
+  details?: Record<string, unknown>;
 }
 
 const CHALLENGE_TTL_MS = 10 * 60 * 1000;
@@ -303,6 +314,58 @@ export function createAuthService(deps: AuthServiceDeps) {
 
     async getSession(token: string): Promise<GetSessionResult | GetSessionError> {
       return getSession(token);
+    },
+
+    async getProfile(token: string): Promise<GetSessionResult | GetSessionError> {
+      // Profile read reuses session resolution — same shape.
+      return getSession(token);
+    },
+
+    async updateProfile(
+      token: string,
+      input: { displayName: string | null },
+    ): Promise<UpdateProfileResult | UpdateProfileError> {
+      // Validate session
+      const sessionResult = await getSession(token);
+      if ("error" in sessionResult) {
+        return { error: "unauthenticated", message: sessionResult.message };
+      }
+
+      // Reject API-key/service-principal tokens (they don't parse as session tokens)
+      const parsed = parseSessionToken(token);
+      if (!parsed) {
+        return { error: "forbidden", message: "API keys cannot update user profiles" };
+      }
+
+      // Resolve internal user ID from public ID
+      const publicId = sessionResult.user.id;
+      const uuid = parseUserPublicId(publicId);
+      if (!uuid) {
+        return { error: "internal_error", message: "Invalid user ID format" };
+      }
+
+      const updateResult = await repo.updateUserProfile(uuid, {
+        displayName: input.displayName,
+        updatedAt: now(),
+      });
+
+      if (!updateResult.ok) {
+        return { error: "internal_error", message: "Failed to update profile" };
+      }
+
+      // Record security event with safe metadata
+      await repo.recordSecurityEvent({
+        ...eventBase(),
+        eventType: "user.profile.updated",
+        outcome: "success",
+        userId: uuid,
+        metadata: { changedFields: ["displayName"] },
+      });
+
+      const user = updateResult.value;
+      return {
+        user: { id: userPublicId(user.id), email: user.email, displayName: user.displayName },
+      };
     },
 
     async resolveBearer(token: string): Promise<ResolveBearerResult | ResolveBearerError> {

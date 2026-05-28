@@ -65,6 +65,10 @@ describe("api-edge auth facade", () => {
       expect(isAuthRoute("/v1/auth/security-events")).toBe(true);
     });
 
+    it("matches /v1/auth/profile", () => {
+      expect(isAuthRoute("/v1/auth/profile")).toBe(true);
+    });
+
     it("does not match unknown auth routes", () => {
       expect(isAuthRoute("/v1/auth/unknown")).toBe(false);
     });
@@ -208,6 +212,70 @@ describe("api-edge auth facade", () => {
         { IDENTITY_WORKER: fetcher, ENVIRONMENT: "test" },
         "req_sec3",
         "/v1/auth/security-events",
+      );
+
+      expect(response.status).toBe(405);
+      const json = (await response.json()) as any;
+      expect(json.error.code).toBe("unsupported");
+    });
+
+    it("forwards GET /v1/auth/profile to IDENTITY_WORKER", async () => {
+      const { fetcher, calls } = createFakeFetcher();
+      const request = new Request("https://api.example.com/v1/auth/profile", {
+        method: "GET",
+        headers: { authorization: "Bearer sps_ses_abc123.secret" },
+      });
+
+      const response = await handleAuthRoute(
+        request,
+        { IDENTITY_WORKER: fetcher, ENVIRONMENT: "test" },
+        "req_prof1",
+        "/v1/auth/profile",
+      );
+
+      expect(response.status).toBe(200);
+      expect(calls).toHaveLength(1);
+      expect(calls[0]!.url).toContain("/v1/auth/profile");
+      expect(calls[0]!.init.method).toBe("GET");
+    });
+
+    it("forwards PATCH /v1/auth/profile to IDENTITY_WORKER with body", async () => {
+      const { fetcher, calls } = createFakeFetcher();
+      const body = JSON.stringify({ displayName: "Alice" });
+      const request = new Request("https://api.example.com/v1/auth/profile", {
+        method: "PATCH",
+        headers: {
+          authorization: "Bearer sps_ses_abc123.secret",
+          "content-type": "application/json",
+        },
+        body,
+      });
+
+      const response = await handleAuthRoute(
+        request,
+        { IDENTITY_WORKER: fetcher, ENVIRONMENT: "test" },
+        "req_prof2",
+        "/v1/auth/profile",
+      );
+
+      expect(response.status).toBe(200);
+      expect(calls).toHaveLength(1);
+      expect(calls[0]!.url).toContain("/v1/auth/profile");
+      expect(calls[0]!.init.method).toBe("PATCH");
+      expect(calls[0]!.init.body).toBeDefined();
+    });
+
+    it("returns 405 for POST /v1/auth/profile", async () => {
+      const { fetcher } = createFakeFetcher();
+      const request = new Request("https://api.example.com/v1/auth/profile", {
+        method: "POST",
+      });
+
+      const response = await handleAuthRoute(
+        request,
+        { IDENTITY_WORKER: fetcher, ENVIRONMENT: "test" },
+        "req_prof3",
+        "/v1/auth/profile",
       );
 
       expect(response.status).toBe(405);

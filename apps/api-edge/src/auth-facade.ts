@@ -10,6 +10,10 @@ const AUTH_ROUTES: Record<string, string> = {
   "/v1/auth/security-events": "GET",
 };
 
+const AUTH_MULTI_METHOD_ROUTES: Record<string, Set<string>> = {
+  "/v1/auth/profile": new Set(["GET", "PATCH"]),
+};
+
 const FORWARDED_HEADERS = [
   "authorization",
   "content-type",
@@ -19,7 +23,7 @@ const FORWARDED_HEADERS = [
 ];
 
 export function isAuthRoute(pathname: string): boolean {
-  return pathname in AUTH_ROUTES;
+  return pathname in AUTH_ROUTES || pathname in AUTH_MULTI_METHOD_ROUTES;
 }
 
 export async function handleAuthRoute(
@@ -29,11 +33,17 @@ export async function handleAuthRoute(
   pathname: string,
 ): Promise<Response> {
   const expectedMethod = AUTH_ROUTES[pathname];
-  if (!expectedMethod) {
+  const allowedMethods = AUTH_MULTI_METHOD_ROUTES[pathname];
+
+  if (!expectedMethod && !allowedMethods) {
     return errorResponse("not_found", `Route not found: ${pathname}`, 404, requestId);
   }
 
-  if (request.method !== expectedMethod) {
+  if (expectedMethod && request.method !== expectedMethod) {
+    return errorResponse("unsupported", "Method not allowed", 405, requestId);
+  }
+
+  if (allowedMethods && !allowedMethods.has(request.method)) {
     return errorResponse("unsupported", "Method not allowed", 405, requestId);
   }
 
@@ -62,7 +72,7 @@ export async function handleAuthRoute(
     headers,
   };
 
-  if (request.method === "POST") {
+  if (request.method === "POST" || request.method === "PATCH") {
     init.body = request.body;
   }
 

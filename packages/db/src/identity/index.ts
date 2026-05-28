@@ -22,6 +22,7 @@ export type {
   ApiKeyCursorPosition,
   ApiKeyPageQueryParams,
   ApiKeyPagedResult,
+  UpdateUserProfileInput,
 } from "./types.js";
 
 export { createIdentityRepository } from "./repository.js";

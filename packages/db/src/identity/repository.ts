@@ -19,6 +19,7 @@ import type {
   SecurityEventPageQueryParams,
   ServicePrincipal,
   Session,
+  UpdateUserProfileInput,
   User,
 } from "./types.js";
 
@@ -182,6 +183,24 @@ export function createIdentityRepository(executor: SqlExecutor): IdentityReposit
         return { ok: true, value: mapUser(result.rows[0]!) };
       } catch {
         return safeError("Failed to get user by email");
+      }
+    },
+
+    async updateUserProfile(userId: string, input: UpdateUserProfileInput): Promise<IdentityResult<User>> {
+      try {
+        const result = await executor.execute<Record<string, unknown>>(
+          `UPDATE identity.users
+           SET display_name = $2, updated_at = $3
+           WHERE id = $1
+           RETURNING *`,
+          [userId, input.displayName, input.updatedAt.toISOString()],
+        );
+        if (result.rowCount === 0) {
+          return { ok: false, error: { kind: "not_found" } };
+        }
+        return { ok: true, value: mapUser(result.rows[0]!) };
+      } catch {
+        return safeError("Failed to update user profile");
       }
     },
 

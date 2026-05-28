@@ -80,6 +80,27 @@ V1 must ship with at least one first-party sign-in path that is Sourceplane-owne
 
 `login/start` and `login/complete` are the only auth mutations that may pass through the public edge without a pre-resolved actor. They still use the standard success and error envelopes.
 
+#### Self-scoped profile routes (identity-owned, user-session only)
+
+- `GET /v1/auth/profile` — read the authenticated user's own profile
+- `PATCH /v1/auth/profile` — update the authenticated user's own profile
+
+These routes are self-scoped: the authenticated session determines the user.
+Clients must not provide a `userId` path or body field. Only user-session
+bearer tokens are accepted; API-key/service-principal actors are rejected.
+
+**Profile read** returns the user's `id`, `email`, and `displayName`.
+
+**Profile update** accepts a JSON body with `displayName` (string or null).
+Empty strings are normalized to null. Maximum length: 120 characters.
+Unsupported fields (e.g. `email`, `id`, `status`) are rejected with
+`validation_failed`. Successful updates record a `user.profile.updated`
+identity security event with safe metadata (changed field names only, no
+old/new values).
+
+Email address changes and account security settings mutations are deferred
+to a future task.
+
 #### API-key administration routes (tenant-scoped)
 
 - `POST /v1/organizations/{orgId}/api-keys` — create
