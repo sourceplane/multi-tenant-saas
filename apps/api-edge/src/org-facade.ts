@@ -1,5 +1,6 @@
 import type { Env } from "./env.js";
 import { errorResponse } from "./http.js";
+import { resolveActor } from "./resolve-actor.js";
 
 const ORG_ROUTES: Record<string, string> = {
   "/v1/organizations": "POST|GET",
@@ -76,7 +77,7 @@ export async function handleOrgRoute(
     );
   }
 
-  const sessionResult = await resolveSession(request, env, requestId);
+  const sessionResult = await resolveActor(request, env, requestId);
   if ("error" in sessionResult) {
     return sessionResult.error;
   }
@@ -86,6 +87,9 @@ export async function handleOrgRoute(
   headers.set("x-actor-subject-id", sessionResult.subjectId);
   headers.set("x-actor-subject-type", sessionResult.subjectType);
   headers.set("x-actor-email", sessionResult.email);
+  if (sessionResult.orgId) {
+    headers.set("x-actor-org-id", sessionResult.orgId);
+  }
   for (const name of FORWARDED_HEADERS) {
     if (name === "x-request-id") continue;
     const value = request.headers.get(name);
@@ -117,62 +121,5 @@ export async function handleOrgRoute(
       503,
       requestId,
     );
-  }
-}
-
-interface SessionSuccess {
-  subjectId: string;
-  subjectType: string;
-  email: string;
-}
-
-interface SessionFailure {
-  error: Response;
-}
-
-async function resolveSession(
-  request: Request,
-  env: Env,
-  requestId: string,
-): Promise<SessionSuccess | SessionFailure> {
-  const authorization = request.headers.get("authorization");
-  if (!authorization || !authorization.startsWith("Bearer ")) {
-    return {
-      error: errorResponse("unauthenticated", "Missing or invalid Authorization header", 401, requestId),
-    };
-  }
-
-  const sessionHeaders = new Headers();
-  sessionHeaders.set("authorization", authorization);
-  sessionHeaders.set("x-request-id", requestId);
-
-  const target = new URL("/v1/auth/session", "https://identity.internal");
-
-  try {
-    const response = await env.IDENTITY_WORKER!.fetch(target.toString(), {
-      method: "GET",
-      headers: sessionHeaders,
-    });
-
-    if (!response.ok) {
-      return {
-        error: errorResponse("unauthenticated", "Authentication failed", 401, requestId),
-      };
-    }
-
-    const json = (await response.json()) as { data?: { user?: { id?: string; email?: string } } };
-    const userId = json?.data?.user?.id;
-    const userEmail = json?.data?.user?.email;
-    if (!userId || !userEmail) {
-      return {
-        error: errorResponse("unauthenticated", "Authentication failed", 401, requestId),
-      };
-    }
-
-    return { subjectId: userId, subjectType: "user", email: userEmail };
-  } catch {
-    return {
-      error: errorResponse("internal_error", "Authentication service unavailable", 503, requestId),
-    };
   }
 }

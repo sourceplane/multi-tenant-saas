@@ -66,6 +66,22 @@ export interface LogoutError {
   message: string;
 }
 
+export interface ResolveBearerResult {
+  actorType: "user" | "service_principal";
+  actorId: string;
+  orgId?: string;
+  projectId?: string | null;
+  displayName?: string | null;
+  email?: string | null;
+  session?: { id: string; expiresAt: Date; createdAt: Date };
+  user?: { id: string; email: string; displayName: string | null };
+}
+
+export interface ResolveBearerError {
+  error: "unauthenticated";
+  message: string;
+}
+
 const CHALLENGE_TTL_MS = 10 * 60 * 1000;
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -115,6 +131,39 @@ export function createAuthService(deps: AuthServiceDeps) {
     }
 
     return createResult;
+  }
+
+  async function getSession(token: string): Promise<GetSessionResult | GetSessionError> {
+    const parsed = parseSessionToken(token);
+    if (!parsed) {
+      return { error: "unauthenticated", message: "Invalid token format" };
+    }
+
+    const tokenHash = await hashSha256(parsed.secret);
+    const sessionResult = await repo.getSessionByTokenHash(tokenHash);
+
+    if (!sessionResult.ok) {
+      return { error: "unauthenticated", message: "Session not found" };
+    }
+
+    const session = sessionResult.value;
+    if (session.revokedAt !== null) {
+      return { error: "unauthenticated", message: "Session has been revoked" };
+    }
+    if (session.expiresAt.getTime() <= now().getTime()) {
+      return { error: "unauthenticated", message: "Session has expired" };
+    }
+
+    const userResult = await repo.getUserById(session.userId);
+    if (!userResult.ok) {
+      return { error: "unauthenticated", message: "User not found" };
+    }
+
+    const user = userResult.value;
+    return {
+      session: { id: sessionPublicId(session.id), expiresAt: session.expiresAt, createdAt: session.createdAt },
+      user: { id: userPublicId(user.id), email: user.email, displayName: user.displayName },
+    };
   }
 
   return {
@@ -253,35 +302,56 @@ export function createAuthService(deps: AuthServiceDeps) {
     },
 
     async getSession(token: string): Promise<GetSessionResult | GetSessionError> {
+      return getSession(token);
+    },
+
+    async resolveBearer(token: string): Promise<ResolveBearerResult | ResolveBearerError> {
+      // Try session token first (sps_ses_ prefix)
       const parsed = parseSessionToken(token);
-      if (!parsed) {
-        return { error: "unauthenticated", message: "Invalid token format" };
+      if (parsed) {
+        const sessionResult = await getSession(token);
+        if ("error" in sessionResult) {
+          return { error: "unauthenticated", message: sessionResult.message };
+        }
+        return {
+          actorType: "user",
+          actorId: sessionResult.user.id,
+          email: sessionResult.user.email,
+          displayName: sessionResult.user.displayName,
+          session: sessionResult.session,
+          user: sessionResult.user,
+        };
       }
 
-      const tokenHash = await hashSha256(parsed.secret);
-      const sessionResult = await repo.getSessionByTokenHash(tokenHash);
-
-      if (!sessionResult.ok) {
-        return { error: "unauthenticated", message: "Session not found" };
+      // Try API key resolution
+      const keyHash = await hashSha256(token);
+      const apiKeyResult = await repo.getApiKeyByKeyHash(keyHash);
+      if (!apiKeyResult.ok) {
+        return { error: "unauthenticated", message: "Invalid bearer token" };
       }
 
-      const session = sessionResult.value;
-      if (session.revokedAt !== null) {
-        return { error: "unauthenticated", message: "Session has been revoked" };
+      const apiKey = apiKeyResult.value;
+      if (apiKey.status !== "active") {
+        return { error: "unauthenticated", message: "API key is not active" };
       }
-      if (session.expiresAt.getTime() <= now().getTime()) {
-        return { error: "unauthenticated", message: "Session has expired" };
+      if (apiKey.revokedAt !== null) {
+        return { error: "unauthenticated", message: "API key has been revoked" };
       }
-
-      const userResult = await repo.getUserById(session.userId);
-      if (!userResult.ok) {
-        return { error: "unauthenticated", message: "User not found" };
+      if (apiKey.expiresAt !== null && apiKey.expiresAt.getTime() <= now().getTime()) {
+        return { error: "unauthenticated", message: "API key has expired" };
       }
 
-      const user = userResult.value;
+      // Resolve service principal for display name
+      const spResult = await repo.getServicePrincipalById(apiKey.servicePrincipalId);
+      const displayName = spResult.ok ? spResult.value.displayName : null;
+      const projectId = spResult.ok ? spResult.value.projectId : null;
+
       return {
-        session: { id: sessionPublicId(session.id), expiresAt: session.expiresAt, createdAt: session.createdAt },
-        user: { id: userPublicId(user.id), email: user.email, displayName: user.displayName },
+        actorType: "service_principal",
+        actorId: `sp_${apiKey.servicePrincipalId.replace(/-/g, "")}`,
+        orgId: apiKey.orgId,
+        projectId,
+        displayName,
       };
     },
 

@@ -13,6 +13,8 @@ import type {
   CreateSecurityEventInput,
   SecurityEventPageQueryParams,
   SecurityEventPagedResult,
+  ApiKey,
+  ServicePrincipal,
 } from "@saas/db/identity";
 
 interface StoredChallenge extends LoginChallenge {
@@ -29,12 +31,16 @@ export function createFakeRepository(): IdentityRepository & {
   _challenges: Map<string, StoredChallenge>;
   _sessions: Map<string, StoredSession>;
   _securityEvents: SecurityEvent[];
+  _apiKeys: Map<string, ApiKey & { keyHash: string }>;
+  _servicePrincipals: Map<string, ServicePrincipal>;
 } {
   const users = new Map<string, User>();
   const authIdentities = new Map<string, AuthIdentity>();
   const challenges = new Map<string, StoredChallenge>();
   const sessions = new Map<string, StoredSession>();
   const securityEvents: SecurityEvent[] = [];
+  const apiKeys = new Map<string, ApiKey & { keyHash: string }>();
+  const servicePrincipals = new Map<string, ServicePrincipal>();
 
   const repo: IdentityRepository & {
     _users: Map<string, User>;
@@ -42,12 +48,16 @@ export function createFakeRepository(): IdentityRepository & {
     _challenges: Map<string, StoredChallenge>;
     _sessions: Map<string, StoredSession>;
     _securityEvents: SecurityEvent[];
+    _apiKeys: Map<string, ApiKey & { keyHash: string }>;
+    _servicePrincipals: Map<string, ServicePrincipal>;
   } = {
     _users: users,
     _authIdentities: authIdentities,
     _challenges: challenges,
     _sessions: sessions,
     _securityEvents: securityEvents,
+    _apiKeys: apiKeys,
+    _servicePrincipals: servicePrincipals,
 
     async createUser(input: CreateUserInput): Promise<IdentityResult<User>> {
       if (users.has(input.id)) {
@@ -215,6 +225,75 @@ export function createFakeRepository(): IdentityRepository & {
       }
 
       return { ok: true, value: { items: page, nextCursor } };
+    },
+
+    async createServicePrincipal(input: any): Promise<IdentityResult<ServicePrincipal>> {
+      const sp: ServicePrincipal = {
+        id: input.id,
+        orgId: input.orgId,
+        projectId: input.projectId ?? null,
+        displayName: input.displayName,
+        description: input.description ?? null,
+        status: "active",
+        createdBy: input.createdBy,
+        createdAt: input.createdAt,
+        updatedAt: input.createdAt,
+      };
+      servicePrincipals.set(input.id, sp);
+      return { ok: true, value: sp };
+    },
+
+    async getServicePrincipalById(id: string): Promise<IdentityResult<ServicePrincipal>> {
+      const sp = servicePrincipals.get(id);
+      if (!sp) return { ok: false, error: { kind: "not_found" } };
+      return { ok: true, value: sp };
+    },
+
+    async listServicePrincipalsByOrg(orgId: string): Promise<IdentityResult<ServicePrincipal[]>> {
+      const result = [...servicePrincipals.values()].filter(sp => sp.orgId === orgId);
+      return { ok: true, value: result };
+    },
+
+    async createApiKey(input: any): Promise<IdentityResult<ApiKey>> {
+      const key: ApiKey & { keyHash: string } = {
+        id: input.id,
+        servicePrincipalId: input.servicePrincipalId,
+        orgId: input.orgId,
+        keyPrefix: input.keyPrefix,
+        keyHash: input.keyHash,
+        label: input.label ?? "",
+        status: "active",
+        expiresAt: input.expiresAt ?? null,
+        lastUsedAt: null,
+        revokedAt: null,
+        revokedBy: null,
+        createdBy: input.createdBy,
+        createdAt: input.createdAt,
+        updatedAt: input.createdAt,
+      };
+      apiKeys.set(input.id, key);
+      return { ok: true, value: key };
+    },
+
+    async getApiKeyByKeyHash(keyHash: string): Promise<IdentityResult<ApiKey>> {
+      for (const k of apiKeys.values()) {
+        if (k.keyHash === keyHash) return { ok: true, value: k };
+      }
+      return { ok: false, error: { kind: "not_found" } };
+    },
+
+    async listApiKeysByOrg(params: any): Promise<IdentityResult<any>> {
+      const orgKeys = [...apiKeys.values()].filter(k => k.orgId === params.orgId);
+      return { ok: true, value: { items: orgKeys, nextCursor: null } };
+    },
+
+    async revokeApiKey(id: string, revokedBy: string, revokedAt: Date): Promise<IdentityResult<ApiKey>> {
+      const k = apiKeys.get(id);
+      if (!k) return { ok: false, error: { kind: "not_found" } };
+      k.revokedAt = revokedAt;
+      k.revokedBy = revokedBy;
+      k.status = "revoked";
+      return { ok: true, value: k };
     },
   };
 

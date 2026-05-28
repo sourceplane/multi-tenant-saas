@@ -48,10 +48,14 @@ function createSessionFetcher(userId: string): { fetcher: Fetcher; calls: FetchC
     fetch(input: string | Request | URL, init?: RequestInit): Promise<Response> {
       const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
       calls.push({ url, init: init ?? {} });
-      if (url.includes("/v1/auth/session")) {
+      if (url.includes("/v1/auth/resolve")) {
         return Promise.resolve(
           Response.json({
-            data: { session: { id: "ses_abc", expiresAt: "2026-12-01T00:00:00Z", createdAt: "2026-01-01T00:00:00Z" }, user: { id: userId, email: "user@test.com", displayName: "Test" } },
+            data: {
+              actor: { actorType: "user", actorId: userId, email: "user@test.com" },
+              session: { id: "ses_abc", expiresAt: "2026-12-01T00:00:00Z", createdAt: "2026-01-01T00:00:00Z" },
+              user: { id: userId, email: "user@test.com", displayName: "Test" },
+            },
             meta: { requestId: "req_inner", cursor: null },
           }),
         );
@@ -88,7 +92,7 @@ describe("api-edge org facade", () => {
     });
 
     it("does not match /v1/auth routes", () => {
-      expect(isOrgRoute("/v1/auth/session")).toBe(false);
+      expect(isOrgRoute("/v1/auth/resolve")).toBe(false);
     });
   });
 
@@ -110,7 +114,7 @@ describe("api-edge org facade", () => {
       );
 
       expect(identityCalls).toHaveLength(1);
-      expect(identityCalls[0]!.url).toContain("/v1/auth/session");
+      expect(identityCalls[0]!.url).toContain("/v1/auth/resolve");
 
       expect(membershipCalls).toHaveLength(1);
       const forwardedHeaders = new Headers(membershipCalls[0]!.init.headers as HeadersInit);
@@ -539,7 +543,7 @@ describe("api-edge org facade", () => {
       );
 
       expect(identityCalls).toHaveLength(1);
-      expect(identityCalls[0]!.url).toContain("/v1/auth/session");
+      expect(identityCalls[0]!.url).toContain("/v1/auth/resolve");
 
       const forwarded = new Headers(membershipCalls[0]!.init.headers as HeadersInit);
       expect(forwarded.get("x-actor-subject-id")).toBe("usr_member_actor");
@@ -763,7 +767,7 @@ describe("api-edge org facade", () => {
       );
 
       expect(identityCalls).toHaveLength(1);
-      expect(identityCalls[0]!.url).toContain("/v1/auth/session");
+      expect(identityCalls[0]!.url).toContain("/v1/auth/resolve");
 
       const forwarded = new Headers(membershipCalls[0]!.init.headers as HeadersInit);
       expect(forwarded.get("x-actor-subject-id")).toBe("usr_member_actor");
@@ -1241,14 +1245,14 @@ describe("api-edge org facade", () => {
         expect(forwarded.get("x-actor-email")).toBe("user@test.com");
       });
 
-      it("fails authentication when identity response has no email", async () => {
+      it("forwards request even when identity response has no email", async () => {
         const noEmailFetcher = {
           fetch(input: string | Request | URL): Promise<Response> {
             const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
-            if (url.includes("/v1/auth/session")) {
+            if (url.includes("/v1/auth/resolve")) {
               return Promise.resolve(
                 Response.json({
-                  data: { session: { id: "ses_abc" }, user: { id: "usr_123" } },
+                  data: { actor: { actorType: "user", actorId: "usr_123" }, session: { id: "ses_abc" }, user: { id: "usr_123" } },
                   meta: { requestId: "req_inner", cursor: null },
                 }),
               );
@@ -1258,7 +1262,7 @@ describe("api-edge org facade", () => {
           connect() { throw new Error("not implemented"); },
         } as unknown as Fetcher;
 
-        const { fetcher: membershipFetcher } = createFakeFetcher();
+        const { fetcher: membershipFetcher, calls: membershipCalls } = createFakeFetcher();
 
         const request = new Request("https://api.example.com/v1/organizations/org_abc/invitations/accept", {
           method: "POST",
@@ -1273,9 +1277,10 @@ describe("api-edge org facade", () => {
           "/v1/organizations/org_abc/invitations/accept",
         );
 
-        expect(response.status).toBe(401);
-        const json = await response.json() as any;
-        expect(json.error.code).toBe("unauthenticated");
+        expect(response.status).toBe(200);
+        expect(membershipCalls).toHaveLength(1);
+        const forwarded = new Headers(membershipCalls[0]!.init.headers as HeadersInit);
+        expect(forwarded.get("x-actor-email")).toBe("");
       });
 
       it("returns 405 for non-POST methods", async () => {

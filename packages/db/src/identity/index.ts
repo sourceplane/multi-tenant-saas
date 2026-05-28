@@ -15,6 +15,13 @@ export type {
   IdentityRepository,
   IdentityResult,
   IdentityRepositoryError,
+  ApiKey,
+  ServicePrincipal,
+  CreateServicePrincipalInput,
+  CreateApiKeyInput,
+  ApiKeyCursorPosition,
+  ApiKeyPageQueryParams,
+  ApiKeyPagedResult,
 } from "./types.js";
 
 export { createIdentityRepository } from "./repository.js";

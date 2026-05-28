@@ -3,6 +3,7 @@ import { handleHealth } from "./handlers/health.js";
 import { handleLoginStart } from "./handlers/login-start.js";
 import { handleLoginComplete } from "./handlers/login-complete.js";
 import { handleSession } from "./handlers/session.js";
+import { handleResolveBearer } from "./handlers/resolve-bearer.js";
 import { handleLogout } from "./handlers/logout.js";
 import { handleSecurityEvents } from "./handlers/security-events.js";
 import { errorResponse, notFound, methodNotAllowed } from "./http.js";
@@ -38,6 +39,11 @@ export async function route(request: Request, env: Env): Promise<Response> {
     if (url.pathname === "/v1/auth/session") {
       if (request.method !== "GET") return methodNotAllowed(requestId);
       return handleSession(request, env, requestId);
+    }
+
+    if (url.pathname === "/v1/auth/resolve") {
+      if (request.method !== "GET") return methodNotAllowed(requestId);
+      return handleResolveBearer(request, env, requestId);
     }
 
     if (url.pathname === "/v1/auth/logout") {
