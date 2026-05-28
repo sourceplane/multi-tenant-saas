@@ -75,5 +75,14 @@ export const manifest: MigrationManifest = {
       description:
         "Config persistence foundation — scoped settings, feature flags, and secret metadata",
     },
+    {
+      id: "080_webhooks_core",
+      context: "webhooks",
+      path: "080_webhooks_core/up.sql",
+      checksum:
+        "bfffc592f82028dd06865833bfd5e8124dbfe51e2e02aecccea4b14b42e9f2a6",
+      description:
+        "Webhook persistence foundation — endpoints, subscriptions, and delivery attempts",
+    },
   ],
 };
