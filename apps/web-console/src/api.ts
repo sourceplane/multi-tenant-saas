@@ -28,6 +28,14 @@ import type {
   PublicSetting,
   PublicFeatureFlag,
   PublicSecretMetadata,
+  CreateSettingRequest,
+  UpdateSettingRequest,
+  CreateSettingResponse,
+  UpdateSettingResponse,
+  CreateFeatureFlagRequest,
+  UpdateFeatureFlagRequest,
+  CreateFeatureFlagResponse,
+  UpdateFeatureFlagResponse,
 } from "@saas/contracts/config";
 
 export interface ApiTarget {
@@ -386,6 +394,76 @@ export class ApiClient {
     if ("error" in r) return this.wrapErr(r.error);
     const flags = (r.json as any).featureFlags ?? r.json;
     return this.wrapOk(Array.isArray(flags) ? flags : [], r.meta);
+  }
+
+  // Config — scoped path helper
+  private configPath(
+    orgId: string,
+    resource: string,
+    opts?: { projectId?: string; environmentId?: string },
+    itemId?: string,
+  ): string {
+    let base: string;
+    if (opts?.projectId && opts?.environmentId) {
+      base = `/v1/organizations/${orgId}/projects/${opts.projectId}/environments/${opts.environmentId}/config/${resource}`;
+    } else if (opts?.projectId) {
+      base = `/v1/organizations/${orgId}/projects/${opts.projectId}/config/${resource}`;
+    } else {
+      base = `/v1/organizations/${orgId}/config/${resource}`;
+    }
+    return itemId ? `${base}/${itemId}` : base;
+  }
+
+  // Config — Setting Mutations
+  async createSetting(
+    orgId: string,
+    data: CreateSettingRequest,
+    opts?: { projectId?: string; environmentId?: string },
+  ): Promise<ApiResult<CreateSettingResponse>> {
+    const path = this.configPath(orgId, "settings", opts);
+    const r = await this.raw("POST", path, data);
+    if ("error" in r) return this.wrapErr(r.error);
+    const setting = (r.json as any).setting ?? r.json;
+    return this.wrapOk({ setting }, r.meta);
+  }
+
+  async updateSetting(
+    orgId: string,
+    settingId: string,
+    data: UpdateSettingRequest,
+    opts?: { projectId?: string; environmentId?: string },
+  ): Promise<ApiResult<UpdateSettingResponse>> {
+    const path = this.configPath(orgId, "settings", opts, settingId);
+    const r = await this.raw("PATCH", path, data);
+    if ("error" in r) return this.wrapErr(r.error);
+    const setting = (r.json as any).setting ?? r.json;
+    return this.wrapOk({ setting }, r.meta);
+  }
+
+  // Config — Feature Flag Mutations
+  async createFeatureFlag(
+    orgId: string,
+    data: CreateFeatureFlagRequest,
+    opts?: { projectId?: string; environmentId?: string },
+  ): Promise<ApiResult<CreateFeatureFlagResponse>> {
+    const path = this.configPath(orgId, "feature-flags", opts);
+    const r = await this.raw("POST", path, data);
+    if ("error" in r) return this.wrapErr(r.error);
+    const featureFlag = (r.json as any).featureFlag ?? r.json;
+    return this.wrapOk({ featureFlag }, r.meta);
+  }
+
+  async updateFeatureFlag(
+    orgId: string,
+    flagId: string,
+    data: UpdateFeatureFlagRequest,
+    opts?: { projectId?: string; environmentId?: string },
+  ): Promise<ApiResult<UpdateFeatureFlagResponse>> {
+    const path = this.configPath(orgId, "feature-flags", opts, flagId);
+    const r = await this.raw("PATCH", path, data);
+    if ("error" in r) return this.wrapErr(r.error);
+    const featureFlag = (r.json as any).featureFlag ?? r.json;
+    return this.wrapOk({ featureFlag }, r.meta);
   }
 
   // Config — Secret Metadata
