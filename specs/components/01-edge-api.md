@@ -58,7 +58,7 @@ The edge must expose and route at least these route groups:
 - `/v1/organizations/{orgId}/projects/*`
 - `/v1/organizations/{orgId}/projects/{projectId}/environments/*`
 - `/v1/organizations/{orgId}/projects/{projectId}/config/*`
-- `/v1/organizations/{orgId}/projects/{projectId}/api-keys/*`
+- `/v1/organizations/{orgId}/api-keys/*`
 - `/v1/organizations/{orgId}/projects/{projectId}/webhooks/*`
 - `/v1/organizations/{orgId}/audit/*`
 - `/v1/organizations/{orgId}/usage/*`

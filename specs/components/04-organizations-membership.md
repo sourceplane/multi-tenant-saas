@@ -78,7 +78,10 @@ This component owns:
 - organizations
 - memberships
 - invitations
-- role assignments
+- role assignments (including service-principal role bindings used by API-key
+  administration; identity owns the service principal and API key credentials,
+  but membership owns the role assignment that grants the service principal
+  access within an organization or project)
 - organization-level settings
 
 ## Agent Freedom
