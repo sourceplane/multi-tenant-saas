@@ -445,10 +445,21 @@ Last updated: 2026-05-28
 - Key durable outcome: Web-console Config tab now supports full secret lifecycle management — create, rotate, and revoke — via public api-edge routes. Secret values are write-only (password inputs, cleared after submission, never persisted/logged/revealed). Revoke requires explicit confirmation. Existing settings and feature-flag mutation flows preserved.
 - Reports: `ai/reports/task-0066-implementer.md`, `ai/reports/task-0066-verifier.md`
 
+### Task 0067 — Webhooks Core Persistence
+
+- Agent: Implementer (varahul) → Verifier
+- Prompt: `ai/tasks/task-0067.md`
+- Verifier prompt: `ai/tasks/task-0067-verifier.md`
+- PR #110 (`impl/task-0067-webhooks-core`) **MERGED** at commit `ca8c871` (2026-05-28).
+- PR URL: `https://github.com/sourceplane/multi-tenant-saas/pull/110`
+- PR CI run: `26591802397` (11/11 SUCCESS: plan + db/contracts/db-tests/contracts-tests verify + db-migrate stage/prod plan).
+- Key durable outcome: Webhooks bounded context foundation on main — migration 080_webhooks_core (endpoints/subscriptions/delivery_attempts in `webhooks` schema), WebhookRepository with full CRUD + cursor pagination + secret-safe reads, @saas/contracts/webhooks public types. 51 new tests (37 db + 14 contract). No plaintext secret exposure.
+- Reports: `ai/reports/task-0067-implementer.md`, `ai/reports/task-0067-verifier.md`
+
 ## Current Task
 
-Task 0066 verified PASS and merged via PR #109 at `5a9fa72`.
+Task 0067 verified PASS and merged via PR #110 at `ca8c871`.
 
-Key durable outcome: Web-console Config tab now supports secret create, rotate, and revoke with write-only value semantics. All existing config mutation flows preserved.
+Key durable outcome: Webhooks core persistence layer — migration, repository, and contracts — providing the foundation for future webhook delivery, API routes, and worker implementation.
 
-Tasks 0001–0066 are completed and verified. Next orchestrator cycle should evaluate the next task per roadmap.
+Tasks 0001–0067 are completed and verified. Next orchestrator cycle should evaluate the next task per roadmap.

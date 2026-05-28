@@ -1369,6 +1369,19 @@ Last updated: 2026-05-28
 |- Scope boundary: web-console api.ts client methods, main.ts UI forms/actions, style.css secret styles. No backend, infra, or contract changes.
 |- Durable outcome: Web-console Config tab now supports full secret lifecycle management — create, rotate, revoke — via public api-edge routes. Secret values are write-only (password inputs, cleared after submission, never persisted/logged/revealed). Revoke requires explicit confirmation. Existing settings and feature-flag mutation flows preserved. No verifier fixes required.
 
+## Task 0067
+
+|- Agent: Implementer (varahul) -> Verifier
+|- Prompt: `ai/tasks/task-0067.md`
+|- Verifier prompt: `ai/tasks/task-0067-verifier.md`
+|- Status: verified PASS and merged (2026-05-28)
+|- PR: #110 (`impl/task-0067-webhooks-core`), squash-merged at `ca8c871`
+|- PR CI run: `26591802397` (11/11 checks SUCCESS)
+|- Reports: `ai/reports/task-0067-implementer.md`, `ai/reports/task-0067-verifier.md`
+|- Objective: Add webhooks core persistence layer — migration, repository, and contract types for webhook endpoints, subscriptions, and delivery attempts.
+|- Scope boundary: packages/db (migration 080_webhooks_core, webhooks repository/types/index, manifest, BoundedContext union), packages/contracts (webhooks types, index re-export), tests/db and tests/contracts webhook test suites, package.json exports.
+|- Durable outcome: Webhooks bounded context foundation on main — migration 080_webhooks_core with 3 tables in `webhooks` schema (endpoints, subscriptions, delivery_attempts), WebhookRepository with full CRUD + cursor pagination + secret-safe reads (secret_ciphertext write-only), @saas/contracts/webhooks public types. 51 new tests (37 db + 14 contract). All queries parameterized and org-scoped. No cross-context FKs. Verifier fix: committed implementer report to PR branch.
+
 ## Historical Notes
 
 - PR #1 split product-specific V2 Git catalog work away from the reusable SaaS
