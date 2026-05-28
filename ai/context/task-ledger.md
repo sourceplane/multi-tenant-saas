@@ -1288,6 +1288,19 @@ Last updated: 2026-05-28
 |- Acceptance: verifier inspects PR #103 code paths and tests, runs local config-worker/api-edge checks plus Orun validate/component/changed-plan/dry-run, reviews CI logs, confirms no secret or unrelated file churn, and merges only on PASS with green CI.
 |- Expected outcome: if PASS, PR #103 merged and `ai/reports/task-0060-verifier.md` records verification evidence; if FAIL, PR remains open with blockers.
 
+## Task 0071
+
+|- Agent: Implementer -> Verifier
+|- Prompt: `ai/tasks/task-0071.md`
+|- Verifier prompt: `ai/tasks/task-0071-verifier.md`
+|- Status: verified PASS, merged (2026-05-28)
+|- Implementation: PR #114 (`impl/task-0071-metering-foundation`), merge commit `f4d3802`
+|- PR CI run: `26603932251` — 10/10 SUCCESS
+|- Reports: `ai/reports/task-0071-implementer.md`, `ai/reports/task-0071-verifier.md`
+|- Objective: add metering persistence and contract foundation — metering bounded-context schema, typed @saas/db/metering repository, and starter @saas/contracts metering types.
+|- Scope boundary: packages/db metering module + migration, packages/contracts metering types, focused tests; no Worker runtime, routes, billing state, or infrastructure.
+|- Durable outcome: 4 metering tables (usage_records, usage_rollups, quota_definitions, quota_violations) with org-scoped tenancy, idempotent usage ingestion, structured quota checks, and 22 tests proven on main.
+
 ## Historical Notes
 
 - PR #1 split product-specific V2 Git catalog work away from the reusable SaaS

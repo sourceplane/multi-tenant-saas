@@ -423,14 +423,12 @@ Task 0060 Verifier is scoped and ready.
   preventing same-org organization/project/environment URL aliases from updating
   rows whose stored scope does not match the requested public path scope.
 
-## Next Task After 0060
+## Current State
 
-- If Task 0060 verifies PASS and merges, the next orchestrator cycle should
-  scope the next implementer-sized task. Current candidates:
-  - web-console config mutation UI using the hardened public settings/feature-
-    flag routes, or
-  - secret metadata mutation/encrypted secret storage design if write-only
-    secret handling should precede UI mutation work.
-- If Task 0060 verification FAILS, keep PR #103 open and scope a focused
-  implementer fix task or ask for human input only if the failure requires a
-  product/security decision.
+- Task 0071 verified PASS and merged via PR #114 at `f4d3802` (2026-05-28).
+- Metering persistence and contract foundation: `metering` bounded-context schema with 4 tables (usage_records, usage_rollups, quota_definitions, quota_violations), typed `@saas/db/metering` repository, `@saas/contracts` metering types. 22 focused tests.
+- Tasks 0001–0071 are complete and verified.
+
+## Next Task
+
+- Next orchestrator cycle should evaluate the next task per roadmap. Candidates include metering Worker runtime, billing persistence foundation, or other roadmap priorities.
