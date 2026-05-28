@@ -335,21 +335,14 @@ describe("config-worker router", () => {
     expect(res.status).toBe(404);
   });
 
-  it("returns 405 for POST on config routes (read-only)", async () => {
-    const env = createFakeEnv();
-    const req = makeRequest("POST", `/v1/organizations/${TEST_ORG_PUBLIC}/config/settings`);
-    const res = await route(req, env);
-    expect(res.status).toBe(405);
-  });
-
-  it("returns 405 for DELETE on config routes (read-only)", async () => {
+  it("returns 405 for DELETE on config routes", async () => {
     const env = createFakeEnv();
     const req = makeRequest("DELETE", `/v1/organizations/${TEST_ORG_PUBLIC}/config/feature-flags`);
     const res = await route(req, env);
     expect(res.status).toBe(405);
   });
 
-  it("returns 405 for PUT on config routes (read-only)", async () => {
+  it("returns 405 for PUT on config routes", async () => {
     const env = createFakeEnv();
     const req = makeRequest("PUT", `/v1/organizations/${TEST_ORG_PUBLIC}/config/secrets`);
     const res = await route(req, env);

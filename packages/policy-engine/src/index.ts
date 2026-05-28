@@ -43,7 +43,9 @@ const ORG_ROLE_PERMISSIONS: Record<OrganizationRole, readonly string[]> = {
     "billing.read",
     "billing.manage",
     "organization.config.read",
+    "organization.config.write",
     "project.config.read",
+    "project.config.write",
   ],
   admin: [
     "organization.read",
@@ -71,7 +73,9 @@ const ORG_ROLE_PERMISSIONS: Record<OrganizationRole, readonly string[]> = {
     "environment.delete",
     "audit.read",
     "organization.config.read",
+    "organization.config.write",
     "project.config.read",
+    "project.config.write",
   ],
   builder: [
     "organization.read",
@@ -113,6 +117,7 @@ const PROJECT_ROLE_PERMISSIONS: Record<ProjectRole, readonly string[]> = {
     "organization.api_key.list",
     "organization.api_key.revoke",
     "project.config.read",
+    "project.config.write",
   ],
   project_builder: [
     "project.read",
@@ -152,6 +157,7 @@ const PROJECT_SCOPED_ACTIONS: ReadonlySet<string> = new Set([
   "environment.update",
   "environment.delete",
   "project.config.read",
+  "project.config.write",
 ]);
 
 // Actions that project roles can authorize when a projectId narrows the request.
@@ -191,7 +197,9 @@ const ALL_KNOWN_ACTIONS: ReadonlySet<string> = new Set([
   "billing.read",
   "billing.manage",
   "organization.config.read",
+  "organization.config.write",
   "project.config.read",
+  "project.config.write",
 ]);
 
 function isOrgRole(role: string): role is OrganizationRole {

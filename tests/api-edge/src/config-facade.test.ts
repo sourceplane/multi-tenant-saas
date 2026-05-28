@@ -120,18 +120,30 @@ describe("api-edge config facade", () => {
       expect(isConfigRoute("/v1/organizations/org_abc/config/unknown")).toBe(false);
     });
 
-    it("does not match config with extra path segments", () => {
-      expect(isConfigRoute("/v1/organizations/org_abc/config/settings/extra")).toBe(false);
+    it("matches config item routes (settings/feature-flags with ID segment)", () => {
+      expect(isConfigRoute("/v1/organizations/org_abc/config/settings/stg_abc")).toBe(true);
+      expect(isConfigRoute("/v1/organizations/org_abc/config/feature-flags/flg_abc")).toBe(true);
     });
   });
 
   describe("handleConfigRoute", () => {
-    it("returns 405 for POST (read-only)", async () => {
+    it("forwards POST to config-worker (create)", async () => {
       const env = createEnv();
       const req = new Request("https://api-edge/v1/organizations/org_abc/config/settings", {
         method: "POST",
         headers: { "content-type": "application/json", authorization: "Bearer tok_test" },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ key: "app.name", value: "test" }),
+      });
+      const res = await handleConfigRoute(req, env as never, "req_test", "/v1/organizations/org_abc/config/settings");
+      // Resolves actor then forwards; exact status depends on env stubs
+      expect([200, 503]).toContain(res.status);
+    });
+
+    it("returns 405 for DELETE (unsupported method)", async () => {
+      const env = createEnv();
+      const req = new Request("https://api-edge/v1/organizations/org_abc/config/settings", {
+        method: "DELETE",
+        headers: { authorization: "Bearer tok_test" },
       });
       const res = await handleConfigRoute(req, env as never, "req_test", "/v1/organizations/org_abc/config/settings");
       expect(res.status).toBe(405);
