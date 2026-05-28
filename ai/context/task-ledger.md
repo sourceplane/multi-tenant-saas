@@ -1265,6 +1265,17 @@ Last updated: 2026-05-28
 |- Scope boundary: `apps/web-console/src/api.ts`, `apps/web-console/src/main.ts`, `apps/web-console/src/style.css`; no backend, infrastructure, or config-worker changes.
 |- Durable outcome: Web-console Config tab live with all 9 config list routes, explicit org/project/environment scope selection, environment on-demand loading, cursor pagination, safe text rendering. No mutations or secret plaintext.
 
+## Task 0059
+
+- Agent: Implementer → Verifier
+- Prompt: `ai/tasks/task-0059.md`
+- Verifier prompt: `ai/tasks/task-0059-verifier.md`
+- Status: verified and merged
+- PR: #102 (`impl/task-0059-config-mutations`), squash-merged at `c3e2b2d`
+- Objective: Add and verify policy-gated public config mutation routes for non-secret settings and feature flags at organization, project, and environment scope, with atomic event/audit writes.
+- Reports: `ai/reports/task-0059-implementer.md`, `ai/reports/task-0059-verifier.md`
+- Durable outcome: Config mutation handlers live on main. POST create and PATCH update for settings and feature flags at org/project/environment scopes. Policy actions `organization.config.write` and `project.config.write` deny-by-default. Atomic `settings.updated` and `feature.updated` event/audit writes. Verifier fixed 2 stale api-edge tests and reconstructed missing implementer report. 98 config-worker tests, 223 api-edge tests.
+
 ## Historical Notes
 
 - PR #1 split product-specific V2 Git catalog work away from the reusable SaaS
