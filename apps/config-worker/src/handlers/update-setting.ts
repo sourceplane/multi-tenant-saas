@@ -1,6 +1,6 @@
 import type { Env } from "../env.js";
 import type { ActorContext } from "../router.js";
-import type { ConfigRepository } from "@saas/db/config";
+import type { ConfigRepository, Scope } from "@saas/db/config";
 import type { EventsRepository } from "@saas/db/events";
 import { createConfigRepository } from "@saas/db/config";
 import { createEventsRepository } from "@saas/db/events";
@@ -9,6 +9,7 @@ import { fetchAuthorizationContext } from "../membership-client.js";
 import { authorizeViaPolicy } from "../policy-client.js";
 import { errorResponse, successResponse, validationError } from "../http.js";
 import { toPublicSetting } from "../mappers.js";
+import { scopeMatchesRequested } from "../scope-match.js";
 import type { PolicyResource } from "@saas/contracts/policy";
 
 export interface UpdateSettingDeps {
@@ -33,10 +34,11 @@ export async function handleUpdateSetting(
   env: Env,
   requestId: string,
   actor: ActorContext,
-  orgId: string,
+  requestedScope: Scope,
   settingId: string,
   deps?: UpdateSettingDeps,
 ): Promise<Response> {
+  const orgId = requestedScope.orgId;
   let body: unknown;
   try {
     body = await request.json();
@@ -85,6 +87,11 @@ export async function handleUpdateSetting(
         const existing = await txRepo.getSetting(orgId, settingId);
         if (!existing.ok) {
           return { result: existing };
+        }
+
+        // Verify requested route scope matches stored row scope
+        if (!scopeMatchesRequested(existing.value, requestedScope)) {
+          return { result: { ok: false as const, error: { kind: "not_found" as const } } };
         }
 
         // Authorize based on existing setting scope
@@ -178,6 +185,20 @@ export async function handleUpdateSetting(
 
     // Non-transactional path (deps injection for tests)
     if (deps) {
+      // Scope match check: get the existing row and verify route scope matches
+      const existing = await deps.repo.getSetting(orgId, settingId);
+      if (!existing.ok) {
+        const err = existing.error;
+        if (err.kind === "not_found") {
+          return errorResponse("not_found", "Setting not found", 404, requestId);
+        }
+        return errorResponse("internal_error", "Service unavailable", 503, requestId);
+      }
+
+      if (!scopeMatchesRequested(existing.value, requestedScope)) {
+        return errorResponse("not_found", "Setting not found", 404, requestId);
+      }
+
       const result = await deps.repo.updateSetting(orgId, settingId, {
         value,
         description: (description as string) ?? undefined,
