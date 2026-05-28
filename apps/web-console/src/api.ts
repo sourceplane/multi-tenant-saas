@@ -2,6 +2,8 @@ import type {
   LoginStartResponse,
   LoginCompleteResponse,
   SessionResponse,
+  ProfileResponse,
+  UpdateProfileRequest,
   ApiErrorEnvelope,
 } from "@saas/contracts/auth";
 import type {
@@ -130,6 +132,19 @@ export class ApiClient {
     const r = await this.raw("POST", "/v1/auth/logout");
     if ("error" in r) return this.wrapErr(r.error);
     return this.wrapOk(r.json as unknown as { success: boolean }, r.meta);
+  }
+
+  // Profile (self-scoped)
+  async getProfile(): Promise<ApiResult<ProfileResponse>> {
+    const r = await this.raw("GET", "/v1/auth/profile");
+    if ("error" in r) return this.wrapErr(r.error);
+    return this.wrapOk(r.json as unknown as ProfileResponse, r.meta);
+  }
+
+  async updateProfile(data: UpdateProfileRequest): Promise<ApiResult<ProfileResponse>> {
+    const r = await this.raw("PATCH", "/v1/auth/profile", data);
+    if ("error" in r) return this.wrapErr(r.error);
+    return this.wrapOk(r.json as unknown as ProfileResponse, r.meta);
   }
 
   // Organizations

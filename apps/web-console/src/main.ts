@@ -9,10 +9,11 @@ import {
   selectOrg,
   selectProject,
   clearProject,
+  updateDisplayName,
 } from "./state";
 
 let state = createState();
-let accountSecurityView = false;
+let accountView: "profile" | "security" | null = null;
 
 function $(id: string): HTMLElement {
   return document.getElementById(id)!;
@@ -94,10 +95,10 @@ function renderHeader(): HTMLElement {
   }
 
   if (state.authenticated) {
-    right.appendChild(btn("Account Security", () => {
-      accountSecurityView = true;
+    right.appendChild(btn("Account", () => {
+      accountView = accountView ? null : "profile";
       render();
-    }, accountSecurityView ? "btn-sm btn-active" : "btn-sm"));
+    }, accountView ? "btn-sm btn-active" : "btn-sm"));
     right.appendChild(btn("Logout", handleLogout, "btn-sm btn-danger"));
   }
 
@@ -112,8 +113,8 @@ function renderMain(): HTMLElement {
 
   if (!state.authenticated) {
     main.appendChild(renderAuthView());
-  } else if (accountSecurityView) {
-    main.appendChild(renderAccountSecurityView());
+  } else if (accountView) {
+    main.appendChild(renderAccountView());
   } else if (!state.orgId) {
     main.appendChild(renderOrgSelectView());
   } else {
@@ -232,7 +233,7 @@ async function handleManualToken(): Promise<void> {
 async function handleLogout(): Promise<void> {
   await state.client.logout();
   state = clearAuth(state);
-  accountSecurityView = false;
+  accountView = null;
   render();
 }
 
@@ -961,26 +962,167 @@ async function loadAudit(cursor?: string): Promise<void> {
   }
 }
 
-// --- Account Security View (user-scoped) ---
+// --- Account View (Profile + Security Events) ---
 
-function renderAccountSecurityView(): HTMLElement {
+function renderAccountView(): HTMLElement {
   const section = h("section", { class: "panel" });
 
   const header = h("div", { class: "form-group" });
   header.appendChild(btn("\u2190 Back", () => {
-    accountSecurityView = false;
+    accountView = null;
     render();
   }, "btn-sm"));
-  header.appendChild(h("h2", {}, "Account Security Events"));
+  header.appendChild(h("h2", {}, "Account Settings"));
   section.appendChild(header);
 
-  section.appendChild(h("p", { class: "muted" }, "Your recent sign-in and session activity. This view is scoped to your account, not an organization."));
+  const nav = h("nav", { class: "form-group" });
+  nav.appendChild(btn("Profile", () => {
+    accountView = "profile";
+    render();
+  }, accountView === "profile" ? "btn-sm btn-active" : "btn-sm"));
+  nav.appendChild(btn("Security Events", () => {
+    accountView = "security";
+    render();
+  }, accountView === "security" ? "btn-sm btn-active" : "btn-sm"));
+  section.appendChild(nav);
 
-  const list = h("div", { id: "security-events-list", class: "mt" });
-  section.appendChild(list);
-  loadSecurityEvents();
+  if (accountView === "profile") {
+    section.appendChild(renderProfileSection());
+  } else {
+    section.appendChild(renderSecurityEventsSection());
+  }
 
   return section;
+}
+
+// --- Profile Section ---
+
+function renderProfileSection(): HTMLElement {
+  const container = h("div", { class: "mt" });
+  container.appendChild(h("h3", {}, "Profile"));
+  container.appendChild(h("p", { class: "muted" }, "View and update your display name. Email cannot be changed here."));
+
+  const profileContent = h("div", { id: "profile-content" });
+  container.appendChild(profileContent);
+  loadProfile();
+
+  return container;
+}
+
+async function loadProfile(): Promise<void> {
+  const container = document.getElementById("profile-content");
+  if (!container) return;
+  clear(container);
+  container.appendChild(h("p", { class: "muted" }, "Loading..."));
+
+  const result = await state.client.getProfile();
+  clear(container);
+
+  if (!result.ok) {
+    showError(result, container);
+    return;
+  }
+
+  const user = result.data.user;
+
+  // Update in-memory session state with latest profile data
+  if (state.session) {
+    state = updateDisplayName(state, user.displayName);
+  }
+
+  const emailRow = h("div", { class: "form-group" });
+  emailRow.appendChild(h("label", {}, "Email"));
+  const emailInput = document.createElement("input");
+  emailInput.type = "email";
+  emailInput.value = user.email;
+  emailInput.readOnly = true;
+  emailInput.className = "muted";
+  emailRow.appendChild(emailInput);
+  container.appendChild(emailRow);
+
+  const nameRow = h("div", { class: "form-group mt" });
+  nameRow.appendChild(h("label", {}, "Display Name"));
+  const nameInput = document.createElement("input");
+  nameInput.type = "text";
+  nameInput.id = "profile-display-name";
+  nameInput.placeholder = "Display name (optional)";
+  nameInput.value = user.displayName ?? "";
+  nameRow.appendChild(nameInput);
+  container.appendChild(nameRow);
+
+  const actions = h("div", { class: "form-group mt" });
+  actions.appendChild(btn("Save", handleSaveProfile, "btn-primary"));
+  actions.appendChild(btn("Clear Name", handleClearDisplayName, "btn-secondary"));
+  container.appendChild(actions);
+
+  container.appendChild(h("div", { id: "profile-result", class: "mt" }));
+}
+
+async function handleSaveProfile(): Promise<void> {
+  const nameInput = document.getElementById("profile-display-name") as HTMLInputElement | null;
+  if (!nameInput) return;
+
+  const container = document.getElementById("profile-result");
+  if (container) clear(container);
+
+  const raw = nameInput.value.trim();
+  const displayName = raw === "" ? null : raw;
+
+  const result = await state.client.updateProfile({ displayName });
+
+  if (!result.ok) {
+    if (container) showError(result, container);
+    return;
+  }
+
+  state = updateDisplayName(state, result.data.user.displayName);
+  if (container) {
+    container.appendChild(h("p", { class: "success" }, "Profile updated."));
+  }
+  // Re-render header to reflect new display name
+  const headerEl = document.querySelector(".app-header");
+  if (headerEl) {
+    const newHeader = renderHeader();
+    headerEl.replaceWith(newHeader);
+  }
+}
+
+async function handleClearDisplayName(): Promise<void> {
+  const container = document.getElementById("profile-result");
+  if (container) clear(container);
+
+  const result = await state.client.updateProfile({ displayName: null });
+
+  if (!result.ok) {
+    if (container) showError(result, container);
+    return;
+  }
+
+  state = updateDisplayName(state, null);
+  const nameInput = document.getElementById("profile-display-name") as HTMLInputElement | null;
+  if (nameInput) nameInput.value = "";
+  if (container) {
+    container.appendChild(h("p", { class: "success" }, "Display name cleared."));
+  }
+  const headerEl = document.querySelector(".app-header");
+  if (headerEl) {
+    const newHeader = renderHeader();
+    headerEl.replaceWith(newHeader);
+  }
+}
+
+// --- Security Events Section ---
+
+function renderSecurityEventsSection(): HTMLElement {
+  const container = h("div", { class: "mt" });
+  container.appendChild(h("h3", {}, "Security Events"));
+  container.appendChild(h("p", { class: "muted" }, "Your recent sign-in and session activity. This view is scoped to your account, not an organization."));
+
+  const list = h("div", { id: "security-events-list", class: "mt" });
+  container.appendChild(list);
+  loadSecurityEvents();
+
+  return container;
 }
 
 let securityEventsCursor: string | null = null;
