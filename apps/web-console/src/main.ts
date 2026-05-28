@@ -50,19 +50,90 @@ function btn(text: string, onclick: () => void, className?: string): HTMLElement
   return b;
 }
 
+let sidebarCollapsed = false;
+
 function render(): void {
   const app = $("app");
   clear(app);
-  app.appendChild(renderHeader());
-  app.appendChild(renderMain());
+
+  // App shell: sidebar + body(topbar + content)
+  app.appendChild(renderSidebar());
+
+  const body = h("div", { class: "app-body" });
+  body.appendChild(renderTopbar());
+
+  const content = h("div", { class: "app-content" });
+  content.appendChild(renderMain());
+  body.appendChild(content);
+
+  app.appendChild(body);
 }
 
-function renderHeader(): HTMLElement {
-  const header = h("header", { class: "app-header" });
+// --- Sidebar ---
 
-  const title = h("div", { class: "header-left" }, h("strong", {}, "Sourceplane Console"));
+type SidebarItem = { id: string; icon: string; label: string; requiresAuth?: boolean; requiresOrg?: boolean };
 
-  const ctx = h("div", { class: "header-context" });
+const SIDEBAR_ITEMS: SidebarItem[] = [
+  { id: "members", icon: "👥", label: "Members", requiresAuth: true, requiresOrg: true },
+  { id: "invitations", icon: "✉️", label: "Invitations", requiresAuth: true, requiresOrg: true },
+  { id: "projects", icon: "📁", label: "Projects", requiresAuth: true, requiresOrg: true },
+  { id: "api-keys", icon: "🔑", label: "API Keys", requiresAuth: true, requiresOrg: true },
+  { id: "config", icon: "⚙️", label: "Config", requiresAuth: true, requiresOrg: true },
+  { id: "audit", icon: "📋", label: "Audit Log", requiresAuth: true, requiresOrg: true },
+];
+
+function renderSidebar(): HTMLElement {
+  const sidebar = h("aside", { class: `app-sidebar${sidebarCollapsed ? " collapsed" : ""}` });
+
+  // Header / brand
+  const header = h("div", { class: "sidebar-header" });
+  const brand = h("div", { class: "sidebar-brand" });
+  brand.appendChild(h("div", { class: "sidebar-brand-icon" }, "S"));
+  brand.appendChild(h("span", { class: "sidebar-brand-text" }, "Sourceplane"));
+  header.appendChild(brand);
+  header.appendChild(btn(sidebarCollapsed ? "▸" : "◂", () => {
+    sidebarCollapsed = !sidebarCollapsed;
+    render();
+  }, "sidebar-toggle"));
+  sidebar.appendChild(header);
+
+  // Navigation
+  const nav = h("nav", { class: "sidebar-nav" });
+
+  if (state.authenticated && state.orgId) {
+    for (const item of SIDEBAR_ITEMS) {
+      const isActive = !accountView && getActiveTab() === item.id;
+      const navItem = h("button", {
+        class: `sidebar-nav-item${isActive ? " active" : ""}`,
+      });
+      navItem.appendChild(h("span", { class: "sidebar-nav-icon" }, item.icon));
+      navItem.appendChild(h("span", { class: "sidebar-nav-label" }, item.label));
+      navItem.addEventListener("click", () => {
+        accountView = null;
+        renderTab(item.id);
+      });
+      nav.appendChild(navItem);
+    }
+  }
+
+  sidebar.appendChild(nav);
+
+  // Footer
+  const footer = h("div", { class: "sidebar-footer" });
+  footer.appendChild(h("div", { class: "sidebar-footer-text" },
+    sidebarCollapsed ? "v0" : `${state.target.name}`));
+  sidebar.appendChild(footer);
+
+  return sidebar;
+}
+
+// --- Topbar ---
+
+function renderTopbar(): HTMLElement {
+  const topbar = h("header", { class: "app-topbar" });
+
+  const left = h("div", { class: "topbar-left" });
+  const ctx = h("div", { class: "topbar-context" });
   ctx.appendChild(h("span", { class: `badge badge-${state.target.name}` }, state.target.name));
   if (state.authenticated) {
     ctx.appendChild(h("span", { class: "badge badge-auth" }, state.session?.email ?? "authenticated"));
@@ -73,8 +144,9 @@ function renderHeader(): HTMLElement {
   if (state.projectName) {
     ctx.appendChild(h("span", { class: "badge badge-project" }, state.projectName));
   }
+  left.appendChild(ctx);
 
-  const right = h("div", { class: "header-right" });
+  const right = h("div", { class: "topbar-right" });
 
   if (!IS_LOCKED && TARGETS.length > 1) {
     const targetSelect = document.createElement("select");
@@ -100,12 +172,16 @@ function renderHeader(): HTMLElement {
       render();
     }, accountView ? "btn-sm btn-active" : "btn-sm"));
     right.appendChild(btn("Logout", handleLogout, "btn-sm btn-danger"));
+
+    // User avatar
+    const avatarText: string = state.session?.displayName || state.session?.email || "?";
+    const initials = avatarText.charAt(0).toUpperCase();
+    right.appendChild(h("div", { class: "topbar-avatar" }, initials));
   }
 
-  header.appendChild(title);
-  header.appendChild(ctx);
-  header.appendChild(right);
-  return header;
+  topbar.appendChild(left);
+  topbar.appendChild(right);
+  return topbar;
 }
 
 function renderMain(): HTMLElement {
@@ -1631,11 +1707,11 @@ async function handleSaveProfile(): Promise<void> {
   if (container) {
     container.appendChild(h("p", { class: "success" }, "Profile updated."));
   }
-  // Re-render header to reflect new display name
-  const headerEl = document.querySelector(".app-header");
-  if (headerEl) {
-    const newHeader = renderHeader();
-    headerEl.replaceWith(newHeader);
+  // Re-render topbar to reflect new display name
+  const topbarEl = document.querySelector(".app-topbar");
+  if (topbarEl) {
+    const newTopbar = renderTopbar();
+    topbarEl.replaceWith(newTopbar);
   }
 }
 
@@ -1656,10 +1732,10 @@ async function handleClearDisplayName(): Promise<void> {
   if (container) {
     container.appendChild(h("p", { class: "success" }, "Display name cleared."));
   }
-  const headerEl = document.querySelector(".app-header");
-  if (headerEl) {
-    const newHeader = renderHeader();
-    headerEl.replaceWith(newHeader);
+  const topbarEl = document.querySelector(".app-topbar");
+  if (topbarEl) {
+    const newTopbar = renderTopbar();
+    topbarEl.replaceWith(newTopbar);
   }
 }
 
