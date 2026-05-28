@@ -322,6 +322,7 @@ function renderWorkspaceView(): HTMLElement {
   const activeTab = getActiveTab();
 
   nav.appendChild(btn("\u2190 Orgs", () => {
+    apiKeysCreatedSecret = null;
     state = { ...state, orgId: null, orgName: null, projectId: null, projectName: null };
     localStorage.removeItem(`orgId:${state.target.name}`);
     localStorage.removeItem(`orgName:${state.target.name}`);
@@ -358,6 +359,11 @@ function renderTab(tab: string): void {
   const content = document.getElementById("workspace-content");
   if (!content) return;
   clear(content);
+
+  // Clear one-time secret when navigating away from API Keys tab
+  if (tab !== "api-keys") {
+    apiKeysCreatedSecret = null;
+  }
 
   switch (tab) {
     case "members": renderMembersTab(content); break;
