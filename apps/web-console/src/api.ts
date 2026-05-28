@@ -24,6 +24,11 @@ import type {
   PublicApiKeyRevokeResult,
   CreateApiKeyRequest,
 } from "@saas/contracts/api-keys";
+import type {
+  PublicSetting,
+  PublicFeatureFlag,
+  PublicSecretMetadata,
+} from "@saas/contracts/config";
 
 export interface ApiTarget {
   name: string;
@@ -337,5 +342,71 @@ export class ApiClient {
     if ("error" in r) return this.wrapErr(r.error);
     const apiKey = (r.json as any).apiKey ?? r.json;
     return this.wrapOk(apiKey, r.meta);
+  }
+
+  // Config — Settings
+  async listConfigSettings(
+    orgId: string,
+    opts?: { projectId?: string; environmentId?: string; cursor?: string; limit?: string },
+  ): Promise<ApiResult<PublicSetting[]>> {
+    const query: Record<string, string> = {};
+    if (opts?.cursor) query.cursor = opts.cursor;
+    if (opts?.limit) query.limit = opts.limit;
+    let path: string;
+    if (opts?.projectId && opts?.environmentId) {
+      path = `/v1/organizations/${orgId}/projects/${opts.projectId}/environments/${opts.environmentId}/config/settings`;
+    } else if (opts?.projectId) {
+      path = `/v1/organizations/${orgId}/projects/${opts.projectId}/config/settings`;
+    } else {
+      path = `/v1/organizations/${orgId}/config/settings`;
+    }
+    const r = await this.raw("GET", path, undefined, query);
+    if ("error" in r) return this.wrapErr(r.error);
+    const settings = (r.json as any).settings ?? r.json;
+    return this.wrapOk(Array.isArray(settings) ? settings : [], r.meta);
+  }
+
+  // Config — Feature Flags
+  async listFeatureFlags(
+    orgId: string,
+    opts?: { projectId?: string; environmentId?: string; cursor?: string; limit?: string },
+  ): Promise<ApiResult<PublicFeatureFlag[]>> {
+    const query: Record<string, string> = {};
+    if (opts?.cursor) query.cursor = opts.cursor;
+    if (opts?.limit) query.limit = opts.limit;
+    let path: string;
+    if (opts?.projectId && opts?.environmentId) {
+      path = `/v1/organizations/${orgId}/projects/${opts.projectId}/environments/${opts.environmentId}/config/feature-flags`;
+    } else if (opts?.projectId) {
+      path = `/v1/organizations/${orgId}/projects/${opts.projectId}/config/feature-flags`;
+    } else {
+      path = `/v1/organizations/${orgId}/config/feature-flags`;
+    }
+    const r = await this.raw("GET", path, undefined, query);
+    if ("error" in r) return this.wrapErr(r.error);
+    const flags = (r.json as any).featureFlags ?? r.json;
+    return this.wrapOk(Array.isArray(flags) ? flags : [], r.meta);
+  }
+
+  // Config — Secret Metadata
+  async listSecretMetadata(
+    orgId: string,
+    opts?: { projectId?: string; environmentId?: string; cursor?: string; limit?: string },
+  ): Promise<ApiResult<PublicSecretMetadata[]>> {
+    const query: Record<string, string> = {};
+    if (opts?.cursor) query.cursor = opts.cursor;
+    if (opts?.limit) query.limit = opts.limit;
+    let path: string;
+    if (opts?.projectId && opts?.environmentId) {
+      path = `/v1/organizations/${orgId}/projects/${opts.projectId}/environments/${opts.environmentId}/config/secrets`;
+    } else if (opts?.projectId) {
+      path = `/v1/organizations/${orgId}/projects/${opts.projectId}/config/secrets`;
+    } else {
+      path = `/v1/organizations/${orgId}/config/secrets`;
+    }
+    const r = await this.raw("GET", path, undefined, query);
+    if ("error" in r) return this.wrapErr(r.error);
+    const secrets = (r.json as any).secrets ?? r.json;
+    return this.wrapOk(Array.isArray(secrets) ? secrets : [], r.meta);
   }
 }
