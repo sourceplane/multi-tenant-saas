@@ -1328,6 +1328,20 @@ Last updated: 2026-05-28
 |- Scope boundary: CSS-only rewrite of `apps/web-console/src/style.css`; no markup/behavior/API/dependency/backend changes; no new fake product surfaces; no React/Tailwind/shadcn migration.
 |- Durable outcome: parchment/sand/fog/stone token system with terracotta/clay/sage/olive/rust accents, editorial serif headings, monospace reserved for identifiers, calmer status pills, gentler motion with `prefers-reduced-motion` support, warmer sidebar with terracotta active rail, parchment topbar, and responsive collapse at 1024/768/480 — all expressed across existing class hooks emitted by `main.ts` with the runtime/DOM unchanged.
 
+## Task 0074
+
+|- Agent: Implementer -> Verifier
+|- Prompt: `ai/tasks/task-0074.md`
+|- Verifier prompt: `ai/tasks/task-0074-verifier.md`
+|- Status: verified PASS, merged (2026-05-29)
+|- Implementation: PR #117 (`impl/task-0074-metering-rollups`), merge commit `d67aba5d`
+|- PR CI run: `26608615817` original 15/15 SUCCESS; post-verifier-report push CI run `26609025377` 15/15 SUCCESS
+|- Post-merge main CI run: `26609144832` — 15/15 SUCCESS
+|- Reports: `ai/reports/task-0074-implementer.md`, `ai/reports/task-0074-verifier.md`
+|- Objective: materialize metering hourly/daily rollups from raw usage records and add a bounded metering-worker scheduled invocation seam.
+|- Scope boundary: `@saas/db/metering` rollup materialization, `apps/metering-worker` scheduled rollup code, wrangler cron config, focused DB/worker tests, and implementer report only; no billing/provider/UI/Analytics Engine/Queue/KV/Durable Object/R2/Terraform/public-trigger or `specs-v2/**` work.
+|- Durable outcome: `materializeUsageRollups` is live in `@saas/db/metering` — parameterized SQL only, GROUP BY `org_id, project_id, environment_id, metric, date_trunc($1, recorded_at)` (org-scoped, never aggregates across orgs), half-open source window `recorded_at >= start AND recorded_at < end`, deterministic md5 ids, `ON CONFLICT … DO UPDATE` whose target mirrors `uq_rollup_dimensions` from migration `100_metering_foundation`, idempotent across re-runs, hourly and daily buckets only. metering-worker exports `scheduled(controller, env, ctx)` which runs `runScheduledMaterialization` (prior+current hour and prior+current day passes) on wrangler cron `5 * * * *`; fails closed when `SOURCEPLANE_DB` is absent; logs only `[scheduled] rollup <bucket> <ISO start>..<ISO end> ok=<bool> rows=<n>` — no org IDs, no metric values, no metadata, no SQL. Public routes and api-edge facade unchanged. Stage/prod wrangler envs declare `SOURCEPLANE_DB` Hyperdrive bindings; dev does not (consistent with no-dev-Supabase environment standard) and the scheduled pass will fail closed there as intended.
+
 ## Historical Notes
 
 - PR #1 split product-specific V2 Git catalog work away from the reusable SaaS

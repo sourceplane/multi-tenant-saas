@@ -428,9 +428,15 @@ Task 0060 Verifier is scoped and ready.
 - Task 0073 verified PASS and merged via PR #116 at `5cde36db` (2026-05-29).
 - Web-console calm editorial parchment design refresh: CSS-only rewrite of `apps/web-console/src/style.css` (+851/-426). No behavior, markup, API, dependency, or backend changes. Class taxonomy emitted by `main.ts` preserved 1:1; tokens evolved to a parchment/sand/fog/stone palette with terracotta/clay/sage/olive/rust accents, editorial serif headings, calm status pills, gentle motion, and `prefers-reduced-motion` support. Post-merge main CI run `26607911105` succeeded across plan + web-console dev/stage/prod verify-deploy.
 - Task 0072 verified PASS and merged via PR #115 at `b4ced6bc` (2026-05-28).
-- Metering Worker runtime: `apps/metering-worker` with 5 routes (usage record, batch, summary, quota check, violations list), api-edge metering facade, policy-engine metering read/write/quota.check actions, 25 focused tests. Uses @saas/db/metering + @saas/contracts/metering.
-- Tasks 0001–0073 are complete and verified.
+- Metering Worker runtime: `apps/metering-worker` with 5 routes (usage record, batch, summary, quota check, violations list), api-edge metering facade, policy-engine metering read/write/quota.check actions, 25 focused tests. Uses `@saas/db/metering` + `@saas/contracts/metering`.
+- Task 0074 verified PASS and merged via PR #117 at `d67aba5d7458b68e527f996ae4c177c4e3427bf4` (2026-05-28). Post-merge main CI run `26609144832` passed 15/15.
+- Task 0074 added metering rollup materialization seam: `materializeUsageRollups` in `@saas/db/metering` (parameterized SQL, org-scoped GROUP BY, idempotent `ON CONFLICT … DO UPDATE` whose conflict target mirrors `uq_rollup_dimensions` from migration `100_metering_foundation`, deterministic md5 ids, hourly and daily buckets, half-open `recorded_at >= start AND recorded_at < end` windows) + metering-worker `scheduled` handler running prior+current hour/day passes on cron `5 * * * *`, fails closed if `SOURCEPLANE_DB` is absent, logs only window bounds and row counts. No public rollup trigger, no billing/provider/UI/Analytics Engine/Queue/KV/Durable Object/Terraform overreach.
+- Tasks 0001–0074 are complete and verified.
+
+## Current Task
+
+None. Awaiting next orchestrator cycle.
 
 ## Next Task
 
-- Next orchestrator cycle should evaluate the next task per roadmap. Candidates include rollup scheduling, billing persistence foundation, Analytics Engine ingestion, or other roadmap priorities.
+- Next orchestrator cycle should evaluate the next Week 4-5 usage→billing task. Now that hourly/daily rollups are materialized, candidates include: billing customer/plan/entitlement persistence reading from `usage_rollups`, web-console usage read surface, quota-definition management endpoints, or a dedicated rollup backfill/maintenance entry point for older windows (the scheduled seam is intentionally bounded to recent windows only).

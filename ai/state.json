@@ -1,6 +1,6 @@
 {
   "goal": "Supabase/Postgres-backed multi-organization Orun SaaS control plane",
-  "current_task": "none",
+  "current_task": null,
   "completed": [
     "0001",
     "0001.1",
@@ -79,16 +79,18 @@
     "0070",
     "0071",
     "0072",
-    "0073"
+    "0073",
+    "0074"
   ],
   "repo_health": "green",
-  "next_focus": "next-orchestrator-cycle",
-  "last_verified": "2026-05-28T23:16:33Z",
+  "next_focus": "evaluate-next-week-4-5-usage-to-billing-task",
+  "last_verified": "2026-05-28T23:49:53Z",
   "waiting_for_input": "false",
-  "task_agent": "none",
+  "task_agent": null,
   "notes": [
-    "Task 0072 verified PASS and merged via PR #115 at b4ced6bc. Metering Worker runtime: 5 API routes, api-edge facade, policy-engine metering actions, 25 focused tests. Uses @saas/db/metering + @saas/contracts/metering.",
-    "Task 0073 verified PASS and merged via PR #116 at 5cde36db. Web-console calm editorial parchment design refresh: CSS-only rewrite of apps/web-console/src/style.css (+851/-426); no behavior, API, markup, or dependency changes. Post-merge main CI run 26607911105 succeeded across plan + web-console dev/stage/prod verify-deploy.",
-    "Next orchestrator cycle should evaluate the next task per roadmap."
+    "Task 0074 verified PASS and merged via PR #117 at d67aba5d7458b68e527f996ae4c177c4e3427bf4 on 2026-05-28T23:49:53Z. Post-merge main CI run 26609144832 completed with 15/15 success.",
+    "Metering rollup materialization seam landed: parameterized org-scoped hourly/daily aggregation in @saas/db/metering.materializeUsageRollups (ON CONFLICT mirrors uq_rollup_dimensions from migration 100_metering_foundation), plus metering-worker scheduled handler running prior+current hour/day passes on cron '5 * * * *' with fail-closed behavior when SOURCEPLANE_DB is absent.",
+    "Verifier report committed at ai/reports/task-0074-verifier.md on the PR branch before merge.",
+    "Next orchestrator cycle should select the next Week 4-5 usage→billing task (entitlements/billing-read consumers of usage_rollups, or a backfill/maintenance entry point for older rollup windows)."
   ]
 }
