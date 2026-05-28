@@ -396,11 +396,21 @@ Last updated: 2026-05-28
 - Key durable outcome: Route scope enforcement live on config PATCH item routes. `scopeMatchesRequested()` shared helper ensures stored row scope exactly matches requested URL path scope before authorization or mutation. Prevents same-org cross-project/cross-environment alias attacks. Mismatches return safe 404. Tests cover org/project/environment cross-scope and cross-project/cross-environment negatives for both settings and feature flags. 106 config-worker tests, 223 api-edge tests.
 - Reports: `ai/reports/task-0060-implementer.md`, `ai/reports/task-0060-verifier.md`
 
+**Task 0061 (Verifier) — COMPLETE ✅**
+
+- Prompt: `ai/tasks/task-0061.md`
+- Verifier prompt: `ai/tasks/task-0061-verifier.md`
+- PR #104 (`task-0061-config-mutation-ui`) **MERGED** at commit `2dbd390` (2026-05-28T13:33Z).
+- PR URL: `https://github.com/sourceplane/multi-tenant-saas/pull/104`
+- PR CI runs: `26576854698` (initial failed — external actions/setup-node@v6 404; rerun all pass), `26577790736` (post-verifier-report, 4/4 SUCCESS).
+- Key durable outcome: Web-console config mutation UI live. Authenticated org users can create and edit settings and feature flags at org/project/environment scope via public api-edge POST/PATCH routes. JSON value validation with clear error messages. Inline edit forms for existing items. Secret metadata remains strictly read-only — no create/edit controls. All values rendered as safe text nodes, no innerHTML/eval/localStorage persistence. `configPath()` helper and `configScopeOpts()` ensure scope-correct API calls matching Task 0060 enforcement.
+- Reports: `ai/reports/task-0061-implementer.md`, `ai/reports/task-0061-verifier.md`
+
 ## Current Task
 
 Awaiting next orchestrator cycle.
 
 ## Next Candidates
 
-- Web-console config mutation UI using the public settings/feature-flag routes.
 - Secret metadata mutation/encrypted secret storage design.
+- Next roadmap task.

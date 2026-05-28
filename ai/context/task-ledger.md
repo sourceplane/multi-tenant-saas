@@ -1289,6 +1289,19 @@ Last updated: 2026-05-28
 - Reports: `ai/reports/task-0060-implementer.md`, `ai/reports/task-0060-verifier.md`
 - Durable outcome: `scopeMatchesRequested()` shared helper enforces stored row scope exactly matches requested URL path scope (org/project/environment). Prevents same-org cross-project/cross-environment alias attacks. Mismatches return safe 404 without authorization or mutation. 106 config-worker tests, 223 api-edge tests.
 
+## Task 0061
+
+- Agent: Implementer → Verifier
+- Prompt: `ai/tasks/task-0061.md`
+- Verifier prompt: `ai/tasks/task-0061-verifier.md`
+- Status: verified and merged
+- PR: #104 (`task-0061-config-mutation-ui`), squash-merged at `2dbd390`
+- PR CI runs: `26576854698` (rerun after external setup-node@v6 404, all pass), `26577790736` (post-verifier-report, 4/4 SUCCESS)
+- Objective: Add safe web-console mutation controls for non-secret config settings and feature flags through public api-edge POST/PATCH routes at explicit organization/project/environment scope.
+- Scope: web-console public client only (api.ts, main.ts, style.css).
+- Reports: `ai/reports/task-0061-implementer.md`, `ai/reports/task-0061-verifier.md`
+- Durable outcome: Web-console config mutation UI live. Create and inline-edit forms for settings and feature flags at org/project/environment scope. JSON value validation. Secret metadata remains read-only. All values rendered as safe text nodes. No localStorage/sessionStorage persistence. `configPath()` helper and `configScopeOpts()` ensure scope-correct API calls.
+
 ## Historical Notes
 
 - PR #1 split product-specific V2 Git catalog work away from the reusable SaaS
