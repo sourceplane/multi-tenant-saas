@@ -1276,6 +1276,19 @@ Last updated: 2026-05-28
 - Reports: `ai/reports/task-0059-implementer.md`, `ai/reports/task-0059-verifier.md`
 - Durable outcome: Config mutation handlers live on main. POST create and PATCH update for settings and feature flags at org/project/environment scopes. Policy actions `organization.config.write` and `project.config.write` deny-by-default. Atomic `settings.updated` and `feature.updated` event/audit writes. Verifier fixed 2 stale api-edge tests and reconstructed missing implementer report. 98 config-worker tests, 223 api-edge tests.
 
+## Task 0060
+
+- Agent: Implementer → Verifier
+- Prompt: `ai/tasks/task-0060.md`
+- Verifier prompt: `ai/tasks/task-0060-verifier.md`
+- Status: verified and merged
+- PR: #103 (`impl/task-0060-scope-enforcement`), squash-merged at `f680f54`
+- PR CI run: `26574711168` (11/11 SUCCESS)
+- Objective: Enforce exact requested-route-scope matching for config setting and feature-flag PATCH item routes before authorization or mutation succeeds.
+- Scope: config-worker router, update-setting, update-feature-flag handlers, scope-match helper, mutation-handler tests.
+- Reports: `ai/reports/task-0060-implementer.md`, `ai/reports/task-0060-verifier.md`
+- Durable outcome: `scopeMatchesRequested()` shared helper enforces stored row scope exactly matches requested URL path scope (org/project/environment). Prevents same-org cross-project/cross-environment alias attacks. Mismatches return safe 404 without authorization or mutation. 106 config-worker tests, 223 api-edge tests.
+
 ## Historical Notes
 
 - PR #1 split product-specific V2 Git catalog work away from the reusable SaaS

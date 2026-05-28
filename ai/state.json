@@ -65,15 +65,16 @@
     "0056",
     "0057",
     "0058",
-    "0059"
+    "0059",
+    "0060"
   ],
   "repo_health": "green",
   "next_focus": "scope-next-task",
-  "last_verified": "2026-05-28T13:15:00Z",
+  "last_verified": "2026-05-28T12:44:37Z",
   "waiting_for_input": "false",
   "task_agent": null,
   "notes": [
-    "Task 0059 verified PASS and merged via PR #102 at c3e2b2d. Config mutation handlers for settings and feature flags are live. Verifier fixed 2 stale api-edge tests and reconstructed missing implementer report.",
+    "Task 0060 verified PASS and merged via PR #103 at f680f54. Route scope enforcement on config PATCH item routes is live — stored-row scope must exactly match requested route scope before authorization/mutation.",
     "Next candidates: web-console config mutation UI or secret metadata mutation/encrypted secret storage design."
   ]
 }

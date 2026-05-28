@@ -386,32 +386,21 @@ Last updated: 2026-05-28
 - Verifier fixes: 2 stale api-edge tests updated (isConfigRoute item route match, POST forwarding), missing implementer report reconstructed.
 - Reports: `ai/reports/task-0059-implementer.md`, `ai/reports/task-0059-verifier.md`
 
+**Task 0060 (Verifier) — COMPLETE ✅**
+
+- Prompt: `ai/tasks/task-0060.md`
+- Verifier prompt: `ai/tasks/task-0060-verifier.md`
+- PR #103 (`impl/task-0060-scope-enforcement`) **MERGED** at commit `f680f54` (2026-05-28T12:44Z).
+- PR URL: `https://github.com/sourceplane/multi-tenant-saas/pull/103`
+- PR CI run: `26574711168` (11/11 checks SUCCESS).
+- Key durable outcome: Route scope enforcement live on config PATCH item routes. `scopeMatchesRequested()` shared helper ensures stored row scope exactly matches requested URL path scope before authorization or mutation. Prevents same-org cross-project/cross-environment alias attacks. Mismatches return safe 404. Tests cover org/project/environment cross-scope and cross-project/cross-environment negatives for both settings and feature flags. 106 config-worker tests, 223 api-edge tests.
+- Reports: `ai/reports/task-0060-implementer.md`, `ai/reports/task-0060-verifier.md`
+
 ## Current Task
 
-Awaiting next orchestrator cycle to scope Task 0060.
+Awaiting next orchestrator cycle.
 
-## Current Roadmap Position
+## Next Candidates
 
-- Active spec pack: reusable SaaS starter under `specs/**`.
-- `specs-v2/**` remains out of scope unless the task is product-specific.
-- Week 0 operations foundation, Worker binding seam, identity persistence,
-  identity Worker auth runtime, api-edge auth facade, membership persistence
-  foundation, membership Worker organization runtime, policy authorization seam,
-  membership-to-policy binding, member-list read surface, cursor pagination,
-  invitation administration, invitation acceptance, events/audit persistence,
-  transaction-safe invitation event wiring, member-admin mutations,
-  projects/environments persistence contracts/repository, db-migrate
-  changed-plan repair, membership-owned authorization-context seam, first
-  project archival, environment create/list/get/archive, organization audit list,
-  identity security events, API-key/service-principal foundation and admin,
-  account profile/security UI, config persistence, config read APIs, config-worker
-  deploy fix, and read-only config UI are complete.
-- Task 0059 advances config/settings/feature-flag write capability while keeping
-  secret value handling and UI mutations deferred.
-
-## Next Task After 0059
-
-- If Task 0059 verifies PASS and merges, the next orchestrator cycle should scope the next implementer-sized task. Current candidates:
-  - web-console config mutation UI using the new public settings/feature-flag routes, or
-  - secret metadata mutation/encrypted secret storage design if write-only secret handling should precede UI mutation work.
-- If Task 0059 verification FAILS, keep PR #102 open and scope a focused implementer fix task or ask for human input only if the failure requires a product/security decision.
+- Web-console config mutation UI using the public settings/feature-flag routes.
+- Secret metadata mutation/encrypted secret storage design.
