@@ -386,91 +386,51 @@ Last updated: 2026-05-28
 - Verifier fixes: 2 stale api-edge tests updated (isConfigRoute item route match, POST forwarding), missing implementer report reconstructed.
 - Reports: `ai/reports/task-0059-implementer.md`, `ai/reports/task-0059-verifier.md`
 
-**Task 0060 (Verifier) — COMPLETE ✅**
-
-- Prompt: `ai/tasks/task-0060.md`
-- Verifier prompt: `ai/tasks/task-0060-verifier.md`
-- PR #103 (`impl/task-0060-scope-enforcement`) **MERGED** at commit `f680f54` (2026-05-28T12:44Z).
-- PR URL: `https://github.com/sourceplane/multi-tenant-saas/pull/103`
-- PR CI run: `26574711168` (11/11 checks SUCCESS).
-- Key durable outcome: Route scope enforcement live on config PATCH item routes. `scopeMatchesRequested()` shared helper ensures stored row scope exactly matches requested URL path scope before authorization or mutation. Prevents same-org cross-project/cross-environment alias attacks. Mismatches return safe 404. Tests cover org/project/environment cross-scope and cross-project/cross-environment negatives for both settings and feature flags. 106 config-worker tests, 223 api-edge tests.
-- Reports: `ai/reports/task-0060-implementer.md`, `ai/reports/task-0060-verifier.md`
-
-**Task 0061 (Verifier) — COMPLETE ✅**
-
-- Prompt: `ai/tasks/task-0061.md`
-- Verifier prompt: `ai/tasks/task-0061-verifier.md`
-- PR #104 (`task-0061-config-mutation-ui`) **MERGED** at commit `2dbd390` (2026-05-28T13:33Z).
-- PR URL: `https://github.com/sourceplane/multi-tenant-saas/pull/104`
-- PR CI runs: `26576854698` (initial failed — external actions/setup-node@v6 404; rerun all pass), `26577790736` (post-verifier-report, 4/4 SUCCESS).
-- Key durable outcome: Web-console config mutation UI live. Authenticated org users can create and edit settings and feature flags at org/project/environment scope via public api-edge POST/PATCH routes. JSON value validation with clear error messages. Inline edit forms for existing items. Secret metadata remains strictly read-only — no create/edit controls. All values rendered as safe text nodes, no innerHTML/eval/localStorage persistence. `configPath()` helper and `configScopeOpts()` ensure scope-correct API calls matching Task 0060 enforcement.
-- Reports: `ai/reports/task-0061-implementer.md`, `ai/reports/task-0061-verifier.md`
-
-**Task 0062 (Verifier) — COMPLETE ✅**
-
-- Prompt: `ai/tasks/task-0062.md`
-- Verifier prompt: `ai/tasks/task-0062-verifier.md`
-- PR #105 (`task-0062-figma-ui-shell`) **MERGED** at commit `3200d3c` (2026-05-28T14:45Z).
-- PR URL: `https://github.com/sourceplane/multi-tenant-saas/pull/105`
-- PR CI runs: `26579885750` (initial, 4/4 SUCCESS), `26580718351` (post-reports, 4/4 SUCCESS).
-- Key durable outcome: Web-console UI shell refreshed with Figma-inspired dark theme. Sidebar navigation with collapsible state, topbar context badges with user avatar, scrollable content area. CSS tokens aligned with Figma oklch-derived palette. Responsive breakpoints for tablet (collapsed sidebar) and mobile (hidden sidebar). All existing workflows preserved. No backend, API, or dependency changes.
-- Reports: `ai/reports/task-0062-implementer.md`, `ai/reports/task-0062-verifier.md`
-
-**Task 0063 (Verifier) — COMPLETE ✅**
-
-- Prompt: `ai/tasks/task-0063.md`
-- Verifier prompt: `ai/tasks/task-0063-verifier.md`
-- Merged via earlier cycle.
-
-**Task 0064 (Verifier) — COMPLETE ✅**
-
-- Prompt: `ai/tasks/task-0064.md`
-- Verifier prompt: `ai/tasks/task-0064-verifier.md`
-- Merged via earlier cycle.
-
-**Task 0065 (Verifier) — COMPLETE ✅**
-
-- Prompt: `ai/tasks/task-0065.md`
-- Verifier prompt: `ai/tasks/task-0065-verifier.md`
-- PR #108 (`impl/task-0065-encrypted-secret-payloads`) **MERGED** at commit `ef9e122`.
-- Key durable outcome: Config-worker encrypted write-only secret payload storage using AES-256-GCM via Web Crypto.
-
-**Task 0066 (Verifier) — COMPLETE ✅**
-
-- Prompt: `ai/tasks/task-0066.md`
-- Verifier prompt: `ai/tasks/task-0066-verifier.md`
-- PR #109 (`impl/task-0066-secret-management-ui`) **MERGED** at commit `5a9fa72` (2026-05-28).
-- PR URL: `https://github.com/sourceplane/multi-tenant-saas/pull/109`
-- PR CI run: `26589177552` (4/4 SUCCESS: plan + 3× web-console Verify deploy).
-- Key durable outcome: Web-console Config tab now supports full secret lifecycle management — create, rotate, and revoke — via public api-edge routes. Secret values are write-only (password inputs, cleared after submission, never persisted/logged/revealed). Revoke requires explicit confirmation. Existing settings and feature-flag mutation flows preserved.
-- Reports: `ai/reports/task-0066-implementer.md`, `ai/reports/task-0066-verifier.md`
-
-### Task 0067 — Webhooks Core Persistence
-
-- Agent: Implementer (varahul) → Verifier
-- Prompt: `ai/tasks/task-0067.md`
-- Verifier prompt: `ai/tasks/task-0067-verifier.md`
-- PR #110 (`impl/task-0067-webhooks-core`) **MERGED** at commit `ca8c871` (2026-05-28).
-- PR URL: `https://github.com/sourceplane/multi-tenant-saas/pull/110`
-- PR CI run: `26591802397` (11/11 SUCCESS: plan + db/contracts/db-tests/contracts-tests verify + db-migrate stage/prod plan).
-- Key durable outcome: Webhooks bounded context foundation on main — migration 080_webhooks_core (endpoints/subscriptions/delivery_attempts in `webhooks` schema), WebhookRepository with full CRUD + cursor pagination + secret-safe reads, @saas/contracts/webhooks public types. 51 new tests (37 db + 14 contract). No plaintext secret exposure.
-- Reports: `ai/reports/task-0067-implementer.md`, `ai/reports/task-0067-verifier.md`
-
-### Task 0068 — Webhooks Management Runtime
-
-- Agent: Implementer → Verifier
-- Prompt: `ai/tasks/task-0068.md`
-- Verifier prompt: `ai/tasks/task-0068-verifier.md`
-- PR #111 (`task-0068/webhooks-worker`) **MERGED** at commit `7b482b8` (2026-05-28).
-- PR URL: `https://github.com/sourceplane/multi-tenant-saas/pull/111`
-- PR CI run: `26597212512` (30/30 SUCCESS).
-- Key durable outcome: Dedicated `apps/webhooks-worker` bounded context with full endpoint/subscription/delivery-attempt management, AES-256-GCM secret encryption, api-edge webhooks facade with WEBHOOKS_WORKER binding, policy actions (organization.webhook.read/write, project.webhook.read/write), deny-by-default authorization, event/audit writes for all mutations. 523 tests passing.
-- Reports: `ai/reports/task-0068-implementer.md`, `ai/reports/task-0068-verifier.md`
-
 ## Current Task
 
-Task 0068 verified PASS and merged via PR #111 at `7b482b8`.
+Task 0060 Verifier is scoped and ready.
 
-Key durable outcome: Webhooks management runtime on main — worker, api-edge facade, policy actions, encryption, and comprehensive test coverage.
+- Prompt: `ai/tasks/task-0060-verifier.md`
+- PR: #103 (`impl/task-0060-scope-enforcement`)
+- Status at orchestration: OPEN, non-draft, merge state CLEAN, CI run
+  `26574711168` green.
+- Objective: verify Task 0060 scope enforcement for config setting and
+  feature-flag PATCH item routes. Requested public route scope must exactly
+  match the stored row scope before authorization or mutation succeeds.
+- Boundary: verifier must inspect config-worker router and update handlers,
+  focused config-worker tests, PR CI logs, secret safety, and absence of
+  unrelated UI/secret/infrastructure/state churn. If PASS and CI remains green,
+  merge PR #103, sync local `main`, leave repo clean, and write
+  `ai/reports/task-0060-verifier.md`.
 
-Tasks 0001–0068 are completed and verified. Next orchestrator cycle should evaluate the next task per roadmap.
+## Current Roadmap Position
+
+- Active spec pack: reusable SaaS starter under `specs/**`.
+- `specs-v2/**` remains out of scope unless the task is product-specific.
+- Week 0 operations foundation, Worker binding seam, identity persistence,
+  identity Worker auth runtime, api-edge auth facade, membership persistence
+  foundation, membership Worker organization runtime, policy authorization seam,
+  membership-to-policy binding, member-list read surface, cursor pagination,
+  invitation administration, invitation acceptance, events/audit persistence,
+  transaction-safe invitation event wiring, member-admin mutations,
+  projects/environments persistence contracts/repository, db-migrate
+  changed-plan repair, membership-owned authorization-context seam, first
+  project archival, environment create/list/get/archive, organization audit list,
+  identity security events, API-key/service-principal foundation and admin,
+  account profile/security UI, config persistence, config read APIs, config-worker
+  deploy fix, read-only config UI, and config mutation runtime are complete.
+- Task 0060 is in verification. It hardens Task 0059 item-level update routes by
+  preventing same-org organization/project/environment URL aliases from updating
+  rows whose stored scope does not match the requested public path scope.
+
+## Next Task After 0060
+
+- If Task 0060 verifies PASS and merges, the next orchestrator cycle should
+  scope the next implementer-sized task. Current candidates:
+  - web-console config mutation UI using the hardened public settings/feature-
+    flag routes, or
+  - secret metadata mutation/encrypted secret storage design if write-only
+    secret handling should precede UI mutation work.
+- If Task 0060 verification FAILS, keep PR #103 open and scope a focused
+  implementer fix task or ask for human input only if the failure requires a
+  product/security decision.
