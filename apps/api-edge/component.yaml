@@ -10,6 +10,7 @@ spec:
   dependsOn:
     - component: projects-worker
     - component: events-worker
+    - component: config-worker
   subscribe:
     environments:
       - name: dev
