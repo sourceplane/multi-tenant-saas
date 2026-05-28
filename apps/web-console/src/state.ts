@@ -94,6 +94,13 @@ export function selectProject(state: AppState, projectId: string, projectName: s
   return { ...state, projectId, projectName };
 }
 
+export function updateDisplayName(state: AppState, displayName: string | null): AppState {
+  if (state.session) {
+    return { ...state, session: { ...state.session, displayName } };
+  }
+  return state;
+}
+
 export function clearProject(state: AppState): AppState {
   localStorage.removeItem(`projectId:${state.target.name}`);
   localStorage.removeItem(`projectName:${state.target.name}`);
