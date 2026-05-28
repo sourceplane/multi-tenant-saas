@@ -235,4 +235,24 @@ Last updated: 2026-05-27
 - 269 tests passing (76 identity-worker + 193 api-edge).
 - Reports: `ai/reports/task-0045-implementer.md`, `ai/reports/task-0045-verifier.md`
 
-**Next phase**: Task 0046 — Web Console Account Security Events View (or next orchestrator cycle decision).
+**Task 0046 (Verifier) — COMPLETE ✅**
+
+- PR #89 **MERGED** at commit `3892243`. Web console Account Security view live.
+
+**Task 0047 (Verifier) — COMPLETE ✅**
+
+- Prompt: `ai/tasks/task-0047.md`
+- Verifier prompt: `ai/tasks/task-0047-verifier.md`
+- PR #90 (`codex/task-0047-api-key-service-principal-foundation`) **MERGED** at
+  commit `08c0e7b` (2026-05-28T01:36Z).
+- PR URL: `https://github.com/sourceplane/multi-tenant-saas/pull/90`
+- PR CI runs: `26548869295` (original, 7/7 pass), `26549208506` (post-cleanup, 7/7 pass).
+- Key durable outcome: Identity-owned persistence foundation for service principals
+  and API keys. Migration 060 adds `identity.service_principals` and `identity.api_keys`
+  tables with hash-only storage, no cross-context FKs. Repository exposes create/get/list/revoke
+  persistence seam for follow-on admin routes.
+- Verifier cleanup: added implementer report, removed 11 carryover ai/ files.
+- 351 db tests passing.
+- Reports: `ai/reports/task-0047-implementer.md`, `ai/reports/task-0047-verifier.md`
+
+**Next phase**: Task 0048 — API-key administration routes (or next orchestrator cycle decision).

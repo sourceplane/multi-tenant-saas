@@ -1097,6 +1097,29 @@ Last updated: 2026-05-27
 |- Durable outcome: `GET /v1/auth/security-events` is live, authenticated, self-scoped, cursor-paginated, with SENSITIVE_KEYS metadata redaction. Unblocks account-security UI.
 |- Reports: `ai/reports/task-0045-implementer.md`, `ai/reports/task-0045-verifier.md`
 
+## Task 0046
+
+|- Agent: Implementer → Verifier
+|- Status: verified PASS and merged
+|- PR: #89, squash-merged at `3892243`
+|- Objective: web console Account Security view consuming Task 0045 security events route.
+|- Durable outcome: Account Security view live in web console.
+
+## Task 0047
+
+|- Agent: Implementer → Verifier
+|- Prompt: `ai/tasks/task-0047.md`
+|- Verifier prompt: `ai/tasks/task-0047-verifier.md`
+|- Status: verified PASS and merged
+|- PR: #90 (`codex/task-0047-api-key-service-principal-foundation`), squash-merged at `08c0e7b` (2026-05-28)
+|- PR CI runs: 26548869295 (original), 26549208506 (post-cleanup) — both green
+|- Objective: identity-owned persistence foundation for organization-bound API keys and service principals.
+|- Scope: migration 060 (`identity.service_principals`, `identity.api_keys`), types, repository methods, db tests.
+|- Test results: 351 db tests pass.
+|- Verifier cleanup: added implementer report, removed 11 carryover ai/ files.
+|- Durable outcome: persistence seam for service principals and API keys on main. Hash-only key storage, no cross-context FKs, create/get/list/revoke repository primitives ready for admin route follow-on.
+|- Reports: `ai/reports/task-0047-implementer.md`, `ai/reports/task-0047-verifier.md`
+
 ## Historical Notes
 
 - PR #1 split product-specific V2 Git catalog work away from the reusable SaaS

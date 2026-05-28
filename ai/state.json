@@ -1,6 +1,6 @@
 {
   "goal": "Supabase/Postgres-backed multi-organization Orun SaaS control plane",
-  "current_task": "0045",
+  "current_task": "0047",
   "completed": [
     "0001",
     "0001.1",
@@ -51,19 +51,21 @@
     "0042",
     "0043",
     "0044",
-    "0045"
+    "0045",
+    "0046",
+    "0047"
   ],
   "repo_health": "green",
-  "next_focus": "account-security-ui-or-task-0046",
-  "last_verified": "2026-05-27T23:35Z",
+  "next_focus": "api-key-admin-routes-or-task-0048",
+  "last_verified": "2026-05-28T01:36Z",
   "waiting_for_input": "false",
-  "task_agent": "/ai/tasks/task-0045-verifier.md",
+  "task_agent": "/ai/tasks/task-0047-verifier.md",
   "notes": [
-    "Task 0045 PASS: PR #88 merged at e67a9b2. GET /v1/auth/security-events exposed via identity-worker + api-edge.",
-    "Verifier cleanup commit 2245fb7 required: added missing implementer report, removed 11 out-of-scope ai/ carryover files.",
-    "Post-merge CI run 26544885697 triggered. All prior PR CI checks green (runs 26544257632, 26544676838).",
-    "269 tests passing (76 identity-worker + 193 api-edge). Cursor pagination, SENSITIVE_KEYS redaction, self-scoped auth all verified.",
-    "Recurring implementer anti-pattern: orchestration ai/ context files committed alongside code. Next task prompts should explicitly warn against this.",
+    "Task 0047 PASS: PR #90 merged at 08c0e7b. Identity-owned persistence for service principals and API keys.",
+    "Verifier cleanup commit 9c0c25a: added implementer report, removed 11 carryover ai/ files.",
+    "Post-cleanup CI run 26549208506 green. 351 db tests passing.",
+    "Migration 060: service_principals + api_keys tables. Hash-only storage, no cross-context FKs.",
+    "Recurring implementer anti-pattern: ai/ carryover files still present — verifier cleanup needed again.",
     "Node.js 20 deprecation warning in CI — actions need update before September 2026 runner cutoff."
   ]
 }
