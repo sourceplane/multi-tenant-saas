@@ -66,5 +66,14 @@ export const manifest: MigrationManifest = {
       description:
         "Identity-owned service principals and API keys — org-bound automation actors and credential persistence",
     },
+    {
+      id: "070_config_settings_flags",
+      context: "config",
+      path: "070_config_settings_flags/up.sql",
+      checksum:
+        "be2b60f0ddb6f342a8c9038db602e142a34d36ffa7f7a17f4d218231087d6562",
+      description:
+        "Config persistence foundation — scoped settings, feature flags, and secret metadata",
+    },
   ],
 };

@@ -4,7 +4,8 @@ export type BoundedContext =
   | "membership"
   | "projects"
   | "billing"
-  | "events";
+  | "events"
+  | "config";
 
 export interface MigrationEntry {
   id: string;
