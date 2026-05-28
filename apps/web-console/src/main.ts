@@ -1129,14 +1129,14 @@ let configEnvs: { id: string; name: string }[] = [];
 
 async function renderConfigTab(container: HTMLElement): Promise<void> {
   container.appendChild(actionBar("Config"));
-  container.appendChild(h("p", { class: "page-subtitle" }, "Manage settings and feature flags. Secret metadata is read-only."));
+  container.appendChild(h("p", { class: "page-subtitle" }, "Manage settings, feature flags, and secrets. Secret values are write-only and cannot be revealed after storage."));
 
   // Resource sub-tabs
   const resourceNav = h("div", { class: "config-resource-nav" });
   const resources: { key: ConfigResource; label: string }[] = [
     { key: "settings", label: "Settings" },
     { key: "feature-flags", label: "Feature Flags" },
-    { key: "secrets", label: "Secrets Metadata" },
+    { key: "secrets", label: "Secrets" },
   ];
   for (const r of resources) {
     const cls = r.key === configResource ? "btn-xs btn-active" : "btn-xs";
@@ -1244,11 +1244,9 @@ async function renderConfigTab(container: HTMLElement): Promise<void> {
     }
   }
 
-  // Create form (settings and feature flags only, not secrets)
-  if (configResource !== "secrets") {
-    const createForm = renderConfigCreateForm();
-    container.appendChild(createForm);
-  }
+  // Create form (settings, feature flags, and secrets)
+  const createForm = renderConfigCreateForm();
+  container.appendChild(createForm);
 
   // Config list
   const list = h("div", { id: "config-list", class: "mt" });
@@ -1396,6 +1394,86 @@ function renderConfigCreateForm(): HTMLElement {
         return;
       }
       showConfigMsg("Feature flag created.", "success");
+      loadConfigList();
+    }, "btn-primary btn-sm"));
+
+    card.appendChild(row);
+    card.appendChild(errDiv);
+  } else if (configResource === "secrets") {
+    card.appendChild(h("h4", {}, "Create Secret"));
+    card.appendChild(h("p", { class: "muted secret-write-only-hint" }, "⚠ Secret values are stored write-only. They cannot be viewed, retrieved, or revealed after creation."));
+
+    const keyInput = document.createElement("input");
+    keyInput.placeholder = "Secret Key";
+    keyInput.id = "config-create-secret-key";
+
+    const valueInput = document.createElement("input");
+    valueInput.type = "password";
+    valueInput.placeholder = "Secret Value (write-only, never shown again)";
+    valueInput.id = "config-create-secret-value";
+    valueInput.autocomplete = "off";
+
+    const displayNameInput = document.createElement("input");
+    displayNameInput.placeholder = "Display Name (optional)";
+    displayNameInput.id = "config-create-secret-display-name";
+
+    const rotationInput = document.createElement("input");
+    rotationInput.placeholder = "Rotation Policy (optional, e.g. 90d)";
+    rotationInput.id = "config-create-secret-rotation";
+
+    const expiresInput = document.createElement("input");
+    expiresInput.type = "datetime-local";
+    expiresInput.id = "config-create-secret-expires";
+    expiresInput.title = "Expires At (optional)";
+
+    const row = h("div", { class: "config-create-fields" });
+    row.appendChild(keyInput);
+    row.appendChild(valueInput);
+    row.appendChild(displayNameInput);
+    row.appendChild(rotationInput);
+    row.appendChild(h("label", {}, "Expires At (optional):"));
+    row.appendChild(expiresInput);
+
+    const errDiv = h("div", { id: "config-create-err" });
+
+    row.appendChild(btn("Create Secret", async () => {
+      const secretKey = (document.getElementById("config-create-secret-key") as HTMLInputElement).value.trim();
+      const value = (document.getElementById("config-create-secret-value") as HTMLInputElement).value;
+      const displayName = (document.getElementById("config-create-secret-display-name") as HTMLInputElement).value.trim();
+      const rotationPolicy = (document.getElementById("config-create-secret-rotation") as HTMLInputElement).value.trim();
+      const expiresAtRaw = (document.getElementById("config-create-secret-expires") as HTMLInputElement).value;
+      const eDiv = document.getElementById("config-create-err");
+      if (eDiv) clear(eDiv);
+
+      if (!secretKey) { if (eDiv) eDiv.appendChild(h("p", { class: "error" }, "Secret key is required.")); return; }
+      if (!value) { if (eDiv) eDiv.appendChild(h("p", { class: "error" }, "Secret value is required.")); return; }
+
+      const data: { secretKey: string; value: string; displayName?: string; rotationPolicy?: string; expiresAt?: string } = { secretKey, value };
+      if (displayName) data.displayName = displayName;
+      if (rotationPolicy) data.rotationPolicy = rotationPolicy;
+      if (expiresAtRaw) data.expiresAt = new Date(expiresAtRaw).toISOString();
+
+      const result = await state.client.createSecret(state.orgId!, data, configScopeOpts());
+
+      // Clear the secret value input immediately regardless of result
+      const valEl = document.getElementById("config-create-secret-value") as HTMLInputElement | null;
+      if (valEl) valEl.value = "";
+
+      if (!result.ok) {
+        if (eDiv) showError(result, eDiv);
+        return;
+      }
+      // Clear remaining form fields on success
+      const keyEl = document.getElementById("config-create-secret-key") as HTMLInputElement | null;
+      if (keyEl) keyEl.value = "";
+      const dnEl = document.getElementById("config-create-secret-display-name") as HTMLInputElement | null;
+      if (dnEl) dnEl.value = "";
+      const rpEl = document.getElementById("config-create-secret-rotation") as HTMLInputElement | null;
+      if (rpEl) rpEl.value = "";
+      const exEl = document.getElementById("config-create-secret-expires") as HTMLInputElement | null;
+      if (exEl) exEl.value = "";
+
+      showConfigMsg("Secret created.", "success");
       loadConfigList();
     }, "btn-primary btn-sm"));
 
@@ -1637,7 +1715,7 @@ function renderFeatureFlagsList(container: HTMLElement, flags: any[], isAppend: 
 
 function renderSecretMetadataList(container: HTMLElement, secrets: any[], isAppend: boolean): void {
   if (!secrets.length && !isAppend) {
-    container.appendChild(h("p", { class: "muted" }, "No secret metadata found at this scope."));
+    container.appendChild(h("p", { class: "muted" }, "No secrets found at this scope."));
     return;
   }
   for (const s of secrets) {
@@ -1663,8 +1741,69 @@ function renderSecretMetadataList(container: HTMLElement, secrets: any[], isAppe
     info.appendChild(h("small", { class: "muted config-meta" }, meta.join(" · ")));
 
     row.appendChild(info);
+
+    // Rotate and Revoke actions
+    const actions = h("span", { class: "actions" });
+    actions.appendChild(btn("Rotate", () => renderSecretRotateForm(s, container, row), "btn-xs"));
+    actions.appendChild(btn("Revoke", async () => {
+      const confirmed = window.confirm(`Revoke secret "${s.secretKey}"? This action cannot be undone.`);
+      if (!confirmed) return;
+      const result = await state.client.revokeSecret(state.orgId!, s.id, configScopeOpts());
+      if (!result.ok) {
+        const errDiv = h("div", {});
+        showError(result, errDiv);
+        row.appendChild(errDiv);
+        return;
+      }
+      showConfigMsg("Secret revoked.", "success");
+      loadConfigList();
+    }, "btn-xs btn-danger"));
+    row.appendChild(actions);
+
     container.appendChild(row);
   }
+}
+
+function renderSecretRotateForm(s: any, container: HTMLElement, rowEl: HTMLElement): void {
+  const form = h("div", { class: "list-item config-item config-edit-form secret-rotate-form" });
+
+  form.appendChild(h("span", { class: "config-key" }, s.secretKey));
+  form.appendChild(h("p", { class: "muted secret-write-only-hint" }, "⚠ Enter replacement value. Write-only — never shown again."));
+
+  const valueInput = document.createElement("input");
+  valueInput.type = "password";
+  valueInput.placeholder = "New secret value (write-only)";
+  valueInput.autocomplete = "off";
+
+  const errDiv = h("div", {});
+
+  const actions = h("div", { class: "actions" });
+  actions.appendChild(btn("Rotate", async () => {
+    clear(errDiv);
+    const value = valueInput.value;
+    if (!value) {
+      errDiv.appendChild(h("p", { class: "error" }, "Replacement value is required."));
+      return;
+    }
+    const result = await state.client.rotateSecret(state.orgId!, s.id, { value }, configScopeOpts());
+
+    // Clear the secret value input immediately regardless of result
+    valueInput.value = "";
+
+    if (!result.ok) { showError(result, errDiv); return; }
+    showConfigMsg("Secret rotated.", "success");
+    loadConfigList();
+  }, "btn-primary btn-xs"));
+  actions.appendChild(btn("Cancel", () => {
+    valueInput.value = "";
+    form.replaceWith(rowEl);
+  }, "btn-xs"));
+
+  form.appendChild(valueInput);
+  form.appendChild(errDiv);
+  form.appendChild(actions);
+
+  rowEl.replaceWith(form);
 }
 
 // --- Account View (Profile + Security Events) ---
