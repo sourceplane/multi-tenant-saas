@@ -17,6 +17,7 @@
       "workers_dev": false,
       "vars": {
         "ENVIRONMENT": "stage"
+        // SECRET_ENCRYPTION_KEY: set via `wrangler secret put SECRET_ENCRYPTION_KEY --env stage`
       },
       "hyperdrive": [
         {
@@ -39,6 +40,7 @@
       "workers_dev": false,
       "vars": {
         "ENVIRONMENT": "prod"
+        // SECRET_ENCRYPTION_KEY: set via `wrangler secret put SECRET_ENCRYPTION_KEY --env prod`
       },
       "hyperdrive": [
         {

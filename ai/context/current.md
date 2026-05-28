@@ -418,22 +418,29 @@ Last updated: 2026-05-28
 
 ## Current Task
 
-Task 0064 Verifier is scoped and ready to verify PR #107.
+Task 0065 Verifier is scoped and ready to verify PR #108.
 
-Objective: verify the metadata-only secret create, rotate, and revoke runtime implemented by PR #107 (`impl/task-0064-secret-metadata-mutations`) before merge.
+Objective: verify encrypted write-only config secret payload storage before merge. PR #108 claims config-worker now accepts secret `value` fields on create/rotate, encrypts with AES-256-GCM before DB mutation, persists only `config.secret_metadata.ciphertext_envelope`, and returns/list only safe public metadata.
+
+Verifier prompt: `ai/tasks/task-0065-verifier.md`
+Implementer prompt: `ai/tasks/task-0065.md`
+Implementer report: `ai/reports/task-0065-implementer.md`
+PR: #108 (`impl/task-0065-encrypted-secret-storage`) — https://github.com/sourceplane/multi-tenant-saas/pull/108
+
+Selected after current repo inspection:
+- Task 0064 verified PASS and merged via PR #107. Secret metadata create/rotate/revoke metadata-only mutations are live.
+- Task 0065 implementation commit exists and PR #108 is open with the implementer report committed and updated with the real PR number.
+- Local orchestrator smoke checks passed before verifier handoff: config-worker-tests (174), api-edge-tests (230), contracts/db tests, config-worker/api-edge/contracts/db typechecks, Orun validate, changed-plan, and GitHub Actions dry-run.
+- GitHub PR CI currently reports 17 passing checks for PR #108, but verifier must still inspect successful logs before PASS or merge.
 
 PR boundary under verification:
-- Config-worker routing/handlers for `POST .../config/secrets`, `POST .../config/secrets/{secretId}/rotate`, and `DELETE .../config/secrets/{secretId}` at organization, project, and environment scope.
-- api-edge facade forwarding for the same public routes, preserving actor headers and never forwarding raw bearer tokens downstream.
-- Contract/helper additions only as needed for public secret metadata mutation request/response shapes.
-- Tests for metadata-only validation, exact route-scope enforcement, policy denial, fail-closed malformed dependency envelopes, event/audit safety, and api-edge forwarding.
-
-Task 0064 verified PASS and merged via PR #107 (squash merge). 12 files changed, +1694 lines. 24/24 CI checks passed. Secret metadata create/rotate/revoke mutations are live.
+- Config-worker encryption adapter using Worker-compatible Web Crypto and configurable `SECRET_ENCRYPTION_KEY`; no hardcoded production key material.
+- Config repository write-only persistence methods that set `ciphertext_envelope` while preserving safe read/list/get surfaces.
+- Config-worker create/rotate secret handlers that accept secret payloads, encrypt before DB mutation, preserve authorization/exact-scope checks/transaction-coupled event-audit writes, and return only `PublicSecretMetadata`.
+- Contract request types and focused config-worker/api-edge/contracts/db tests for encryption, secret-safety, fail-closed key binding behavior, api-edge body forwarding, and no bearer forwarding.
+- No reveal/read API, no web-console UI, no Terraform/live secret provisioning, no KV/effective config/versioning work.
 
 Current repo checkpoint:
-- `origin/main` includes PR #107 squash merge.
+- Local branch is `impl/task-0065-encrypted-secret-storage`; PR #108 is open and ready for verifier handoff.
 - Tasks 0001–0064 are completed and verified.
-
-## Next Task
-
-Generate the next Implementer task for the config/secrets roadmap. Likely next scope: encrypted secret payload storage/write-only API semantics, secret management UI, or next item from the roadmap — selected after reading updated repo state and specs.
+- Main CI baseline is green; latest visible main CI runs `26585584501` and `26585656635` completed successfully.

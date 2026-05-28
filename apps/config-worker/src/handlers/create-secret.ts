@@ -11,12 +11,15 @@ import { authorizeViaPolicy } from "../policy-client.js";
 import { errorResponse, successResponse, validationError } from "../http.js";
 import { toPublicSecretMetadata } from "../mappers.js";
 import type { PolicyResource } from "@saas/contracts/policy";
+import type { EncryptionAdapter } from "../encryption.js";
 
 const KEY_RE = /^[a-zA-Z][a-zA-Z0-9._-]{0,127}$/;
 
-/** Fields that must never appear in a create-secret request body. */
+/**
+ * Fields that must never appear in a create-secret request body,
+ * EXCEPT `value` which is now accepted for write-only encrypted storage.
+ */
 const SECRET_MATERIAL_FIELDS = [
-  "value",
   "plaintext",
   "secret",
   "ciphertext",
@@ -33,6 +36,7 @@ export interface CreateSecretDeps {
   eventsRepo?: Pick<EventsRepository, "appendEventWithAudit">;
   generateId?: () => string;
   now?: () => Date;
+  encryptionAdapter?: EncryptionAdapter | null;
 }
 
 function randomHex(bytes: number): string {
@@ -67,18 +71,19 @@ export async function handleCreateSecret(
   const raw = body as Record<string, unknown>;
   const fields: Record<string, string[]> = {};
 
-  // Reject secret-material fields
+  // Reject secret-material fields (except value, which is now accepted)
   for (const forbidden of SECRET_MATERIAL_FIELDS) {
     if (forbidden in raw) {
       fields[forbidden] = ["Secret material fields are not accepted"];
     }
   }
 
-  const { secretKey, displayName, rotationPolicy, expiresAt } = raw as {
+  const { secretKey, displayName, rotationPolicy, expiresAt, value } = raw as {
     secretKey?: unknown;
     displayName?: unknown;
     rotationPolicy?: unknown;
     expiresAt?: unknown;
+    value?: unknown;
   };
 
   if (typeof secretKey !== "string" || !KEY_RE.test(secretKey)) {
@@ -89,6 +94,12 @@ export async function handleCreateSecret(
   }
   if (rotationPolicy !== undefined && rotationPolicy !== null && typeof rotationPolicy !== "string") {
     fields.rotationPolicy = ["rotationPolicy must be a string or null"];
+  }
+  if (value !== undefined && value !== null && typeof value !== "string") {
+    fields.value = ["value must be a string"];
+  }
+  if (value !== undefined && value !== null && typeof value === "string" && value.length === 0) {
+    fields.value = ["value must not be empty"];
   }
 
   let parsedExpiresAt: Date | undefined;
@@ -107,6 +118,20 @@ export async function handleCreateSecret(
 
   if (Object.keys(fields).length > 0) {
     return validationError(requestId, fields);
+  }
+
+  // Resolve encryption adapter
+  let encryptionAdapter: EncryptionAdapter | null | undefined = deps?.encryptionAdapter;
+  if (encryptionAdapter === undefined && !deps) {
+    // Production path: lazy-import encryption adapter
+    const { createEncryptionAdapter } = await import("../encryption.js");
+    encryptionAdapter = await createEncryptionAdapter(env.SECRET_ENCRYPTION_KEY);
+  }
+
+  // If value is provided, encryption adapter is required
+  const secretValue = typeof value === "string" ? value : null;
+  if (secretValue && !encryptionAdapter) {
+    return errorResponse("internal_error", "Encryption is not configured", 503, requestId);
   }
 
   if (!deps && !env.SOURCEPLANE_DB) {
@@ -152,6 +177,17 @@ export async function handleCreateSecret(
     }
   }
 
+  // Encrypt value before any DB mutation
+  let ciphertextEnvelope: string | undefined;
+  if (secretValue && encryptionAdapter) {
+    try {
+      const envelope = await encryptionAdapter.encrypt(secretValue);
+      ciphertextEnvelope = JSON.stringify(envelope);
+    } catch {
+      return errorResponse("internal_error", "Encryption failed", 503, requestId);
+    }
+  }
+
   const secretId = crypto.randomUUID();
   const genId = deps?.generateId ?? (() => randomHex(16));
   const now = deps?.now ? deps.now() : new Date();
@@ -167,6 +203,9 @@ export async function handleCreateSecret(
   const input: CreateSecretMetadataInput = parsedExpiresAt !== undefined
     ? { ...baseInput, expiresAt: parsedExpiresAt }
     : baseInput;
+  if (ciphertextEnvelope !== undefined) {
+    input.ciphertextEnvelope = ciphertextEnvelope;
+  }
 
   const executor = deps ? null : createSqlExecutor(env.SOURCEPLANE_DB!);
   try {

@@ -128,9 +128,13 @@ export interface ListSecretMetadataResponse {
 // ---------------------------------------------------------------------------
 // Secret Metadata Mutation Requests
 // ---------------------------------------------------------------------------
-// NOTE: No value, plaintext, secret, ciphertext, ciphertextEnvelope, hash,
-// or any secret-material field is accepted. Validation must reject them.
+// NOTE: The `value` field on CreateSecretRequest and RotateSecretRequest is
+// write-only — it is accepted during creation/rotation, encrypted in the
+// worker before persistence, and NEVER returned in any response, event, or
+// audit payload. No ciphertext, hash, or raw secret material appears in
+// responses.
 
+/** Metadata-only secret creation (no encrypted value). */
 export interface CreateSecretMetadataRequest {
   secretKey: string;
   displayName?: string | null;
@@ -138,8 +142,24 @@ export interface CreateSecretMetadataRequest {
   expiresAt?: string | null;
 }
 
+/** Write-only secret creation with an encrypted value. */
+export interface CreateSecretRequest {
+  secretKey: string;
+  /** Write-only secret value. Encrypted before persistence; never returned. */
+  value: string;
+  displayName?: string | null;
+  rotationPolicy?: string | null;
+  expiresAt?: string | null;
+}
+
 export interface CreateSecretMetadataResponse {
   secret: PublicSecretMetadata;
+}
+
+/** Write-only secret rotation with a replacement value. */
+export interface RotateSecretRequest {
+  /** Write-only replacement secret value. Encrypted before persistence; never returned. */
+  value: string;
 }
 
 export interface RotateSecretMetadataResponse {
