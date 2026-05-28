@@ -319,7 +319,7 @@ function renderWorkspaceView(): HTMLElement {
   const container = h("div", { class: "workspace" });
 
   const nav = h("nav", { class: "workspace-nav" });
-  const tabs = ["Members", "Invitations", "Projects", "API Keys", "Audit"];
+  const tabs = ["Members", "Invitations", "Projects", "API Keys", "Audit", "Config"];
   const activeTab = getActiveTab();
 
   nav.appendChild(btn("\u2190 Orgs", () => {
@@ -372,6 +372,7 @@ function renderTab(tab: string): void {
     case "projects": renderProjectsTab(content); break;
     case "api-keys": renderApiKeysTab(content); break;
     case "audit": renderAuditTab(content); break;
+    case "config": renderConfigTab(content); break;
   }
 }
 
@@ -959,6 +960,282 @@ async function loadAudit(cursor?: string): Promise<void> {
   if (auditCursor) {
     const c = auditCursor;
     container.appendChild(btn("Load More", () => loadAudit(c), "btn-sm mt"));
+  }
+}
+
+// --- Config Tab ---
+
+type ConfigResource = "settings" | "feature-flags" | "secrets";
+type ConfigScope = "organization" | "project" | "environment";
+
+let configResource: ConfigResource = "settings";
+let configScope: ConfigScope = "organization";
+let configEnvId: string | null = null;
+let configEnvName: string | null = null;
+let configEnvs: { id: string; name: string }[] = [];
+
+async function renderConfigTab(container: HTMLElement): Promise<void> {
+  container.appendChild(h("h3", {}, "Config"));
+  container.appendChild(h("p", { class: "muted" }, "Read-only view of settings, feature flags, and secret metadata."));
+
+  // Resource sub-tabs
+  const resourceNav = h("div", { class: "config-resource-nav" });
+  const resources: { key: ConfigResource; label: string }[] = [
+    { key: "settings", label: "Settings" },
+    { key: "feature-flags", label: "Feature Flags" },
+    { key: "secrets", label: "Secrets Metadata" },
+  ];
+  for (const r of resources) {
+    const cls = r.key === configResource ? "btn-xs btn-active" : "btn-xs";
+    resourceNav.appendChild(btn(r.label, () => {
+      configResource = r.key;
+      renderTab("config");
+    }, cls));
+  }
+  container.appendChild(resourceNav);
+
+  // Scope selector
+  const scopeNav = h("div", { class: "config-scope-nav" });
+  scopeNav.appendChild(h("span", { class: "muted" }, "Scope: "));
+  const scopes: { key: ConfigScope; label: string }[] = [
+    { key: "organization", label: "Organization" },
+    { key: "project", label: "Project" },
+    { key: "environment", label: "Environment" },
+  ];
+  for (const s of scopes) {
+    const cls = s.key === configScope ? "btn-xs btn-active" : "btn-xs";
+    scopeNav.appendChild(btn(s.label, () => {
+      configScope = s.key;
+      configEnvId = null;
+      configEnvName = null;
+      renderTab("config");
+    }, cls));
+  }
+  container.appendChild(scopeNav);
+
+  // Scope context info
+  const scopeInfo = h("div", { class: "config-scope-info" });
+  scopeInfo.appendChild(h("small", { class: "muted" }, `Org: ${state.orgName ?? state.orgId}`));
+  if ((configScope === "project" || configScope === "environment") && state.projectId) {
+    scopeInfo.appendChild(h("small", { class: "muted" }, ` · Project: ${state.projectName ?? state.projectId}`));
+  }
+  if (configScope === "environment" && configEnvName) {
+    scopeInfo.appendChild(h("small", { class: "muted" }, ` · Environment: ${configEnvName}`));
+  }
+  container.appendChild(scopeInfo);
+
+  // Handle missing project/environment context
+  if (configScope === "project" && !state.projectId) {
+    container.appendChild(h("div", { class: "panel-alt mt" },
+      h("p", { class: "muted" }, "Select a project from the Projects tab to view project-scoped config."),
+    ));
+    return;
+  }
+
+  if (configScope === "environment") {
+    if (!state.projectId) {
+      container.appendChild(h("div", { class: "panel-alt mt" },
+        h("p", { class: "muted" }, "Select a project from the Projects tab first, then choose an environment."),
+      ));
+      return;
+    }
+    // Environment selector
+    const envSelector = h("div", { class: "form-group mt" });
+    envSelector.appendChild(h("label", {}, "Environment: "));
+    const envSelect = document.createElement("select");
+    envSelect.id = "config-env-select";
+
+    const placeholderOpt = document.createElement("option");
+    placeholderOpt.value = "";
+    placeholderOpt.textContent = "— Select environment —";
+    envSelect.appendChild(placeholderOpt);
+
+    if (configEnvs.length === 0) {
+      // Load environments on demand
+      envSelector.appendChild(envSelect);
+      envSelector.appendChild(h("span", { class: "muted" }, "Loading environments..."));
+      container.appendChild(envSelector);
+
+      const envResult = await state.client.listEnvironments(state.orgId!, state.projectId!);
+      if (!envResult.ok) {
+        showError(envResult, container);
+        return;
+      }
+      configEnvs = envResult.data.map((e: any) => ({ id: e.id, name: e.name }));
+      // Re-render now that envs are loaded
+      renderTab("config");
+      return;
+    }
+
+    for (const env of configEnvs) {
+      const opt = document.createElement("option");
+      opt.value = env.id;
+      opt.textContent = env.name;
+      if (env.id === configEnvId) opt.selected = true;
+      envSelect.appendChild(opt);
+    }
+    envSelect.addEventListener("change", () => {
+      const selected = configEnvs.find((e) => e.id === envSelect.value);
+      configEnvId = selected?.id ?? null;
+      configEnvName = selected?.name ?? null;
+      renderTab("config");
+    });
+    envSelector.appendChild(envSelect);
+    container.appendChild(envSelector);
+
+    if (!configEnvId) {
+      container.appendChild(h("div", { class: "panel-alt mt" },
+        h("p", { class: "muted" }, "Select an environment above to view environment-scoped config."),
+      ));
+      return;
+    }
+  }
+
+  // Config list
+  const list = h("div", { id: "config-list", class: "mt" });
+  container.appendChild(list);
+  loadConfigList();
+}
+
+let configCursor: string | null = null;
+
+async function loadConfigList(cursor?: string): Promise<void> {
+  const container = document.getElementById("config-list");
+  if (!container) return;
+  if (!cursor) {
+    clear(container);
+    configCursor = null;
+  }
+
+  const existingBtn = container.querySelector(".config-load-more");
+  if (existingBtn) existingBtn.remove();
+
+  const loadingEl = h("p", { class: "muted" }, "Loading...");
+  container.appendChild(loadingEl);
+
+  const opts: { projectId?: string; environmentId?: string; cursor?: string; limit?: string } = { limit: "20" };
+  if (configScope === "project" || configScope === "environment") {
+    opts.projectId = state.projectId!;
+  }
+  if (configScope === "environment" && configEnvId) {
+    opts.environmentId = configEnvId;
+  }
+  if (cursor) opts.cursor = cursor;
+
+  if (configResource === "settings") {
+    const result = await state.client.listConfigSettings(state.orgId!, opts);
+    loadingEl.remove();
+    if (!result.ok) { showError(result, container); return; }
+    renderSettingsList(container, result.data, !!cursor);
+    configCursor = result.meta.cursor;
+  } else if (configResource === "feature-flags") {
+    const result = await state.client.listFeatureFlags(state.orgId!, opts);
+    loadingEl.remove();
+    if (!result.ok) { showError(result, container); return; }
+    renderFeatureFlagsList(container, result.data, !!cursor);
+    configCursor = result.meta.cursor;
+  } else {
+    const result = await state.client.listSecretMetadata(state.orgId!, opts);
+    loadingEl.remove();
+    if (!result.ok) { showError(result, container); return; }
+    renderSecretMetadataList(container, result.data, !!cursor);
+    configCursor = result.meta.cursor;
+  }
+
+  if (configCursor) {
+    const c = configCursor;
+    container.appendChild(btn("Load More", () => loadConfigList(c), "btn-sm mt config-load-more"));
+  }
+}
+
+function renderSettingsList(container: HTMLElement, settings: any[], isAppend: boolean): void {
+  if (!settings.length && !isAppend) {
+    container.appendChild(h("p", { class: "muted" }, "No settings found at this scope."));
+    return;
+  }
+  for (const s of settings) {
+    const row = h("div", { class: "list-item config-item" });
+    const info = h("div", { class: "config-item-info" });
+    info.appendChild(h("span", { class: "config-key" }, s.key));
+    if (s.description) {
+      info.appendChild(h("span", { class: "muted" }, ` — ${s.description}`));
+    }
+    info.appendChild(h("small", { class: "muted config-meta" },
+      `Scope: ${s.scopeKind} · Updated: ${formatTimestamp(s.updatedAt)} · Created: ${formatTimestamp(s.createdAt)}`));
+
+    // Render value safely as text
+    const valueStr = typeof s.value === "string" ? s.value : JSON.stringify(s.value, null, 2);
+    const valueEl = h("pre", { class: "config-value" });
+    valueEl.appendChild(document.createTextNode(valueStr));
+    info.appendChild(valueEl);
+
+    row.appendChild(info);
+    container.appendChild(row);
+  }
+}
+
+function renderFeatureFlagsList(container: HTMLElement, flags: any[], isAppend: boolean): void {
+  if (!flags.length && !isAppend) {
+    container.appendChild(h("p", { class: "muted" }, "No feature flags found at this scope."));
+    return;
+  }
+  for (const f of flags) {
+    const row = h("div", { class: "list-item config-item" });
+    const info = h("div", { class: "config-item-info" });
+
+    const headerLine = h("div", { class: "config-flag-header" });
+    headerLine.appendChild(h("span", { class: "config-key" }, f.flagKey));
+    headerLine.appendChild(h("span", { class: f.enabled ? "badge badge-auth" : "badge badge-revoked" },
+      f.enabled ? "ENABLED" : "DISABLED"));
+    info.appendChild(headerLine);
+
+    if (f.description) {
+      info.appendChild(h("span", { class: "muted" }, f.description));
+    }
+    info.appendChild(h("small", { class: "muted config-meta" },
+      `Scope: ${f.scopeKind} · Updated: ${formatTimestamp(f.updatedAt)} · Created: ${formatTimestamp(f.createdAt)}`));
+
+    if (f.value != null) {
+      const valueStr = typeof f.value === "string" ? f.value : JSON.stringify(f.value, null, 2);
+      const valueEl = h("pre", { class: "config-value" });
+      valueEl.appendChild(document.createTextNode(valueStr));
+      info.appendChild(valueEl);
+    }
+
+    row.appendChild(info);
+    container.appendChild(row);
+  }
+}
+
+function renderSecretMetadataList(container: HTMLElement, secrets: any[], isAppend: boolean): void {
+  if (!secrets.length && !isAppend) {
+    container.appendChild(h("p", { class: "muted" }, "No secret metadata found at this scope."));
+    return;
+  }
+  for (const s of secrets) {
+    const row = h("div", { class: "list-item config-item" });
+    const info = h("div", { class: "config-item-info" });
+
+    const headerLine = h("div", { class: "config-flag-header" });
+    headerLine.appendChild(h("span", { class: "config-key" }, s.secretKey));
+    headerLine.appendChild(h("span", { class: "badge badge-org" }, s.status));
+    if (s.displayName) {
+      headerLine.appendChild(h("span", { class: "muted" }, s.displayName));
+    }
+    info.appendChild(headerLine);
+
+    const meta: string[] = [];
+    meta.push(`Scope: ${s.scopeKind}`);
+    meta.push(`Version: ${s.version}`);
+    if (s.rotationPolicy) meta.push(`Rotation: ${s.rotationPolicy}`);
+    if (s.lastRotatedAt) meta.push(`Last rotated: ${formatTimestamp(s.lastRotatedAt)}`);
+    if (s.expiresAt) meta.push(`Expires: ${formatTimestamp(s.expiresAt)}`);
+    meta.push(`Created: ${formatTimestamp(s.createdAt)}`);
+    meta.push(`Updated: ${formatTimestamp(s.updatedAt)}`);
+    info.appendChild(h("small", { class: "muted config-meta" }, meta.join(" · ")));
+
+    row.appendChild(info);
+    container.appendChild(row);
   }
 }
 
