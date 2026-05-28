@@ -204,6 +204,72 @@ h4 { font-size: 14px; font-weight: 600; margin-bottom: 6px; }
   color: var(--primary);
 }
 
+/* API Keys */
+.api-key-secret-box {
+  background: rgba(34, 197, 94, 0.08);
+  border: 1px solid var(--success);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-top: 12px;
+}
+
+.api-key-secret-warning {
+  color: var(--badge-stage);
+  font-weight: 600;
+  margin: 6px 0;
+}
+
+.api-key-secret-value {
+  font-family: var(--mono);
+  font-size: 13px;
+  max-width: 480px !important;
+  background: var(--bg);
+  color: var(--success);
+  font-weight: 600;
+}
+
+.apikey-row {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.apikey-row .actions {
+  margin-left: 0;
+  align-self: flex-end;
+}
+
+.apikey-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+}
+
+.apikey-label {
+  font-weight: 600;
+}
+
+.apikey-prefix {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.apikey-meta {
+  display: block;
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+.apikey-revoked {
+  opacity: 0.6;
+}
+
+.badge-revoked {
+  background: var(--danger);
+  color: #fff;
+}
+
 .security-outcome-success {
   color: var(--success);
   font-weight: 500;

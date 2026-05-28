@@ -16,6 +16,12 @@ import type {
 } from "@saas/contracts/projects";
 import type { PublicAuditEntry } from "@saas/contracts/events";
 import type { PublicSecurityEvent } from "@saas/contracts/security-events";
+import type {
+  PublicApiKey,
+  PublicApiKeyCreateResult,
+  PublicApiKeyRevokeResult,
+  CreateApiKeyRequest,
+} from "@saas/contracts/api-keys";
 
 export interface ApiTarget {
   name: string;
@@ -281,5 +287,40 @@ export class ApiClient {
     if ("error" in r) return this.wrapErr(r.error);
     const events = (r.json as any).securityEvents ?? r.json;
     return this.wrapOk(Array.isArray(events) ? events : [], r.meta);
+  }
+
+  // API Keys (org-scoped)
+  async listApiKeys(
+    orgId: string,
+    opts?: { cursor?: string; limit?: string; projectId?: string },
+  ): Promise<ApiResult<PublicApiKey[]>> {
+    const query: Record<string, string> = {};
+    if (opts?.cursor) query.cursor = opts.cursor;
+    if (opts?.limit) query.limit = opts.limit;
+    if (opts?.projectId) query.projectId = opts.projectId;
+    const r = await this.raw("GET", `/v1/organizations/${orgId}/api-keys`, undefined, query);
+    if ("error" in r) return this.wrapErr(r.error);
+    const keys = (r.json as any).apiKeys ?? r.json;
+    return this.wrapOk(Array.isArray(keys) ? keys : [], r.meta);
+  }
+
+  async createApiKey(
+    orgId: string,
+    data: CreateApiKeyRequest,
+  ): Promise<ApiResult<PublicApiKeyCreateResult>> {
+    const r = await this.raw("POST", `/v1/organizations/${orgId}/api-keys`, data);
+    if ("error" in r) return this.wrapErr(r.error);
+    const apiKey = (r.json as any).apiKey ?? r.json;
+    return this.wrapOk(apiKey, r.meta);
+  }
+
+  async revokeApiKey(
+    orgId: string,
+    apiKeyId: string,
+  ): Promise<ApiResult<PublicApiKeyRevokeResult>> {
+    const r = await this.raw("DELETE", `/v1/organizations/${orgId}/api-keys/${apiKeyId}`);
+    if ("error" in r) return this.wrapErr(r.error);
+    const apiKey = (r.json as any).apiKey ?? r.json;
+    return this.wrapOk(apiKey, r.meta);
   }
 }
