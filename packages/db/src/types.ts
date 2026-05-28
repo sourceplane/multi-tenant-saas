@@ -5,7 +5,8 @@ export type BoundedContext =
   | "projects"
   | "billing"
   | "events"
-  | "config";
+  | "config"
+  | "webhooks";
 
 export interface MigrationEntry {
   id: string;

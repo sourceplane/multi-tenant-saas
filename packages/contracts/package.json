@@ -16,7 +16,8 @@
     "./security-events": "./src/security-events.ts",
     "./api-keys": "./src/api-keys.ts",
     "./service-principal": "./src/service-principal.ts",
-    "./config": "./src/config.ts"
+    "./config": "./src/config.ts",
+    "./webhooks": "./src/webhooks.ts"
   },
   "scripts": {
     "build": "tsc --project tsconfig.build.json",

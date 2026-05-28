@@ -1,0 +1,167 @@
+export type { SqlExecutor, SqlExecutorResult, SqlRow } from "../hyperdrive/executor.js";
+
+// ── Result type ─────────────────────────────────────────────
+
+export type WebhookRepositoryError =
+  | { kind: "not_found" }
+  | { kind: "conflict"; entity: string }
+  | { kind: "internal"; message: string };
+
+export type WebhookResult<T> =
+  | { ok: true; value: T }
+  | { ok: false; error: WebhookRepositoryError };
+
+// ── Cursor pagination (matches existing convention) ─────────
+
+export interface CursorPosition {
+  createdAt: string;
+  id: string;
+}
+
+export interface PageQueryParams {
+  limit: number;
+  cursor: CursorPosition | null;
+}
+
+export interface PagedResult<T> {
+  items: T[];
+  nextCursor: CursorPosition | null;
+}
+
+// ── Webhook endpoints ───────────────────────────────────────
+// NOTE: No plaintext signing secret fields. Only safe metadata.
+
+export type WebhookEndpointStatus = "active" | "disabled" | "pending";
+
+export interface WebhookEndpoint {
+  id: string;
+  orgId: string;
+  projectId: string | null;
+  url: string;
+  name: string | null;
+  description: string | null;
+  status: WebhookEndpointStatus;
+  disabledReason: string | null;
+  disabledAt: Date | null;
+  secretVersion: number;
+  secretLastRotatedAt: Date | null;
+  // NOTE: secret_ciphertext is intentionally excluded from the type.
+  // It is never exposed through the repository read surface.
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface CreateWebhookEndpointInput {
+  id: string;
+  orgId: string;
+  projectId?: string | null;
+  url: string;
+  name?: string | null;
+  description?: string | null;
+  /** JSON-serialized ciphertext envelope for signing secret. Write-only — never returned. */
+  secretCiphertext?: string;
+}
+
+export interface UpdateWebhookEndpointInput {
+  url?: string;
+  name?: string | null;
+  description?: string | null;
+}
+
+export interface DisableWebhookEndpointInput {
+  reason?: string;
+}
+
+// ── Webhook subscriptions ───────────────────────────────────
+
+export interface WebhookSubscription {
+  id: string;
+  orgId: string;
+  endpointId: string;
+  projectId: string | null;
+  eventType: string;
+  enabled: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface CreateWebhookSubscriptionInput {
+  id: string;
+  orgId: string;
+  endpointId: string;
+  projectId?: string | null;
+  eventType: string;
+  enabled?: boolean;
+}
+
+export interface UpdateWebhookSubscriptionInput {
+  enabled?: boolean;
+}
+
+// ── Webhook delivery attempts ───────────────────────────────
+// NOTE: No full event payloads or customer response bodies.
+
+export type DeliveryAttemptStatus = "pending" | "success" | "failed" | "retrying";
+
+export interface WebhookDeliveryAttempt {
+  id: string;
+  orgId: string;
+  endpointId: string;
+  subscriptionId: string;
+  eventId: string;
+  eventType: string;
+  status: DeliveryAttemptStatus;
+  attemptNumber: number;
+  httpStatusCode: number | null;
+  failureReason: string | null;
+  idempotencyKey: string | null;
+  nextRetryAt: Date | null;
+  completedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface CreateDeliveryAttemptInput {
+  id: string;
+  orgId: string;
+  endpointId: string;
+  subscriptionId: string;
+  eventId: string;
+  eventType: string;
+  idempotencyKey?: string | null;
+}
+
+export interface UpdateDeliveryAttemptInput {
+  status: DeliveryAttemptStatus;
+  attemptNumber?: number;
+  httpStatusCode?: number | null;
+  failureReason?: string | null;
+  nextRetryAt?: Date | null;
+  completedAt?: Date | null;
+}
+
+// ── Repository interface ────────────────────────────────────
+
+export interface WebhookRepository {
+  // Endpoints
+  createEndpoint(input: CreateWebhookEndpointInput): Promise<WebhookResult<WebhookEndpoint>>;
+  getEndpoint(orgId: string, endpointId: string): Promise<WebhookResult<WebhookEndpoint>>;
+  listEndpoints(orgId: string, params: PageQueryParams, projectId?: string | null): Promise<WebhookResult<PagedResult<WebhookEndpoint>>>;
+  updateEndpoint(orgId: string, endpointId: string, input: UpdateWebhookEndpointInput): Promise<WebhookResult<WebhookEndpoint>>;
+  disableEndpoint(orgId: string, endpointId: string, input: DisableWebhookEndpointInput): Promise<WebhookResult<WebhookEndpoint>>;
+  deleteEndpoint(orgId: string, endpointId: string): Promise<WebhookResult<{ deleted: true }>>;
+  rotateEndpointSecret(orgId: string, endpointId: string, secretCiphertext?: string): Promise<WebhookResult<WebhookEndpoint>>;
+
+  // Subscriptions
+  createSubscription(input: CreateWebhookSubscriptionInput): Promise<WebhookResult<WebhookSubscription>>;
+  getSubscription(orgId: string, subscriptionId: string): Promise<WebhookResult<WebhookSubscription>>;
+  listSubscriptions(orgId: string, endpointId: string, params: PageQueryParams): Promise<WebhookResult<PagedResult<WebhookSubscription>>>;
+  updateSubscription(orgId: string, subscriptionId: string, input: UpdateWebhookSubscriptionInput): Promise<WebhookResult<WebhookSubscription>>;
+  deleteSubscription(orgId: string, subscriptionId: string): Promise<WebhookResult<{ deleted: true }>>;
+
+  // Delivery attempts
+  createDeliveryAttempt(input: CreateDeliveryAttemptInput): Promise<WebhookResult<WebhookDeliveryAttempt>>;
+  updateDeliveryAttempt(orgId: string, attemptId: string, input: UpdateDeliveryAttemptInput): Promise<WebhookResult<WebhookDeliveryAttempt>>;
+  getDeliveryAttempt(orgId: string, attemptId: string): Promise<WebhookResult<WebhookDeliveryAttempt>>;
+  listDeliveryAttempts(orgId: string, endpointId: string, params: PageQueryParams): Promise<WebhookResult<PagedResult<WebhookDeliveryAttempt>>>;
+}
