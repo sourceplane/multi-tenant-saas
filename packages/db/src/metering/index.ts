@@ -10,6 +10,8 @@ export type {
   UsageRollup,
   UsageSummaryQuery,
   UsageSummary,
+  RollupMaterializationWindow,
+  RollupMaterializationResult,
   QuotaPeriod,
   QuotaEnforcement,
   QuotaStatus,

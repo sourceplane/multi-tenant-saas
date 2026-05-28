@@ -75,6 +75,31 @@ export interface UsageRollup {
   updatedAt: Date;
 }
 
+/**
+ * Window over which to materialize rollups from raw usage records.
+ * `start` is inclusive, `end` is exclusive. The materializer aggregates all
+ * usage records with `recorded_at >= start AND recorded_at < end`, grouped
+ * into buckets of `bucketType`. Callers MUST pass a bounded recent window —
+ * never an unbounded scan of history.
+ */
+export interface RollupMaterializationWindow {
+  bucketType: BucketType;
+  start: Date;
+  end: Date;
+}
+
+/**
+ * Result of a single bucket-type rollup materialization pass.
+ * `rollupsWritten` is the number of distinct rollup rows that were upserted
+ * (one per org/project/environment/metric/bucket_start group within the window).
+ */
+export interface RollupMaterializationResult {
+  bucketType: BucketType;
+  windowStart: Date;
+  windowEnd: Date;
+  rollupsWritten: number;
+}
+
 export interface UsageSummaryQuery {
   orgId: string;
   projectId?: string | null;
@@ -182,6 +207,19 @@ export interface MeteringRepository {
     orgId: string,
     params: PageQueryParams,
   ): Promise<MeteringResult<PagedResult<UsageRollup>>>;
+
+  /**
+   * Materialize `metering.usage_rollups` rows from `metering.usage_records`
+   * for the given bounded window and bucket type. Idempotent: re-running for
+   * the same window overwrites the affected rollup rows with the latest
+   * aggregate values rather than duplicating them.
+   *
+   * Aggregation key is `(org_id, project_id, environment_id, metric, bucket_type, bucket_start)`.
+   * Every aggregation row is org-scoped — no cross-org grouping is possible.
+   */
+  materializeUsageRollups(
+    window: RollupMaterializationWindow,
+  ): Promise<MeteringResult<RollupMaterializationResult>>;
 
   /**
    * Check quota for a given org and metric against active quota definitions.
