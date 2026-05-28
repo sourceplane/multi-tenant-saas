@@ -1331,6 +1331,16 @@ Last updated: 2026-05-28
 - Reports: `ai/reports/task-0063-implementer.md`, `ai/reports/task-0063-verifier.md`
 - Durable outcome: Web-console page internals polished with Figma-inspired components: page headers, action bars, member rows with avatars, invitation rows with status badges, project cards, audit log table with headers, animated loading indicators, structured empty states. All existing workflows preserved. No backend, API, or dependency changes.
 
+## Task 0064
+
+|- Agent: Implementer
+|- Prompt: `ai/tasks/task-0064.md`
+|- Status: scoped and ready to begin (2026-05-28)
+|- Objective: Add metadata-only secret create, rotate, and revoke runtime for config secrets through config-worker and api-edge.
+|- Scope boundary: config-worker secret metadata mutation handlers/routes, api-edge forwarding, focused contracts/helpers, and tests. No encrypted payload storage, no plaintext reveal/read flow, no UI, no infrastructure.
+|- Acceptance: targeted config-worker/api-edge/contracts tests pass; Orun validate/changed-plan/dry-run pass; metadata-only responses/events/audit contain no secret material; exact route-scope enforcement prevents cross-scope secret mutation.
+|- Expected outcome: Public secret metadata mutation surface is ready for verification, unlocking later encrypted secret payload storage and UI work.
+
 ## Historical Notes
 
 - PR #1 split product-specific V2 Git catalog work away from the reusable SaaS

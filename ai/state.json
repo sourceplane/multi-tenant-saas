@@ -1,6 +1,6 @@
 {
   "goal": "Supabase/Postgres-backed multi-organization Orun SaaS control plane",
-  "current_task": null,
+  "current_task": "0064",
   "completed": [
     "0001",
     "0001.1",
@@ -72,13 +72,13 @@
     "0063"
   ],
   "repo_health": "green",
-  "next_focus": "next-orchestrator-cycle",
-  "last_verified": "2026-05-28T15:10:00Z",
+  "next_focus": "secret-metadata-mutation-runtime",
+  "last_verified": "2026-05-28T15:05:00Z",
   "waiting_for_input": "false",
-  "task_agent": null,
+  "task_agent": "ai/tasks/task-0064.md",
   "notes": [
-    "Task 0063 verified PASS and merged via PR #106 at 0ed171c; post-merge main CI run 26583005845 in progress.",
-    "Web-console page-internal UI polish complete: page headers, action bars, member/invitation/project cards, audit table, loading/empty states, status badges.",
-    "No open PRs. Local checkout has unrelated untracked historical ai/ carryover files."
+    "Task 0063 verified PASS and merged via PR #106 at 0ed171c; post-merge main CI run 26583005845 completed successfully.",
+    "No open PRs. Local checkout still has unrelated untracked historical ai/ carryover files; do not stage them for Task 0064.",
+    "Task 0064 scoped: metadata-only secret create/rotate/revoke runtime for config-worker and api-edge, with strict no-plaintext/no-ciphertext public exposure and exact route-scope enforcement."
   ]
 }

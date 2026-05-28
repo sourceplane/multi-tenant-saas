@@ -418,12 +418,28 @@ Last updated: 2026-05-28
 
 ## Current Task
 
-Task 0063 verified PASS and merged via PR #106 at `0ed171c`. Web-console page internals polished with Figma-inspired components: page headers, action bars, member rows with avatars, invitation rows with status badges, project cards, audit log table, loading indicators, empty states.
+Task 0064 is scoped and ready for Implementer.
 
-Post-merge main CI run `26583005845` in progress at merge time.
+Objective: add metadata-only secret create, rotate, and revoke runtime for the config bounded context through config-worker and api-edge, without encrypted payload storage or any plaintext reveal/read flow.
+
+PR boundary:
+- Config-worker routing/handlers for `POST .../config/secrets`, `POST .../config/secrets/{secretId}/rotate`, and `DELETE .../config/secrets/{secretId}` at organization, project, and environment scope.
+- api-edge facade forwarding for the same public routes, preserving actor headers and never forwarding raw bearer tokens downstream.
+- Contract/helper additions only as needed for public secret metadata mutation request/response shapes.
+- Tests for metadata-only validation, exact route-scope enforcement, policy denial, fail-closed malformed dependency envelopes, event/audit safety, and api-edge forwarding.
+
+Constraints:
+- Metadata-only: no plaintext secret values, ciphertext envelopes, hashes, or reveal/read flow.
+- Rotate means metadata rotation only using the existing repository version/lastRotatedAt seam.
+- Revoke is soft status change, not hard delete.
+- Event/audit writes must be safe and atomically coupled with metadata mutations in production paths.
+
+Current repo checkpoint:
+- `main` is at `1f26e17` after Task 0063 docs/state follow-up.
+- PR #106 merged at `0ed171c`.
+- Post-merge main CI run `26583005845` completed successfully.
+- No open GitHub PRs were found during orchestration.
 
 ## Next Task
 
-Next orchestrator cycle should evaluate the next task. Candidates:
-  - secret metadata mutation/encrypted secret storage design/runtime; or
-  - the next starter capability from `specs/product-overview.md` / roadmap, likely notifications, webhooks, metering, or billing depending on dependency readiness.
+After Task 0064 is implemented, generate a Verifier task for PR #TBD before moving to new feature scope. The verifier must inspect transaction atomicity, exact route-scope enforcement, api-edge no-bearer forwarding, secret-safety invariants, local test results, and PR CI logs before merging.
