@@ -1120,6 +1120,19 @@ Last updated: 2026-05-27
 |- Durable outcome: persistence seam for service principals and API keys on main. Hash-only key storage, no cross-context FKs, create/get/list/revoke repository primitives ready for admin route follow-on.
 |- Reports: `ai/reports/task-0047-implementer.md`, `ai/reports/task-0047-verifier.md`
 
+### Task 0048 — API Key Bearer Resolution for Service Principal Auth
+
+|- Agent: Implementer → Verifier
+|- Prompt: `ai/tasks/task-0048.md`
+|- Verifier prompt: `ai/tasks/task-0048-verifier.md`
+|- Status: verified PASS
+|- Implementation: PR #91, branch `task-0048/api-key-bearer-resolution`, merge commit `2a78a5d`
+|- PR CI runs: `26551391669` (27/27), `26551799366` (27/27), `26551978574` (27/27)
+|- Reports: `ai/reports/task-0048-implementer.md`, `ai/reports/task-0048-verifier.md`
+|- Objective: Add API-key bearer actor-resolution seam through identity-worker and api-edge.
+|- Scope: auth contract extension (ActorContext, BearerResolutionResponse), identity resolveBearer(), GET /v1/auth/resolve, api-edge resolveActor() unified module, facade deduplication, focused tests.
+|- Durable outcome: Identity resolves both session tokens and API keys. api-edge forwards x-actor-subject-id/type for service_principal actors. No raw bearer tokens forwarded downstream. 88+193 tests green.
+
 ## Historical Notes
 
 - PR #1 split product-specific V2 Git catalog work away from the reusable SaaS

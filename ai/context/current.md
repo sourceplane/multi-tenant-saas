@@ -255,4 +255,15 @@ Last updated: 2026-05-27
 - 351 db tests passing.
 - Reports: `ai/reports/task-0047-implementer.md`, `ai/reports/task-0047-verifier.md`
 
-**Next phase**: Task 0048 — API-key administration routes (or next orchestrator cycle decision).
+**Task 0048 (Verifier) — COMPLETE ✅**
+
+- Prompt: `ai/tasks/task-0048.md`
+- Verifier prompt: `ai/tasks/task-0048-verifier.md`
+- PR #91 (`task-0048/api-key-bearer-resolution`) **MERGED** at commit `2a78a5d` (2026-05-28T04:00Z).
+- PR URL: `https://github.com/sourceplane/multi-tenant-saas/pull/91`
+- PR CI runs: `26551391669` (original, 27/27 pass), `26551799366` (post-implementer-report, 27/27 pass), `26551978574` (post-verifier-report, 27/27 pass).
+- Key durable outcome: Identity now resolves both session tokens and active API keys via `resolveBearer()`. api-edge has a unified `resolveActor()` module that forwards `x-actor-subject-id` and `x-actor-subject-type=service_principal` for SP-authenticated requests. Facades deduplicated (3 separate resolveSession implementations replaced by shared module). No raw bearer tokens forwarded downstream.
+- 88 identity-worker tests, 193 api-edge tests, all green.
+- Reports: `ai/reports/task-0048-implementer.md`, `ai/reports/task-0048-verifier.md`
+
+**Next phase**: API-key admin routes, SP RBAC policy, or next orchestrator cycle decision.

@@ -1,6 +1,6 @@
 {
   "goal": "Supabase/Postgres-backed multi-organization Orun SaaS control plane",
-  "current_task": "0047",
+  "current_task": "0048",
   "completed": [
     "0001",
     "0001.1",
@@ -53,19 +53,19 @@
     "0044",
     "0045",
     "0046",
-    "0047"
+    "0047",
+    "0048"
   ],
   "repo_health": "green",
-  "next_focus": "api-key-admin-routes-or-task-0048",
-  "last_verified": "2026-05-28T01:36Z",
+  "next_focus": "api-key-admin-routes-or-sp-rbac-policy",
+  "last_verified": "2026-05-28T04:00Z",
   "waiting_for_input": "false",
-  "task_agent": "/ai/tasks/task-0047-verifier.md",
+  "task_agent": "/ai/tasks/task-0048-verifier.md",
   "notes": [
-    "Task 0047 PASS: PR #90 merged at 08c0e7b. Identity-owned persistence for service principals and API keys.",
-    "Verifier cleanup commit 9c0c25a: added implementer report, removed 11 carryover ai/ files.",
-    "Post-cleanup CI run 26549208506 green. 351 db tests passing.",
-    "Migration 060: service_principals + api_keys tables. Hash-only storage, no cross-context FKs.",
-    "Recurring implementer anti-pattern: ai/ carryover files still present — verifier cleanup needed again.",
+    "Task 0048 PASS: PR #91 merged at 2a78a5d. API key bearer resolution for service_principal auth.",
+    "Identity resolveBearer() handles both session tokens and API keys. api-edge resolveActor() unified module.",
+    "3 facade files (org/project/audit) deduplicated via shared resolveActor(). 88+193 tests green.",
+    "CI runs 26551391669, 26551799366, 26551978574 all green (27 jobs each).",
     "Node.js 20 deprecation warning in CI — actions need update before September 2026 runner cutoff."
   ]
 }
