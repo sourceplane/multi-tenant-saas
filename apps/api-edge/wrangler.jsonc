@@ -54,6 +54,10 @@
         {
           "binding": "METERING_WORKER",
           "service": "metering-worker-stage"
+        },
+        {
+          "binding": "BILLING_WORKER",
+          "service": "billing-worker-stage"
         }
       ]
     },
@@ -96,6 +100,10 @@
         {
           "binding": "METERING_WORKER",
           "service": "metering-worker-prod"
+        },
+        {
+          "binding": "BILLING_WORKER",
+          "service": "billing-worker-prod"
         }
       ]
     }
