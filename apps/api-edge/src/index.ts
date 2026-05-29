@@ -10,6 +10,7 @@ import { isAuditRoute, handleAuditRoute } from "./audit-facade";
 import { isConfigRoute, handleConfigRoute } from "./config-facade";
 import { isWebhooksRoute, handleWebhooksRoute } from "./webhooks-facade";
 import { isMeteringRoute, handleMeteringRoute } from "./metering-facade";
+import { isBillingRoute, handleBillingRoute } from "./billing-facade";
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -33,6 +34,8 @@ export default {
       response = await handleWebhooksRoute(request, env, requestId, url.pathname);
     } else if (isMeteringRoute(url.pathname)) {
       response = await handleMeteringRoute(request, env, requestId, url.pathname);
+    } else if (isBillingRoute(url.pathname)) {
+      response = await handleBillingRoute(request, env, requestId, url.pathname);
     } else if (isProjectRoute(url.pathname)) {
       response = await handleProjectRoute(request, env, requestId, url.pathname);
     } else if (isOrgRoute(url.pathname)) {
