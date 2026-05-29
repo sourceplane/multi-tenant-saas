@@ -74,6 +74,12 @@ export interface ProjectsRepository {
   getProjectBySlug(orgId: string, slugLower: string): Promise<ProjectsResult<Project>>;
   listProjectsPaged(orgId: string, params: PageQueryParams): Promise<ProjectsResult<PagedResult<Project>>>;
   archiveProject(orgId: string, projectId: string, archivedAt: Date): Promise<ProjectsResult<Project>>;
+  /**
+   * Count of active (non-archived) projects for an organization. Used by
+   * domain callers (e.g. projects-worker) to compare against entitlement
+   * limits without loading a full page of projects.
+   */
+  countActiveProjects(orgId: string): Promise<ProjectsResult<number>>;
 
   createEnvironment(input: CreateEnvironmentInput): Promise<ProjectsResult<Environment>>;
   getEnvironmentById(orgId: string, projectId: string, environmentId: string): Promise<ProjectsResult<Environment>>;

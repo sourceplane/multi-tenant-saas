@@ -32,6 +32,10 @@
         {
           "binding": "POLICY_WORKER",
           "service": "policy-worker-stage"
+        },
+        {
+          "binding": "BILLING_WORKER",
+          "service": "billing-worker-stage"
         }
       ]
     },
@@ -54,6 +58,10 @@
         {
           "binding": "POLICY_WORKER",
           "service": "policy-worker-prod"
+        },
+        {
+          "binding": "BILLING_WORKER",
+          "service": "billing-worker-prod"
         }
       ]
     }

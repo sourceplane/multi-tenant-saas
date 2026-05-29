@@ -64,6 +64,9 @@ function createFakeEnv(overrides?: Record<string, unknown>): Env {
     SOURCEPLANE_DB: { connectionString: "postgres://fake" },
     MEMBERSHIP_WORKER: createMockFetcher({ data: { memberships: [{ kind: "role_assignment", role: "admin", scope: { kind: "organization", orgId: TEST_ORG_UUID } }] } }),
     POLICY_WORKER: createMockFetcher({ data: { allow: true, reason: "org_admin", policyVersion: 1, derivedScope: { orgId: TEST_ORG_UUID } } }),
+    // Default: billing-worker returns an allowed `limit.projects` decision with
+    // unlimited (limitValue: null) so legacy create-project tests keep passing.
+    BILLING_WORKER: createMockFetcher({ data: { allowed: true, orgId: TEST_ORG_PUBLIC, entitlementKey: "limit.projects", valueType: "quantity", limitValue: null, source: "plan", subscriptionId: null } }),
     ENVIRONMENT: "test",
   };
   if (overrides) {
@@ -108,6 +111,7 @@ function createFakeProjectsRepo(overrides?: Partial<Record<keyof ProjectsReposit
     async getProjectBySlug() { return { ok: true, value: fakeProject }; },
     async listProjectsPaged() { return { ok: true, value: { items: [fakeProject], nextCursor: null } }; },
     async archiveProject() { return { ok: true, value: fakeProject }; },
+    async countActiveProjects() { return { ok: true as const, value: 0 }; },
     async createEnvironment() { return { ok: false as const, error: { kind: "not_found" as const } }; },
     async getEnvironmentById() { return { ok: false as const, error: { kind: "not_found" as const } }; },
     async getEnvironmentBySlug() { return { ok: false as const, error: { kind: "not_found" as const } }; },
@@ -181,6 +185,7 @@ function createFakeEventsRepo(overrides?: Partial<Record<keyof EventsRepository,
       appendEventWithAuditCalls.push([input]);
       return { ok: true, value: { event: fakeEvent, audit: fakeAudit } };
     },
+    async queryEventsByOrg() { return { ok: true, value: [] }; },
     async queryAuditByOrg() { return { ok: true, value: { items: [], nextCursor: null } }; },
     async queryAuditByTarget() { return { ok: true, value: { items: [], nextCursor: null } }; },
   };
@@ -512,6 +517,185 @@ describe("handleCreateProject", () => {
     expect(payloadStr).not.toContain(TEST_ORG_UUID);
     expect(payload.projectId).toMatch(/^prj_/);
     expect(payload.orgId).toMatch(/^org_/);
+  });
+
+  // ── Billing entitlement gate (Task 0079) ──
+  describe("billing entitlement gate (limit.projects)", () => {
+    it("returns 503 when BILLING_WORKER binding is missing", async () => {
+      const env = createFakeEnv({ BILLING_WORKER: undefined });
+      const projectsRepo = createFakeProjectsRepo();
+      const eventsRepo = createFakeEventsRepo();
+      const req = makeRequest("POST", `/v1/organizations/${TEST_ORG_PUBLIC}/projects`, { name: "X" });
+
+      const res = await handleCreateProject(req, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, { projectsRepo, eventsRepo });
+      expect(res.status).toBe(503);
+      // Must not have written anything.
+      expect(projectsRepo.createProjectCalls.length).toBe(0);
+      expect(eventsRepo.appendEventWithAuditCalls.length).toBe(0);
+    });
+
+    it("sends x-internal-caller=projects-worker on the billing service-binding call", async () => {
+      const env = createFakeEnv();
+      const projectsRepo = createFakeProjectsRepo();
+      const eventsRepo = createFakeEventsRepo();
+      const req = makeRequest("POST", `/v1/organizations/${TEST_ORG_PUBLIC}/projects`, { name: "Hello" });
+
+      const res = await handleCreateProject(req, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, { projectsRepo, eventsRepo });
+      expect(res.status).toBe(201);
+
+      const billing = env.BILLING_WORKER as unknown as { fetchCalls: Array<{ url: string; init: RequestInit }> };
+      expect(billing.fetchCalls.length).toBe(1);
+      const call = billing.fetchCalls[0]!;
+      expect(call.url).toContain("/v1/internal/billing/entitlements/check");
+      const headers = call.init.headers as Record<string, string>;
+      expect(headers["x-internal-caller"]).toBe("projects-worker");
+      expect(headers["x-request-id"]).toBeTruthy();
+      const sent = JSON.parse(call.init.body as string) as { orgId: string; entitlementKey: string };
+      expect(sent.orgId).toBe(TEST_ORG_PUBLIC);
+      expect(sent.entitlementKey).toBe("limit.projects");
+    });
+
+    it("allows creation when active count is strictly under the quantity limit", async () => {
+      const env = createFakeEnv({
+        BILLING_WORKER: createMockFetcher({ data: { allowed: true, orgId: TEST_ORG_PUBLIC, entitlementKey: "limit.projects", valueType: "quantity", limitValue: 5, source: "plan", subscriptionId: null } }),
+      });
+      const projectsRepo = createFakeProjectsRepo({
+        countActiveProjects: async () => ({ ok: true as const, value: 4 }),
+      });
+      const eventsRepo = createFakeEventsRepo();
+      const req = makeRequest("POST", `/v1/organizations/${TEST_ORG_PUBLIC}/projects`, { name: "Under Limit" });
+
+      const res = await handleCreateProject(req, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, { projectsRepo, eventsRepo });
+      expect(res.status).toBe(201);
+      expect(projectsRepo.createProjectCalls.length).toBe(1);
+    });
+
+    it("denies with 412 limit_reached when active count meets the quantity limit", async () => {
+      const env = createFakeEnv({
+        BILLING_WORKER: createMockFetcher({ data: { allowed: true, orgId: TEST_ORG_PUBLIC, entitlementKey: "limit.projects", valueType: "quantity", limitValue: 3, source: "plan", subscriptionId: null } }),
+      });
+      const projectsRepo = createFakeProjectsRepo({
+        countActiveProjects: async () => ({ ok: true as const, value: 3 }),
+      });
+      const eventsRepo = createFakeEventsRepo();
+      const req = makeRequest("POST", `/v1/organizations/${TEST_ORG_PUBLIC}/projects`, { name: "At Limit" });
+
+      const res = await handleCreateProject(req, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, { projectsRepo, eventsRepo });
+      expect(res.status).toBe(412);
+      const json = await res.json() as { error: { code: string; details?: { reason?: string } } };
+      expect(json.error.code).toBe("precondition_failed");
+      expect(json.error.details?.reason).toBe("limit_reached");
+      expect(projectsRepo.createProjectCalls.length).toBe(0);
+      expect(eventsRepo.appendEventWithAuditCalls.length).toBe(0);
+    });
+
+    it("denies with 412 disabled when billing entitlement is disabled", async () => {
+      const env = createFakeEnv({
+        BILLING_WORKER: createMockFetcher({ data: { allowed: false, orgId: TEST_ORG_PUBLIC, entitlementKey: "limit.projects", reason: "disabled" } }),
+      });
+      const projectsRepo = createFakeProjectsRepo();
+      const eventsRepo = createFakeEventsRepo();
+      const req = makeRequest("POST", `/v1/organizations/${TEST_ORG_PUBLIC}/projects`, { name: "Blocked" });
+
+      const res = await handleCreateProject(req, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, { projectsRepo, eventsRepo });
+      expect(res.status).toBe(412);
+      const json = await res.json() as { error: { code: string; details?: { reason?: string } } };
+      expect(json.error.code).toBe("precondition_failed");
+      expect(json.error.details?.reason).toBe("disabled");
+      expect(projectsRepo.createProjectCalls.length).toBe(0);
+    });
+
+    it("denies with 412 not_configured when no entitlement exists for the org", async () => {
+      const env = createFakeEnv({
+        BILLING_WORKER: createMockFetcher({ data: { allowed: false, orgId: TEST_ORG_PUBLIC, entitlementKey: "limit.projects", reason: "not_configured" } }),
+      });
+      const projectsRepo = createFakeProjectsRepo();
+      const eventsRepo = createFakeEventsRepo();
+      const req = makeRequest("POST", `/v1/organizations/${TEST_ORG_PUBLIC}/projects`, { name: "Blocked" });
+
+      const res = await handleCreateProject(req, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, { projectsRepo, eventsRepo });
+      expect(res.status).toBe(412);
+      const json = await res.json() as { error: { code: string; details?: { reason?: string } } };
+      expect(json.error.code).toBe("precondition_failed");
+      expect(json.error.details?.reason).toBe("not_configured");
+    });
+
+    it("returns 503 when billing-worker returns non-OK (fail-closed)", async () => {
+      const env = createFakeEnv({
+        BILLING_WORKER: createMockFetcher({}, 500),
+      });
+      const projectsRepo = createFakeProjectsRepo();
+      const eventsRepo = createFakeEventsRepo();
+      const req = makeRequest("POST", `/v1/organizations/${TEST_ORG_PUBLIC}/projects`, { name: "X" });
+
+      const res = await handleCreateProject(req, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, { projectsRepo, eventsRepo });
+      expect(res.status).toBe(503);
+      expect(projectsRepo.createProjectCalls.length).toBe(0);
+    });
+
+    it("returns 503 when billing-worker fetch throws (fail-closed)", async () => {
+      const env = createFakeEnv({ BILLING_WORKER: createMockFetcherThatThrows() });
+      const projectsRepo = createFakeProjectsRepo();
+      const eventsRepo = createFakeEventsRepo();
+      const req = makeRequest("POST", `/v1/organizations/${TEST_ORG_PUBLIC}/projects`, { name: "X" });
+
+      const res = await handleCreateProject(req, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, { projectsRepo, eventsRepo });
+      expect(res.status).toBe(503);
+      expect(projectsRepo.createProjectCalls.length).toBe(0);
+    });
+
+    it("returns 503 when billing-worker returns malformed envelope (fail-closed)", async () => {
+      const env = createFakeEnv({ BILLING_WORKER: createMockFetcher({ wrong: "shape" }) });
+      const projectsRepo = createFakeProjectsRepo();
+      const eventsRepo = createFakeEventsRepo();
+      const req = makeRequest("POST", `/v1/organizations/${TEST_ORG_PUBLIC}/projects`, { name: "X" });
+
+      const res = await handleCreateProject(req, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, { projectsRepo, eventsRepo });
+      expect(res.status).toBe(503);
+    });
+
+    it("returns 503 when active-project count lookup fails (fail-closed)", async () => {
+      const env = createFakeEnv({
+        BILLING_WORKER: createMockFetcher({ data: { allowed: true, orgId: TEST_ORG_PUBLIC, entitlementKey: "limit.projects", valueType: "quantity", limitValue: 5, source: "plan", subscriptionId: null } }),
+      });
+      const projectsRepo = createFakeProjectsRepo({
+        countActiveProjects: async () => ({ ok: false as const, error: { kind: "internal" as const, message: "boom" } }),
+      });
+      const eventsRepo = createFakeEventsRepo();
+      const req = makeRequest("POST", `/v1/organizations/${TEST_ORG_PUBLIC}/projects`, { name: "X" });
+
+      const res = await handleCreateProject(req, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, { projectsRepo, eventsRepo });
+      expect(res.status).toBe(503);
+      expect(projectsRepo.createProjectCalls.length).toBe(0);
+    });
+
+    it("denies with 412 malformed_limit when billing returns a non-quantity valueType for limit.projects", async () => {
+      const env = createFakeEnv({
+        BILLING_WORKER: createMockFetcher({ data: { allowed: true, orgId: TEST_ORG_PUBLIC, entitlementKey: "limit.projects", valueType: "boolean", limitValue: null, source: "plan", subscriptionId: null } }),
+      });
+      const projectsRepo = createFakeProjectsRepo();
+      const eventsRepo = createFakeEventsRepo();
+      const req = makeRequest("POST", `/v1/organizations/${TEST_ORG_PUBLIC}/projects`, { name: "X" });
+
+      const res = await handleCreateProject(req, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, { projectsRepo, eventsRepo });
+      expect(res.status).toBe(412);
+      const json = await res.json() as { error: { details?: { reason?: string } } };
+      expect(json.error.details?.reason).toBe("malformed_limit");
+    });
+
+    it("does not call billing when policy denies (gate runs after auth)", async () => {
+      const env = createFakeEnv({
+        POLICY_WORKER: createMockFetcher({ data: { allow: false, reason: "denied", policyVersion: 1, derivedScope: { orgId: TEST_ORG_UUID } } }),
+      });
+      const projectsRepo = createFakeProjectsRepo();
+      const eventsRepo = createFakeEventsRepo();
+      const req = makeRequest("POST", `/v1/organizations/${TEST_ORG_PUBLIC}/projects`, { name: "Denied" });
+
+      const res = await handleCreateProject(req, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, { projectsRepo, eventsRepo });
+      expect(res.status).toBe(404); // policy denial masked as not_found
+      const billing = env.BILLING_WORKER as unknown as { fetchCalls: unknown[] };
+      expect(billing.fetchCalls.length).toBe(0);
+    });
   });
 });
 
