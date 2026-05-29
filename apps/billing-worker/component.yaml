@@ -8,7 +8,6 @@ spec:
   domain: starter-runtime
   path: apps/billing-worker
   dependsOn:
-    - component: membership-worker
     - component: policy-worker
   subscribe:
     environments:

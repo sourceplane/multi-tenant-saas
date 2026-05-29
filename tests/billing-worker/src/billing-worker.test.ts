@@ -428,6 +428,31 @@ describe("router", () => {
     const res = await route(req, env);
     expect(res.status).toBe(403);
   });
+
+  it("internal entitlement-check route accepts membership-worker caller (Task 0080)", async () => {
+    // membership-worker is the second allow-listed internal caller. With DB
+    // missing we expect 503 (downstream misconfig), NOT 403 — proving the
+    // allow-list lets the caller through before repository access.
+    const env = createFakeEnv({ SOURCEPLANE_DB: undefined });
+    const req = new Request(
+      "https://billing-worker/v1/internal/billing/entitlements/check",
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-internal-caller": "membership-worker",
+        },
+        body: JSON.stringify({
+          orgId: TEST_ORG_PUBLIC,
+          entitlementKey: "limit.members",
+        }),
+      },
+    );
+    const res = await route(req, env);
+    expect(res.status).toBe(503);
+    const body = (await res.json()) as { error: { code: string } };
+    expect(body.error.code).toBe("internal_error");
+  });
 });
 
 // ── Internal entitlement-check unit tests ────────────────────

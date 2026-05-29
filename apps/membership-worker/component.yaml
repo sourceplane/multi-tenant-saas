@@ -9,6 +9,7 @@ spec:
   path: apps/membership-worker
   dependsOn:
     - component: policy-worker
+    - component: billing-worker
   subscribe:
     environments:
       - name: dev

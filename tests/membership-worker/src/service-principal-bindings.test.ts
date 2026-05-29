@@ -89,6 +89,7 @@ function createFakeRepo(opts: {
     async acceptInvitation() { return { ok: false as const, error: { kind: "not_found" as const } }; },
     async revokeAllRoleAssignments(_orgId: string, _subjectId: string, _revokedAt?: Date) { return { ok: true as const, value: [] }; },
     async countActiveOwners() { return { ok: true as const, value: 0 }; },
+    async countBillableMembers() { return { ok: true as const, value: 0 }; },
   };
 }
 
