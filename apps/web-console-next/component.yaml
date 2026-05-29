@@ -1,0 +1,50 @@
+apiVersion: sourceplane.io/v1
+kind: Component
+metadata:
+  name: web-console-next
+  description: Next.js 15 + opennextjs/cloudflare delivery of the Sourceplane web console (per-environment)
+spec:
+  type: cloudflare-pages-turbo
+  domain: starter-ui
+  path: apps/web-console-next
+  subscribe:
+    environments:
+      - name: dev
+        profile: verify
+      - name: stage
+        profile: verify
+        profileRules:
+          - profile: deploy
+            when:
+              triggerRef: github-push-main
+      - name: prod
+        profile: verify
+        profileRules:
+          - profile: deploy
+            when:
+              triggerRef: github-push-main
+  parameters:
+    nodeVersion: "22"
+    pnpmVersion: "10.12.1"
+
+    workspaceDir: ../..
+    appDir: .
+
+    turboFilter: "@saas/web-console-next"
+    # opennextjs/cloudflare emits Pages-compatible assets here.
+    outputDir: .open-next/assets
+    projectName: sourceplane-web-console-next
+    deployBranch: main
+
+    environmentAwareProjectName: true
+    environmentBuildVar: NEXT_PUBLIC_DEPLOY_ENV
+
+    installCommand: pnpm install --frozen-lockfile
+    buildCommand: pnpm exec turbo run build --filter=@saas/web-console-next
+
+    smokeCommand: "curl -sf https://${EFFECTIVE_PROJECT_NAME}.pages.dev/ | grep -q 'Sourceplane Console' && curl -sf https://api-edge-${ORUN_ENVIRONMENT}.rahulvarghesepullely.workers.dev/health | grep -q ok"
+  labels:
+    team: platform
+    layer: delivery
+    surface: web-console-next
+    runtime: cloudflare
