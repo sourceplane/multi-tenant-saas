@@ -13,6 +13,7 @@ import {
 } from "../billing-client.js";
 import { successResponse, errorResponse, validationError } from "../http.js";
 import { parseOrgPublicId, orgPublicId, invitationPublicId, generateInvitationToken } from "../ids.js";
+import { enqueueNotification, type EnqueueNotificationResult } from "../notifications-client.js";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const INVITATION_EXPIRY_DAYS = 7;
@@ -29,6 +30,22 @@ export interface CreateInvitationDeps {
    * against env.BILLING_WORKER.
    */
   checkEntitlement?: typeof checkBillingEntitlement;
+  /**
+   * Injectable notifications enqueue for tests. When omitted on the deps
+   * path, NO enqueue is attempted (tests opt in by passing this). The real
+   * transactional path always calls the real `enqueueNotification` against
+   * `env.NOTIFICATIONS_WORKER` (best-effort; absent binding is a no-op).
+   */
+  enqueueNotification?: (
+    env: { NOTIFICATIONS_WORKER?: Fetcher },
+    ctx: {
+      internalActor: string;
+      actorSubjectType: string;
+      actorSubjectId: string;
+      requestId: string;
+    },
+    request: Parameters<typeof enqueueNotification>[2],
+  ) => Promise<EnqueueNotificationResult>;
 }
 
 function randomHex(bytes: number): string {
@@ -244,6 +261,51 @@ export async function handleCreateInvitation(
       };
 
       const isDebug = env.DEBUG_DELIVERY === "true";
+
+      // Best-effort: enqueue an `invitation.created` notification AFTER the
+      // transaction has committed successfully. A rolled-back invitation
+      // must never produce a user-facing notification, so the enqueue lives
+      // strictly outside the `executor.transaction(...)` callback. The
+      // client never throws and handles all failure modes internally; the
+      // 201 response below is identical whether the enqueue succeeded or
+      // not. Skipped under DEBUG_DELIVERY === "true" to avoid duplicate
+      // `local_debug` provider rows during developer flows (mirrors the
+      // identity-worker choice).
+      //
+      // No raw token leaves the worker boundary in `templateData`. Only
+      // redaction-safe, code-controlled fields are forwarded; the raw token
+      // remains in the existing `delivery: { mode: "local_debug", token }`
+      // response-body path only.
+      if (!isDebug) {
+        const enqueueFn = deps?.enqueueNotification ?? enqueueNotification;
+        await enqueueFn(
+          env,
+          {
+            internalActor: "membership-worker",
+            actorSubjectType: actor.subjectType,
+            actorSubjectId: actor.subjectId,
+            requestId,
+          },
+          {
+            orgId: orgUuid,
+            category: "invitation",
+            templateKey: "invitation.created",
+            templateData: {
+              role: validRole,
+              invitationId: invitationPublicId(inv.id),
+              expiresAt: inv.expiresAt.toISOString(),
+              invitedBy: inv.invitedBy,
+              orgId: orgPublicId(orgUuid),
+            },
+            recipient: {
+              channel: "email",
+              address: validEmail.toLowerCase(),
+            },
+            correlationId: requestId,
+          },
+        );
+      }
+
       const responseData: Record<string, unknown> = { invitation: publicInv };
       if (isDebug) {
         responseData.delivery = { mode: "local_debug", token: rawToken };
@@ -311,6 +373,40 @@ export async function handleCreateInvitation(
     };
 
     const isDebug = env.DEBUG_DELIVERY === "true";
+
+    // Deps (non-transactional) path: only enqueue when the caller has
+    // explicitly injected a notifications client. The default deps path
+    // (older unit tests that predate notifications) MUST NOT attempt an
+    // enqueue. DEBUG_DELIVERY short-circuit matches the real path.
+    if (!isDebug && deps?.enqueueNotification) {
+      await deps.enqueueNotification(
+        env,
+        {
+          internalActor: "membership-worker",
+          actorSubjectType: actor.subjectType,
+          actorSubjectId: actor.subjectId,
+          requestId,
+        },
+        {
+          orgId: orgUuid,
+          category: "invitation",
+          templateKey: "invitation.created",
+          templateData: {
+            role: validRole,
+            invitationId: invitationPublicId(inv.id),
+            expiresAt: inv.expiresAt.toISOString(),
+            invitedBy: inv.invitedBy,
+            orgId: orgPublicId(orgUuid),
+          },
+          recipient: {
+            channel: "email",
+            address: validEmail.toLowerCase(),
+          },
+          correlationId: requestId,
+        },
+      );
+    }
+
     const responseData: Record<string, unknown> = { invitation: publicInv };
     if (isDebug) {
       responseData.delivery = { mode: "local_debug", token: rawToken };

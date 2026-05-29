@@ -35,6 +35,10 @@
         {
           "binding": "BILLING_WORKER",
           "service": "billing-worker-stage"
+        },
+        {
+          "binding": "NOTIFICATIONS_WORKER",
+          "service": "notifications-worker-stage"
         }
       ]
     },
@@ -58,6 +62,10 @@
         {
           "binding": "BILLING_WORKER",
           "service": "billing-worker-prod"
+        },
+        {
+          "binding": "NOTIFICATIONS_WORKER",
+          "service": "notifications-worker-prod"
         }
       ]
     }
