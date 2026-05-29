@@ -36,7 +36,8 @@
       "^@saas/db/hyperdrive$": "<rootDir>/../../packages/db/src/hyperdrive/index.ts",
       "^@saas/db/identity$": "<rootDir>/../../packages/db/src/identity/index.ts",
       "^@saas/db/events$": "<rootDir>/../../packages/db/src/events/index.ts",
-      "^@saas/db/(.*)$": "<rootDir>/../../packages/db/src/$1.ts"
+      "^@saas/db/(.*)$": "<rootDir>/../../packages/db/src/$1.ts",
+      "^@saas/notifications-client$": "<rootDir>/../../packages/notifications-client/src/index.ts"
     },
     "transform": {
       "^.+\\.ts$": [

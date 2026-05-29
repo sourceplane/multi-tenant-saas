@@ -8,6 +8,7 @@
  */
 import {
   enqueueNotification,
+  buildIdempotencyKey,
   type NotificationsEnvBinding,
 } from "@saas/notifications-client";
 
@@ -181,5 +182,47 @@ describe("@saas/notifications-client enqueueNotification", () => {
     await expect(
       enqueueNotification(makeEnv(handler), baseCtx, baseRequest),
     ).resolves.toBeDefined();
+  });
+});
+
+describe("buildIdempotencyKey", () => {
+  it("returns a deterministic, scope-prefixed string", () => {
+    expect(buildIdempotencyKey("auth.magic_link", "chl_abc")).toBe(
+      "auth.magic_link:chl_abc",
+    );
+    expect(
+      buildIdempotencyKey("invitation.accepted", "inv_xyz", "mem_qux"),
+    ).toBe("invitation.accepted:inv_xyz:mem_qux");
+  });
+
+  it("is pure — same inputs produce the same output across calls", () => {
+    const a = buildIdempotencyKey("invitation.created", "inv_1");
+    const b = buildIdempotencyKey("invitation.created", "inv_1");
+    expect(a).toBe(b);
+  });
+
+  it("template-scopes — different scopes with the same id never collide", () => {
+    const created = buildIdempotencyKey("invitation.created", "inv_1");
+    const accepted = buildIdempotencyKey("invitation.accepted", "inv_1");
+    expect(created).not.toBe(accepted);
+  });
+
+  it("rejects empty scope", () => {
+    expect(() => buildIdempotencyKey("", "inv_1")).toThrow(TypeError);
+  });
+
+  it("rejects calls with no parts", () => {
+    expect(() => (buildIdempotencyKey as (s: string) => string)("auth.magic_link")).toThrow(TypeError);
+  });
+
+  it("rejects empty parts", () => {
+    expect(() => buildIdempotencyKey("invitation.created", "")).toThrow(TypeError);
+  });
+
+  it("rejects parts containing whitespace, ':' or control characters", () => {
+    expect(() => buildIdempotencyKey("auth.magic_link", "has space")).toThrow(TypeError);
+    expect(() => buildIdempotencyKey("auth.magic_link", "has:colon")).toThrow(TypeError);
+    expect(() => buildIdempotencyKey("auth.magic_link", "has\nnewline")).toThrow(TypeError);
+    expect(() => buildIdempotencyKey("auth.magic_link", "has\u0007bell")).toThrow(TypeError);
   });
 });

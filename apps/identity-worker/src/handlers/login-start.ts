@@ -1,11 +1,15 @@
 import type { Env } from "../env.js";
 import type { LoginStartResponse } from "@saas/contracts/auth";
+import type { IdentityRepository } from "@saas/db/identity";
 import { createSqlExecutor } from "@saas/db/hyperdrive";
 import { createIdentityRepository } from "@saas/db/identity";
 import { createAuthService } from "../services/auth.js";
 import { successResponse, errorResponse, validationError } from "../http.js";
 import { extractRequestContext } from "../request-context.js";
-import { enqueueNotification } from "@saas/notifications-client";
+import {
+  enqueueNotification,
+  buildIdempotencyKey,
+} from "@saas/notifications-client";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -22,7 +26,27 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
  */
 const SYSTEM_ORG_ID = "00000000-0000-0000-0000-000000000000";
 
-export async function handleLoginStart(request: Request, env: Env, requestId: string): Promise<Response> {
+export interface HandleLoginStartDeps {
+  /**
+   * Injectable repository for unit tests. When omitted, a real
+   * `createSqlExecutor(env.SOURCEPLANE_DB)` + `createIdentityRepository`
+   * pair is used (production path).
+   */
+  repo?: IdentityRepository;
+  /**
+   * Injectable notifications enqueue for tests. When omitted, the real
+   * `@saas/notifications-client` `enqueueNotification` is used (best-effort;
+   * absent `env.NOTIFICATIONS_WORKER` binding is a no-op).
+   */
+  enqueueNotification?: typeof enqueueNotification;
+}
+
+export async function handleLoginStart(
+  request: Request,
+  env: Env,
+  requestId: string,
+  deps?: HandleLoginStartDeps,
+): Promise<Response> {
   let body: unknown;
   try {
     body = await request.json();
@@ -39,13 +63,13 @@ export async function handleLoginStart(request: Request, env: Env, requestId: st
     return validationError(requestId, { email: ["A valid email address is required"] });
   }
 
-  if (!env.SOURCEPLANE_DB) {
+  if (!deps?.repo && !env.SOURCEPLANE_DB) {
     return errorResponse("internal_error", "Database not configured", 503, requestId);
   }
 
-  const executor = createSqlExecutor(env.SOURCEPLANE_DB);
+  const executor = deps?.repo ? null : createSqlExecutor(env.SOURCEPLANE_DB!);
   try {
-    const repo = createIdentityRepository(executor);
+    const repo = deps?.repo ?? createIdentityRepository(executor!);
     const ctx = extractRequestContext(request, requestId);
     const auth = createAuthService({ repo, now: () => new Date(), ctx });
     const result = await auth.startLogin(email);
@@ -68,7 +92,8 @@ export async function handleLoginStart(request: Request, env: Env, requestId: st
       // Fire-and-forget intentionally: we do not propagate errors. Awaiting
       // here is safe — the client itself catches all failure modes and
       // returns a `{ ok: false, reason }` shape without throwing.
-      await enqueueNotification(
+      const enqueueFn = deps?.enqueueNotification ?? enqueueNotification;
+      await enqueueFn(
         env,
         {
           internalActor: "identity-worker",
@@ -96,6 +121,16 @@ export async function handleLoginStart(request: Request, env: Env, requestId: st
             channel: "email",
             address: email.trim().toLowerCase(),
           },
+          // Stripe-quality idempotency: a Workers-runtime retry of this
+          // login-start (same `challengeId`, same logical action) must
+          // collapse to one notification row + one provider attempt.
+          // `challengeId` is the durable, public-id handle for the
+          // magic-link challenge row — created once, returned to the
+          // caller, and unique per logical login attempt. It is NOT
+          // secret material (the rawCode is hashed server-side; the
+          // public id only references the row). Template-scoped to
+          // prevent cross-template collisions on the same upstream id.
+          idempotencyKey: buildIdempotencyKey("auth.magic_link", result.challengeId),
           correlationId: requestId,
         },
       );
@@ -115,6 +150,6 @@ export async function handleLoginStart(request: Request, env: Env, requestId: st
   } catch {
     return errorResponse("internal_error", "An unexpected error occurred", 500, requestId);
   } finally {
-    await executor.dispose();
+    if (executor) await executor.dispose();
   }
 }

@@ -383,4 +383,55 @@ describe("accept-invitation → notifications-worker wire (Task 0089)", () => {
     expect(response.status).toBe(404);
     expect(recorder.calls).toHaveLength(0);
   });
+
+  // ── Task 0090 — idempotency-key population ────────────────────────────
+  describe("idempotencyKey (Task 0090)", () => {
+    async function callOnce(recorder: ReturnType<typeof makeRecorder>) {
+      return handleAcceptInvitation(
+        makeRequest({ token: RAW_TOKEN }),
+        {
+          SOURCEPLANE_DB: {} as Hyperdrive,
+          ENVIRONMENT: "test",
+          NOTIFICATIONS_WORKER: {} as Fetcher,
+        } as any,
+        "req_test",
+        acceptActor,
+        orgPublicIdStr,
+        {
+          repo: makeRepo(),
+          hashToken: async (t: string) => "hashed_" + t,
+          now: () => fixedNow,
+          enqueueNotification: recorder.fn,
+        },
+      );
+    }
+
+    it("populates a deterministic, template-scoped idempotencyKey", async () => {
+      const recorder = makeRecorder();
+      // The repo mock returns fixed `invUuid` + `memUuid` for both calls,
+      // mimicking a Workers-runtime retry of the same logical acceptance
+      // converging on the same persisted (invitation, member) pair.
+      await callOnce(recorder);
+      await callOnce(recorder);
+
+      expect(recorder.calls).toHaveLength(2);
+      const k1 = recorder.calls[0]!.request.idempotencyKey;
+      const k2 = recorder.calls[1]!.request.idempotencyKey;
+      expect(typeof k1).toBe("string");
+      expect(k1).toBe(k2);
+      expect(k1.startsWith("invitation.accepted:inv_")).toBe(true);
+      // Composite key includes `mem_…` after the invitation id.
+      expect(k1).toMatch(/^invitation\.accepted:inv_[0-9a-f]+:mem_[0-9a-f]+$/);
+    });
+
+    it("idempotencyKey contains no raw token, hash, or token-shaped material", async () => {
+      const recorder = makeRecorder();
+      await callOnce(recorder);
+      const key = recorder.calls[0]!.request.idempotencyKey as string;
+      expect(key).not.toContain(RAW_TOKEN);
+      expect(key).not.toContain("hashed_" + RAW_TOKEN);
+      // No 64-hex token-shaped substring.
+      expect(key).not.toMatch(/[0-9a-f]{40,}/i);
+    });
+  });
 });

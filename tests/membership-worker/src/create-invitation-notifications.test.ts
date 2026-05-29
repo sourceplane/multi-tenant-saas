@@ -397,4 +397,70 @@ describe("create-invitation → notifications-worker wire (Task 0088)", () => {
     expect(td).not.toHaveProperty("tokenHash");
     expect(td).not.toHaveProperty("rawToken");
   });
+
+  // ── Task 0090 — idempotency-key population ────────────────────────────
+  describe("idempotencyKey (Task 0090)", () => {
+    function makeEnv() {
+      return {
+        POLICY_WORKER: policyFetcher(true),
+        SOURCEPLANE_DB: {} as Hyperdrive,
+        ENVIRONMENT: "test",
+        DEBUG_DELIVERY: "false",
+        NOTIFICATIONS_WORKER: {} as Fetcher,
+      };
+    }
+
+    async function callOnce(genId: () => string, recorder: ReturnType<typeof makeRecorder>) {
+      return handleCreateInvitation(
+        makeRequest({ email: "user@test.com", role: "builder" }),
+        makeEnv() as any,
+        "req_test",
+        actor,
+        orgPublicIdStr,
+        {
+          repo: baseRepo(),
+          generateToken: async () => fakeToken,
+          now: () => fixedNow,
+          enqueueNotification: recorder.fn,
+          generateId: genId,
+        },
+      );
+    }
+
+    it("populates a deterministic, template-scoped idempotencyKey", async () => {
+      const recorder = makeRecorder();
+      // Pin crypto.randomUUID so `inv.id` is stable across the two calls
+      // below — the dedup invariant is `(orgId, idempotencyKey)`, and
+      // since the handler synthesizes `invitationId = crypto.randomUUID()`
+      // before invoking the repo, replays of the same logical action MUST
+      // converge on the same id (a real Workers-runtime retry replays the
+      // upstream id verbatim).
+      const STABLE_INV_UUID = "12345678-1234-1234-1234-123456789012";
+      const origRandomUUID = crypto.randomUUID;
+      (crypto as any).randomUUID = () => STABLE_INV_UUID;
+      try {
+        await callOnce(() => "evt_1", recorder);
+        await callOnce(() => "evt_2", recorder);
+      } finally {
+        (crypto as any).randomUUID = origRandomUUID;
+      }
+
+      expect(recorder.calls).toHaveLength(2);
+      const k1 = recorder.calls[0]!.request.idempotencyKey;
+      const k2 = recorder.calls[1]!.request.idempotencyKey;
+      expect(typeof k1).toBe("string");
+      expect(k1).toBe(k2);
+      // Template-scoped + carries the public-id form of the invitation row.
+      expect(k1.startsWith("invitation.created:inv_")).toBe(true);
+    });
+
+    it("idempotencyKey contains no raw token, hash, or secret material", async () => {
+      const recorder = makeRecorder();
+      await callOnce(() => "evt_x", recorder);
+      const key = recorder.calls[0]!.request.idempotencyKey as string;
+      expect(key).not.toContain(RAW_TOKEN);
+      expect(key).not.toContain(fakeToken.hash);
+      expect(key).not.toMatch(/[A-F0-9]{40,}/);
+    });
+  });
 });

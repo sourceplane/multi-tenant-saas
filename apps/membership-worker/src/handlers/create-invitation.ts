@@ -13,7 +13,7 @@ import {
 } from "../billing-client.js";
 import { successResponse, errorResponse, validationError } from "../http.js";
 import { parseOrgPublicId, orgPublicId, invitationPublicId, generateInvitationToken } from "../ids.js";
-import { enqueueNotification, type EnqueueNotificationResult } from "@saas/notifications-client";
+import { enqueueNotification, buildIdempotencyKey, type EnqueueNotificationResult } from "@saas/notifications-client";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const INVITATION_EXPIRY_DAYS = 7;
@@ -301,6 +301,18 @@ export async function handleCreateInvitation(
               channel: "email",
               address: validEmail.toLowerCase(),
             },
+            // Stripe-quality idempotency: a retry of this same
+            // post-commit enqueue (same `inv.id`, same logical
+            // invitation create) must collapse to one notification
+            // row + one provider attempt. `inv.id` is the durable
+            // UUID materialised inside the prior `txRepo.createInvitation`
+            // commit — stable across retries, scoped per-org, never
+            // secret. Template-scoped to prevent collision with
+            // `invitation.accepted` on the same invitation.
+            idempotencyKey: buildIdempotencyKey(
+              "invitation.created",
+              invitationPublicId(inv.id),
+            ),
             correlationId: requestId,
           },
         );
@@ -402,6 +414,12 @@ export async function handleCreateInvitation(
             channel: "email",
             address: validEmail.toLowerCase(),
           },
+          // Same idempotency contract as the transactional path; see
+          // the comment block above for the full rationale.
+          idempotencyKey: buildIdempotencyKey(
+            "invitation.created",
+            invitationPublicId(inv.id),
+          ),
           correlationId: requestId,
         },
       );
