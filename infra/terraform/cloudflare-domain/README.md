@@ -30,11 +30,16 @@ vars) for runtime CORS decisions.
 |----------|-------------|
 | `data.cloudflare_zone.existing` | Looks up the existing zone (when `zoneMode: existing`) |
 | `cloudflare_zone.managed` | Creates a new zone (when `zoneMode: managed`) |
-| `cloudflare_workers_domain.console` | Attaches `CONSOLE_CUSTOM_DOMAIN` to `{workerNamePrefix}-{environment}` (Worker Custom Domain) |
+| `cloudflare_workers_domain.console` | (Phase 1 of v4→v5 migration — Task 0085a) State entry dropped via `removed { lifecycle { destroy = false } }`. Live Cloudflare custom-domain resource is untouched; Phase 2 (Task 0085b) re-imports it as the v5 `cloudflare_workers_custom_domain.console`. |
 
-> Note: the resource is named `cloudflare_workers_domain` in the Cloudflare
-> Terraform provider v4.x. (The equivalent v5 name is
-> `cloudflare_workers_custom_domain` — we have not migrated to v5.)
+> v4 → v5 migration status: Phase 1 of 2 (Task 0085a). The provider pin
+> stays at `cloudflare ~> 4.52` in this PR. The v4-typed state entry for
+> the Workers custom-domain attachment is dropped (no-op against the
+> live Cloudflare resource — only the Terraform state file in S3 is
+> mutated). Phase 2 (Task 0085b, separate PR) bumps the provider to
+> `~> 5.0` and re-imports the live resources by their known immutable
+> IDs as `cloudflare_workers_custom_domain.console`. The two live
+> custom-domain resources survive byte-identical through both phases.
 
 ## Parameters
 
@@ -89,4 +94,4 @@ After merge to main, verify:
 - `zone_name` — Domain name
 - `zone_status` — Zone activation status
 - `console_custom_domain` — The custom domain hostname for this environment
-- `worker_custom_domain_id` — ID of the `cloudflare_workers_domain.console` resource
+- `worker_custom_domain_id` — placeholder during 0085a (state entry intentionally untracked between Phase 1 drop and Phase 2 v5 re-import); restored to a real attachment ID after Task 0085b lands
