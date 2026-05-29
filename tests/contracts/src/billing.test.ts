@@ -12,6 +12,11 @@ import type {
   GetEntitlementsRequest,
   GetEntitlementsResponse,
   GetBillingSummaryResponse,
+  CheckBillingEntitlementRequest,
+  CheckBillingEntitlementResponse,
+  BillingEntitlementAllowedDecision,
+  BillingEntitlementDeniedDecision,
+  BillingEntitlementDeniedReason,
 } from "@saas/contracts/billing";
 
 describe("contracts: billing — Plan shape", () => {
@@ -254,5 +259,93 @@ describe("contracts: billing — secret-safe surface (type-level)", () => {
     // above already exercise the runtime shape; this test just documents
     // the invariant.
     expect(true).toBe(true);
+  });
+});
+
+describe("contracts: billing — Entitlement decision (internal seam)", () => {
+  it("CheckBillingEntitlementRequest only carries orgId + entitlementKey", () => {
+    const req: CheckBillingEntitlementRequest = {
+      orgId: "org_11111111111111111111111111111111",
+      entitlementKey: "feature.custom_domains",
+    };
+    expect(req.orgId).toMatch(/^org_/);
+    expect(req.entitlementKey).toBe("feature.custom_domains");
+    const forbidden = [
+      "apiKey",
+      "secret",
+      "token",
+      "providerCustomerId",
+      "providerSubscriptionId",
+      "providerPayload",
+      "sql",
+      "metadata",
+    ];
+    for (const k of forbidden) {
+      expect(Object.prototype.hasOwnProperty.call(req, k)).toBe(false);
+    }
+  });
+
+  it("BillingEntitlementAllowedDecision shape carries safe entitlement details only", () => {
+    const allowed: BillingEntitlementAllowedDecision = {
+      allowed: true,
+      orgId: "org_1",
+      entitlementKey: "feature.custom_domains",
+      valueType: "boolean",
+      limitValue: null,
+      source: "plan",
+      subscriptionId: null,
+    };
+    expect(allowed.allowed).toBe(true);
+    expect(allowed.source).toBe("plan");
+    const forbidden = [
+      "apiKey",
+      "secret",
+      "token",
+      "providerPayload",
+      "rawPayload",
+      "sql",
+      "stack",
+      "stackTrace",
+      "metadata",
+      "providerSubscriptionId",
+    ];
+    for (const k of forbidden) {
+      expect(Object.prototype.hasOwnProperty.call(allowed, k)).toBe(false);
+    }
+  });
+
+  it("BillingEntitlementDeniedDecision uses a narrow reason set", () => {
+    const reasons: BillingEntitlementDeniedReason[] = ["disabled", "not_configured"];
+    expect(reasons).toEqual(["disabled", "not_configured"]);
+    const denied: BillingEntitlementDeniedDecision = {
+      allowed: false,
+      orgId: "org_1",
+      entitlementKey: "feature.custom_domains",
+      reason: "not_configured",
+    };
+    expect(denied.allowed).toBe(false);
+    expect(denied.reason).toBe("not_configured");
+  });
+
+  it("CheckBillingEntitlementResponse discriminates on `allowed`", () => {
+    const responses: CheckBillingEntitlementResponse[] = [
+      {
+        allowed: true,
+        orgId: "org_1",
+        entitlementKey: "limit.projects",
+        valueType: "quantity",
+        limitValue: 10,
+        source: "override",
+        subscriptionId: "sub_1",
+      },
+      {
+        allowed: false,
+        orgId: "org_1",
+        entitlementKey: "limit.projects",
+        reason: "disabled",
+      },
+    ];
+    const allowedCount = responses.filter((r) => r.allowed).length;
+    expect(allowedCount).toBe(1);
   });
 });

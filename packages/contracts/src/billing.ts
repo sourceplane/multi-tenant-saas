@@ -180,6 +180,68 @@ export interface GetEntitlementsResponse {
 }
 
 // ---------------------------------------------------------------------------
+// Entitlement decision (internal seam)
+// ---------------------------------------------------------------------------
+
+/**
+ * Request shape for the private billing entitlement decision seam consumed by
+ * other bounded contexts (over a service binding) that need to gate
+ * product behavior on a named entitlement without reading billing tables
+ * directly.
+ *
+ * Provider-neutral: callers pass the organization id and a stable entitlement
+ * key only. No provider ids, secrets, or billing internals are required.
+ */
+export interface CheckBillingEntitlementRequest {
+  /** Public organization identifier (e.g. 'org_<32-hex>'). */
+  orgId: string;
+  /** Stable machine entitlement key (e.g. 'feature.custom_domains'). */
+  entitlementKey: string;
+}
+
+/**
+ * Reason an entitlement decision is denied. Kept narrow and provider-neutral.
+ *
+ * - 'disabled': the entitlement is configured for the org but explicitly off.
+ * - 'not_configured': no entitlement record exists for this (org, key).
+ */
+export type BillingEntitlementDeniedReason = "disabled" | "not_configured";
+
+/**
+ * Successful, allowed entitlement decision. Carries only non-secret, safe
+ * billing facts that already appear in PublicEntitlement.
+ */
+export interface BillingEntitlementAllowedDecision {
+  allowed: true;
+  orgId: string;
+  entitlementKey: string;
+  /** Mirrors PublicEntitlement.valueType. */
+  valueType: PublicEntitlementValueType;
+  /** NULL means unlimited (when allowed). */
+  limitValue: number | null;
+  /** Where this decision came from. */
+  source: PublicEntitlementSource;
+  /** Opaque public subscription reference if scoped to one, otherwise null. */
+  subscriptionId: string | null;
+}
+
+/**
+ * Denied entitlement decision. Same response envelope as allowed but carries a
+ * narrow reason. Missing entitlements MUST surface here (not as 5xx) so callers
+ * fail closed deterministically.
+ */
+export interface BillingEntitlementDeniedDecision {
+  allowed: false;
+  orgId: string;
+  entitlementKey: string;
+  reason: BillingEntitlementDeniedReason;
+}
+
+export type CheckBillingEntitlementResponse =
+  | BillingEntitlementAllowedDecision
+  | BillingEntitlementDeniedDecision;
+
+// ---------------------------------------------------------------------------
 // Billing summary
 // ---------------------------------------------------------------------------
 

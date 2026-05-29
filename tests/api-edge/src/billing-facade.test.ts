@@ -129,6 +129,47 @@ describe("api-edge billing facade", () => {
         isBillingRoute("/v1/organizations/org_abc/usage"),
       ).toBe(false);
     });
+    it("does not expose the private internal entitlement-check route", () => {
+      // Task 0078 introduced POST /v1/internal/billing/entitlements/check on
+      // billing-worker as a private service-binding route. api-edge MUST NOT
+      // route this — public traffic must never reach it.
+      expect(
+        isBillingRoute("/v1/internal/billing/entitlements/check"),
+      ).toBe(false);
+      expect(
+        isBillingRoute("/v1/organizations/org_abc/billing/entitlements/check"),
+      ).toBe(false);
+      expect(
+        isBillingRoute("/v1/internal/billing/entitlements"),
+      ).toBe(false);
+    });
+    it("public billing facade only matches the five Task 0076 read routes", () => {
+      // Documents the exact public surface — guards against accidental
+      // expansion of the facade. Any new public billing route should require
+      // a deliberate change to this list.
+      const allowed = [
+        "/v1/organizations/org_abc/billing/plans",
+        "/v1/organizations/org_abc/billing/customer",
+        "/v1/organizations/org_abc/billing/summary",
+        "/v1/organizations/org_abc/billing/invoices",
+        "/v1/organizations/org_abc/billing/entitlements",
+      ];
+      for (const p of allowed) {
+        expect(isBillingRoute(p)).toBe(true);
+      }
+      const denied = [
+        "/v1/organizations/org_abc/billing",
+        "/v1/organizations/org_abc/billing/checkout",
+        "/v1/organizations/org_abc/billing/portal",
+        "/v1/organizations/org_abc/billing/subscriptions",
+        "/v1/internal/billing/entitlements/check",
+        "/v1/internal/billing",
+        "/v1/billing/entitlements/check",
+      ];
+      for (const p of denied) {
+        expect(isBillingRoute(p)).toBe(false);
+      }
+    });
   });
 
   describe("handleBillingRoute", () => {
