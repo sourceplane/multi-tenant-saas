@@ -16,6 +16,7 @@
     "./webhooks": "./src/webhooks/index.ts",
     "./metering": "./src/metering/index.ts",
     "./billing": "./src/billing/index.ts",
+    "./notifications": "./src/notifications/index.ts",
     "./runner": "./src/runner/index.ts"
   },
   "bin": {

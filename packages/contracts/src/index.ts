@@ -12,3 +12,4 @@ export * from "./api-keys.js";
 export * from "./webhooks.js";
 export * from "./metering.js";
 export * from "./billing.js";
+export * from "./notifications.js";

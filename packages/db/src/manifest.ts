@@ -111,5 +111,14 @@ export const manifest: MigrationManifest = {
       description:
         "Billing persistence foundation — provider-neutral plans, billing customers, subscriptions, invoices, and entitlements",
     },
+    {
+      id: "120_notifications_core",
+      context: "notifications",
+      path: "120_notifications_core/up.sql",
+      checksum:
+        "868cc1092b4b385b6ed3d203efe5302191865131bb98d0e9f5fe5ad6d16f01bb",
+      description:
+        "Notifications persistence foundation — preferences, notifications, attempts, suppressions",
+    },
   ],
 };
