@@ -1,6 +1,6 @@
 {
   "goal": "Supabase/Postgres-backed multi-organization Orun SaaS control plane",
-  "current_task": null,
+  "current_task": "next-orchestrator-cycle",
   "completed": [
     "0001",
     "0001.1",
@@ -80,17 +80,21 @@
     "0071",
     "0072",
     "0073",
-    "0074"
+    "0074",
+    "0075"
   ],
   "repo_health": "green",
-  "next_focus": "evaluate-next-week-4-5-usage-to-billing-task",
-  "last_verified": "2026-05-28T23:49:53Z",
+  "next_focus": "evaluate-next-task-after-task-0075-billing-foundation-merged",
+  "last_verified": "2026-05-29T00:34:00Z",
   "waiting_for_input": "false",
-  "task_agent": null,
+  "task_agent": "ai/tasks/task-0075-verifier.md",
   "notes": [
-    "Task 0074 verified PASS and merged via PR #117 at d67aba5d7458b68e527f996ae4c177c4e3427bf4 on 2026-05-28T23:49:53Z. Post-merge main CI run 26609144832 completed with 15/15 success.",
-    "Metering rollup materialization seam landed: parameterized org-scoped hourly/daily aggregation in @saas/db/metering.materializeUsageRollups (ON CONFLICT mirrors uq_rollup_dimensions from migration 100_metering_foundation), plus metering-worker scheduled handler running prior+current hour/day passes on cron '5 * * * *' with fail-closed behavior when SOURCEPLANE_DB is absent.",
-    "Verifier report committed at ai/reports/task-0074-verifier.md on the PR branch before merge.",
-    "Next orchestrator cycle should select the next Week 4-5 usage→billing task (entitlements/billing-read consumers of usage_rollups, or a backfill/maintenance entry point for older rollup windows)."
+    "Task 0075 verified PASS and merged via PR #118 (squash merge commit ba01ea64bc046b0ad89582d0ad51275eafb91f1f) on 2026-05-29.",
+    "PR CI run 26610166103 (11/11 jobs success) and post-merge main CI run 26610557793 (11/11 jobs success) both applied 110_billing_foundation to stage and prod Supabase.",
+    "Billing foundation now live on main: migration 110_billing_foundation, @saas/db/billing repository, @saas/contracts/billing types, package exports/test mappings, 30 db tests + 14 contract tests.",
+    "Repository is parameterized SQL only, org-scoped on every accessor, with cross-org invoice upsert guarded by ON CONFLICT WHERE org_id = EXCLUDED.org_id. No metering.* references in billing code.",
+    "Contracts are provider-neutral and secret-safe; opaque provider/hostedUrl fields only.",
+    "Migration is idempotent (CREATE … IF NOT EXISTS throughout) and applies cleanly under the Supabase autocommit runner.",
+    "Verifier report: ai/reports/task-0075-verifier.md."
   ]
 }

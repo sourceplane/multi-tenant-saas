@@ -425,18 +425,30 @@ Task 0060 Verifier is scoped and ready.
 
 ## Current State
 
-- Task 0073 verified PASS and merged via PR #116 at `5cde36db` (2026-05-29).
-- Web-console calm editorial parchment design refresh: CSS-only rewrite of `apps/web-console/src/style.css` (+851/-426). No behavior, markup, API, dependency, or backend changes. Class taxonomy emitted by `main.ts` preserved 1:1; tokens evolved to a parchment/sand/fog/stone palette with terracotta/clay/sage/olive/rust accents, editorial serif headings, calm status pills, gentle motion, and `prefers-reduced-motion` support. Post-merge main CI run `26607911105` succeeded across plan + web-console dev/stage/prod verify-deploy.
-- Task 0072 verified PASS and merged via PR #115 at `b4ced6bc` (2026-05-28).
-- Metering Worker runtime: `apps/metering-worker` with 5 routes (usage record, batch, summary, quota check, violations list), api-edge metering facade, policy-engine metering read/write/quota.check actions, 25 focused tests. Uses `@saas/db/metering` + `@saas/contracts/metering`.
-- Task 0074 verified PASS and merged via PR #117 at `d67aba5d7458b68e527f996ae4c177c4e3427bf4` (2026-05-28). Post-merge main CI run `26609144832` passed 15/15.
-- Task 0074 added metering rollup materialization seam: `materializeUsageRollups` in `@saas/db/metering` (parameterized SQL, org-scoped GROUP BY, idempotent `ON CONFLICT … DO UPDATE` whose conflict target mirrors `uq_rollup_dimensions` from migration `100_metering_foundation`, deterministic md5 ids, hourly and daily buckets, half-open `recorded_at >= start AND recorded_at < end` windows) + metering-worker `scheduled` handler running prior+current hour/day passes on cron `5 * * * *`, fails closed if `SOURCEPLANE_DB` is absent, logs only window bounds and row counts. No public rollup trigger, no billing/provider/UI/Analytics Engine/Queue/KV/Durable Object/Terraform overreach.
-- Tasks 0001–0074 are complete and verified.
+- Task 0074 verified PASS and merged via PR #117 at `d67aba5d7458b68e527f996ae4c177c4e3427bf4` (2026-05-28). Post-merge main CI run `26609144832` passed 15/15, and follow-up state/ledger CI run `26609344259` passed.
+- Task 0074 added metering rollup materialization: `@saas/db/metering.materializeUsageRollups` aggregates raw usage into hourly/daily `metering.usage_rollups` using parameterized SQL, org-scoped grouping, deterministic ids, half-open windows, and idempotent `ON CONFLICT` upserts matching `uq_rollup_dimensions`.
+- `apps/metering-worker` now has a bounded scheduled handler on cron `5 * * * *` that materializes prior/current hour and prior/current day windows, fails closed when `SOURCEPLANE_DB` is absent, and logs only bucket/window/row-count data.
+- Task 0075 verified PASS and merged via PR #118 (squash merge `ba01ea64bc046b0ad89582d0ad51275eafb91f1f`) on 2026-05-29. PR CI run `26610166103` was 11/11 SUCCESS and post-merge main CI run `26610557793` was 11/11 SUCCESS. Both `db-migrate · stage · Migrate` and `db-migrate · prod · Migrate` applied `110_billing_foundation` to live Supabase.
+- Billing foundation now live on main:
+  - Migration `110_billing_foundation` (checksum `980564a8…b9f8f`) creates `billing.{plans, billing_customers, subscriptions, invoices, entitlements}` with `org_id`-first indexes, `UNIQUE(org_id)` on `billing_customers` (V1 invariant), `UNIQUE(org_id, entitlement_key)`, CHECK constraints on every enum/amount, and is idempotent under the Supabase autocommit runner.
+  - `@saas/db/billing` exports `createBillingRepository(SqlExecutor)` returning a Worker-safe `BillingRepository`. Every accessor uses parameterized SQL only and is org-scoped on cross-tenant-sensitive paths. Invoice upsert refuses cross-org overwrites via `ON CONFLICT (id) DO UPDATE … WHERE billing.invoices.org_id = EXCLUDED.org_id`. Zero references to `metering.*`.
+  - `@saas/contracts/billing` exports provider-neutral public types (`PublicPlan`, `PublicBillingCustomer`, `PublicSubscription`, `PublicInvoice`, `PublicEntitlement`, summary/list envelopes). Opaque `provider*` and `hostedUrl` fields only — no secret-bearing surfaces; enforced at the type level by a contracts test.
+  - Tests: 30 db-tests + 14 contracts-tests cover tenant isolation, parameterized-SQL invariant, entitlement upsert, invoice cross-org safety, summary composition, and a dedicated metering/billing boundary assertion.
+- Tasks 0001–0075 are complete and verified. No billing Worker runtime, api-edge billing routes, web-console billing UI, provider SDK, provider secrets, Terraform, Queue/KV/Durable Object/Analytics Engine bindings, or `specs-v2/**` changes were introduced by Task 0075.
 
 ## Current Task
 
-None. Awaiting next orchestrator cycle.
+No active task — orchestrator should select the next billing-runtime or roadmap task. See "Next Task After 0075" below.
 
-## Next Task
+## Current Roadmap Position
 
-- Next orchestrator cycle should evaluate the next Week 4-5 usage→billing task. Now that hourly/daily rollups are materialized, candidates include: billing customer/plan/entitlement persistence reading from `usage_rollups`, web-console usage read surface, quota-definition management endpoints, or a dedicated rollup backfill/maintenance entry point for older windows (the scheduled seam is intentionally bounded to recent windows only).
+- Active spec pack: reusable SaaS starter under `specs/**`.
+- `specs-v2/**` remains out of scope unless the task is product-specific.
+- Week 4-5 usage→billing phase is active.
+- Metering prerequisites are in place: persistence/contracts (Task 0071), public metering Worker/API surface (Task 0072), and rollup materialization (Task 0074).
+- Billing foundation is in place: persistence + provider-neutral contracts (Task 0075).
+
+## Next Task After 0075
+
+Natural next task: billing Worker runtime / api-edge billing routes exposing provider-neutral `listPlans`, `getBillingCustomer`, `getBillingSummary`, `listInvoices`, and `getEntitlements` through policy-gated organization routes. Payment-provider integration (webhooks, checkout/portal sessions), billing UI, and quota-definition management should remain separate follow-up tasks per `specs/components/11-billing.md` sequencing.
+

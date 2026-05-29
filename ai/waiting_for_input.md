@@ -6,9 +6,8 @@ No human input is currently requested.
 
 ## Ready To Proceed
 
-Task 0060 Verifier is scoped in `ai/tasks/task-0060-verifier.md`.
-PR #103 is OPEN, merge state CLEAN, and CI run `26574711168` is green at orchestration time.
+Task 0075 verified PASS and merged via PR #118 on 2026-05-29. Billing foundation (migration 110_billing_foundation, `@saas/db/billing`, `@saas/contracts/billing`) is live on stage and prod Supabase.
 
 ## Needed To Continue
 
-Verifier should run the prompt, write `ai/reports/task-0060-verifier.md`, and merge PR #103 only if verification and CI both PASS.
+Orchestrator should pick the next task on the Week 4-5 usage→billing roadmap — most likely a billing Worker runtime/api-edge billing routes surface that exposes provider-neutral list/get endpoints over the Task 0075 repository.

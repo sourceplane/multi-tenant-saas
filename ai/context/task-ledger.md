@@ -1342,6 +1342,23 @@ Last updated: 2026-05-28
 |- Scope boundary: `@saas/db/metering` rollup materialization, `apps/metering-worker` scheduled rollup code, wrangler cron config, focused DB/worker tests, and implementer report only; no billing/provider/UI/Analytics Engine/Queue/KV/Durable Object/R2/Terraform/public-trigger or `specs-v2/**` work.
 |- Durable outcome: `materializeUsageRollups` is live in `@saas/db/metering` — parameterized SQL only, GROUP BY `org_id, project_id, environment_id, metric, date_trunc($1, recorded_at)` (org-scoped, never aggregates across orgs), half-open source window `recorded_at >= start AND recorded_at < end`, deterministic md5 ids, `ON CONFLICT … DO UPDATE` whose target mirrors `uq_rollup_dimensions` from migration `100_metering_foundation`, idempotent across re-runs, hourly and daily buckets only. metering-worker exports `scheduled(controller, env, ctx)` which runs `runScheduledMaterialization` (prior+current hour and prior+current day passes) on wrangler cron `5 * * * *`; fails closed when `SOURCEPLANE_DB` is absent; logs only `[scheduled] rollup <bucket> <ISO start>..<ISO end> ok=<bool> rows=<n>` — no org IDs, no metric values, no metadata, no SQL. Public routes and api-edge facade unchanged. Stage/prod wrangler envs declare `SOURCEPLANE_DB` Hyperdrive bindings; dev does not (consistent with no-dev-Supabase environment standard) and the scheduled pass will fail closed there as intended.
 
+
+## Task 0075
+
+|- Agent: Implementer -> Verifier
+|- Prompt: `ai/tasks/task-0075.md`
+|- Verifier prompt: `ai/tasks/task-0075-verifier.md`
+|- Status: verified PASS, merged (2026-05-29)
+|- Implementation: PR #118 (`impl/task-0075-billing-foundation`), squash merge commit `ba01ea64bc046b0ad89582d0ad51275eafb91f1f`
+|- PR CI run: `26610166103` — 11/11 SUCCESS (including db-migrate stage/prod applying `110_billing_foundation`)
+|- Post-merge main CI run: `26610557793` — 11/11 SUCCESS (re-applied `110_billing_foundation` on stage/prod; both no-ops post-merge by design since the PR CI runs already applied)
+|- Reports: `ai/reports/task-0075-implementer.md`, `ai/reports/task-0075-verifier.md`
+|- Objective: add the billing persistence and shared contract foundation for organization-level plans, billing customers, subscriptions, invoices, and entitlements so future billing runtime/UI work can query starter-owned state and consume metering outputs without hardcoded UI branching.
+|- Scope boundary: billing migration, `@saas/db/billing` repository module, `@saas/contracts/billing` types, package exports/test mappers, focused DB/contract tests, and implementer report only; no billing Worker, api-edge route, web-console UI, payment-provider SDK/webhook, provider secrets, Terraform, Queue/KV/Durable Object/Analytics Engine, metering mutation, or `specs-v2/**` work.
+|- Durable outcome: migration `110_billing_foundation` (checksum `980564a806e89c0039f012f7c0ec49267920aea549b394c5af3712722e4b9f8f`) is live on stage and prod Supabase; creates `billing.{plans, billing_customers, subscriptions, invoices, entitlements}` with `org_id`-first indexes, `UNIQUE(org_id)` on `billing_customers` (V1 invariant), `UNIQUE(org_id, entitlement_key)` for entitlement upserts, CHECK constraints on every enum/amount, idempotent `CREATE … IF NOT EXISTS` throughout, and no secret-bearing columns. `@saas/db/billing` exports a Worker-safe `BillingRepository` whose every accessor uses parameterized SQL, requires `org_id` on cross-org-sensitive lookups, and refuses cross-org invoice rewrites via `ON CONFLICT (id) DO UPDATE … WHERE billing.invoices.org_id = EXCLUDED.org_id`. Billing repository code contains zero references to `metering.*` (asserted by a dedicated boundary test). `@saas/contracts/billing` exports provider-neutral public types (Plan, BillingCustomer, Subscription, Invoice, Entitlement, BillingSummary) with opaque `provider*`/`hostedUrl` fields and no secret-bearing surfaces (enforced by a type-level test). 30 db-tests and 14 contracts-tests cover tenant isolation, parameterized-SQL invariant, entitlement upsert and listing, subscription state transitions, invoice cross-org safety, summary composition, and the metering/billing boundary. Local `orun plan --changed` selects the same job set (contracts/db build+verify, contracts-tests/db-tests, db-migrate stage+prod) that CI actually executed — no plan drift.
+
+
+
 ## Historical Notes
 
 - PR #1 split product-specific V2 Git catalog work away from the reusable SaaS
