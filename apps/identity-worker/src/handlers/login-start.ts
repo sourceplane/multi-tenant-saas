@@ -5,8 +5,22 @@ import { createIdentityRepository } from "@saas/db/identity";
 import { createAuthService } from "../services/auth.js";
 import { successResponse, errorResponse, validationError } from "../http.js";
 import { extractRequestContext } from "../request-context.js";
+import { enqueueNotification } from "../notifications-client.js";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * Pre-org sentinel `orgId` for identity-level transactional notifications.
+ *
+ * Magic-link login happens BEFORE any org context is established (a single
+ * user may belong to many orgs; the login challenge is identity-scoped).
+ * The notifications row schema requires a UUID `org_id` (no FK), and this
+ * zero UUID is already used elsewhere in the repo as a system sentinel
+ * (see `config-worker` settings rows, COALESCE patterns in migrations 070
+ * and 080). Using it here keeps the row well-formed without coupling
+ * identity to membership.
+ */
+const SYSTEM_ORG_ID = "00000000-0000-0000-0000-000000000000";
 
 export async function handleLoginStart(request: Request, env: Env, requestId: string): Promise<Response> {
   let body: unknown;
@@ -41,6 +55,52 @@ export async function handleLoginStart(request: Request, env: Env, requestId: st
     }
 
     const isDebug = env.DEBUG_DELIVERY === "true";
+
+    // Non-debug path: enqueue a magic-link notification through
+    // notifications-worker over the internal service binding. Best-effort —
+    // a notifications failure must NOT 5xx the login response.
+    //
+    // Debug path: skip enqueue entirely. `code` is returned inline in the
+    // response (existing local_debug contract), so emitting an additional
+    // notification would be redundant and would write a `local-debug`
+    // provider row for every dev call.
+    if (!isDebug) {
+      // Fire-and-forget intentionally: we do not propagate errors. Awaiting
+      // here is safe — the client itself catches all failure modes and
+      // returns a `{ ok: false, reason }` shape without throwing.
+      await enqueueNotification(
+        env,
+        {
+          internalActor: "identity-worker",
+          actorSubjectType: "system",
+          actorSubjectId: "identity-worker",
+          requestId,
+        },
+        {
+          orgId: SYSTEM_ORG_ID,
+          // Magic-link login is "identity proof / login challenge
+          // validation" per spec 14 (line 40). The existing V1 contract
+          // enumerates allowed categories as
+          // invitation|billing|security|support|product (no
+          // "transactional"); "security" is the auditable category for
+          // this flow per spec 14 line 72.
+          category: "security",
+          templateKey: "auth.magic_link",
+          templateData: {
+            code: result.rawCode,
+            emailHint: result.emailHint,
+            expiresAt: result.expiresAt.toISOString(),
+            requestId,
+          },
+          recipient: {
+            channel: "email",
+            address: email.trim().toLowerCase(),
+          },
+          correlationId: requestId,
+        },
+      );
+    }
+
     const response: LoginStartResponse = {
       challengeId: result.challengeId,
       expiresAt: result.expiresAt.toISOString(),
