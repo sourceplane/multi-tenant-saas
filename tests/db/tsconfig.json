@@ -18,7 +18,10 @@
       "@saas/db/membership": ["../../packages/db/src/membership/index.ts"],
       "@saas/db/events": ["../../packages/db/src/events/index.ts"],
       "@saas/db/projects": ["../../packages/db/src/projects/index.ts"],
-      "@saas/db/config": ["../../packages/db/src/config/index.ts"]
+      "@saas/db/config": ["../../packages/db/src/config/index.ts"],
+      "@saas/db/webhooks": ["../../packages/db/src/webhooks/index.ts"],
+      "@saas/db/metering": ["../../packages/db/src/metering/index.ts"],
+      "@saas/db/billing": ["../../packages/db/src/billing/index.ts"]
     }
   },
   "include": ["src/**/*.ts"],

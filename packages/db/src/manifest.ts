@@ -102,5 +102,14 @@ export const manifest: MigrationManifest = {
       description:
         "Metering persistence foundation — usage records, rollups, quota definitions, and quota violations",
     },
+    {
+      id: "110_billing_foundation",
+      context: "billing",
+      path: "110_billing_foundation/up.sql",
+      checksum:
+        "980564a806e89c0039f012f7c0ec49267920aea549b394c5af3712722e4b9f8f",
+      description:
+        "Billing persistence foundation — provider-neutral plans, billing customers, subscriptions, invoices, and entitlements",
+    },
   ],
 };
