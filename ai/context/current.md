@@ -1,18 +1,58 @@
 # Current Context
 
-Last updated: 2026-05-29 (Task 0083 Implementer complete, Verifier scoped)
+Last updated: 2026-05-29 (Task 0083 merged, post-merge soak FAILED, hotfix 0083.1 needed)
 
-## Current Task — 0083 Verifier (scoped, in-flight)
+## Current Task — 0083.1 Hotfix (TO SCOPE)
 
-- Task 0083 Implementer is **complete** on branch
-  `impl/task-0083-domain-cutover`, PR **#129**, head
-  `28da48896cc3278cceae50dc83d28db676d0c0fa`.
-- PR CI run **`26631953781`** in flight at orchestration time:
-  16 pass / 17 pending / 0 fail. Load-bearing jobs not yet finished:
-  `web-console-next.{dev,stage,prod} · Verify deploy` and
-  `cloudflare-domain.{stage,prod} · Terraform`.
-- Implementer report on PR branch: `ai/reports/task-0083-implementer.md`.
-- Verifier prompt: `ai/tasks/task-0083-verifier.md`.
+**repo_health: yellow**
+
+Task 0083 (PR #129) **merged** at `2026-05-29T12:30:01Z` as squash commit
+`927c5179`. PR-CI and post-merge main-CI both 9/9 SUCCESS. Code-level
+changes landed correctly: `cloudflare_pages_domain.console` →
+`cloudflare_workers_domain.console` (v4 provider ~> 4.52),
+`apps/web-console/` deleted, api-edge CORS narrowed, spec sweep
+complete, `intent.yaml` `stage.promotion.dependsOn=[dev]` removed,
+orun toolchain bumped v2.3.0 → v2.9.0.
+
+**Verifier result: FAIL on mandatory post-merge soak.** Both stage and
+prod `cloudflare-domain · Terraform · apply` jobs ran with
+`CONSOLE_CUSTOM_DOMAIN = ""` → `0 added, 0 changed, 0 destroyed`. The
+new `cloudflare_workers_domain.console` resource was never created
+(count=0 because `local.has_custom_domain` evaluates to false on empty
+input). `stage.sourceplane.ai` and `prod.sourceplane.ai` resolve to
+NXDOMAIN.
+
+**Root cause**: `CONSOLE_CUSTOM_DOMAIN` env var from `intent.yaml`
+(values `stage.sourceplane.ai`, `prod.sourceplane.ai`) is not threaded
+into the Terraform apply step as `TF_VAR_CONSOLE_CUSTOM_DOMAIN`. Job
+env block contained only `TF_VAR_cloudflare_api_token` and
+`TF_VAR_cloudflare_account_id`. Same class of bug as Task 0082.2.
+
+**Rollback hatch healthy**: both
+`sourceplane-web-console-next-{stage,prod}.rahulvarghesepullely.workers.dev`
+serve HTTP 200 with `Sourceplane Console`.
+
+**Verifier report**: `ai/reports/task-0083-verifier.md` (on main as part
+of merge commit, overwritten in-place per addendum instruction).
+
+### Task 0083.1 scope (proposed)
+
+Wire `CONSOLE_CUSTOM_DOMAIN` from intent.yaml env → Terraform via
+`TF_VAR_CONSOLE_CUSTOM_DOMAIN` in
+`infra/terraform/cloudflare-domain/component.yaml`. Reference the
+`cloudflare-hyperdrive` component for the working env-mapping pattern.
+
+**Acceptance criteria** (identical to Task 0083 live probes):
+- `curl -sfL https://stage.sourceplane.ai/` → 200, body contains
+  `Sourceplane Console`.
+- `curl -sfL https://prod.sourceplane.ai/` → 200, body contains
+  `Sourceplane Console`.
+- Post-merge `cloudflare-domain · {stage,prod} · Terraform · apply`
+  logs show `cloudflare_workers_domain.console: Creation complete`.
+
+Set `repo_health: green` only after both apex probes pass.
+
+## Historical (Task 0083 verifier addendum, now closed)
 
 ### Task 0083 scope (single PR, single rollback unit)
 

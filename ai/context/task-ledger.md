@@ -1496,13 +1496,15 @@ Last updated: 2026-05-29
 
 ## Task 0083
 
-|- Agent: Implementer -> Verifier (verifier scoped, in-flight)
+|- Agent: Implementer -> Verifier (verifier addendum re-verified on new head; merged with FAIL soak)
 |- Prompt: `ai/tasks/task-0083.md`
-|- Verifier prompt: `ai/tasks/task-0083-verifier.md`
-|- Status: implementer COMPLETE; verifier SCOPED (2026-05-29); PR #129 OPEN, CI in flight (16 pass / 17 pending / 0 fail at orchestration)
-|- Implementation: PR #129 (`impl/task-0083-domain-cutover`), head `28da48896cc3278cceae50dc83d28db676d0c0fa`
-|- PR CI run: `26631953781`
-|- Reports: `ai/reports/task-0083-implementer.md` (committed on PR branch). Verifier report TBD at `ai/reports/task-0083-verifier.md`.
+|- Verifier prompt: `ai/tasks/task-0083-verifier.md` + addendum `ai/tasks/task-0083-verifier-addendum.md`
+|- Status: implementer COMPLETE; verifier FAIL on post-merge soak; PR #129 **MERGED** 2026-05-29T12:30:01Z as squash commit `927c5179`. Hotfix Task 0083.1 required.
+|- Implementation: PR #129 (`impl/task-0083-domain-cutover`), final head `8703081bdf190ea485afc1acd5d99496718690e1`, merge commit `927c51795df869466f5c66e8eed40a9ab10a0bea`
+|- PR CI run: `26636510934` (9/9 SUCCESS). Post-merge main-CI run: `26637297242` (9/9 SUCCESS — but cloudflare-domain apply was a no-op, see verifier report).
+|- Reports: `ai/reports/task-0083-implementer.md` (on main via merge). Verifier report: `ai/reports/task-0083-verifier.md` (overwritten per addendum, Result: FAIL).
+|- Verifier soak finding: post-merge `cloudflare-domain · {stage,prod} · Terraform · apply` ran with `CONSOLE_CUSTOM_DOMAIN = ""` (env var not threaded from intent.yaml to `TF_VAR_CONSOLE_CUSTOM_DOMAIN`). `cloudflare_workers_domain.console` count=0 → resource never created. `stage.sourceplane.ai` and `prod.sourceplane.ai` NXDOMAIN. Rollback hatch (`*.rahulvarghesepullely.workers.dev`) serving HTTP 200 with `Sourceplane Console` on both envs. repo_health=yellow.
+|- Hotfix Task 0083.1 scope: wire `CONSOLE_CUSTOM_DOMAIN` env var to Terraform as `TF_VAR_CONSOLE_CUSTOM_DOMAIN` in `infra/terraform/cloudflare-domain/component.yaml`; reference `cloudflare-hyperdrive` for the working env-mapping pattern. Same acceptance criteria as 0083 live probes.
 |- Objective: cut custom domains `stage.sourceplane.ai` and `prod.sourceplane.ai` over from the legacy `cloudflare_pages_domain.console` attachment on `sourceplane-web-console-{stage,prod}` Pages projects to a `cloudflare_workers_domain.console` attachment on the `sourceplane-web-console-next-{stage,prod}` Workers (the `cloudflare-workers-assets-turbo` composition shipped in Tasks 0082.2 / 0082.2.1 / 0082.2.2). Delete `apps/web-console/`. Remove the legacy `*.pages.dev` console origins from api-edge CORS. Spec sweep (`specs/components/{01-edge-api,12-web-console,16-admin-support}.md`, `specs/repo.md`, README) for the new deployment shape.
 |- Scope boundary: `infra/terraform/cloudflare-domain/**` (resource swap + provider bump + dependsOn flip), `apps/web-console/**` deletion, `apps/api-edge/src/cors.ts` + `tests/api-edge/src/cors.test.ts`, the four spec files + two READMEs, `pnpm-lock.yaml` regen. NO change to `apps/web-console-next/**`, `intent.yaml`, any worker/contract/db/policy/migration, no new orun composition, no legacy Pages-project deletion (manual soak cleanup), no `dev`-env `deploy` profile rule on `web-console-next`.
 |- Implementer deviation: used v4 resource name `cloudflare_workers_domain` instead of v5 `cloudflare_workers_custom_domain` to keep blast radius small; cloudflare provider pin bumped `~> 4.30` -> `~> 4.52`; resource pinned to `environment = "production"` (only valid value); `pagesProjectPrefix` variable + `pages_project_name` output kept read-only for one soak cycle so the first post-merge `terraform plan` diff is a clean one-destroy/one-create per env.
