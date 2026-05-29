@@ -16,14 +16,15 @@
     "0079", "0080", "0081", "0082", "0082.1"
   ],
   "repo_health": "green",
-  "next_focus": "task-0083-web-console-cutover-pages-repoint",
+  "next_focus": "task-0083-verifier-domain-cutover",
   "last_verified": "2026-05-29T08:29:38Z",
   "waiting_for_input": "false",
-  "task_agent": "ai/tasks/task-0083.md",
+  "task_agent": "ai/tasks/task-0083-verifier.md",
   "notes": [
-    "Task 0082 + 0082.1 verified PASS and merged together via PR #125 squash merge commit b73cd54c314eb1eb0f93f69a5bc09f278dc39b99 (2026-05-29T08:29:38Z). PR head before merge: c12400b (verifier fix on top of e505677 implementer + 875e6e6 prerender fix). PR CI run 26626681497 4/4 SUCCESS (plan + web-console-next.{dev,stage,prod}.Verify deploy).",
-    "Verifier fix: added apps/web-console-next/.gitignore covering .next/, .open-next/, out/, .wrangler/, *.tsbuildinfo, .env*.local; ran `git rm -r --cached apps/web-console-next/.next` to untrack 173 already-committed Next.js build artifact files. Note: only .next/** was committed by implementer (not .open-next/** as task prompt claimed); the new .gitignore covers both prospectively.",
-    "apps/web-console-next is now a real cloudflare-pages-turbo component on main: Next.js 15 + App Router, @opennextjs/cloudflare@1.0.4 / @opennextjs/aws@3.6.2 adapter, `next build && opennextjs-cloudflare build --skipBuild --skipWranglerConfigCheck` emits .open-next/assets/** (43 files verified locally). Per-package apps/web-console-next/turbo.json extends `//` with .open-next/** + .next/** outputs. Root turbo.json untouched. apps/web-console (vanilla Vite) byte-identical to pre-PR main.",
-    "Task 0083 unblocked: cutover from apps/web-console -> apps/web-console-next. Pages project repoint / custom domain switch on stage and prod. Rollback via the preserved vanilla apps/web-console Pages projects. Wait for the post-merge main CI run (26626890618) to complete and confirm the deploy profile auto-created per-env Pages projects sourceplane-web-console-next-{dev,stage,prod} before scoping 0083."
+    "Task 0083 Implementer complete on PR #125 successor branch impl/task-0083-domain-cutover, PR #129, head 28da48896cc3278cceae50dc83d28db676d0c0fa. CI run 26631953781 in flight at orchestration time: 16 pass / 17 pending, 0 failure.",
+    "Scope: swing stage.sourceplane.ai and prod.sourceplane.ai from cloudflare_pages_domain.console (on legacy sourceplane-web-console-{stage,prod} Pages projects) to cloudflare_workers_domain.console (on sourceplane-web-console-next-{stage,prod} Workers + Static Assets, the cloudflare-workers-assets-turbo composition shipped in PRs #126/#127/#128). Delete apps/web-console/. Remove the *.pages.dev console origins from api-edge CORS. Spec sweep for the new deployment shape.",
+    "Implementer deviation from prompt: used v4 resource name cloudflare_workers_domain instead of v5 cloudflare_workers_custom_domain to keep blast radius small; provider pinned to ~> 4.52 (was ~> 4.30). Resource keeps environment = \"production\" (only valid value). pagesProjectPrefix variable + pages_project_name output kept read-only for one soak cycle.",
+    "Task 0083 Verifier scoped at ai/tasks/task-0083-verifier.md. Verifier must: (1) confirm PR-boundary match, (2) drive PR CI to 33/33 SUCCESS, (3) merge, (4) run mandatory post-merge soak (Terraform apply logs + curl on both apex domains + CORS preflight + workers.dev rollback hatch alive) per orun-saas-orchestration references/post-merge-deploy-profile-gap.md. Two implementer-flagged follow-ups: drop pagesProjectPrefix after soak; optional v5 cloudflare provider bump.",
+    "Rollback hatch: legacy Pages projects sourceplane-web-console-{stage,prod} are not deleted in this PR and remain on Cloudflare, so reverting the merge re-attaches cloudflare_pages_domain.console on the next apply."
   ]
 }
