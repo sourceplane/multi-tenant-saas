@@ -2,7 +2,7 @@
 
 **Status:** Implementation complete, PR opened.
 **Branch:** `impl/task-0085a-cloudflare-v4-removed-state-drop` (fresh off `main`).
-**PR:** #[PR] (placeholder — replaced after `gh pr create`).
+**PR:** #133 (https://github.com/sourceplane/multi-tenant-saas/pull/133).
 **Phase:** 1 of 2 (v4→v5 cloudflare-domain migration). Phase 2 will be scoped as Task 0085b after this PR merges and the post-merge `forgotten` apply lands on both envs.
 
 ## Summary
@@ -108,7 +108,7 @@ All four URLs return final 200 with `<title>Sourceplane Console</title>`:
 Closed as superseded (not merged) with a one-line comment pointing to this PR:
 
 ```
-gh pr close 132 --comment "Superseded by #[PR] (Task 0085a — Phase 1 of the v4→v5 split per ai/proposals/task-0085-spec-update.md Resolution). Branch left for reference; no rebase/salvage required."
+  gh pr close 132 --comment "Superseded by #133 (Task 0085a — Phase 1 of the v4→v5 cloudflare-domain split per ai/proposals/task-0085-spec-update.md Resolution, orchestrator decision 2026-05-29). Branch left for reference; no rebase/salvage required (0085a starts a fresh branch off main). Phase 2 lands as Task 0085b after this merges and the post-merge 'forgotten' apply lands on both envs."
 ```
 
 Branch `impl/task-0085-cloudflare-v5-workers-custom-domain` is left in place for historical reference (failed PR-CI runs 26642692516 + 26642904336 still reachable from it).
@@ -134,4 +134,4 @@ Branch `impl/task-0085-cloudflare-v5-workers-custom-domain` is left in place for
 
 ## PR Number
 
-#[PR] (replaced with the real number from `gh pr create` in the follow-up commit, per the task's PR Creation Requirement).
+#133 (https://github.com/sourceplane/multi-tenant-saas/pull/133)
