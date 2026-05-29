@@ -1,138 +1,98 @@
 # Task 0085 — Implementer Report
 
+**Status:** **BLOCKED** — see Spec Change Proposal
 **Branch:** `impl/task-0085-cloudflare-v5-workers-custom-domain`
 **PR:** [#132](https://github.com/sourceplane/multi-tenant-saas/pull/132)
-**Scope:** `infra/terraform/cloudflare-domain/` only.
+  (converted to draft pending orchestrator decision)
+**Spec Change Proposal:** [`ai/proposals/task-0085-spec-update.md`](../proposals/task-0085-spec-update.md)
 
 ## Summary
 
-- Bumped the cloudflare Terraform provider in `cloudflare-domain` from
-  `~> 4.52` to `~> 5.0`, closing the last v4 pin in the repo.
-- Renamed `cloudflare_workers_domain.console` →
-  `cloudflare_workers_custom_domain.console` (the v5 name); attribute
-  shape is unchanged so the rename is state-only.
-- Added a `moved {}` block that translates both stage and prod state
-  addresses across the rename. Plan diff expectation per env is
-  `Plan: 0 to add, 0 to change, 0 to destroy.` with a `# … has moved
-  to …` notice; live IDs
-  `052eaece5e989d5a7280b6c206e562c42950e3a6` (stage) and
-  `31e5f2ed1b1e4a5700e8ae0678846a0d753840e1` (prod) must survive
-  byte-identical.
-- Migrated `data.cloudflare_zone.existing` (lookup-by-name → nested
-  `filter` block) and `cloudflare_zone.managed` (nested `account`
-  block, `zone`→`name`, dropped `plan`) to their v5 shapes. The
-  managed-zone resource has `count = 0` in both live envs but must
-  remain schema-valid.
-- Refreshed `.terraform.lock.hcl` locally for four platforms
-  (`linux_amd64`, `linux_arm64`, `darwin_amd64`, `darwin_arm64`) so
-  PR CI reuses the pinned hashes deterministically.
+- Attempted the rename + provider bump as a single PR per task scope.
+- Both v5-sanctioned state-migration patterns fail when packaged with
+  the provider bump in the same PR:
+  1. Bare `moved { from = cloudflare_workers_domain.console, to =
+     cloudflare_workers_custom_domain.console }` →
+     `Error: Unable to Move Resource State` (v5 provider doesn't
+     implement cross-type MoveState for this rename).
+  2. `removed { lifecycle { destroy = false } } + import {}` →
+     `Error: no schema available for cloudflare_workers_domain.console[0]
+     while reading state` (Terraform needs the v4 provider schema to
+     read the existing v4-typed state entry; v4 is gone under a `~> 5.0`
+     pin, and the provider sources can't coexist).
+- Per Task 0085 Constraint #7, this is the "v5 provider forces a
+  behavioral change that cannot be absorbed by a `moved` block"
+  case — STOP and file a Spec Change Proposal rather than silently
+  destroy + re-add the live custom-domain resources.
+- Spec Change Proposal at `ai/proposals/task-0085-spec-update.md`
+  proposes rescoping into two state-preserving phases: **0085a**
+  (v4-pinned `removed{}` to drop v4 state entries) → real `apply`
+  → **0085b** (v5 bump + `import{}` to re-adopt by known IDs).
+  Both phases produce zero-resource-churn plans end-to-end and
+  preserve the live resource IDs byte-identical.
 
-## Files Changed
+## Files Changed (on branch, awaiting orchestrator decision)
 
-Terraform sources (`infra/terraform/cloudflare-domain/terraform/`):
-
-- `main.tf` — provider pin bump, resource rename, `moved` block, v5
-  shape fixes on `data.cloudflare_zone` and `cloudflare_zone`,
-  output redirected to the renamed resource, comment block
-  rewritten.
-- `.terraform.lock.hcl` — cloudflare `4.52.7` → `5.19.1`, multi-arch
-  hashes pinned.
-
-Component docs (`infra/terraform/cloudflare-domain/`):
-
-- `README.md` — Resources Managed table updated to the v5 name,
-  v4-vs-v5 note rewritten to record completion + preserved IDs,
-  Outputs list updated.
-
-Orchestration scope:
-
-- `ai/tasks/task-0085.md` — orchestrator-authored task scope file
-  committed for verifier reference.
+- `infra/terraform/cloudflare-domain/terraform/main.tf` —
+  provider bump + rename + v5 schema fixes + import block; still
+  posted in PR #132 as evidence of the attempted shape.
+- `infra/terraform/cloudflare-domain/terraform/.terraform.lock.hcl` —
+  refreshed to cloudflare 5.19.1 across four platforms.
+- `infra/terraform/cloudflare-domain/README.md` — v4/v5 note rewrite.
+- `ai/tasks/task-0085.md` — orchestrator scope file tracked.
+- `ai/proposals/task-0085-spec-update.md` — **this proposal.**
 
 ## Checks Run
 
 | Command | Result |
 |---|---|
-| `terraform -chdir=infra/terraform/cloudflare-domain/terraform fmt -check -diff` | ✓ exit 0, no diff |
-| `terraform -chdir=infra/terraform/cloudflare-domain/terraform init -backend=false -input=false` | ✓ `cloudflare/cloudflare v5.19.1` installed |
-| `terraform -chdir=infra/terraform/cloudflare-domain/terraform validate` | ✓ `Success! The configuration is valid` with one expected `Warning: Attribute Deprecated` on `cloudflare_workers_custom_domain.console.environment` |
-| `terraform providers lock -platform=linux_amd64 -platform=darwin_arm64 -platform=darwin_amd64 -platform=linux_arm64` | ✓ multi-arch hashes recorded |
-| `./.workspace/bin/orun validate` | ✓ Intent is valid; All validation passed |
-| `./.workspace/bin/orun plan --changed --intent intent.yaml --output plan.json` | ✓ 1 component × 3 envs → 2 jobs (stage + prod, both `terraform.plan-only`) |
-| `./.workspace/bin/orun run --plan plan.json --dry-run --runner github-actions` | ✓ both jobs preview ✓; `2 selected` |
+| `terraform fmt -check` | ✓ |
+| `terraform validate` (locally, no backend) | ✓ Success, one expected deprecation warning on `environment` |
+| `kiox -- orun validate` | ✓ Intent is valid |
+| `kiox -- orun plan --changed --intent intent.yaml --output plan.json` | ✓ 2 jobs (stage, prod, both plan-only) |
+| `kiox -- orun run --plan plan.json --dry-run --runner github-actions` | ✓ |
+| PR-CI run 26642692516 (`moved{}` shape) | ✗ `Unable to Move Resource State` on both envs |
+| PR-CI run 26642904336 (`removed{}+import{}` shape) | ✗ `no schema available for cloudflare_workers_domain.console[0]` on both envs |
 
 ## Plan Diff Evidence
 
-Local plan execution against the live S3 backend was not run from the
-laptop (no CI-issued AWS/Cloudflare creds in this shell). The
-authoritative plan-diff evidence is the PR-CI `cloudflare-domain ·
-{stage,prod} · Terraform` jobs. Expected shape per env:
-
-```
-# cloudflare_workers_domain.console[0] has moved to cloudflare_workers_custom_domain.console[0]
-
-Plan: 0 to add, 0 to change, 0 to destroy.
-```
-
-If either env reports `1 to destroy, 1 to add` instead of a `moved`
-no-op, that invalidates this PR per the task's failure-mode list and
-the verifier must STOP before merge.
+No clean zero-churn plan was achievable with the single-PR shape.
+Captured failures are linked in the Spec Change Proposal under
+References.
 
 ## Assumptions
 
-Decisions taken under implementer latitude (per orchestrator brief):
-
-- **Provider pin shape:** `~> 5.0` — floats forward on patch and
-  minor releases inside the 5.x major; ratchet to a tighter band
-  deferred until v6 is announced. Rationale: the migration guide
-  treats 5.x as a stable line; tighter pins create maintenance work
-  with no immediate safety benefit.
-- **Lock file:** refreshed locally with `terraform providers lock`
-  for all four prod-relevant platforms rather than deferred to CI
-  `terraform init`. Rationale: CI on Linux runners reuses the pinned
-  hash exactly rather than re-resolving `~> 5.0` to whatever is
-  latest at init time, which keeps the plan-diff evidence on this PR
-  reproducible.
-- **`moved {}` block organization:** single block at module level
-  (not per-env). The same module is instantiated once per workspace,
-  and Terraform applies the `moved` rewrite per-workspace at plan
-  time — a single block is sufficient and clearer than splitting.
-- **`environment` attribute kept on the renamed resource:** v5 marks
-  it as deprecated-but-optional; `terraform validate` emits one
-  one-line warning. Kept intentionally so the `moved` migration is
-  byte-identical with state. Dropping it would force an in-place
-  update on the live resource, which is out of scope.
-- **`cloudflare_zone.managed` v5 shape:** migrated even though
-  `count = 0` in both live envs, because `terraform validate` would
-  fail on the old v4 attribute shape under the v5 provider. Used
-  the simplest v5 shape (`account = { id = ... }`, `type = "full"`,
-  no `plan`) — `plan` now lives on the separate
-  `cloudflare_zone_subscription` resource and is out of scope here.
+- v5 upgrade guide's two-phase pattern (the
+  `cloudflare_zone_settings_override` walkthrough) is the
+  sanctioned migration shape for renames of this class.
+- Live resource IDs `052eaece5e989d5a7280b6c206e562c42950e3a6`
+  (stage) and `31e5f2ed1b1e4a5700e8ae0678846a0d753840e1` (prod)
+  are immutable and stable enough to pin in source as the
+  re-import target. (They have survived Tasks 0083, 0083.1, and
+  0084 without change.)
+- The orchestrator owns the rescope decision; the implementer
+  does not unilaterally split a task into two without sign-off.
 
 ## Spec Proposals
 
-None. The v5 migration was state-neutral via `moved` + minor v5
-attribute shape fixes; no behavioral change required a Spec Change
-Proposal.
+- `ai/proposals/task-0085-spec-update.md` — rescope to 0085a +
+  0085b. Reason: v5 provider cross-type rename is structurally a
+  two-phase migration; cannot be absorbed by `moved{}` or by
+  `removed{}+import{}` in a single PR.
 
 ## Remaining Gaps
 
-- **`environment` deprecation, future v6:** the `environment`
-  attribute on `cloudflare_workers_custom_domain` is deprecated in
-  v5.x. When `~> 5.0` eventually retires (v6), this attribute will
-  almost certainly be removed; that will be its own task and will
-  need to either drop the line cleanly (if v6 treats absence the
-  same as `"production"`) or accept an in-place update on the
-  resource.
-- **`cloudflare_zone_settings_override` not present in this
-  component**, so the two-phase v4→v5 `tf-migrate` workflow does not
-  apply here.
+The v4 debt remains until either 0085a/0085b is run, or the
+orchestrator chooses an alternative path. Nothing on `main` is
+regressed; the failing plan is contained to the open PR's
+plan-only job.
 
 ## Next Task Dependencies
 
-None expected — this closes the v4 debt called out in Tasks 0083 and
-0084 ledger entries.
+Orchestrator decision on the Spec Change Proposal. If accepted, the
+follow-up tasks are 0085a (this PR closed as superseded) → 0085b.
 
 ## PR Number
 
 **#132** — https://github.com/sourceplane/multi-tenant-saas/pull/132
+(draft, pending orchestrator decision on the rescope proposal)
