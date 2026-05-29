@@ -12,8 +12,24 @@ deployed via the same `cloudflare-pages-turbo` orun composition (with
 pnpm -F @saas/web-console-next dev          # next dev on :3001
 pnpm -F @saas/web-console-next typecheck    # tsc --noEmit
 pnpm -F @saas/web-console-next lint         # eslint
-pnpm -F @saas/web-console-next build        # opennextjs-cloudflare build
+pnpm -F @saas/web-console-next build        # next build (standalone) + opennextjs-cloudflare build
 ```
+
+The `build` script runs Next's standalone build (configured via
+`output: "standalone"` + `outputFileTracingRoot` in `next.config.mjs`) and
+then invokes `opennextjs-cloudflare build --skipBuild
+--skipWranglerConfigCheck`, which reads `.next/standalone/**` and emits the
+Cloudflare Pages-compatible bundle into `.open-next/`:
+
+- `.open-next/assets/**` — static assets the `cloudflare-pages-turbo`
+  orun component publishes (matches `outputDir` in `component.yaml`).
+- `.open-next/worker.js` — Pages Function entrypoint, referenced from
+  `wrangler.jsonc#main`.
+
+`open-next.config.ts` keeps the in-memory `dummy` overrides for the
+incremental cache / tag cache / queue — this app has no R2/KV/D1 bindings
+and runs fully session-authenticated, so no persistent caching layer is
+needed.
 
 ## Parity vs. apps/web-console
 

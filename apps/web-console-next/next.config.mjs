@@ -1,6 +1,19 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // `output: "standalone"` is required by the @opennextjs/cloudflare adapter,
+  // which reads `.next/standalone/**` to bundle the server function before
+  // emitting Pages-compatible assets into `.open-next/assets/**`.
+  output: "standalone",
+  // Trace from the monorepo root so the standalone build pulls in workspace
+  // dependencies (e.g. @saas/contracts) instead of trying to resolve them
+  // from the per-app node_modules.
+  outputFileTracingRoot: path.join(__dirname, "../.."),
   typescript: {
     ignoreBuildErrors: false,
   },
