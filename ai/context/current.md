@@ -1,23 +1,54 @@
 # Current Context
 
-Last updated: 2026-05-29
+Last updated: 2026-05-29 (orchestrator cycle after Task 0082 verifier FAIL)
 
-## Current Task — 0082 Verifier (OPEN, PR CI RED)
+## Current Task — 0082.1 Implementer (PR #125 still OPEN)
 
-- Implementer PR: **#125** (`impl/task-0082-web-console-next`), head `9f3ec6b`.
-- Verifier prompt: `ai/tasks/task-0082-verifier.md`.
-- PR CI run `26622616478`: `plan = SUCCESS`; **all three
-  `web-console-next · {dev,stage,prod} · Verify deploy` jobs = FAILURE**.
-- Root failure: `/demo` route prerender threw
-  `TypeError: Cannot read properties of undefined (reading 'url')`
-  inside `useMemo` during Next.js 15 static export.
-  See https://nextjs.org/docs/messages/prerender-error.
-- Verifier remit: drive the `/demo` failure to green with a single
-  scoped fix on the PR branch (Suspense wrapper or
-  `export const dynamic = "force-dynamic"`) within
-  `apps/web-console-next/**`, then merge. If the fix doesn't land
-  cleanly, FAIL with explicit blockers and leave PR #125 open.
-- `repo_health` is `yellow` until PR #125 is closed.
+- Prompt: `ai/tasks/task-0082.1.md`.
+- Target PR: **#125** (`impl/task-0082-web-console-next`), current head
+  `4d8b6d2` (verifier report commit on top of the `force-dynamic` fix at
+  `875e6e6`). **No new branch, no new PR** — Task 0082.1 commits push
+  onto the same PR.
+- Predecessor: Task 0082 verifier returned **FAIL** (report committed at
+  `ai/reports/task-0082-verifier.md` on PR branch). Verifier successfully
+  landed the `/demo` prerender fix via root layout
+  `export const dynamic = "force-dynamic"` — Next.js now builds 16/16
+  routes as `ƒ (Dynamic)`.
+- Remaining blocker driving Task 0082.1: `apps/web-console-next/component.yaml`
+  declares `type: cloudflare-pages-turbo` + `outputDir: .open-next/assets`
+  and the README references `@opennextjs/cloudflare` delivery, but
+  `apps/web-console-next/package.json` has **no `@opennextjs/cloudflare`
+  dependency** and `build` is plain `next build` (emits `.next/`). Root
+  `turbo.json` `tasks.build.outputs` is `["dist/**", ".wrangler/**"]`.
+  Result on PR CI run `26623666583`: orun's `verify-build-output` step
+  fails on all three `web-console-next.{dev,stage,prod}.verify-deploy`
+  jobs with `WARNING no output files found for task
+  @saas/web-console-next#build`.
+- Task 0082.1 boundary: add `@opennextjs/cloudflare` adapter, make
+  `pnpm --filter @saas/web-console-next build` produce
+  `apps/web-console-next/.open-next/assets/**`, surface those assets
+  to Turborepo (per-package `apps/web-console-next/turbo.json` override
+  preferred over widening root `turbo.json`), preserve the verifier's
+  root-layout `force-dynamic` fix, keep diff confined to
+  `apps/web-console-next/**` + root `turbo.json` (only if strictly
+  necessary) + `pnpm-lock.yaml` + `ai/reports/task-0082.1-implementer.md`.
+  Do **not** change `component.yaml` `type`/`outputDir`/`projectName`/
+  `environmentBuildVar`/`buildCommand`/`smokeCommand`. Do **not** touch
+  `apps/web-console` or any other app/worker/contract/package/db/policy/
+  api-edge/Terraform. Do **not** scope Task 0083 cutover.
+- After 0082.1 implementer pushes and all three `web-console-next ·
+  {dev,stage,prod} · Verify deploy` jobs go SUCCESS, a Task 0082.1
+  Verifier will merge PR #125 and close out Tasks 0082 + 0082.1
+  together.
+- `repo_health` stays `yellow` until PR #125 is merged.
+
+## Next Task — 0083 (blocked until PR #125 merges)
+
+- Cutover from `apps/web-console` to `apps/web-console-next`: Pages
+  project repoint / domain switch on stage/prod with rollback via the
+  preserved vanilla `apps/web-console` Pages projects. Must wait until
+  stage/prod `sourceplane-web-console-next-{stage,prod}.pages.dev`
+  return HTML containing `Sourceplane Console`.
 
 ## Recently Merged — 0079, 0080, 0081
 
