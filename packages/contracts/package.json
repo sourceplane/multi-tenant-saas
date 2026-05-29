@@ -19,7 +19,8 @@
     "./config": "./src/config.ts",
     "./webhooks": "./src/webhooks.ts",
     "./metering": "./src/metering.ts",
-    "./billing": "./src/billing.ts"
+    "./billing": "./src/billing.ts",
+    "./notifications": "./src/notifications.ts"
   },
   "scripts": {
     "build": "tsc --project tsconfig.build.json",
