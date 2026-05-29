@@ -19,10 +19,6 @@ spec:
     terraformVersion: "1.15.3"
     baseDomain: sourceplane.ai
     zoneMode: existing
-    # Legacy Pages project prefix — retained for one cycle for state-file output
-    # diffing during the soak. Not consumed by any resource. Removed in a
-    # follow-up cleanup task after the legacy Pages projects are manually deleted.
-    pagesProjectPrefix: sourceplane-web-console
     workerNamePrefix: sourceplane-web-console-next
     # NOTE: `CONSOLE_CUSTOM_DOMAIN` is intentionally NOT declared here.
     # It is supplied per-environment via

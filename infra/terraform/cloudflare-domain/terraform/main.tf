@@ -132,12 +132,6 @@ variable "zoneMode" {
   }
 }
 
-variable "pagesProjectPrefix" {
-  type        = string
-  default     = "sourceplane-web-console"
-  description = "Legacy Pages project name prefix; kept read-only on the local + output for state-file diffing during the soak period. Removed in a follow-up cleanup task after the legacy Pages projects are manually deleted."
-}
-
 variable "workerNamePrefix" {
   type        = string
   default     = "sourceplane-web-console-next"
@@ -154,7 +148,6 @@ variable "CONSOLE_CUSTOM_DOMAIN" {
 
 locals {
   console_custom_domain = var.CONSOLE_CUSTOM_DOMAIN
-  pages_project_name    = "${var.pagesProjectPrefix}-${var.environment}"
   worker_name           = "${var.workerNamePrefix}-${var.environment}"
   has_custom_domain     = local.console_custom_domain != ""
 }
@@ -221,11 +214,6 @@ output "zone_status" {
 output "console_custom_domain" {
   description = "Console custom domain hostname"
   value       = local.console_custom_domain
-}
-
-output "pages_project_name" {
-  description = "Legacy Pages project name for this environment (read-only; retained for soak-period diffing)"
-  value       = local.pages_project_name
 }
 
 output "worker_name" {
