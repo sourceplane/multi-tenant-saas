@@ -89,9 +89,6 @@ environments:
       triggerRefs:
         - github-pull-request
         - github-push-main
-    promotion:
-      dependsOn:
-        - environment: dev
     parameterDefaults:
       terraform:
         awsRegion: us-east-1
