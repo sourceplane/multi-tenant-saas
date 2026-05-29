@@ -1,6 +1,6 @@
 {
   "goal": "Supabase/Postgres-backed multi-organization Orun SaaS control plane",
-  "current_task": "0083.1",
+  "current_task": "0084",
   "completed": [
     "0001", "0001.1", "0002", "0003", "0003.1", "0004", "0005",
     "0006", "0006.1", "0007", "0007.1", "0008", "0009", "0009.1",
@@ -13,18 +13,19 @@
     "0058", "0059", "0060", "0061", "0062", "0063", "0064", "0065",
     "0066", "0067", "0068", "0069", "0070", "0071", "0072", "0073",
     "0074", "0075", "0076", "0077", "0078",
-    "0079", "0080", "0081", "0082", "0082.1", "0083"
+    "0079", "0080", "0081", "0082", "0082.1", "0083", "0083.1"
   ],
-  "repo_health": "yellow",
-  "next_focus": "task-0083.1-hotfix-CONSOLE_CUSTOM_DOMAIN-wiring",
-  "last_verified": "2026-05-29T12:30:01Z",
+  "repo_health": "green",
+  "next_focus": "task-0084-drop-pages-residuals",
+  "last_verified": "2026-05-29T13:30:00Z",
   "waiting_for_input": "false",
-  "task_agent": "ai/tasks/task-0083-verifier-addendum.md",
+  "task_agent": "ai/tasks/task-0084.md",
   "notes": [
-    "Task 0083 PR #129 merged at 2026-05-29T12:30:01Z as squash commit 927c5179. PR-CI and post-merge main-CI both 9/9 SUCCESS. Code-level changes landed: cloudflare_pages_domain.console replaced with cloudflare_workers_domain.console (v4 provider, ~> 4.52 pin), apps/web-console deleted, api-edge CORS narrowed (removed *.pages.dev origins), specs updated for new deployment shape, intent.yaml stage.promotion.dependsOn=[dev] removed, orun toolchain bumped v2.3.0->v2.9.0.",
-    "Verifier result: FAIL on post-merge soak despite green CI. Root cause: CONSOLE_CUSTOM_DOMAIN env var from intent.yaml is not threaded to Terraform as TF_VAR_CONSOLE_CUSTOM_DOMAIN in the cloudflare-domain component apply step. Both stage and prod cloudflare-domain apply jobs ran with empty value: '0 added, 0 changed, 0 destroyed'. cloudflare_workers_domain.console count=0 -> resource never created. stage.sourceplane.ai and prod.sourceplane.ai resolve to NXDOMAIN. Same class of bug as Task 0082.2.",
-    "Rollback hatch healthy: both sourceplane-web-console-next-{stage,prod}.rahulvarghesepullely.workers.dev return HTTP 200 with 'Sourceplane Console'. Users on workers.dev URLs unaffected; only consumers expecting apex hostnames are broken.",
-    "Task 0083.1 hotfix scope: wire CONSOLE_CUSTOM_DOMAIN -> TF_VAR_CONSOLE_CUSTOM_DOMAIN in infra/terraform/cloudflare-domain/component.yaml. Reference the cloudflare-hyperdrive component for the working env-mapping pattern. Acceptance criteria: post-apply curl on both stage and prod apex hostnames returns 200 with body 'Sourceplane Console'.",
-    "repo_health set to yellow until Task 0083.1 lands and apex probes pass. Verifier report at ai/reports/task-0083-verifier.md (overwritten, not appended). Implementer-side observation logged: future infra-deploy tasks should require real curl evidence (not just plan output) committed before scoping a verifier."
+    "Task 0083.1 (PR #130, squash 2443826) merged at 2026-05-29T13:24Z. Main-CI run 26639840823 SUCCESS. cloudflare_workers_domain.console created on both stage (id=052eaece5e989d5a7280b6c206e562c42950e3a6) and prod (id=31e5f2ed1b1e4a5700e8ae0678846a0d753840e1). Apex probes stage.sourceplane.ai and prod.sourceplane.ai both 200 with Sourceplane Console body. CORS preflight from both apex origins to api-edge-{env}.rahulvarghesepullely.workers.dev returns 204 with matching access-control-allow-origin reflection. Rollback hatch workers.dev URLs still 200.",
+    "Fix shape: option (c) — promoted CONSOLE_CUSTOM_DOMAIN from environments.{env}.env into environments.{env}.parameterDefaults.terraform for dev/stage/prod in intent.yaml, and removed the shadowing component-level default CONSOLE_CUSTOM_DOMAIN: '' from infra/terraform/cloudflare-domain/component.yaml. The job template's existing range $key, $value := .parameters -> TF_VAR_<key> loop now exports TF_VAR_CONSOLE_CUSTOM_DOMAIN automatically (no job-template edits). Provider pin ~> 4.52 unchanged. orun toolchain v2.3.0 kept (the local v2.9.0 kiox.lock bump was reverted out of scope).",
+    "Verifier report: ai/reports/task-0083.1-verifier.md.",
+    "Task 0083 cutover is now fully live and verified. repo_health: green.",
+    "Next task scoped: 0084 — drop dead pagesProjectPrefix variable + pages_project_name output from infra/terraform/cloudflare-domain/ (kept for one soak cycle post-Task 0083, soak cycle now complete) and imperatively delete the legacy sourceplane-web-console-{dev,stage,prod} Cloudflare Pages projects via wrangler since Orun has no managed record of them. Prompt at ai/tasks/task-0084.md.",
+    "Follow-up candidate (deferred 0085): bump cloudflare TF provider to v5 and rename cloudflare_workers_domain -> cloudflare_workers_custom_domain for forward compatibility."
   ]
 }

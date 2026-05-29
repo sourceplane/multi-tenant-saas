@@ -1510,3 +1510,36 @@ Last updated: 2026-05-29
 |- Implementer deviation: used v4 resource name `cloudflare_workers_domain` instead of v5 `cloudflare_workers_custom_domain` to keep blast radius small; cloudflare provider pin bumped `~> 4.30` -> `~> 4.52`; resource pinned to `environment = "production"` (only valid value); `pagesProjectPrefix` variable + `pages_project_name` output kept read-only for one soak cycle so the first post-merge `terraform plan` diff is a clean one-destroy/one-create per env.
 |- Verifier mandate (per `ai/tasks/task-0083-verifier.md`): drive PR CI to 33/33 SUCCESS, merge, then run the mandatory post-merge soak (Terraform apply logs confirming `cloudflare_workers_domain.console` creation + `cloudflare_pages_domain.console` destroy on both stage and prod; `curl -sfL` on both apex domains returns 200 with `Sourceplane Console`; CORS preflight from `https://stage.sourceplane.ai` returns the matching `access-control-allow-origin`; `*.rahulvarghesepullely.workers.dev` shadow hostnames still 200 as rollback hatch). Roll back the merge if soak probes fail past one retry.
 |- Expected outcome: Pages -> Workers + Static Assets migration fully closed out, legacy `apps/web-console` decommissioned, two follow-ups queued (drop `pagesProjectPrefix` after soak; optional v5 cloudflare provider bump).
+
+
+## Task 0083.1
+
+|- Agent: Implementer
+|- Prompt: `ai/tasks/task-0083.1.md`
+|- Status: scoped and ready (2026-05-29). Orchestrator close-out pending one human-input question about uncommitted local diff on `main` (see `ai/waiting_for_input.md`).
+|- Objective: thread `CONSOLE_CUSTOM_DOMAIN` (already declared per-env in `intent.yaml` as `stage.sourceplane.ai` / `prod.sourceplane.ai`) through to the `cloudflare-domain` Terraform apply step as `TF_VAR_CONSOLE_CUSTOM_DOMAIN`, so `cloudflare_workers_domain.console` is actually planned and applied on the next `github-push-main` run. Closes out the Task 0083 cutover whose post-merge soak FAILED with `0 added, 0 changed, 0 destroyed` and apex NXDOMAIN on both stage and prod.
+|- Scope boundary: ONE wiring change (1-2 files) + optional README touch in `infra/terraform/cloudflare-domain/` + implementer report. NO Terraform `main.tf` changes (variable + gating already correct), NO provider/toolchain bumps, NO changes to other components, NO deletion of `pagesProjectPrefix` (still in soak), NO new spec proposal unless the wiring shape forces a documented contract change. Architect Brief grants latitude on shape selection (options a/b/c) with required one-line rationale in the report.
+|- Acceptance (pre-merge): orun `validate` / `plan --changed` / `run --dry-run` all PASS; rendered `terraform-env` step contains a literal `TF_VAR_CONSOLE_CUSTOM_DOMAIN=` export for stage and prod; PR CI green.
+|- Acceptance (post-merge, verifier-owned soak): `cloudflare-domain · {stage,prod} · Terraform · apply` logs contain `cloudflare_workers_domain.console: Creation complete`; `curl -sfL https://{stage,prod}.sourceplane.ai/` returns 200 with body `Sourceplane Console`; rollback hatch (`*.rahulvarghesepullely.workers.dev`) still serves 200.
+|- Expected outcome: apex hostnames live, repo_health back to green, Task 0083 cutover fully closed, follow-up candidates 0084-A (drop `pagesProjectPrefix` + delete legacy Pages projects) and 0084-B (cloudflare provider v5 + `cloudflare_workers_custom_domain` rename) unblocked.
+
+|- Agent: Verifier (closed 2026-05-29T13:30Z, PASS)
+|- PR: #130 (`impl/task-0083.1-console-domain-tfvar`) squash-merged at `2443826` (2026-05-29T13:24Z)
+|- PR CI run: `26639655361` (3/3 SUCCESS). Post-merge main-CI run: `26639840823` (SUCCESS).
+|- Fix shape: option (c) — promoted `CONSOLE_CUSTOM_DOMAIN` from `environments.{env}.env` into `environments.{env}.parameterDefaults.terraform` for dev/stage/prod in `intent.yaml`; removed shadowing component-level default `CONSOLE_CUSTOM_DOMAIN: ""` from `infra/terraform/cloudflare-domain/component.yaml`. Job template's existing `range $key, $value := .parameters` -> `TF_VAR_<key>` loop exports `TF_VAR_CONSOLE_CUSTOM_DOMAIN` automatically (no job-template edits).
+|- Apply evidence: `cloudflare_workers_domain.console[0]: Creation complete` on stage (id=`052eaece5e989d5a7280b6c206e562c42950e3a6`) and prod (id=`31e5f2ed1b1e4a5700e8ae0678846a0d753840e1`). First real create of this resource on both envs.
+|- Soak probes: `curl -sfL https://stage.sourceplane.ai/` -> 200 `Sourceplane Console` (11245 bytes); `curl -sfL https://prod.sourceplane.ai/` -> 200 `Sourceplane Console` (11245 bytes); CORS preflight from both apex origins to `api-edge-{env}.rahulvarghesepullely.workers.dev` returns 204 with matching `access-control-allow-origin`; rollback hatch `*.rahulvarghesepullely.workers.dev` still 200.
+|- Reports: `ai/reports/task-0083.1-implementer.md`, `ai/reports/task-0083.1-verifier.md`.
+|- Out-of-scope drift caught: local `kiox.lock` v2.3.0->v2.9.0 toolchain bump was reverted before pushing the impl branch.
+|- Durable outcome: Task 0083 Pages -> Workers + Static Assets cutover fully live. `repo_health: green`.
+
+## Task 0084
+
+|- Agent: Implementer
+|- Prompt: `ai/tasks/task-0084.md`
+|- Status: scoped (2026-05-29) — ready for pickup.
+|- Objective: drop the now-dead `pagesProjectPrefix` variable + `pages_project_name` output from `infra/terraform/cloudflare-domain/` (kept for one soak cycle post Task 0083; the cycle is complete) and imperatively delete the legacy `sourceplane-web-console-{dev,stage,prod}` Cloudflare Pages projects via wrangler. Orun has no managed record of those Pages projects, so deletion must happen outside the terraform plan; the apply step itself should be a clean no-op after the variable+output drop.
+|- Scope boundary: `infra/terraform/cloudflare-domain/terraform/main.tf` (delete `variable "pagesProjectPrefix"`, `local.pages_project_name`, `output "pages_project_name"`), `infra/terraform/cloudflare-domain/component.yaml` (delete the `pagesProjectPrefix` parameter line), `infra/terraform/cloudflare-domain/README.md` (drop the two "Retained read-only..." rows), plus an out-of-band wrangler/Cloudflare-API deletion script for the three legacy Pages projects with evidence captured in the implementer report. NO change to `cloudflare_workers_domain.console`, no provider-pin change, no other component, no api-edge change.
+|- Acceptance (pre-merge): orun `validate` / `plan --changed` / `run --dry-run` PASS; PR CI green. Terraform plan diff must be only the removal of the variable/output (no resource churn).
+|- Acceptance (post-merge): `cloudflare-domain · {stage,prod} · Terraform · apply` is a clean no-op (`0 added, 0 changed, 0 destroyed`); apex probes still 200; rollback hatch still 200; wrangler verification that `sourceplane-web-console-{dev,stage,prod}` Pages projects no longer exist.
+|- Expected outcome: legacy Pages residuals fully gone, repo housekeeping closed. Follow-up 0085 (cloudflare provider v5 + `cloudflare_workers_custom_domain` rename) unblocked.
