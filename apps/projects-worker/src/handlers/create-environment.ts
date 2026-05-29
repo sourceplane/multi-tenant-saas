@@ -8,8 +8,14 @@ import { createEventsRepository } from "@saas/db/events";
 import { createSqlExecutor } from "@saas/db/hyperdrive";
 import { fetchAuthorizationContext } from "../membership-client.js";
 import { authorizeViaPolicy } from "../policy-client.js";
+import {
+  checkBillingEntitlement,
+  decideEnvironmentsLimit,
+} from "../billing-client.js";
 import { successResponse, errorResponse, validationError } from "../http.js";
 import { orgPublicId, projectPublicId, environmentPublicId } from "../ids.js";
+
+const ENVIRONMENTS_LIMIT_ENTITLEMENT_KEY = "limit.environments";
 
 const NAME_MIN = 1;
 const NAME_MAX = 100;
@@ -75,6 +81,11 @@ export function toPublicEnvironment(env: { id: string; orgId: string; projectId:
 export interface HandleCreateEnvironmentDeps {
   projectsRepo?: ProjectsRepository;
   eventsRepo?: EventsRepository;
+  /**
+   * Injectable billing entitlement check for tests. Defaults to a
+   * real call against env.BILLING_WORKER.
+   */
+  checkEntitlement?: typeof checkBillingEntitlement;
 }
 
 export async function handleCreateEnvironment(
@@ -93,6 +104,9 @@ export async function handleCreateEnvironment(
     return errorResponse("internal_error", "Service unavailable", 503, requestId);
   }
   if (!env.POLICY_WORKER) {
+    return errorResponse("internal_error", "Service unavailable", 503, requestId);
+  }
+  if (!env.BILLING_WORKER) {
     return errorResponse("internal_error", "Service unavailable", 503, requestId);
   }
 
@@ -132,7 +146,86 @@ export async function handleCreateEnvironment(
     return errorResponse("not_found", "Not found", 404, requestId);
   }
 
-  const executor = deps?.projectsRepo && deps?.eventsRepo ? null : createSqlExecutor(env.SOURCEPLANE_DB);
+  // ── Billing entitlement gate (Task 0081) ──────────────────────
+  // Environment creation is gated on `limit.environments` after auth/
+  // membership/policy allow and before any environment / event / audit
+  // row is written or any UUID is generated. Fails closed on any
+  // service/misconfiguration error.
+  const entitlementResult = await (deps?.checkEntitlement ?? checkBillingEntitlement)(
+    env.BILLING_WORKER,
+    orgPublicId(orgId),
+    ENVIRONMENTS_LIMIT_ENTITLEMENT_KEY,
+    requestId,
+  );
+  if (entitlementResult.kind === "service_error") {
+    return errorResponse(
+      "internal_error",
+      "Service unavailable",
+      503,
+      requestId,
+    );
+  }
+
+  // For quantity limits we need the current active environment count
+  // scoped to the parent project. Use the injected repo when present
+  // (tests); otherwise build a transient non-transactional repo against
+  // the same executor we'll use for the write transaction below.
+  const preTxExecutor =
+    deps?.projectsRepo && deps?.eventsRepo
+      ? null
+      : createSqlExecutor(env.SOURCEPLANE_DB);
+  let countRepo: Pick<ProjectsRepository, "countActiveEnvironments">;
+  if (deps?.projectsRepo) {
+    countRepo = deps.projectsRepo;
+  } else {
+    countRepo = createProjectsRepository(preTxExecutor!);
+  }
+
+  let activeCount: number;
+  try {
+    const countResult = await countRepo.countActiveEnvironments(orgId, projectId);
+    if (!countResult.ok) {
+      if (preTxExecutor) await preTxExecutor.dispose();
+      return errorResponse(
+        "internal_error",
+        "Service unavailable",
+        503,
+        requestId,
+      );
+    }
+    activeCount = countResult.value;
+  } catch {
+    if (preTxExecutor) await preTxExecutor.dispose();
+    return errorResponse(
+      "internal_error",
+      "Service unavailable",
+      503,
+      requestId,
+    );
+  }
+
+  const gate = decideEnvironmentsLimit(entitlementResult.decision, activeCount);
+  if (gate.kind === "service_error") {
+    if (preTxExecutor) await preTxExecutor.dispose();
+    return errorResponse(
+      "internal_error",
+      "Service unavailable",
+      503,
+      requestId,
+    );
+  }
+  if (gate.kind === "deny") {
+    if (preTxExecutor) await preTxExecutor.dispose();
+    return errorResponse(
+      "precondition_failed",
+      gate.message,
+      412,
+      requestId,
+      { reason: gate.reason },
+    );
+  }
+
+  const executor = preTxExecutor;
   try {
     const parentCheck = async (projectsRepo: ProjectsRepository) => {
       const parentResult = await projectsRepo.getProjectById(orgId, projectId);

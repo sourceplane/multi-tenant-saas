@@ -82,6 +82,14 @@ export interface ProjectsRepository {
   countActiveProjects(orgId: string): Promise<ProjectsResult<number>>;
 
   createEnvironment(input: CreateEnvironmentInput): Promise<ProjectsResult<Environment>>;
+  /**
+   * Count of active (non-archived) environments under a specific parent
+   * project. Used by domain callers (e.g. projects-worker) to compare
+   * against `limit.environments` entitlement quotas before creating a
+   * new environment row. The count is intentionally scoped to
+   * `org_id + project_id` because environment APIs are project-scoped.
+   */
+  countActiveEnvironments(orgId: string, projectId: string): Promise<ProjectsResult<number>>;
   getEnvironmentById(orgId: string, projectId: string, environmentId: string): Promise<ProjectsResult<Environment>>;
   getEnvironmentBySlug(orgId: string, projectId: string, slugLower: string): Promise<ProjectsResult<Environment>>;
   listEnvironmentsPaged(orgId: string, projectId: string, params: PageQueryParams): Promise<ProjectsResult<PagedResult<Environment>>>;
