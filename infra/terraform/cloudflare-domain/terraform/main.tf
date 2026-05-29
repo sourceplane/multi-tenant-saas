@@ -14,7 +14,7 @@ terraform {
     }
     cloudflare = {
       source  = "cloudflare/cloudflare"
-      version = "~> 4.52"
+      version = "~> 5.0"
     }
   }
 }
@@ -153,19 +153,34 @@ locals {
 }
 
 # --- Zone lookup (existing mode) ---
+#
+# v5 note: data.cloudflare_zone no longer accepts a bare `name` argument;
+# lookup-by-name is expressed through the nested `filter` block. The
+# returned attributes (id, status, name) are unchanged.
 
 data "cloudflare_zone" "existing" {
   count = var.zoneMode == "existing" ? 1 : 0
-  name  = var.baseDomain
+  filter = {
+    name = var.baseDomain
+  }
 }
 
 # --- Zone creation (managed mode) ---
+#
+# v5 note: cloudflare_zone now nests account under an `account` block
+# (`account.id` replaces the top-level `account_id`), uses `name` instead
+# of `zone`, and drops the `plan` argument (plan is now managed via the
+# separate `cloudflare_zone_subscription` resource). This component runs
+# in `existing` mode in stage/prod, so `count = 0` and the resource is
+# never actually created — but the block must still be schema-valid.
 
 resource "cloudflare_zone" "managed" {
-  count      = var.zoneMode == "managed" ? 1 : 0
-  account_id = var.cloudflare_account_id
-  zone       = var.baseDomain
-  plan       = "free"
+  count = var.zoneMode == "managed" ? 1 : 0
+  account = {
+    id = var.cloudflare_account_id
+  }
+  name = var.baseDomain
+  type = "full"
 }
 
 locals {
@@ -176,15 +191,16 @@ locals {
 
 # --- Worker custom domain attachment ---
 #
-# Note: in the cloudflare TF provider v4.x line this resource is named
-# `cloudflare_workers_domain` (description: "Creates a Worker Custom Domain.").
-# It is renamed to `cloudflare_workers_custom_domain` in v5. Task 0083 spec
-# references the v5 name; we use the v4 name here because the rest of the repo
-# (and this component's provider pin `~> 4.52`) is on the v4 line. Functionality
-# is equivalent. Tracked as a follow-up: bump provider to v5 across the repo
-# and rename this resource at that time.
+# Renamed in the cloudflare provider v5 line from `cloudflare_workers_domain`
+# to `cloudflare_workers_custom_domain`. The attribute shape is unchanged
+# (hostname, service, environment, account_id, zone_id), so the migration
+# is state-only: the `moved` block below carries the existing Cloudflare
+# resource IDs across the rename so no resource is destroyed or recreated.
+# Pre-rename live IDs (stage / prod) are preserved byte-identical:
+#   stage: 052eaece5e989d5a7280b6c206e562c42950e3a6
+#   prod:  31e5f2ed1b1e4a5700e8ae0678846a0d753840e1
 
-resource "cloudflare_workers_domain" "console" {
+resource "cloudflare_workers_custom_domain" "console" {
   count = local.has_custom_domain ? 1 : 0
 
   account_id  = var.cloudflare_account_id
@@ -192,6 +208,11 @@ resource "cloudflare_workers_domain" "console" {
   hostname    = local.console_custom_domain
   service     = local.worker_name
   environment = "production"
+}
+
+moved {
+  from = cloudflare_workers_domain.console
+  to   = cloudflare_workers_custom_domain.console
 }
 
 # --- Outputs (non-secret) ---
@@ -223,5 +244,5 @@ output "worker_name" {
 
 output "worker_custom_domain_id" {
   description = "Cloudflare Workers custom domain attachment ID"
-  value       = local.has_custom_domain ? try(cloudflare_workers_domain.console[0].id, "pending") : "not_configured"
+  value       = local.has_custom_domain ? try(cloudflare_workers_custom_domain.console[0].id, "pending") : "not_configured"
 }

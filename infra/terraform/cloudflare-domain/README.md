@@ -30,11 +30,15 @@ vars) for runtime CORS decisions.
 |----------|-------------|
 | `data.cloudflare_zone.existing` | Looks up the existing zone (when `zoneMode: existing`) |
 | `cloudflare_zone.managed` | Creates a new zone (when `zoneMode: managed`) |
-| `cloudflare_workers_domain.console` | Attaches `CONSOLE_CUSTOM_DOMAIN` to `{workerNamePrefix}-{environment}` (Worker Custom Domain) |
+| `cloudflare_workers_custom_domain.console` | Attaches `CONSOLE_CUSTOM_DOMAIN` to `{workerNamePrefix}-{environment}` (Worker Custom Domain) |
 
-> Note: the resource is named `cloudflare_workers_domain` in the Cloudflare
-> Terraform provider v4.x. (The equivalent v5 name is
-> `cloudflare_workers_custom_domain` — we have not migrated to v5.)
+> Note: this component is on the Cloudflare Terraform provider v5 line
+> (`~> 5.0`). The resource was renamed from `cloudflare_workers_domain`
+> (v4) to `cloudflare_workers_custom_domain` (v5) in Task 0085; the
+> rename is carried in Terraform state via a `moved {}` block so the
+> live Cloudflare resource IDs survive byte-identical (stage
+> `052eaece5e989d5a7280b6c206e562c42950e3a6`, prod
+> `31e5f2ed1b1e4a5700e8ae0678846a0d753840e1`).
 
 ## Parameters
 
@@ -89,4 +93,4 @@ After merge to main, verify:
 - `zone_name` — Domain name
 - `zone_status` — Zone activation status
 - `console_custom_domain` — The custom domain hostname for this environment
-- `worker_custom_domain_id` — ID of the `cloudflare_workers_domain.console` resource
+- `worker_custom_domain_id` — ID of the `cloudflare_workers_custom_domain.console` resource
