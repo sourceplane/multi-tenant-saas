@@ -1,6 +1,6 @@
 # Task 0085a — Implementer Report
 
-**Status:** Implementation complete, PR opened.
+**Status:** Implementation complete, PR opened, PR CI green.
 **Branch:** `impl/task-0085a-cloudflare-v4-removed-state-drop` (fresh off `main`).
 **PR:** #133 (https://github.com/sourceplane/multi-tenant-saas/pull/133).
 **Phase:** 1 of 2 (v4→v5 cloudflare-domain migration). Phase 2 will be scoped as Task 0085b after this PR merges and the post-merge `forgotten` apply lands on both envs.
@@ -65,17 +65,48 @@ Note: `kiox.lock` was incidentally bumped from `orun v2.3.0` → `v2.9.0` during
 
 ## Plan Diff Evidence
 
-Local PR-CI plan output cannot be reproduced without remote state credentials; the literal evidence will come from PR CI `plan` job logs for both stage and prod and will be captured in the implementer report addendum / verifier report.
+PR-CI run [26644076501](https://github.com/sourceplane/multi-tenant-saas/actions/runs/26644076501) — both env jobs PASS. Plan job PASS. Literal Terraform 1.15.x output per env (`removed { lifecycle { destroy = false } }` against a tracked resource):
 
-**Expected, per the v5 upgrade guide and the proposal's failure-mode analysis:**
+**stage** ([job 78524741081](https://github.com/sourceplane/multi-tenant-saas/actions/runs/26644076501/job/78524741081)):
 
 ```
-Plan: 0 to add, 0 to change, 1 to forget.
+Terraform will perform the following actions:
+
+ # cloudflare_workers_domain.console[0] will no longer be managed by Terraform, but will not be destroyed
+ # (destroy = false is set in the configuration)
+ . resource "cloudflare_workers_domain" "console" {
+        id          = "052eaece5e989d5a7280b6c206e562c42950e3a6"
+        # (5 unchanged attributes hidden)
+    }
+
+Plan: 0 to add, 0 to change, 0 to destroy.
+
+Changes to Outputs:
+  ~ worker_custom_domain_id = "052eaece5e989d5a7280b6c206e562c42950e3a6" -> "pending_v5_reimport_task_0085b"
+
+Warning: Some objects will no longer be managed by Terraform
+
+If you apply this plan, Terraform will discard its tracking information for
+the following objects, but it will not delete them:
+ - cloudflare_workers_domain.console[0]
 ```
 
-on both `cloudflare-domain · stage · Terraform` and `cloudflare-domain · prod · Terraform` PR-CI jobs. The `forget` count is Terraform 1.15.x's literal output for `removed { lifecycle { destroy = false } }` against a tracked resource — it drops the state entry without touching the live Cloudflare resource.
+**prod** ([job 78524741140](https://github.com/sourceplane/multi-tenant-saas/actions/runs/26644076501/job/78524741140)) — same shape with the prod ID:
 
-**Hard fail signal (per task Constraint #7):** any nonzero `to destroy` count on either env. If observed, STOP, do not push fixes, file a new spec proposal.
+```
+ # cloudflare_workers_domain.console[0] will no longer be managed by Terraform, but will not be destroyed
+        id          = "31e5f2ed1b1e4a5700e8ae0678846a0d753840e1"
+Plan: 0 to add, 0 to change, 0 to destroy.
+  ~ worker_custom_domain_id = "31e5f2ed1b1e4a5700e8ae0678846a0d753840e1" -> "pending_v5_reimport_task_0085b"
+Warning: Some objects will no longer be managed by Terraform
+ - cloudflare_workers_domain.console[0]
+```
+
+**Wording reconciliation:** The task scope anticipated `Plan: 0 to add, 0 to change, 1 to forget.` Terraform 1.15.x does NOT add a `to forget` count to the plan footer for `removed { lifecycle { destroy = false } }`; instead it shows the resource separately with action marker `.` (forget), the explanatory comment `# (destroy = false is set in the configuration)`, and the dedicated `Warning: Some objects will no longer be managed by Terraform` block that names the resource. The footer stays `Plan: 0 to add, 0 to change, 0 to destroy.` (note: zero on every count, including `to destroy` — which is the load-bearing invariant).
+
+This matches Constraint #7 of the task scope exactly: `to destroy` is 0, the live Cloudflare resource is untouched, only the state file is mutated. The `Output diff` line is the cosmetic re-point of `worker_custom_domain_id` to the placeholder string (this is the secondary edit that lets `output {}` continue to plan cleanly once `cloudflare_workers_domain.console[0]` is no longer a referenceable symbol).
+
+**Live IDs confirmed match the task scope:** stage `052eaece5e989d5a7280b6c206e562c42950e3a6` ✓, prod `31e5f2ed1b1e4a5700e8ae0678846a0d753840e1` ✓. These are the byte-identical IDs that must survive both phases.
 
 The `removed {}` block as written:
 
