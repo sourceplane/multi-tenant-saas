@@ -1,6 +1,6 @@
 {
   "goal": "Supabase/Postgres-backed multi-organization Orun SaaS control plane",
-  "current_task": "0085b",
+  "current_task": "0086-verifier",
   "completed": [
     "0001", "0001.1", "0002", "0003", "0003.1", "0004", "0005",
     "0006", "0006.1", "0007", "0007.1", "0008", "0009", "0009.1",
@@ -16,15 +16,16 @@
     "0079", "0080", "0081", "0082", "0082.1", "0083", "0083.1", "0084",
     "0085a"
   ],
+  "deferred": ["0085b"],
   "repo_health": "green",
-  "next_focus": "task-0085b-cloudflare-v5-provider-bump-and-workers-custom-domain-import",
+  "next_focus": "task-0086-notifications-worker-verifier",
   "last_verified": "2026-05-29T15:08:00Z",
   "waiting_for_input": "false",
-  "task_agent": "/ai/tasks/task-0085b.md",
+  "task_agent": "/ai/tasks/task-0086-verifier.md",
   "notes": [
-    "Task 0085a (Verifier) DONE — PASS. PR #133 squash-merged at efa539cdd662da8399fb1303ee497bf54684a1eb (2026-05-29T15:06:12Z) via --admin (rollup 3/3 SUCCESS uncontested, branch 1 commit behind on the orchestration-scoping commit d43cf81 only). Post-merge main-CI run 26645041830 = 3/3 SUCCESS; both cloudflare-domain · {stage,prod} · Terraform · apply jobs logged `Apply complete! Resources: 0 added, 0 changed, 0 destroyed.` (stage job 78528178977, prod job 78528178968). State-drop confirmation surfaced via the 'no longer be managed by Terraform' warning block naming cloudflare_workers_domain.console[0] (Terraform 1.15.x does not emit a separate `Removed from state` line for `removed { lifecycle { destroy = false } }`, per the wording-reconciliation note). All four live probes still 200 with `Sourceplane Console`. Post-apply `orun plan --changed` selects 0 jobs — state drop is durable.",
-    "Phase 1 of the v4→v5 cloudflare-domain migration is now LIVE on main. The v4-typed `cloudflare_workers_domain.console` state entry is dropped on both envs; the live Cloudflare custom-domain attachments (stage id 052eaece5e989d5a7280b6c206e562c42950e3a6, prod id 31e5f2ed1b1e4a5700e8ae0678846a0d753840e1) are untouched and continue to serve stage.sourceplane.ai / prod.sourceplane.ai. Provider pin stays cloudflare ~> 4.52. `output worker_custom_domain_id` is a literal placeholder `pending_v5_reimport_task_0085b` (no downstream consumers).",
-    "Risk window OPEN until 0085b lands: the two live custom-domain attachments are NOT Terraform-tracked between this merge and 0085b's `import {}` apply. Any Cloudflare-side drift would not be detected by `terraform plan`. Mitigation: scope 0085b as the immediate next task; no manual Cloudflare changes to these attachments during the window. Reports: ai/reports/task-0085a-implementer.md, ai/reports/task-0085a-verifier.md.",
-    "Next focus: scope Task 0085b — Phase 2 of the v4→v5 cloudflare-domain migration. Bump required_providers.cloudflare.version from ~> 4.52 to ~> 5.0; replace fenced v4 `cloudflare_workers_domain.console` block (main.tf lines 224–232) with v5 `resource cloudflare_workers_custom_domain.console`; add `import {}` blocks keyed by var.environment re-adopting the two known immutable IDs above; restore `output worker_custom_domain_id` to the real attachment ID; refresh .terraform.lock.hcl to cloudflare 5.x multi-arch; drop the `removed {}` block (its work is done) and clear Phase 1 fence comments. Acceptance: PR-CI plan `Plan: 1 to import, 0 to add, 0 to change, 0 to destroy.` on both envs; post-merge apply `Apply complete! Resources: 1 imported, 0 added, 0 changed, 0 destroyed.` on both envs; four live probes still 200."
+    "Task 0086 (Implementer) DONE — notifications-worker V1 bring-up landed on branch `impl/task-0086-notifications-worker`. PR #134 OPEN, MERGEABLE, base=main, draft=false. PR-CI run 26649268365 reports 13/13 SUCCESS: plan + contracts/db Verify on 3 envs + db-migrate Migrate on stage,prod + notifications-worker Verify deploy on 3 envs + notifications-worker-tests on dev. Implementer report committed to PR branch and listed in PR file diff. Branch tip: b611398 `feat(notifications): add notifications-worker V1 (task-0086)`.",
+    "Task 0086 verifier scoped at ai/tasks/task-0086-verifier.md. Acceptance gates: PR scope confined to apps/notifications-worker + packages/contracts notifications.ts + packages/db notifications + migration 120_notifications_core + tests/notifications-worker + lockfile + ai/tasks+reports; no touch to infra/terraform/cloudflare-domain (Task 0085b deferred surface). Load-bearing post-merge soak: db-migrate stage+prod apply for 120_notifications_core green, notifications-worker stage+prod Verify deploy green, live /health 200 on both Worker URLs, apex hostnames stage.sourceplane.ai + prod.sourceplane.ai still 200 with `Sourceplane Console` (no regression on the Task 0085a `0 destroyed` invariant). Verifier must also recompute migration checksum vs manifest (claimed 868cc1092b4b385b6ed3d203efe5302191865131bb98d0e9f5fe5ad6d16f01bb) and audit `wrangler.jsonc` for placeholder bindings flagged by implementer Follow-up #3 (record but not blocker).",
+    "Task 0085b (Phase 2 cloudflare-domain v4→v5 — provider bump + cloudflare_workers_custom_domain + import{} re-adopting the two known immutable IDs 052eaece5e989d5a7280b6c206e562c42950e3a6 / 31e5f2ed1b1e4a5700e8ae0678846a0d753840e1) remains EXPLICITLY DEFERRED by the user. Narrow Terraform-tracking risk window stays open on cloudflare-domain (no Terraform-tracked record of the two live custom-domain attachments). Mitigation: no manual Cloudflare changes to those attachments; Task 0086 confirmed-scoped to NOT touch infra/terraform/cloudflare-domain. Next-candidate task slate after 0086 verifier PASS: (a) notifications caller wiring (identity magic-link OR membership invitation email), (b) real notifications provider swap (Resend/SES/Postmark), (c) revive 0085b when user lifts the defer.",
+    "Pre-existing failure on main: `@saas/identity-worker-tests` `crypto` type error reproduces on a clean stash of the 0086 branch — unrelated, NOT introduced by 0086, scope is a separate follow-up task (add node:crypto import or @types/node globals)."
   ]
 }
