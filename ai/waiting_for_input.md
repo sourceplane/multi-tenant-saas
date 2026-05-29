@@ -6,34 +6,33 @@ No human input is currently requested.
 
 ## Ready To Proceed
 
-Task 0082 verifier returned **FAIL** with the prerender fix landed on PR
-#125 (commit `875e6e6`, root layout `force-dynamic`) and an
-implementer-territory blocker at the orun `verify-build-output` step:
-the `apps/web-console-next` build does not produce
-`.open-next/assets/**` because `@opennextjs/cloudflare` is not wired,
-despite `component.yaml` declaring `outputDir: .open-next/assets`.
+Task 0082 + 0082.1 verified **PASS** and merged together via PR #125 squash
+merge commit `b73cd54c314eb1eb0f93f69a5bc09f278dc39b99` on
+2026-05-29T08:29:38Z. PR CI run `26626681497` 4/4 SUCCESS at PR head
+`c12400b` (verifier `.gitignore` + `.next/**` untrack on top of `e505677`
+opennextjs/cloudflare wiring and `875e6e6` prerender fix).
 
-The next agent in the cycle is the **Task 0082.1 Implementer**
-(`ai/tasks/task-0082.1.md`), who will push a scoped follow-up commit (or
-small series) onto the **same** PR #125 branch
-`impl/task-0082-web-console-next`:
+Verifier fix landed one focused commit on the PR branch:
+- NEW `apps/web-console-next/.gitignore` covering `.next/`, `.open-next/`,
+  `out/`, `.wrangler/`, `*.tsbuildinfo`, `.env*.local`.
+- `git rm -r --cached apps/web-console-next/.next` — 173 already-committed
+  build artifact files untracked.
+- NEW `ai/reports/task-0082.1-verifier.md`.
 
-- add `@opennextjs/cloudflare` to `apps/web-console-next/package.json`,
-- update the `build` script to emit `.open-next/assets/**`,
-- surface those assets in the Turborepo cache (per-package
-  `apps/web-console-next/turbo.json` override preferred over widening
-  root `turbo.json`),
-- preserve the verifier's root-layout `force-dynamic` fix,
-- keep diff confined to `apps/web-console-next/**`, root `turbo.json`
-  (only if strictly necessary), `pnpm-lock.yaml`, and
-  `ai/reports/task-0082.1-implementer.md`.
+`apps/web-console-next` is now a real `cloudflare-pages-turbo` component on
+main with Next.js 15 + App Router and `@opennextjs/cloudflare@1.0.4`
+emitting Pages-compatible assets at `.open-next/assets/**`. Repo health is
+**green**.
 
-No new branch, no new PR. PR #125 stays OPEN; merge will follow a Task
-0082.1 Verifier pass once all three `web-console-next ·
-{dev,stage,prod} · Verify deploy` jobs go SUCCESS.
-
-`repo_health` is `yellow` until PR #125 is merged.
+Next agent in the cycle is the **orchestrator** to scope **Task 0083**:
+cutover from `apps/web-console` (vanilla Vite) to `apps/web-console-next`
+(Next.js). That covers Pages project repoint / custom domain switch on
+stage and prod, with rollback via the preserved vanilla
+`apps/web-console` Pages projects. Wait for the post-merge main CI run
+(`26626890618`) to complete and confirm the deploy profile auto-created
+per-env Pages projects `sourceplane-web-console-next-{dev,stage,prod}`
+before scoping 0083.
 
 ## Needed To Continue
 
-Nothing blocking. Implementer may proceed.
+Nothing blocking. Orchestrator may proceed to scope Task 0083.
