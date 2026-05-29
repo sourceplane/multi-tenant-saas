@@ -6,10 +6,17 @@ No human input is currently requested.
 
 ## Ready To Proceed
 
-Task 0078 verified PASS and squash-merged via PR #121 (commit `9f83468`) on 2026-05-29. Local `main` is synced and clean. Verifier report at `ai/reports/task-0078-verifier.md`.
+Tasks 0079, 0080, and 0081 are verified and merged (PRs #122, #123, #124).
+The entitlement quota gates for projects, members, and environments are live on main.
 
-The next orchestrator cycle should scope Task 0079 around the first internal caller of the new `POST /v1/internal/billing/entitlements/check` seam — either projects-worker gating `limit.projects` before project creation, or policy-worker consulting the seam from policy decisions — and introduce caller-identity gating on the internal route at the same time. Provider adapter / Stripe SDK / webhook ingest / metering-worker / billing mutations remain out of scope.
+Task 0082 implementer PR #125 (`impl/task-0082-web-console-next`) is open
+and **PR CI is RED**. The next agent in the cycle is the **Task 0082
+Verifier** (`ai/tasks/task-0082-verifier.md`), who must either drive the
+`/demo` Next.js prerender failure to green with a scoped fix on the PR
+branch and merge, OR FAIL the PR with explicit blockers.
+
+`repo_health` is `yellow` until PR #125 is closed (merged or failed).
 
 ## Needed To Continue
 
-Nothing blocking. Orchestrator may select the next task off the roadmap.
+Nothing blocking. Verifier may proceed.

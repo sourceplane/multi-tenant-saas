@@ -83,8 +83,9 @@ V1 is not:
 
 The web console must open directly into the usable SaaS application. A user should be able to:
 
-- sign in
-- create an organization
+- sign in (passwordless email magic link, or OAuth provider)
+- land in a working scope on first login (a personal organization is auto-created; the user does not see a chooser screen as their first authenticated view)
+- create an additional organization
 - invite a member
 - accept an invitation
 - switch organizations
@@ -95,7 +96,21 @@ The web console must open directly into the usable SaaS application. A user shou
 - review usage and billing
 - configure webhooks and notification preferences
 
+The console is the buyer-facing artifact. It must look credible against the
+Vercel / Linear / Stripe Dashboard bar. Design invariants are specified in
+`specs/components/12-web-console.md` § Design Direction (URL-driven scope,
+Cmd-K, designed empty/skeleton/upgrade states, dark-mode-by-default,
+token-driven theming).
+
 The CLI and SDK must expose the same public contracts for automation.
+
+## Forward Direction
+
+`specs/roadmap.md` captures the active architect-style roadmap in three
+clusters: Baseline SaaS (B), UI / Design (U), and Product Areas (P). The
+per-component specs under `specs/components/*.md` remain the contract; the
+roadmap document is the sequencing and intent layer the Orchestrator reads
+when choosing the next task.
 
 ## Agent Execution Model
 
