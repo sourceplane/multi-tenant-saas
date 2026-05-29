@@ -92,9 +92,12 @@ export type ProjectsEntitlementGate =
 
 /**
  * Pure decision logic that interprets a billing entitlement response for
- * the `limit.projects` quantity gate. Exposed for unit-testing.
+ * a generic quantity-style limit gate. Used by both `decideProjectsLimit`
+ * (limit.projects) and `decideEnvironmentsLimit` (limit.environments)
+ * — the only differences between the two are the deny messages, which
+ * are passed in by the caller.
  *
- * Semantics (per Task 0079 / specs/components/11-billing.md):
+ * Semantics (per Task 0079 / Task 0081 / specs/components/11-billing.md):
  * - allowed:false  → deny (reason = billing's reason: disabled | not_configured)
  * - allowed:true + valueType !== "quantity" → deny (malformed_limit)
  * - allowed:true + valueType "quantity" + limitValue null → allow (unlimited)
@@ -104,9 +107,15 @@ export type ProjectsEntitlementGate =
  *
  * The function fails closed on any unexpected shape.
  */
-export function decideProjectsLimit(
+function decideQuantityGate(
   decision: CheckBillingEntitlementResponse,
   activeCount: number,
+  messages: {
+    disabled: string;
+    notConfigured: string;
+    malformed: string;
+    limitReached: string;
+  },
 ): ProjectsEntitlementGate {
   if (!decision.allowed) {
     return {
@@ -114,15 +123,15 @@ export function decideProjectsLimit(
       reason: decision.reason,
       message:
         decision.reason === "disabled"
-          ? "Project creation is disabled by your current plan"
-          : "Project creation is not available for this organization",
+          ? messages.disabled
+          : messages.notConfigured,
     };
   }
   if (decision.valueType !== "quantity") {
     return {
       kind: "deny",
       reason: "malformed_limit",
-      message: "Project creation is not permitted by your current plan",
+      message: messages.malformed,
     };
   }
   if (decision.limitValue === null) {
@@ -136,7 +145,7 @@ export function decideProjectsLimit(
     return {
       kind: "deny",
       reason: "malformed_limit",
-      message: "Project creation is not permitted by your current plan",
+      message: messages.malformed,
     };
   }
   if (!Number.isFinite(activeCount) || activeCount < 0) {
@@ -148,6 +157,41 @@ export function decideProjectsLimit(
   return {
     kind: "deny",
     reason: "limit_reached",
-    message: "Your plan's project limit has been reached",
+    message: messages.limitReached,
   };
+}
+
+/**
+ * Pure decision logic for the `limit.projects` quantity gate.
+ * See `decideQuantityGate` for the full semantics.
+ */
+export function decideProjectsLimit(
+  decision: CheckBillingEntitlementResponse,
+  activeCount: number,
+): ProjectsEntitlementGate {
+  return decideQuantityGate(decision, activeCount, {
+    disabled: "Project creation is disabled by your current plan",
+    notConfigured: "Project creation is not available for this organization",
+    malformed: "Project creation is not permitted by your current plan",
+    limitReached: "Your plan's project limit has been reached",
+  });
+}
+
+/**
+ * Pure decision logic for the `limit.environments` quantity gate
+ * (Task 0081). Same shape as `decideProjectsLimit`; only deny messages
+ * differ. The active count is interpreted by the caller as
+ * environments-under-parent-project — environment APIs are explicitly
+ * `orgId + projectId` scoped.
+ */
+export function decideEnvironmentsLimit(
+  decision: CheckBillingEntitlementResponse,
+  activeCount: number,
+): ProjectsEntitlementGate {
+  return decideQuantityGate(decision, activeCount, {
+    disabled: "Environment creation is disabled by your current plan",
+    notConfigured: "Environment creation is not available for this organization",
+    malformed: "Environment creation is not permitted by your current plan",
+    limitReached: "Your plan's environment limit has been reached",
+  });
 }

@@ -206,6 +206,35 @@ export function createProjectsRepository(executor: SqlExecutor): ProjectsReposit
       }
     },
 
+    async countActiveEnvironments(orgId: string, projectId: string): Promise<ProjectsResult<number>> {
+      try {
+        const result = await executor.execute<Record<string, unknown>>(
+          `SELECT COUNT(*)::bigint AS count FROM projects.environments
+           WHERE org_id = $1 AND project_id = $2 AND status = 'active'`,
+          [orgId, projectId],
+        );
+        const row = result.rows[0];
+        const raw = row ? (row.count as string | number | bigint | null) : 0;
+        // pg may return bigint as string; coerce to a JS number defensively.
+        // Realistic environment counts per project fit comfortably below
+        // Number.MAX_SAFE_INTEGER.
+        const count =
+          typeof raw === "number"
+            ? raw
+            : typeof raw === "bigint"
+              ? Number(raw)
+              : raw == null
+                ? 0
+                : Number(raw);
+        if (!Number.isFinite(count) || count < 0) {
+          return safeError("Failed to count active environments");
+        }
+        return { ok: true, value: count };
+      } catch {
+        return safeError("Failed to count active environments");
+      }
+    },
+
     async getEnvironmentById(orgId: string, projectId: string, environmentId: string): Promise<ProjectsResult<Environment>> {
       try {
         const result = await executor.execute<Record<string, unknown>>(

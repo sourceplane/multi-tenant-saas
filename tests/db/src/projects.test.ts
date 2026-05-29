@@ -257,6 +257,90 @@ describe("ProjectsRepository", () => {
     });
   });
 
+  describe("countActiveEnvironments", () => {
+    it("uses parameterized COUNT scoped by org_id, project_id, and active status", async () => {
+      const { executor, queries } = createFakeExecutor({ rows: [{ count: 3 }] });
+      const repo = createProjectsRepository(executor);
+
+      await repo.countActiveEnvironments("org-001", "prj-001");
+
+      expect(queries).toHaveLength(1);
+      expect(queries[0]!.text).toContain("COUNT(*)");
+      expect(queries[0]!.text).toContain("projects.environments");
+      expect(queries[0]!.text).toContain("org_id = $1");
+      expect(queries[0]!.text).toContain("project_id = $2");
+      expect(queries[0]!.text).toContain("status = 'active'");
+      expect(queries[0]!.params).toEqual(["org-001", "prj-001"]);
+    });
+
+    it("returns numeric count when pg returns a number", async () => {
+      const { executor } = createFakeExecutor({ rows: [{ count: 7 }] });
+      const repo = createProjectsRepository(executor);
+
+      const result = await repo.countActiveEnvironments("org-001", "prj-001");
+
+      expect(result.ok).toBe(true);
+      if (result.ok) expect(result.value).toBe(7);
+    });
+
+    it("coerces bigint count returned by pg", async () => {
+      const { executor } = createFakeExecutor({ rows: [{ count: BigInt(42) }] });
+      const repo = createProjectsRepository(executor);
+
+      const result = await repo.countActiveEnvironments("org-001", "prj-001");
+
+      expect(result.ok).toBe(true);
+      if (result.ok) expect(result.value).toBe(42);
+    });
+
+    it("coerces string count returned by pg (bigint-as-string)", async () => {
+      const { executor } = createFakeExecutor({ rows: [{ count: "12" }] });
+      const repo = createProjectsRepository(executor);
+
+      const result = await repo.countActiveEnvironments("org-001", "prj-001");
+
+      expect(result.ok).toBe(true);
+      if (result.ok) expect(result.value).toBe(12);
+    });
+
+    it("returns 0 when no rows", async () => {
+      const { executor } = createFakeExecutor({ rows: [] });
+      const repo = createProjectsRepository(executor);
+
+      const result = await repo.countActiveEnvironments("org-001", "prj-001");
+
+      expect(result.ok).toBe(true);
+      if (result.ok) expect(result.value).toBe(0);
+    });
+
+    it("returns safe internal error on executor failure", async () => {
+      const { executor } = createFakeExecutor({
+        error: new Error("connection to 10.0.0.1:5432 refused"),
+      });
+      const repo = createProjectsRepository(executor);
+
+      const result = await repo.countActiveEnvironments("org-001", "prj-001");
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.kind).toBe("internal");
+        expect(
+          (result.error as { kind: "internal"; message: string }).message,
+        ).not.toContain("10.0.0.1");
+      }
+    });
+
+    it("returns safe internal error when count parses to NaN", async () => {
+      const { executor } = createFakeExecutor({ rows: [{ count: "not-a-number" }] });
+      const repo = createProjectsRepository(executor);
+
+      const result = await repo.countActiveEnvironments("org-001", "prj-001");
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.kind).toBe("internal");
+    });
+  });
+
   describe("getProjectById", () => {
     it("includes org_id and project_id in query params", async () => {
       const { executor, queries } = createFakeExecutor({ rows: [SAMPLE_PROJECT_ROW] });
