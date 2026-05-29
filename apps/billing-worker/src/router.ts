@@ -11,6 +11,28 @@ import { generateRequestId, parseOrgPublicId } from "./ids.js";
 
 const REQUEST_ID_RE = /^[\w-]{1,128}$/;
 
+/**
+ * Allow-list of internal bounded-context callers permitted to invoke
+ * service-binding-only billing routes. This is a non-secret provenance
+ * contract, not an authentication credential: only Workers explicitly
+ * bound to billing-worker over a Cloudflare service binding can present
+ * this header, so it cannot be forged from outside the trust boundary.
+ *
+ * Add a new caller here when a new bounded context gains a service binding
+ * to billing-worker. Avoid wildcards.
+ */
+const INTERNAL_CALLER_HEADER = "x-internal-caller";
+const INTERNAL_CALLER_RE = /^[a-z][a-z0-9-]{0,63}$/;
+const ALLOWED_INTERNAL_CALLERS: ReadonlySet<string> = new Set([
+  "projects-worker",
+]);
+
+function isAllowedInternalCaller(value: string | null): value is string {
+  if (!value) return false;
+  if (!INTERNAL_CALLER_RE.test(value)) return false;
+  return ALLOWED_INTERNAL_CALLERS.has(value);
+}
+
 export interface ActorContext {
   subjectId: string;
   subjectType: string;
@@ -75,7 +97,20 @@ export async function route(request: Request, env: Env): Promise<Response> {
     // These do NOT require an x-actor-* identity because the caller is another
     // bounded-context Worker over a service binding, not an end user. Public
     // exposure is prevented by the api-edge billing facade routing allow-list.
+    //
+    // They DO require an explicit internal-caller identity (allow-list) so
+    // the route fails closed if a misconfigured or unknown service binding
+    // ever reaches it, before any repository access.
     if (url.pathname === "/v1/internal/billing/entitlements/check") {
+      const caller = request.headers.get(INTERNAL_CALLER_HEADER);
+      if (!isAllowedInternalCaller(caller)) {
+        return errorResponse(
+          "unauthorized",
+          "Unauthorized",
+          403,
+          requestId,
+        );
+      }
       return handleCheckEntitlement(request, env, requestId);
     }
 

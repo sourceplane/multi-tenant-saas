@@ -8,8 +8,14 @@ import { createEventsRepository } from "@saas/db/events";
 import { createSqlExecutor } from "@saas/db/hyperdrive";
 import { fetchAuthorizationContext } from "../membership-client.js";
 import { authorizeViaPolicy } from "../policy-client.js";
+import {
+  checkBillingEntitlement,
+  decideProjectsLimit,
+} from "../billing-client.js";
 import { successResponse, errorResponse, validationError } from "../http.js";
 import { orgPublicId, projectPublicId } from "../ids.js";
+
+const PROJECTS_LIMIT_ENTITLEMENT_KEY = "limit.projects";
 
 const NAME_MIN = 1;
 const NAME_MAX = 100;
@@ -74,6 +80,11 @@ function toPublicProject(project: { id: string; orgId: string; name: string; slu
 export interface HandleCreateProjectDeps {
   projectsRepo?: ProjectsRepository;
   eventsRepo?: EventsRepository;
+  /**
+   * Injectable billing entitlement check for tests. Defaults to a
+   * real call against env.BILLING_WORKER.
+   */
+  checkEntitlement?: typeof checkBillingEntitlement;
 }
 
 export async function handleCreateProject(
@@ -91,6 +102,9 @@ export async function handleCreateProject(
     return errorResponse("internal_error", "Service unavailable", 503, requestId);
   }
   if (!env.POLICY_WORKER) {
+    return errorResponse("internal_error", "Service unavailable", 503, requestId);
+  }
+  if (!env.BILLING_WORKER) {
     return errorResponse("internal_error", "Service unavailable", 503, requestId);
   }
 
@@ -130,7 +144,86 @@ export async function handleCreateProject(
     return errorResponse("not_found", "Not found", 404, requestId);
   }
 
-  const executor = deps?.projectsRepo && deps?.eventsRepo ? null : createSqlExecutor(env.SOURCEPLANE_DB);
+  // ── Billing entitlement gate (Task 0079) ──────────────────────
+  // Project creation is gated on `limit.projects` after auth/membership/
+  // policy allow and before any project / event / audit row is written.
+  // Fails closed on any service/misconfiguration error.
+  const entitlementCall = (deps?.checkEntitlement ?? checkBillingEntitlement)(
+    env.BILLING_WORKER,
+    orgPublicId(orgId),
+    PROJECTS_LIMIT_ENTITLEMENT_KEY,
+    requestId,
+  );
+  const entitlementResult = await entitlementCall;
+  if (entitlementResult.kind === "service_error") {
+    return errorResponse(
+      "internal_error",
+      "Service unavailable",
+      503,
+      requestId,
+    );
+  }
+
+  // For quantity limits we need the current active project count. Use the
+  // injected repo when present (tests); otherwise build a transient
+  // non-transactional repo against the same executor we'll use for the
+  // write transaction below.
+  const preTxExecutor =
+    deps?.projectsRepo && deps?.eventsRepo
+      ? null
+      : createSqlExecutor(env.SOURCEPLANE_DB);
+  let countRepo: Pick<ProjectsRepository, "countActiveProjects">;
+  if (deps?.projectsRepo) {
+    countRepo = deps.projectsRepo;
+  } else {
+    countRepo = createProjectsRepository(preTxExecutor!);
+  }
+
+  let activeCount: number;
+  try {
+    const countResult = await countRepo.countActiveProjects(orgId);
+    if (!countResult.ok) {
+      if (preTxExecutor) await preTxExecutor.dispose();
+      return errorResponse(
+        "internal_error",
+        "Service unavailable",
+        503,
+        requestId,
+      );
+    }
+    activeCount = countResult.value;
+  } catch {
+    if (preTxExecutor) await preTxExecutor.dispose();
+    return errorResponse(
+      "internal_error",
+      "Service unavailable",
+      503,
+      requestId,
+    );
+  }
+
+  const gate = decideProjectsLimit(entitlementResult.decision, activeCount);
+  if (gate.kind === "service_error") {
+    if (preTxExecutor) await preTxExecutor.dispose();
+    return errorResponse(
+      "internal_error",
+      "Service unavailable",
+      503,
+      requestId,
+    );
+  }
+  if (gate.kind === "deny") {
+    if (preTxExecutor) await preTxExecutor.dispose();
+    return errorResponse(
+      "precondition_failed",
+      gate.message,
+      412,
+      requestId,
+      { reason: gate.reason },
+    );
+  }
+
+  const executor = preTxExecutor;
   try {
     const projectId = crypto.randomUUID();
     const eventId = crypto.randomUUID();

@@ -291,7 +291,10 @@ describe("router", () => {
     const env = createFakeEnv();
     const req = new Request(
       "https://billing-worker/v1/internal/billing/entitlements/check",
-      { method: "GET" },
+      {
+        method: "GET",
+        headers: { "x-internal-caller": "projects-worker" },
+      },
     );
     const res = await route(req, env);
     expect(res.status).toBe(405);
@@ -305,7 +308,10 @@ describe("router", () => {
       "https://billing-worker/v1/internal/billing/entitlements/check",
       {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          "x-internal-caller": "projects-worker",
+        },
         body: JSON.stringify({
           orgId: TEST_ORG_PUBLIC,
           entitlementKey: "feature.custom_domains",
@@ -324,7 +330,10 @@ describe("router", () => {
       "https://billing-worker/v1/internal/billing/entitlements/check",
       {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          "x-internal-caller": "projects-worker",
+        },
         body: "{not json",
       },
     );
@@ -338,12 +347,86 @@ describe("router", () => {
       "https://billing-worker/v1/internal/billing/entitlements/check",
       {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          "x-internal-caller": "projects-worker",
+        },
         body: JSON.stringify({ orgId: "not_org", entitlementKey: "Bad.KEY" }),
       },
     );
     const res = await route(req, env);
     expect(res.status).toBe(400);
+  });
+
+  // ── Internal caller allow-list (Task 0079) ──
+  it("internal entitlement-check route rejects missing x-internal-caller with 403", async () => {
+    const env = createFakeEnv();
+    const req = new Request(
+      "https://billing-worker/v1/internal/billing/entitlements/check",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          orgId: TEST_ORG_PUBLIC,
+          entitlementKey: "limit.projects",
+        }),
+      },
+    );
+    const res = await route(req, env);
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as { error: { code: string } };
+    expect(body.error.code).toBe("unauthorized");
+  });
+
+  it("internal entitlement-check route rejects unknown caller with 403", async () => {
+    const env = createFakeEnv();
+    const req = new Request(
+      "https://billing-worker/v1/internal/billing/entitlements/check",
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-internal-caller": "rogue-worker",
+        },
+        body: JSON.stringify({
+          orgId: TEST_ORG_PUBLIC,
+          entitlementKey: "limit.projects",
+        }),
+      },
+    );
+    const res = await route(req, env);
+    expect(res.status).toBe(403);
+  });
+
+  it("internal entitlement-check route rejects malformed caller header with 403", async () => {
+    const env = createFakeEnv();
+    const req = new Request(
+      "https://billing-worker/v1/internal/billing/entitlements/check",
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-internal-caller": "Projects-Worker!",
+        },
+        body: JSON.stringify({
+          orgId: TEST_ORG_PUBLIC,
+          entitlementKey: "limit.projects",
+        }),
+      },
+    );
+    const res = await route(req, env);
+    expect(res.status).toBe(403);
+  });
+
+  it("internal caller allow-list runs BEFORE method/body validation", async () => {
+    // Without caller header, a GET should still get 403 (gate first) not 405.
+    const env = createFakeEnv();
+    const req = new Request(
+      "https://billing-worker/v1/internal/billing/entitlements/check",
+      { method: "GET" },
+    );
+    const res = await route(req, env);
+    expect(res.status).toBe(403);
   });
 });
 
