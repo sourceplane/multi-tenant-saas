@@ -5,7 +5,7 @@ import { createIdentityRepository } from "@saas/db/identity";
 import { createAuthService } from "../services/auth.js";
 import { successResponse, errorResponse, validationError } from "../http.js";
 import { extractRequestContext } from "../request-context.js";
-import { enqueueNotification } from "../notifications-client.js";
+import { enqueueNotification } from "@saas/notifications-client";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 

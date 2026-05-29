@@ -1,6 +1,6 @@
 {
   "goal": "Supabase/Postgres-backed multi-organization Orun SaaS control plane",
-  "current_task": null,
+  "current_task": "0089",
   "completed": [
     "0001", "0001.1", "0002", "0003", "0003.1", "0004", "0005",
     "0006", "0006.1", "0007", "0007.1", "0008", "0009", "0009.1",
@@ -16,18 +16,19 @@
     "0079", "0080", "0081", "0082", "0082.1", "0083", "0083.1", "0084",
     "0085a", "0086", "0087", "0088"
   ],
-  "deferred": ["0085b", "notifications-provider-swap"],
+  "deferred": ["0085b", "notifications-provider-swap", "notifications-worker-dev-binding"],
   "repo_health": "green",
-  "next_focus": "Pick from: (a) provision notifications-worker-dev + dev binding (closes dev-wire gap for both identity-worker AND membership-worker); (b) accept-invitation → invitation.accepted wire (third caller earns shared @saas/notifications-client extraction); (c) lift notifications-provider-swap defer (Resend/Postmark/SES); (d) revive 0085b cloudflare-domain v4→v5 when user lifts defer.",
+  "next_focus": "Task 0089: extract @saas/notifications-client shared package + wire accept-invitation -> notifications-worker invitation.accepted (third-caller trigger).",
   "last_verified": "2026-05-29T19:59:13Z",
   "waiting_for_input": "false",
-  "task_agent": null,
+  "task_agent": "/ai/tasks/task-0089.md",
   "notes": [
-    "Orchestrator policy updated: human-input-blocked candidates are now DEFERRED to /ai/deferred.md, not paused. waiting_for_input only flips to true if EVERY candidate is blocked. See agents/orchestrator.md → Deferred Decision Protocol.",
-    "Deferred candidates parked (orchestrator skips, keeps loop running): (a) real notifications provider swap — needs user decision between Resend/Postmark/SES; (b) Task 0085b cloudflare-domain v4→v5 re-import — explicit user defer, narrow Terraform-tracking risk window still open on the two live custom-domain attachments (stage 052eaece5e989d5a7280b6c206e562c42950e3a6 / prod 31e5f2ed1b1e4a5700e8ae0678846a0d753840e1).",
-    "Task 0086 (notifications-worker V1) VERIFIED + MERGED. PR #134 squashed to main at 2bb088f. Post-merge main-CI run 26653759859 = 13/13 SUCCESS. Notifications-worker deployed on stage/prod with NOTIFICATIONS_PROVIDER=local-debug, internal-only, EVENTS_WORKER binding active.",
-    "Task 0087 (identity-worker → notifications-worker magic-link wire) VERIFIED + MERGED. PR #135 squashed to main at 5192ffd. Post-merge main-CI run 26657375953 = 5/5 SUCCESS. identity-worker-stage @ 5b84bcce / identity-worker-prod @ 5ca2ff26 redeployed with NOTIFICATIONS_WORKER service binding. Best-effort contract held — notifications failure cannot 5xx login.",
-    "Task 0088 (membership-worker → notifications-worker invitation.created wire) VERIFIED + MERGED. PR #136 squashed to main at d9968ad (2026-05-29T19:59:13Z). Post-merge main-CI run 26659213313 = 5/5 SUCCESS. membership-worker-stage @ ad86086a-4d93-434a-991c-c0531f2d1784, membership-worker-prod @ ed626b76-6d3b-4126-81a6-3df608b15ef5 redeployed with NOTIFICATIONS_WORKER service binding (stage+prod only; dev block bindings-less because notifications-worker-dev doesn't exist). Enqueue placed strictly outside executor.transaction() commit; DEBUG_DELIVERY=true short-circuit preserves existing local_debug response body; no raw token in templateData. Apex stage/prod 200, notifications-worker private 1042 invariants intact. notifications-client.ts now duplicated in identity-worker AND membership-worker — extract to @saas/notifications-client when third caller appears. Verifier report: ai/reports/task-0088-verifier.md.",
-    "Recommended next-focus candidates: (a) provision notifications-worker-dev + dev binding (closes dev-wire gap for BOTH identity-worker and membership-worker in one change); (b) accept-invitation → invitation.accepted wire (second invitation-category template, third overall caller — earns shared @saas/notifications-client package extraction); (c) lift notifications-provider-swap defer (Resend/Postmark/SES); (d) revive 0085b cloudflare-domain v4→v5 when user lifts defer."
+    "Orchestrator policy: human-input-blocked candidates DEFERRED to /ai/deferred.md, loop continues. waiting_for_input only flips true if every candidate is blocked.",
+    "Deferred (orchestrator skips): (a) notifications-provider-swap — needs Resend/Postmark/SES choice; (b) Task 0085b cloudflare-domain v4->v5 — explicit user defer (do not touch infra/terraform/cloudflare-domain/** or cloudflare ~> 4.52 pin); (c) notifications-worker-dev provisioning — narrow follow-up, parked behind Task 0089.",
+    "Task 0086 (notifications-worker V1) VERIFIED + MERGED (PR #134, 2bb088f).",
+    "Task 0087 (identity-worker -> notifications magic-link) VERIFIED + MERGED (PR #135, 5192ffd).",
+    "Task 0088 (membership-worker create-invitation -> notifications invitation.created) VERIFIED + MERGED (PR #136, d9968ad). notifications-client.ts duplicated in identity-worker AND membership-worker; extraction explicitly deferred to 'third caller'.",
+    "Task 0089 SCOPED (this tick): one PR extracts @saas/notifications-client shared workspace package AND wires accept-invitation as the third caller (invitation.accepted enqueue, post-transaction, best-effort). Branch: impl/task-0089-shared-notifications-client. Three current consumers consolidated in one move. Hard non-goals: no provider swap, no notifications-worker code edits, no dev-binding work, no cloudflare-domain edits, no provider-pin bump.",
+    "Recommended after 0089: (a) notifications-worker-dev provisioning + dev binding (closes dev-wire gap for identity AND both membership handlers); (b) lift notifications-provider-swap defer when user names a provider; (c) revive 0085b when user lifts defer."
   ]
 }

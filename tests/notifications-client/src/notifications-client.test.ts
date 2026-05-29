@@ -1,5 +1,15 @@
 /// <reference types="@cloudflare/workers-types" />
-import { enqueueNotification, type NotificationsEnvBinding } from "../../../apps/membership-worker/src/notifications-client";
+/**
+ * Canonical test suite for `@saas/notifications-client`. This used to live
+ * twice — once under `tests/identity-worker/` and once under
+ * `tests/membership-worker/` — when each worker carried its own copy of
+ * the client. With the Task 0089 extraction it's a single package, so the
+ * suite lives once, here, and is executed under `@saas/notifications-client-tests`.
+ */
+import {
+  enqueueNotification,
+  type NotificationsEnvBinding,
+} from "@saas/notifications-client";
 
 type FetchHandler = (url: string, init?: RequestInit) => Promise<Response>;
 
@@ -13,30 +23,29 @@ function makeEnv(handler?: FetchHandler): NotificationsEnvBinding {
 }
 
 const baseCtx = {
-  internalActor: "membership-worker",
-  actorSubjectType: "user",
-  actorSubjectId: "usr_admin",
+  internalActor: "identity-worker",
+  actorSubjectType: "system",
+  actorSubjectId: "identity-worker",
   requestId: "req_test_123",
 };
 
 const baseRequest = {
-  orgId: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
-  category: "invitation" as const,
-  templateKey: "invitation.created",
+  orgId: "00000000-0000-0000-0000-000000000000",
+  category: "security" as const,
+  templateKey: "auth.magic_link",
   templateData: {
-    role: "builder",
-    invitationId: "inv_deadbeefdeadbeefdeadbeefdeadbeef",
-    expiresAt: "2026-01-22T10:00:00.000Z",
-    invitedBy: "usr_admin",
-    orgId: "org_aaaaaaaabbbbccccddddeeeeeeeeeeee",
+    code: "123456",
+    emailHint: "t***@example.com",
+    expiresAt: "2026-05-30T10:00:00.000Z",
+    requestId: "req_test_123",
   },
   recipient: {
     channel: "email" as const,
-    address: "invite@example.com",
+    address: "test@example.com",
   },
 };
 
-describe("membership-worker notifications-client.enqueueNotification", () => {
+describe("@saas/notifications-client enqueueNotification", () => {
   it("returns no_binding when NOTIFICATIONS_WORKER is missing", async () => {
     const result = await enqueueNotification(makeEnv(), baseCtx, baseRequest);
     expect(result).toEqual({ ok: false, reason: "no_binding" });
@@ -54,13 +63,13 @@ describe("membership-worker notifications-client.enqueueNotification", () => {
             notification: {
               id: "ntf_abc123",
               orgId: baseRequest.orgId,
-              category: "invitation",
-              templateKey: "invitation.created",
+              category: "security",
+              templateKey: "auth.magic_link",
               status: "sent",
               recipient: { channel: "email", address: baseRequest.recipient.address },
               providerMessageId: "local-debug-xyz",
-              queuedAt: "2026-01-15T10:00:00.000Z",
-              sentAt: "2026-01-15T10:00:00.000Z",
+              queuedAt: "2026-05-30T10:00:00.000Z",
+              sentAt: "2026-05-30T10:00:00.000Z",
               failedAt: null,
               lastError: null,
               attempts: [],
@@ -78,16 +87,48 @@ describe("membership-worker notifications-client.enqueueNotification", () => {
     expect(capturedUrl).toBe("https://notifications.internal/v1/notifications");
     expect(capturedInit?.method).toBe("POST");
     const headers = capturedInit?.headers as Record<string, string>;
-    expect(headers["x-internal-actor"]).toBe("membership-worker");
-    expect(headers["x-actor-subject-type"]).toBe("user");
-    expect(headers["x-actor-subject-id"]).toBe("usr_admin");
+    expect(headers["x-internal-actor"]).toBe("identity-worker");
+    expect(headers["x-actor-subject-type"]).toBe("system");
+    expect(headers["x-actor-subject-id"]).toBe("identity-worker");
     expect(headers["x-request-id"]).toBe(baseCtx.requestId);
     expect(headers["content-type"]).toBe("application/json");
     const body = JSON.parse(capturedInit?.body as string);
-    expect(body.category).toBe("invitation");
-    expect(body.templateKey).toBe("invitation.created");
+    expect(body.category).toBe("security");
+    expect(body.templateKey).toBe("auth.magic_link");
     expect(body.recipient.channel).toBe("email");
     expect(body.recipient.address).toBe(baseRequest.recipient.address);
+  });
+
+  it("forwards membership-worker caller identity headers correctly", async () => {
+    let capturedInit: RequestInit | undefined;
+    const handler: FetchHandler = async (_url, init) => {
+      capturedInit = init;
+      return new Response(
+        JSON.stringify({ data: { notification: { id: "ntf_xyz" } } }),
+        { status: 201, headers: { "content-type": "application/json" } },
+      );
+    };
+
+    const ctx = {
+      internalActor: "membership-worker",
+      actorSubjectType: "user",
+      actorSubjectId: "usr_admin",
+      requestId: "req_mem_1",
+    };
+    const req = {
+      orgId: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+      category: "invitation" as const,
+      templateKey: "invitation.created",
+      templateData: { role: "builder" },
+      recipient: { channel: "email" as const, address: "i@example.com" },
+    };
+
+    const result = await enqueueNotification(makeEnv(handler), ctx, req);
+    expect(result).toEqual({ ok: true, notificationId: "ntf_xyz" });
+    const headers = capturedInit?.headers as Record<string, string>;
+    expect(headers["x-internal-actor"]).toBe("membership-worker");
+    expect(headers["x-actor-subject-type"]).toBe("user");
+    expect(headers["x-actor-subject-id"]).toBe("usr_admin");
   });
 
   it("returns non_2xx when the worker responds with a 4xx/5xx", async () => {

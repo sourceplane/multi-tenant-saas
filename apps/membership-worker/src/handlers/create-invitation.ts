@@ -13,7 +13,7 @@ import {
 } from "../billing-client.js";
 import { successResponse, errorResponse, validationError } from "../http.js";
 import { parseOrgPublicId, orgPublicId, invitationPublicId, generateInvitationToken } from "../ids.js";
-import { enqueueNotification, type EnqueueNotificationResult } from "../notifications-client.js";
+import { enqueueNotification, type EnqueueNotificationResult } from "@saas/notifications-client";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const INVITATION_EXPIRY_DAYS = 7;

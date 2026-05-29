@@ -5,7 +5,11 @@ import { createSqlExecutor } from "@saas/db/hyperdrive";
 import { createMembershipRepository } from "@saas/db/membership";
 import { createEventsRepository } from "@saas/db/events";
 import { successResponse, errorResponse, validationError } from "../http.js";
-import { parseOrgPublicId, invitationPublicId, memberPublicId, hashToken } from "../ids.js";
+import { parseOrgPublicId, orgPublicId, invitationPublicId, memberPublicId, hashToken } from "../ids.js";
+import {
+  enqueueNotification,
+  type EnqueueNotificationResult,
+} from "@saas/notifications-client";
 
 export interface AcceptActorContext {
   subjectId: string;
@@ -21,6 +25,23 @@ export interface AcceptInvitationDeps {
   hashToken?: (raw: string) => Promise<string>;
   now?: () => Date;
   generateId?: () => string;
+  /**
+   * Injectable notifications enqueue for tests. When omitted on the deps
+   * (non-transactional) path, NO enqueue is attempted (mirrors the
+   * create-invitation pattern). The real transactional path always calls
+   * the real `enqueueNotification` against `env.NOTIFICATIONS_WORKER`
+   * (best-effort; absent binding is a no-op).
+   */
+  enqueueNotification?: (
+    env: { NOTIFICATIONS_WORKER?: Fetcher },
+    ctx: {
+      internalActor: string;
+      actorSubjectType: string;
+      actorSubjectId: string;
+      requestId: string;
+    },
+    request: Parameters<typeof enqueueNotification>[2],
+  ) => Promise<EnqueueNotificationResult>;
 }
 
 function randomHex(bytes: number): string {
@@ -163,6 +184,45 @@ export async function handleAcceptInvitation(
         revokedAt: inv.revokedAt ? inv.revokedAt.toISOString() : null,
       };
 
+      // Best-effort: enqueue an `invitation.accepted` notification AFTER
+      // the transaction has committed successfully. A rolled-back
+      // acceptance must never produce a user-facing notification, so the
+      // enqueue lives strictly outside the `executor.transaction(...)`
+      // callback. The client never throws and handles all failure modes
+      // internally; the 200 response below is identical whether the
+      // enqueue succeeded or not.
+      //
+      // No raw token leaves the worker boundary in `templateData`. Only
+      // redaction-safe, code-controlled fields are forwarded; the raw
+      // token only ever appears on the inbound request and is hashed
+      // before any persistence.
+      const enqueueFn = deps?.enqueueNotification ?? enqueueNotification;
+      await enqueueFn(
+        env,
+        {
+          internalActor: "membership-worker",
+          actorSubjectType: actor.subjectType,
+          actorSubjectId: actor.subjectId,
+          requestId,
+        },
+        {
+          orgId: orgUuid,
+          category: "invitation",
+          templateKey: "invitation.accepted",
+          templateData: {
+            invitationId: invitationPublicId(inv.id),
+            role: inv.role,
+            memberId: memberPublicId(member.id),
+            orgId: orgPublicId(orgUuid),
+          },
+          recipient: {
+            channel: "email",
+            address: actor.email.toLowerCase(),
+          },
+          correlationId: requestId,
+        },
+      );
+
       return successResponse(
         {
           invitation: publicInv,
@@ -248,6 +308,38 @@ export async function handleAcceptInvitation(
       acceptedAt: inv.acceptedAt ? inv.acceptedAt.toISOString() : null,
       revokedAt: inv.revokedAt ? inv.revokedAt.toISOString() : null,
     };
+
+    // Deps (non-transactional) path: only enqueue when the caller has
+    // explicitly injected a notifications client. The default deps path
+    // (older unit tests that predate notifications) MUST NOT attempt an
+    // enqueue. Mirrors the create-invitation pattern.
+    if (deps?.enqueueNotification) {
+      await deps.enqueueNotification(
+        env,
+        {
+          internalActor: "membership-worker",
+          actorSubjectType: actor.subjectType,
+          actorSubjectId: actor.subjectId,
+          requestId,
+        },
+        {
+          orgId: orgUuid,
+          category: "invitation",
+          templateKey: "invitation.accepted",
+          templateData: {
+            invitationId: invitationPublicId(inv.id),
+            role: inv.role,
+            memberId: memberPublicId(member.id),
+            orgId: orgPublicId(orgUuid),
+          },
+          recipient: {
+            channel: "email",
+            address: actor.email.toLowerCase(),
+          },
+          correlationId: requestId,
+        },
+      );
+    }
 
     return successResponse(
       {
