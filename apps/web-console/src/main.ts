@@ -111,6 +111,7 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
   { id: "projects", icon: "📁", label: "Projects", requiresAuth: true, requiresOrg: true },
   { id: "api-keys", icon: "🔑", label: "API Keys", requiresAuth: true, requiresOrg: true },
   { id: "config", icon: "⚙️", label: "Config", requiresAuth: true, requiresOrg: true },
+  { id: "billing", icon: "💳", label: "Billing", requiresAuth: true, requiresOrg: true },
   { id: "audit", icon: "📋", label: "Audit Log", requiresAuth: true, requiresOrg: true },
 ];
 
@@ -427,7 +428,7 @@ function renderWorkspaceView(): HTMLElement {
   const container = h("div", { class: "workspace" });
 
   const nav = h("nav", { class: "workspace-nav" });
-  const tabs = ["Members", "Invitations", "Projects", "API Keys", "Audit", "Config"];
+  const tabs = ["Members", "Invitations", "Projects", "API Keys", "Audit", "Config", "Billing"];
   const activeTab = getActiveTab();
 
   nav.appendChild(btn("\u2190 Orgs", () => {
@@ -481,6 +482,7 @@ function renderTab(tab: string): void {
     case "api-keys": renderApiKeysTab(content); break;
     case "audit": renderAuditTab(content); break;
     case "config": renderConfigTab(content); break;
+    case "billing": renderBillingTab(content); break;
   }
 }
 
@@ -2041,6 +2043,371 @@ function formatTimestamp(iso: string): string {
 
 function truncate(s: string, max: number): string {
   return s.length > max ? s.slice(0, max) + "\u2026" : s;
+}
+
+// --- Billing Tab (read-only) ---
+
+function formatMoney(cents: number, currency: string): string {
+  const amount = (cents / 100).toFixed(2);
+  const cur = (currency || "usd").toUpperCase();
+  return `${amount} ${cur}`;
+}
+
+function formatDate(iso: string | null): string {
+  if (!iso) return "—";
+  try {
+    return new Date(iso).toLocaleDateString();
+  } catch {
+    return iso;
+  }
+}
+
+function formatDateTime(iso: string | null): string {
+  if (!iso) return "—";
+  try {
+    return new Date(iso).toLocaleString();
+  } catch {
+    return iso;
+  }
+}
+
+function billingMetaRow(label: string, value: string | HTMLElement): HTMLElement {
+  const row = h("div", { class: "billing-meta-row" });
+  row.appendChild(h("span", { class: "billing-meta-label" }, label));
+  if (typeof value === "string") {
+    row.appendChild(h("span", { class: "billing-meta-value" }, value));
+  } else {
+    const wrap = h("span", { class: "billing-meta-value" });
+    wrap.appendChild(value);
+    row.appendChild(wrap);
+  }
+  return row;
+}
+
+async function renderBillingTab(container: HTMLElement): Promise<void> {
+  container.appendChild(actionBar("Billing"));
+  container.appendChild(h("p", { class: "page-subtitle" },
+    "Read-only view of plans, customer profile, current subscription, entitlements, and invoices for this organization. No changes can be made here."));
+
+  const summarySection = h("div", { id: "billing-summary", class: "mt" });
+  container.appendChild(summarySection);
+
+  const plansSection = h("div", { id: "billing-plans", class: "mt" });
+  container.appendChild(plansSection);
+
+  const customerSection = h("div", { id: "billing-customer", class: "mt" });
+  container.appendChild(customerSection);
+
+  const entitlementsSection = h("div", { id: "billing-entitlements", class: "mt" });
+  container.appendChild(entitlementsSection);
+
+  const invoicesSection = h("div", { id: "billing-invoices", class: "mt" });
+  container.appendChild(invoicesSection);
+
+  loadBillingSummary();
+  loadBillingPlans();
+  loadBillingCustomer();
+  loadBillingEntitlements();
+  loadBillingInvoices();
+}
+
+async function loadBillingSummary(): Promise<void> {
+  const section = document.getElementById("billing-summary");
+  if (!section) return;
+  clear(section);
+  section.appendChild(h("h3", {}, "Summary"));
+  section.appendChild(loadingIndicator("Loading summary..."));
+
+  const result = await state.client.getBillingSummary(state.orgId!);
+  clear(section);
+  section.appendChild(h("h3", {}, "Summary"));
+
+  if (!result.ok) {
+    showError(result, section);
+    return;
+  }
+
+  const { customer, activeSubscription, plan, entitlements } = result.data;
+
+  if (!customer && !activeSubscription && !plan) {
+    section.appendChild(emptyState("💳", "No billing activity yet",
+      "This organization has no billing customer, plan, or subscription on record."));
+    return;
+  }
+
+  const card = h("div", { class: "panel-alt billing-summary-card" });
+
+  const planLine = h("div", { class: "billing-summary-headline" });
+  if (plan) {
+    planLine.appendChild(h("span", { class: "billing-plan-name" }, plan.name));
+    planLine.appendChild(h("span", { class: "muted" }, ` (${plan.code})`));
+  } else {
+    planLine.appendChild(h("span", { class: "muted" }, "No active plan"));
+  }
+  card.appendChild(planLine);
+
+  if (activeSubscription) {
+    card.appendChild(billingMetaRow("Subscription status",
+      h("span", { class: `billing-status billing-status-${activeSubscription.status}` }, activeSubscription.status)));
+    if (activeSubscription.currentPeriodStart || activeSubscription.currentPeriodEnd) {
+      card.appendChild(billingMetaRow("Current period",
+        `${formatDate(activeSubscription.currentPeriodStart)} → ${formatDate(activeSubscription.currentPeriodEnd)}`));
+    }
+    if (activeSubscription.trialEnd) {
+      card.appendChild(billingMetaRow("Trial ends", formatDate(activeSubscription.trialEnd)));
+    }
+    if (activeSubscription.cancelAt) {
+      card.appendChild(billingMetaRow("Cancels at", formatDate(activeSubscription.cancelAt)));
+    }
+    if (activeSubscription.provider) {
+      card.appendChild(billingMetaRow("Provider", activeSubscription.provider));
+    }
+  } else {
+    card.appendChild(billingMetaRow("Subscription", "No active subscription"));
+  }
+
+  if (plan && plan.priceAmountCents !== null) {
+    const interval = plan.billingInterval === "none" ? "" : ` / ${plan.billingInterval}`;
+    card.appendChild(billingMetaRow("Plan price",
+      `${formatMoney(plan.priceAmountCents, plan.priceCurrency)}${interval}`));
+  }
+
+  if (customer) {
+    card.appendChild(billingMetaRow("Customer",
+      customer.displayName || customer.email || "—"));
+  }
+
+  section.appendChild(card);
+
+  const entCount = entitlements.length;
+  section.appendChild(h("p", { class: "muted billing-summary-foot" },
+    `${entCount} entitlement${entCount === 1 ? "" : "s"} active for the current subscription.`));
+}
+
+async function loadBillingPlans(): Promise<void> {
+  const section = document.getElementById("billing-plans");
+  if (!section) return;
+  clear(section);
+  section.appendChild(h("h3", {}, "Available Plans"));
+  section.appendChild(loadingIndicator("Loading plans..."));
+
+  const result = await state.client.listBillingPlans(state.orgId!);
+  clear(section);
+  section.appendChild(h("h3", {}, "Available Plans"));
+
+  if (!result.ok) {
+    showError(result, section);
+    return;
+  }
+
+  const plans = result.data.plans;
+  if (!plans.length) {
+    section.appendChild(emptyState("📦", "No plans configured",
+      "There are no billing plans published for this organization yet."));
+    return;
+  }
+
+  const grid = h("div", { class: "billing-plans-grid" });
+  for (const plan of plans) {
+    const card = h("div", { class: "panel-alt billing-plan-card" });
+    const header = h("div", { class: "billing-plan-header" });
+    header.appendChild(h("span", { class: "billing-plan-name" }, plan.name));
+    header.appendChild(h("span", { class: `billing-status billing-status-${plan.status}` }, plan.status));
+    card.appendChild(header);
+    card.appendChild(h("div", { class: "muted billing-plan-code" }, plan.code));
+    if (plan.description) {
+      card.appendChild(h("p", { class: "billing-plan-desc" }, plan.description));
+    }
+    if (plan.priceAmountCents !== null) {
+      const interval = plan.billingInterval === "none" ? "" : ` / ${plan.billingInterval}`;
+      card.appendChild(h("div", { class: "billing-plan-price" },
+        `${formatMoney(plan.priceAmountCents, plan.priceCurrency)}${interval}`));
+    } else {
+      card.appendChild(h("div", { class: "muted billing-plan-price" }, "Custom pricing"));
+    }
+    grid.appendChild(card);
+  }
+  section.appendChild(grid);
+}
+
+async function loadBillingCustomer(): Promise<void> {
+  const section = document.getElementById("billing-customer");
+  if (!section) return;
+  clear(section);
+  section.appendChild(h("h3", {}, "Billing Customer"));
+  section.appendChild(loadingIndicator("Loading customer..."));
+
+  const result = await state.client.getBillingCustomer(state.orgId!);
+  clear(section);
+  section.appendChild(h("h3", {}, "Billing Customer"));
+
+  if (!result.ok) {
+    // 404 is expected when no customer exists — render explicit empty state.
+    if (result.error.code === "not_found") {
+      section.appendChild(emptyState("👤", "No billing customer",
+        "This organization does not yet have a billing customer profile."));
+      return;
+    }
+    showError(result, section);
+    return;
+  }
+
+  const c = result.data.customer;
+  const card = h("div", { class: "panel-alt billing-customer-card" });
+  card.appendChild(billingMetaRow("Name", c.displayName || "—"));
+  card.appendChild(billingMetaRow("Email", c.email || "—"));
+  card.appendChild(billingMetaRow("Status",
+    h("span", { class: `billing-status billing-status-${c.status}` }, c.status)));
+  if (c.provider) {
+    card.appendChild(billingMetaRow("Provider", c.provider));
+  }
+  if (c.providerCustomerId) {
+    card.appendChild(billingMetaRow("Provider reference",
+      h("code", { class: "mono" }, truncate(c.providerCustomerId, 40))));
+  }
+  card.appendChild(billingMetaRow("Created", formatDateTime(c.createdAt)));
+  section.appendChild(card);
+}
+
+async function loadBillingEntitlements(): Promise<void> {
+  const section = document.getElementById("billing-entitlements");
+  if (!section) return;
+  clear(section);
+  section.appendChild(h("h3", {}, "Entitlements"));
+  section.appendChild(loadingIndicator("Loading entitlements..."));
+
+  const result = await state.client.getBillingEntitlements(state.orgId!);
+  clear(section);
+  section.appendChild(h("h3", {}, "Entitlements"));
+
+  if (!result.ok) {
+    showError(result, section);
+    return;
+  }
+
+  const ents = result.data.entitlements;
+  if (!ents.length) {
+    section.appendChild(emptyState("🎟️", "No entitlements",
+      "No entitlements are defined for this organization's current subscription."));
+    return;
+  }
+
+  const table = h("table", { class: "audit-table billing-entitlements-table" });
+  const thead = h("thead", {});
+  thead.appendChild(h("tr", {},
+    h("th", {}, "Key"),
+    h("th", {}, "Type"),
+    h("th", {}, "Enabled"),
+    h("th", {}, "Limit"),
+    h("th", {}, "Source"),
+  ));
+  table.appendChild(thead);
+  const tbody = document.createElement("tbody");
+  for (const e of ents) {
+    const limitText = e.valueType === "boolean"
+      ? "—"
+      : e.limitValue === null
+        ? (e.enabled ? "Unlimited" : "—")
+        : String(e.limitValue);
+    tbody.appendChild(h("tr", {},
+      h("td", {}, h("code", { class: "mono" }, e.entitlementKey)),
+      h("td", { class: "muted" }, e.valueType),
+      h("td", {}, e.enabled ? "Yes" : "No"),
+      h("td", {}, limitText),
+      h("td", { class: "muted" }, e.source),
+    ));
+  }
+  table.appendChild(tbody);
+  section.appendChild(table);
+}
+
+async function loadBillingInvoices(cursorParam?: string): Promise<void> {
+  const section = document.getElementById("billing-invoices");
+  if (!section) return;
+
+  let tbody = section.querySelector("tbody") as HTMLTableSectionElement | null;
+  const isFirstPage = !cursorParam;
+
+  if (isFirstPage) {
+    clear(section);
+    section.appendChild(h("h3", {}, "Invoices"));
+    section.appendChild(loadingIndicator("Loading invoices..."));
+    tbody = null;
+  } else {
+    const existingBtn = section.querySelector(".billing-invoices-more");
+    if (existingBtn) existingBtn.remove();
+    section.appendChild(loadingIndicator("Loading more invoices..."));
+  }
+
+  const opts: { cursor?: string; limit?: string } = { limit: "50" };
+  if (cursorParam) opts.cursor = cursorParam;
+  const result = await state.client.listBillingInvoices(state.orgId!, opts);
+
+  // Remove loading indicator (last child)
+  const loadingEl = section.querySelector(".loading-indicator");
+  if (loadingEl) loadingEl.remove();
+
+  if (isFirstPage) {
+    clear(section);
+    section.appendChild(h("h3", {}, "Invoices"));
+  }
+
+  if (!result.ok) {
+    showError(result, section);
+    return;
+  }
+
+  const invoices = result.data.invoices;
+  const nextCursor = result.data.nextCursor;
+
+  if (isFirstPage && invoices.length === 0) {
+    section.appendChild(emptyState("🧾", "No invoices",
+      "No invoices have been issued for this organization yet."));
+    return;
+  }
+
+  if (!tbody) {
+    const table = h("table", { class: "audit-table billing-invoices-table" });
+    const thead = h("thead", {});
+    thead.appendChild(h("tr", {},
+      h("th", {}, "Number"),
+      h("th", {}, "Status"),
+      h("th", {}, "Amount Due"),
+      h("th", {}, "Amount Paid"),
+      h("th", {}, "Issued"),
+      h("th", {}, "Period"),
+    ));
+    table.appendChild(thead);
+    tbody = document.createElement("tbody");
+    table.appendChild(tbody);
+    section.appendChild(table);
+  }
+
+  for (const inv of invoices) {
+    const period = (inv.periodStart || inv.periodEnd)
+      ? `${formatDate(inv.periodStart)} → ${formatDate(inv.periodEnd)}`
+      : "—";
+    tbody.appendChild(h("tr", {},
+      h("td", {}, h("span", { class: "audit-action" }, inv.number || inv.id)),
+      h("td", {}, h("span", { class: `billing-status billing-status-${inv.status}` }, inv.status)),
+      h("td", {}, formatMoney(inv.amountDueCents, inv.currency)),
+      h("td", {}, formatMoney(inv.amountPaidCents, inv.currency)),
+      h("td", { class: "muted" }, formatDate(inv.issuedAt)),
+      h("td", { class: "muted" }, period),
+    ));
+  }
+
+  if (nextCursor) {
+    // The cursor returned by the billing route is a base64-encoded JSON object;
+    // the API client forwards it as an opaque string via meta.cursor.
+    const encoded = result.meta.cursor ?? null;
+    if (encoded) {
+      const c = encoded;
+      const loadMore = btn("Load More", () => loadBillingInvoices(c),
+        "btn-sm mt billing-invoices-more");
+      section.appendChild(loadMore);
+    }
+  }
 }
 
 // --- Boot ---

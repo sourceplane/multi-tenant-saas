@@ -1410,3 +1410,157 @@ code, kbd, samp, .mono {
     scroll-behavior: auto !important;
   }
 }
+
+/* ============================================================
+   Billing tab — read-only summary, plans, customer, entitlements, invoices
+   ============================================================ */
+
+.billing-summary-card,
+.billing-customer-card,
+.billing-plan-card {
+  padding: 18px 20px;
+}
+
+.billing-summary-headline {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 12px;
+  font-size: 18px;
+  font-weight: var(--font-weight-semibold);
+  color: var(--ink);
+}
+
+.billing-summary-foot {
+  margin-top: 10px;
+  font-size: 12px;
+}
+
+.billing-meta-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 6px 0;
+  border-bottom: 1px dashed var(--border);
+  font-size: 13px;
+}
+
+.billing-meta-row:last-child { border-bottom: none; }
+
+.billing-meta-label {
+  color: var(--text-quiet);
+  text-transform: uppercase;
+  font-size: 10.5px;
+  letter-spacing: 0.10em;
+  font-weight: var(--font-weight-semibold);
+}
+
+.billing-meta-value {
+  color: var(--text);
+  text-align: right;
+  word-break: break-word;
+}
+
+.billing-plans-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+  margin-top: 8px;
+}
+
+.billing-plan-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.billing-plan-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.billing-plan-name {
+  font-weight: var(--font-weight-semibold);
+  color: var(--ink);
+  font-size: 15px;
+}
+
+.billing-plan-code {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: 0.02em;
+}
+
+.billing-plan-desc {
+  font-size: 13px;
+  color: var(--text);
+  margin: 4px 0 0;
+}
+
+.billing-plan-price {
+  margin-top: 6px;
+  font-size: 14px;
+  font-weight: var(--font-weight-semibold);
+  color: var(--terracotta);
+}
+
+.billing-status {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: var(--font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  background: var(--paper-soft);
+  color: var(--text-quiet);
+  border: 1px solid var(--border);
+}
+
+.billing-status-active,
+.billing-status-paid,
+.billing-status-trialing {
+  background: rgba(72, 132, 90, 0.10);
+  color: #386a47;
+  border-color: rgba(72, 132, 90, 0.30);
+}
+
+.billing-status-past_due,
+.billing-status-open,
+.billing-status-uncollectible {
+  background: rgba(181, 97, 58, 0.10);
+  color: var(--terracotta);
+  border-color: rgba(181, 97, 58, 0.30);
+}
+
+.billing-status-canceled,
+.billing-status-expired,
+.billing-status-void,
+.billing-status-archived,
+.billing-status-inactive {
+  background: rgba(120, 120, 120, 0.08);
+  color: var(--text-quiet);
+}
+
+.billing-status-draft {
+  background: rgba(120, 120, 120, 0.06);
+  color: var(--text-quiet);
+  font-style: italic;
+}
+
+.billing-entitlements-table,
+.billing-invoices-table {
+  margin-top: 8px;
+}
+
+@media (max-width: 600px) {
+  .billing-meta-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+  .billing-meta-value { text-align: left; }
+  .billing-plans-grid { grid-template-columns: 1fr; }
+}

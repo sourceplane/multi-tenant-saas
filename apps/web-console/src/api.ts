@@ -42,6 +42,15 @@ import type {
   RotateSecretMetadataResponse,
   RevokeSecretMetadataResponse,
 } from "@saas/contracts/config";
+import type {
+  ListPlansResponse,
+  GetBillingCustomerResponse,
+  GetBillingSummaryResponse,
+  ListInvoicesResponse,
+  GetEntitlementsResponse,
+  PublicEntitlementSource,
+  PublicInvoiceStatus,
+} from "@saas/contracts/billing";
 
 export interface ApiTarget {
   name: string;
@@ -529,5 +538,50 @@ export class ApiClient {
     if ("error" in r) return this.wrapErr(r.error);
     const secrets = (r.json as any).secrets ?? r.json;
     return this.wrapOk(Array.isArray(secrets) ? secrets : [], r.meta);
+  }
+
+  // Billing (org-scoped, read-only)
+  async listBillingPlans(orgId: string): Promise<ApiResult<ListPlansResponse>> {
+    const r = await this.raw("GET", `/v1/organizations/${orgId}/billing/plans`);
+    if ("error" in r) return this.wrapErr(r.error);
+    return this.wrapOk(r.json as unknown as ListPlansResponse, r.meta);
+  }
+
+  async getBillingCustomer(orgId: string): Promise<ApiResult<GetBillingCustomerResponse>> {
+    const r = await this.raw("GET", `/v1/organizations/${orgId}/billing/customer`);
+    if ("error" in r) return this.wrapErr(r.error);
+    return this.wrapOk(r.json as unknown as GetBillingCustomerResponse, r.meta);
+  }
+
+  async getBillingSummary(orgId: string): Promise<ApiResult<GetBillingSummaryResponse>> {
+    const r = await this.raw("GET", `/v1/organizations/${orgId}/billing/summary`);
+    if ("error" in r) return this.wrapErr(r.error);
+    return this.wrapOk(r.json as unknown as GetBillingSummaryResponse, r.meta);
+  }
+
+  async listBillingInvoices(
+    orgId: string,
+    opts?: { cursor?: string; limit?: string; status?: PublicInvoiceStatus; subscriptionId?: string },
+  ): Promise<ApiResult<ListInvoicesResponse>> {
+    const query: Record<string, string> = {};
+    if (opts?.cursor) query.cursor = opts.cursor;
+    if (opts?.limit) query.limit = opts.limit;
+    if (opts?.status) query.status = opts.status;
+    if (opts?.subscriptionId) query.subscriptionId = opts.subscriptionId;
+    const r = await this.raw("GET", `/v1/organizations/${orgId}/billing/invoices`, undefined, query);
+    if ("error" in r) return this.wrapErr(r.error);
+    return this.wrapOk(r.json as unknown as ListInvoicesResponse, r.meta);
+  }
+
+  async getBillingEntitlements(
+    orgId: string,
+    opts?: { subscriptionId?: string; source?: PublicEntitlementSource },
+  ): Promise<ApiResult<GetEntitlementsResponse>> {
+    const query: Record<string, string> = {};
+    if (opts?.subscriptionId) query.subscriptionId = opts.subscriptionId;
+    if (opts?.source) query.source = opts.source;
+    const r = await this.raw("GET", `/v1/organizations/${orgId}/billing/entitlements`, undefined, query);
+    if ("error" in r) return this.wrapErr(r.error);
+    return this.wrapOk(r.json as unknown as GetEntitlementsResponse, r.meta);
   }
 }
