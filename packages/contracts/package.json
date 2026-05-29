@@ -18,7 +18,8 @@
     "./service-principal": "./src/service-principal.ts",
     "./config": "./src/config.ts",
     "./webhooks": "./src/webhooks.ts",
-    "./metering": "./src/metering.ts"
+    "./metering": "./src/metering.ts",
+    "./billing": "./src/billing.ts"
   },
   "scripts": {
     "build": "tsc --project tsconfig.build.json",
