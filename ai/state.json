@@ -1,6 +1,6 @@
 {
   "goal": "Supabase/Postgres-backed multi-organization Orun SaaS control plane",
-  "current_task": "0085a",
+  "current_task": "0085b",
   "completed": [
     "0001", "0001.1", "0002", "0003", "0003.1", "0004", "0005",
     "0006", "0006.1", "0007", "0007.1", "0008", "0009", "0009.1",
@@ -13,18 +13,18 @@
     "0058", "0059", "0060", "0061", "0062", "0063", "0064", "0065",
     "0066", "0067", "0068", "0069", "0070", "0071", "0072", "0073",
     "0074", "0075", "0076", "0077", "0078",
-    "0079", "0080", "0081", "0082", "0082.1", "0083", "0083.1", "0084"
+    "0079", "0080", "0081", "0082", "0082.1", "0083", "0083.1", "0084",
+    "0085a"
   ],
   "repo_health": "green",
-  "next_focus": "task-0085a-verifier-then-0085b-v5-reimport",
-  "last_verified": "2026-05-29T13:55:00Z",
+  "next_focus": "task-0085b-cloudflare-v5-provider-bump-and-workers-custom-domain-import",
+  "last_verified": "2026-05-29T15:08:00Z",
   "waiting_for_input": "false",
-  "task_agent": "/ai/tasks/task-0085a-verifier.md",
+  "task_agent": "/ai/tasks/task-0085b.md",
   "notes": [
-    "Task 0085 single-PR shape proved structurally impossible: cloudflare v5 provider does not implement cross-type MoveState for cloudflare_workers_domain -> cloudflare_workers_custom_domain (PR-CI 26642692516 bare moved{} failed 'Unable to Move Resource State'; PR-CI 26642904336 removed{}+import{} under ~> 5.0 failed 'no schema available for cloudflare_workers_domain.console[0]'). Implementer filed ai/proposals/task-0085-spec-update.md proposing the v5 upgrade guide's sanctioned two-phase pattern (same shape tf-migrate produces for cloudflare_zone_settings_override). Orchestrator ACCEPTED 2026-05-29; rescoped to 0085a (Phase 1 state drop under ~> 4.52) + 0085b (Phase 2 provider bump + re-import). PR #132 closed superseded.",
-    "Task 0085a (Implementer) DONE: PR #133 (impl/task-0085a-cloudflare-v4-removed-state-drop) open, mergeable=MERGEABLE, mergeStateStatus=CLEAN, PR-CI run 26644307676 = 3/3 SUCCESS (plan + both cloudflare-domain · {stage,prod} · Terraform). Earlier PR-CI run 26644076501 captured the literal plan-diff evidence (stage job 78524741081 id=052eaece5e989d5a7280b6c206e562c42950e3a6, prod job 78524741140 id=31e5f2ed1b1e4a5700e8ae0678846a0d753840e1, both with `Plan: 0 to add, 0 to change, 0 to destroy.` + the `no longer be managed` warning stanza naming cloudflare_workers_domain.console[0]). Implementer report at ai/reports/task-0085a-implementer.md.",
-    "Verifier task scoped 2026-05-29 at ai/tasks/task-0085a-verifier.md. Acceptance gate: (1) PR-time literal plan-diff strings present on both env jobs; (2) post-merge main-CI apply on both envs logs `Apply complete!` with `0 destroyed` AND the cloudflare_workers_domain.console[0] state-drop confirmation stanza; (3) four live probes still 200 (apex stage/prod + both *.rahulvarghesepullely.workers.dev rollback hatches). Anything other than `0 destroyed` is FAIL + revert (would unbind stage.sourceplane.ai / prod.sourceplane.ai live).",
-    "Live invariant across both phases of the 0085 migration: cloudflare custom-domain resource IDs stage=052eaece5e989d5a7280b6c206e562c42950e3a6 prod=31e5f2ed1b1e4a5700e8ae0678846a0d753840e1 must survive byte-identical. Phase 1 (0085a) drops them from Terraform state only; Phase 2 (0085b) re-imports them by these exact IDs under cloudflare ~> 5.0.",
-    "Next focus after 0085a verifier PASS + merge + clean soak: scope Task 0085b — bump required_providers.cloudflare.version to ~> 5.0, replace fenced v4 block with resource `cloudflare_workers_custom_domain.console`, add import {} blocks keyed by var.environment re-adopting the two known immutable IDs, restore `output worker_custom_domain_id` to the real attachment ID, refresh `.terraform.lock.hcl` for cloudflare 5.x multi-arch."
+    "Task 0085a (Verifier) DONE — PASS. PR #133 squash-merged at efa539cdd662da8399fb1303ee497bf54684a1eb (2026-05-29T15:06:12Z) via --admin (rollup 3/3 SUCCESS uncontested, branch 1 commit behind on the orchestration-scoping commit d43cf81 only). Post-merge main-CI run 26645041830 = 3/3 SUCCESS; both cloudflare-domain · {stage,prod} · Terraform · apply jobs logged `Apply complete! Resources: 0 added, 0 changed, 0 destroyed.` (stage job 78528178977, prod job 78528178968). State-drop confirmation surfaced via the 'no longer be managed by Terraform' warning block naming cloudflare_workers_domain.console[0] (Terraform 1.15.x does not emit a separate `Removed from state` line for `removed { lifecycle { destroy = false } }`, per the wording-reconciliation note). All four live probes still 200 with `Sourceplane Console`. Post-apply `orun plan --changed` selects 0 jobs — state drop is durable.",
+    "Phase 1 of the v4→v5 cloudflare-domain migration is now LIVE on main. The v4-typed `cloudflare_workers_domain.console` state entry is dropped on both envs; the live Cloudflare custom-domain attachments (stage id 052eaece5e989d5a7280b6c206e562c42950e3a6, prod id 31e5f2ed1b1e4a5700e8ae0678846a0d753840e1) are untouched and continue to serve stage.sourceplane.ai / prod.sourceplane.ai. Provider pin stays cloudflare ~> 4.52. `output worker_custom_domain_id` is a literal placeholder `pending_v5_reimport_task_0085b` (no downstream consumers).",
+    "Risk window OPEN until 0085b lands: the two live custom-domain attachments are NOT Terraform-tracked between this merge and 0085b's `import {}` apply. Any Cloudflare-side drift would not be detected by `terraform plan`. Mitigation: scope 0085b as the immediate next task; no manual Cloudflare changes to these attachments during the window. Reports: ai/reports/task-0085a-implementer.md, ai/reports/task-0085a-verifier.md.",
+    "Next focus: scope Task 0085b — Phase 2 of the v4→v5 cloudflare-domain migration. Bump required_providers.cloudflare.version from ~> 4.52 to ~> 5.0; replace fenced v4 `cloudflare_workers_domain.console` block (main.tf lines 224–232) with v5 `resource cloudflare_workers_custom_domain.console`; add `import {}` blocks keyed by var.environment re-adopting the two known immutable IDs above; restore `output worker_custom_domain_id` to the real attachment ID; refresh .terraform.lock.hcl to cloudflare 5.x multi-arch; drop the `removed {}` block (its work is done) and clear Phase 1 fence comments. Acceptance: PR-CI plan `Plan: 1 to import, 0 to add, 0 to change, 0 to destroy.` on both envs; post-merge apply `Apply complete! Resources: 1 imported, 0 added, 0 changed, 0 destroyed.` on both envs; four live probes still 200."
   ]
 }
