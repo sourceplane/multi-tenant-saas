@@ -435,10 +435,20 @@ Task 0060 Verifier is scoped and ready.
   - `@saas/contracts/billing` exports provider-neutral public types (`PublicPlan`, `PublicBillingCustomer`, `PublicSubscription`, `PublicInvoice`, `PublicEntitlement`, summary/list envelopes). Opaque `provider*` and `hostedUrl` fields only — no secret-bearing surfaces; enforced at the type level by a contracts test.
   - Tests: 30 db-tests + 14 contracts-tests cover tenant isolation, parameterized-SQL invariant, entitlement upsert, invoice cross-org safety, summary composition, and a dedicated metering/billing boundary assertion.
 - Tasks 0001–0075 are complete and verified. No billing Worker runtime, api-edge billing routes, web-console billing UI, provider SDK, provider secrets, Terraform, Queue/KV/Durable Object/Analytics Engine bindings, or `specs-v2/**` changes were introduced by Task 0075.
+- Task 0076 verified PASS and merged via PR #119 (squash merge `fb66ff5d7d134e8077fd5104bc8bbb9007d9bcd7`) on 2026-05-29. Original PR CI run `26611508443` was 27/27 SUCCESS; post-implementer-report PR CI run `26611795386` was 27/27 SUCCESS after the verifier committed the missing implementer report (commit `4a353a5`).
+- First billing runtime/API read surface now live on main:
+  - `apps/billing-worker` (private; `workers_dev: false` for dev/stage/prod) exposes five org-scoped GET routes: `/v1/organizations/{orgId}/billing/{plans,customer,summary,invoices,entitlements}`.
+  - Stage/prod billing-worker bindings are same-environment: `SOURCEPLANE_DB` Hyperdrive (`08f7c605…` stage / `ab2c21c2…` prod), `MEMBERSHIP_WORKER`, `POLICY_WORKER`.
+  - `apps/api-edge` billing facade routes those five paths to billing-worker via service binding (`billing-worker-stage` / `billing-worker-prod`) and depends on `billing-worker` at the component level.
+  - api-edge resolves the actor via identity-worker before forwarding and emits `x-actor-subject-id` / `x-actor-subject-type` headers. The `authorization` header and any raw bearer token are never forwarded to billing-worker.
+  - Authorization in billing-worker: membership-worker authorization-context → policy-worker `billing.read`. Any failure (binding error, membership miss, policy deny) collapses to a generic 404 no-enumeration response; missing service bindings return 503.
+  - Public responses use `@saas/contracts/billing` provider-neutral mappers — no plaintext credentials, ciphertext, SQL, or stack traces are exposed; provider fields surface only as opaque IDs/URLs.
+  - Tests: 24 billing-worker tests (route matching, method rejection, auth failure, policy denial fail-closed, query validation) + 14 new api-edge billing-facade tests (route matching, missing bindings, actor forwarding without bearer, downstream-throw fallback).
+- Tasks 0001–0076 are complete and verified. No billing mutations, provider SDK, webhook handling, payment credentials, billing UI, schema, or new infra (Queue/KV/DO/AE/Terraform/Secrets Store) were introduced by Task 0076.
 
 ## Current Task
 
-No active task — orchestrator should select the next billing-runtime or roadmap task. See "Next Task After 0075" below.
+No active task — orchestrator should select the next billing surface task. See "Next Task After 0076" below.
 
 ## Current Roadmap Position
 
@@ -446,9 +456,13 @@ No active task — orchestrator should select the next billing-runtime or roadma
 - `specs-v2/**` remains out of scope unless the task is product-specific.
 - Week 4-5 usage→billing phase is active.
 - Metering prerequisites are in place: persistence/contracts (Task 0071), public metering Worker/API surface (Task 0072), and rollup materialization (Task 0074).
-- Billing foundation is in place: persistence + provider-neutral contracts (Task 0075).
+- Billing foundation + first read runtime/API are in place: persistence + provider-neutral contracts (Task 0075) and billing-worker runtime + api-edge billing read facade (Task 0076).
 
-## Next Task After 0075
+## Next Task After 0076
 
-Natural next task: billing Worker runtime / api-edge billing routes exposing provider-neutral `listPlans`, `getBillingCustomer`, `getBillingSummary`, `listInvoices`, and `getEntitlements` through policy-gated organization routes. Payment-provider integration (webhooks, checkout/portal sessions), billing UI, and quota-definition management should remain separate follow-up tasks per `specs/components/11-billing.md` sequencing.
+Natural next candidates per `specs/components/11-billing.md` sequencing:
+
+1. Web-console billing read UI consuming the five new public org-scoped routes (plans/customer/summary/invoices/entitlements). Mirrors the read-only Config tab pattern from Task 0058.
+2. `billing_admin` role wiring for `billing.read` in policy-worker if the product expects a billing-only persona to access these routes (currently only `owner`/`admin` paths satisfy policy).
+3. Provider-adapter scaffolding for a privileged read-sync job (e.g. Stripe customer/subscription read sync) kept private and behind webhook/poll boundaries — separate from any public surface and from the future mutation surface (checkout/portal/webhooks), which remains an explicit non-goal until scoped.
 

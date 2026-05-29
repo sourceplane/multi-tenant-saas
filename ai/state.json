@@ -81,20 +81,21 @@
     "0072",
     "0073",
     "0074",
-    "0075"
+    "0075",
+    "0076"
   ],
   "repo_health": "green",
-  "next_focus": "evaluate-next-task-after-task-0075-billing-foundation-merged",
-  "last_verified": "2026-05-29T00:34:00Z",
+  "next_focus": "evaluate-next-billing-task-after-task-0076-billing-worker-runtime-merged",
+  "last_verified": "2026-05-29T01:12:57Z",
   "waiting_for_input": "false",
-  "task_agent": "ai/tasks/task-0075-verifier.md",
+  "task_agent": "ai/tasks/task-0076-verifier.md",
   "notes": [
-    "Task 0075 verified PASS and merged via PR #118 (squash merge commit ba01ea64bc046b0ad89582d0ad51275eafb91f1f) on 2026-05-29.",
-    "PR CI run 26610166103 (11/11 jobs success) and post-merge main CI run 26610557793 (11/11 jobs success) both applied 110_billing_foundation to stage and prod Supabase.",
-    "Billing foundation now live on main: migration 110_billing_foundation, @saas/db/billing repository, @saas/contracts/billing types, package exports/test mappings, 30 db tests + 14 contract tests.",
-    "Repository is parameterized SQL only, org-scoped on every accessor, with cross-org invoice upsert guarded by ON CONFLICT WHERE org_id = EXCLUDED.org_id. No metering.* references in billing code.",
-    "Contracts are provider-neutral and secret-safe; opaque provider/hostedUrl fields only.",
-    "Migration is idempotent (CREATE … IF NOT EXISTS throughout) and applies cleanly under the Supabase autocommit runner.",
-    "Verifier report: ai/reports/task-0075-verifier.md."
+    "Task 0076 verified PASS and merged via PR #119 (squash merge commit fb66ff5d7d134e8077fd5104bc8bbb9007d9bcd7) on 2026-05-29.",
+    "Original PR CI run 26611508443 (27/27 SUCCESS); post-implementer-report PR CI run 26611795386 (27/27 SUCCESS) after verifier committed missing implementer report (commit 4a353a5).",
+    "First billing runtime/API read surface live on main: apps/billing-worker with five GET routes (plans, customer, summary, invoices, entitlements) plus apps/api-edge billing facade forwarding to it.",
+    "Authorization uses membership-worker authorization-context + policy-worker billing.read; fails closed to no-enumeration 404s; raw bearer tokens never forwarded across the binding seam.",
+    "Stage/prod billing-worker is private (workers_dev: false) with same-environment SOURCEPLANE_DB / MEMBERSHIP_WORKER / POLICY_WORKER bindings; api-edge stage/prod bind BILLING_WORKER to billing-worker-{stage,prod} and depend on billing-worker.",
+    "No mutations, no provider SDK, no webhook handling, no UI, no schema, no Queue/KV/DO/AE/Terraform churn introduced. 24 billing-worker tests and 14 api-edge billing-facade tests added.",
+    "Verifier report: ai/reports/task-0076-verifier.md."
   ]
 }
