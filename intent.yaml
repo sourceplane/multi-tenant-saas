@@ -77,12 +77,12 @@ environments:
         namespacePrefix: dev-
         owner: sourceplane
         repo: multi-tenant-saas
+        CONSOLE_CUSTOM_DOMAIN: ""
     policies:
       requireApproval: "false"
     env:
       AWS_REGION: us-east-1
       BASE_DOMAIN: sourceplane.ai
-      CONSOLE_CUSTOM_DOMAIN: ""
 
   stage:
     activation:
@@ -97,12 +97,12 @@ environments:
         namespacePrefix: stg-
         owner: sourceplane
         repo: multi-tenant-saas
+        CONSOLE_CUSTOM_DOMAIN: stage.sourceplane.ai
     policies:
       requireApproval: "true"
     env:
       AWS_REGION: us-east-1
       BASE_DOMAIN: sourceplane.ai
-      CONSOLE_CUSTOM_DOMAIN: stage.sourceplane.ai
 
   prod:
     activation:
@@ -120,9 +120,9 @@ environments:
         namespacePrefix: prod-
         owner: sourceplane
         repo: multi-tenant-saas
+        CONSOLE_CUSTOM_DOMAIN: prod.sourceplane.ai
     policies:
       requireApproval: "true"
     env:
       AWS_REGION: us-east-1
       BASE_DOMAIN: sourceplane.ai
-      CONSOLE_CUSTOM_DOMAIN: prod.sourceplane.ai

@@ -24,6 +24,19 @@ spec:
     # follow-up cleanup task after the legacy Pages projects are manually deleted.
     pagesProjectPrefix: sourceplane-web-console
     workerNamePrefix: sourceplane-web-console-next
+    # NOTE: `CONSOLE_CUSTOM_DOMAIN` is intentionally NOT declared here.
+    # It is supplied per-environment via
+    # `environments.{dev,stage,prod}.parameterDefaults.terraform.CONSOLE_CUSTOM_DOMAIN`
+    # in `intent.yaml` (dev: "", stage: stage.sourceplane.ai,
+    # prod: prod.sourceplane.ai) and surfaced to Terraform as
+    # `TF_VAR_CONSOLE_CUSTOM_DOMAIN` by the generic `.parameters` →
+    # `TF_VAR_<key>` loop in the cloudflare-domain-validate job template.
+    # Declaring a default here would shadow the parameterDefault override
+    # and cause the rendered TF_VAR to resolve to the local default ('')
+    # in every environment — exactly the silent-empty failure that
+    # broke Task 0083 (0 added, 0 changed, 0 destroyed). The Terraform
+    # variable itself already defaults to "" in
+    # `terraform/variables.tf`, so absence here is safe for dev.
 
   env:
     AWS_EC2_METADATA_DISABLED: "true"
