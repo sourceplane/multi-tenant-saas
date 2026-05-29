@@ -1,10 +1,5 @@
 "use client";
 
-// /demo is a token-free screenshot/preview surface; opt out of static
-// prerender to dodge "Cannot read properties of undefined (reading 'url')"
-// from client-only UI primitives during Next.js 15 static export.
-export const dynamic = "force-dynamic";
-
 import * as React from "react";
 import { Building2, Boxes, FolderKanban, KeyRound, Mail, Search, ScrollText, Receipt } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
