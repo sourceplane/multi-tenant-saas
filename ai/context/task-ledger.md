@@ -1,6 +1,6 @@
 # Task Ledger
 
-Last updated: 2026-05-29 (Task 0084 verified PASS and merged)
+Last updated: 2026-05-29 (Task 0085a Implementer DONE — PR #133 open 3/3 SUCCESS; Verifier task scoped at `ai/tasks/task-0085a-verifier.md`)
 
 ## Task 0001
 
@@ -1555,3 +1555,32 @@ Last updated: 2026-05-29 (Task 0084 verified PASS and merged)
 ||- Live probes (post-merge): `curl -sfL https://stage.sourceplane.ai/` -> 200 `<title>Sourceplane Console</title>`; same for `https://prod.sourceplane.ai/`; rollback hatch `sourceplane-web-console-next-{stage,prod}.rahulvarghesepullely.workers.dev` both 200. `wrangler pages project list` confirms `sourceplane-web-console-{dev,stage,prod}` stay absent (unsuffixed `sourceplane-web-console` and `*-next-stage` remain, both out of scope).
 ||- Reports: `ai/reports/task-0084-implementer.md`, `ai/reports/task-0084-verifier.md`.
 ||- Durable outcome: legacy Pages residuals fully gone from infra Terraform; `pagesProjectPrefix` variable, `local.pages_project_name`, and `output "pages_project_name"` removed from `infra/terraform/cloudflare-domain/{terraform/main.tf,component.yaml,README.md}`. Three legacy Pages projects `sourceplane-web-console-{dev,stage,prod}` confirmed absent from Cloudflare account. Task 0085 (cloudflare TF provider v4 -> v5 + `cloudflare_workers_domain` -> `cloudflare_workers_custom_domain` rename) unblocked as next candidate.
+
+
+## Task 0085 (rescoped — superseded by 0085a + 0085b)
+
+|- Agent: Implementer (BLOCKED) -> Orchestrator (ACCEPTED rescope 2026-05-29)
+|- Prompt: `ai/tasks/task-0085.md`
+|- Status: superseded by Task 0085a + Task 0085b per accepted spec proposal `ai/proposals/task-0085-spec-update.md`. NOT a single PR.
+|- Objective (original): bump `cloudflare/cloudflare ~> 4.52` -> `~> 5.x` and rename `cloudflare_workers_domain.console` -> `cloudflare_workers_custom_domain.console` in `infra/terraform/cloudflare-domain/terraform/main.tf` in one PR, preserving the two live custom-domain resource IDs via `moved {}` or `terraform state mv`.
+|- Blocker: cloudflare provider v5 does not implement cross-type `MoveState` for this rename. Two PR-CI runs proved no single-PR shape works:
+   - run `26642692516` (bare `moved {}`): `Error: Unable to Move Resource State`.
+   - run `26642904336` (`removed{}+import{}` under `~> 5.0` pin): `Error: no schema available for cloudflare_workers_domain.console[0]` (v4 schema needed to read v4-typed state entry, v4 gone under `~> 5.0`).
+|- Resolution: orchestrator ACCEPTED rescope on 2026-05-29 (see `ai/proposals/task-0085-spec-update.md` `## Resolution`). Split into:
+   - Task 0085a — Phase 1: state drop under existing `~> 4.52` pin via `removed { lifecycle { destroy = false } }`. Zero Cloudflare API writes.
+   - Task 0085b — Phase 2 (scoped only after 0085a verifier PASS + clean post-merge apply): provider bump to `~> 5.0`, `cloudflare_workers_custom_domain.console` resource, `import {}` blocks re-adopting by the two known immutable IDs.
+|- PR #132 (`impl/task-0085-cloudflare-v5-workers-custom-domain`) closed as superseded by the 0085a implementer (not merged; branch left for reference).
+|- Live invariant across both phases: stage id `052eaece5e989d5a7280b6c206e562c42950e3a6` and prod id `31e5f2ed1b1e4a5700e8ae0678846a0d753840e1` must survive byte-identical.
+
+## Task 0085a
+
+|- Agent: Implementer
+|- Prompt: `ai/tasks/task-0085a.md`
+|- Status: Implementer DONE (2026-05-29) — PR #133 open, mergeable CLEAN, PR-CI 3/3 SUCCESS. Verifier task scoped at `ai/tasks/task-0085a-verifier.md`; awaiting verifier pickup.
+|- Objective: Phase 1 of the v4->v5 cloudflare-domain migration. Under the existing `cloudflare ~> 4.52` pin, drop the `cloudflare_workers_domain.console` Terraform state entry on stage and prod without touching the live Cloudflare resource. State-only mutation; zero Cloudflare API writes.
+|- Scope boundary: `infra/terraform/cloudflare-domain/terraform/main.tf` (add `removed { from = cloudflare_workers_domain.console; lifecycle { destroy = false } }`, fence/comment-out the v4 resource block, re-point `output worker_custom_domain_id` to the literal placeholder `pending_v5_reimport_task_0085b`), `infra/terraform/cloudflare-domain/README.md` (phase-1-of-2 note), `ai/reports/task-0085a-implementer.md`. NO provider pin change, NO `import {}` block (those land in 0085b), NO change to other components, intent.yaml, composition, or job template.
+|- Acceptance (pre-merge): orun `validate` / `plan --changed` / `run --dry-run` PASS; PR CI green; CI logs on both env jobs show the literal plan-diff strings: `# cloudflare_workers_domain.console[0] will no longer be managed by Terraform, but will not be destroyed`, `# (destroy = false is set in the configuration)`, `Plan: 0 to add, 0 to change, 0 to destroy.`, `Warning: Some objects will no longer be managed by Terraform` + the resource listed by name, plus the Output diff line `~ worker_custom_domain_id = "<known-id>" -> "pending_v5_reimport_task_0085b"` with `<known-id>` = `052eaece5e989d5a7280b6c206e562c42950e3a6` for stage / `31e5f2ed1b1e4a5700e8ae0678846a0d753840e1` for prod.
+|- Acceptance (post-merge, verifier-owned soak): both `cloudflare-domain · {stage,prod} · Terraform · apply` jobs log `Apply complete!` with `0 destroyed` AND a state-drop confirmation stanza for `cloudflare_workers_domain.console[0]`. The four live probes still return 200 (stage + prod apex + both `*.rahulvarghesepullely.workers.dev` rollback hatches). Anything other than `0 destroyed` is FAIL + revert (would unbind `stage.sourceplane.ai` / `prod.sourceplane.ai` live).
+|- Wording-reconciliation note: Terraform 1.15.x does NOT emit a `to forget` count in the apply footer for `removed { lifecycle { destroy = false } }`; the footer stays `Plan: 0 to add, 0 to change, 0 to destroy.` and the state-drop is communicated via the dedicated `Warning` block and (post-apply) the `Removed from state` stanza. The load-bearing invariant is `to destroy = 0` AND the resource named in the warning/stanza.
+|- Implementer outcome (2026-05-29): PR #133 (`impl/task-0085a-cloudflare-v4-removed-state-drop`, head matches `gh pr view 133`), `mergeable=MERGEABLE`, `mergeStateStatus=CLEAN`. PR-CI run `26644307676` 3/3 SUCCESS. Earlier PR-CI run `26644076501` (stage job `78524741081`, prod job `78524741140`) captured the literal plan-diff evidence pasted into `ai/reports/task-0085a-implementer.md`. Pre-merge probes: all four URLs 200 with `<title>Sourceplane Console</title>`. PR #132 closed superseded.
+|- Expected outcome: v4-typed state entry dropped, live resources untouched, 0085b unblocked. Risk window: between 0085a merge and 0085b apply, the two live custom-domain attachments are not Terraform-tracked; any Cloudflare-side drift would not be detected by `terraform plan`. Mitigation: keep 0085b on the immediate orchestrator queue.
