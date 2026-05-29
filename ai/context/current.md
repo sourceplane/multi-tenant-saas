@@ -1,35 +1,73 @@
 # Current Context
 
-Last updated: 2026-05-29 (Task 0089 Verifier PASS — PR #137 merged at
-`8d4eb26`, post-merge main-CI `26666036515` 13/13 SUCCESS, all four
-consumer-worker `Verify deploy` jobs uploaded with the import-swap +
-accept-invitation enqueue wire active)
+Last updated: 2026-05-30 (Task 0090 SCOPED — orchestrator pick after
+Task 0089 close-out. Repo health 🟢 green, main `8d4eb26`,
+post-merge main-CI `26666036515` 13/13 SUCCESS still the latest
+verified main run.)
 
-## No active task
+## Active task: 0090 — Notifications V1 idempotency-key population
 
-Task 0089 (shared `@saas/notifications-client` workspace package +
-`accept-invitation` → `invitation.accepted` wire as the contractual
-third-caller trigger) is verified and merged. Awaiting next
-orchestrator tick.
+Prompt: `ai/tasks/task-0090.md`. Implementer agent.
 
-### Next-task candidates
+Populate `idempotencyKey` on every notifications-V1 enqueue across the
+three live callers so retries collapse to one notification row + one
+provider attempt via the existing notifications-worker idempotent-hit
+path. Closes the non-blocking V1 risk note logged by Task 0088
+verifier; required hardening before any real provider swap can ship
+safely.
 
-1. **Provision `notifications-worker-dev` + dev binding** — closes
-   the dev-wire gap exposed across Tasks 0087, 0088, and 0089. All
-   three callers (identity-worker `login-start`, membership-worker
-   `create-invitation`, membership-worker `accept-invitation`) now
-   uniformly short-circuit to `no_binding` on dev because no
-   `notifications-worker-dev` exists. Single wrangler/component
-   change unblocks the dev enqueue path for all three.
-2. **Real notifications provider swap** — Resend / Postmark / SES into
-   `apps/notifications-worker/src/providers/`. Currently deferred
-   awaiting user provider choice.
-3. **Pre-existing `identity-worker-tests` Fetcher/crypto TS-type fix**
-   — pre-existing, reproduces on clean `main @ 9811919`
-   (`api-key-admin.ts:77,112,136 — TS2304 Cannot find name 'Fetcher'`,
+PR Boundary: three caller files
+(`apps/identity-worker/src/handlers/login-start.ts`,
+`apps/membership-worker/src/handlers/create-invitation.ts`,
+`apps/membership-worker/src/handlers/accept-invitation.ts`),
+optionally a small helper in
+`packages/notifications-client/src/index.ts`, plus tests under
+`tests/notifications-client/`, `tests/identity-worker/src/`,
+`tests/membership-worker/src/`. Zero edits to
+`apps/notifications-worker/**`,
+`packages/contracts/src/notifications.ts`, `packages/db/**`, any
+`apps/*/wrangler.jsonc`, any `apps/*/component.yaml`,
+`infra/terraform/cloudflare-domain/**`, or the
+`cloudflare ~> 4.52` provider pin (Task 0085b risk window stays
+sealed).
+
+Acceptance highlights: `pnpm typecheck && pnpm lint` green; the three
+per-package test suites green (pre-existing `api-key-admin.test.ts`
+compile failure stays out of scope); kiox/orun triple green; PR
+opened with a real PR number; idempotency keys are deterministic,
+secret-free (no `rawCode`), and template-scoped.
+
+### Deferred (orchestrator skips, loop keeps moving)
+
+1. **Real notifications provider swap** (Resend / Postmark / SES) —
+   waiting on user provider choice. The adapter seam in
+   `apps/notifications-worker/src/providers/` is ready; this is a
+   drop-in once the choice is made. Task 0090's idempotency keys are
+   pre-requisite hardening for this swap.
+2. **Task 0085b — cloudflare-domain v4 → v5 + re-import** — explicit
+   user defer. Apex attachments stay Cloudflare-managed-only while
+   parked.
+3. **`notifications-worker-dev` provisioning + dev binding (REFRAMED)**
+   — original framing was "single wrangler change unlocks dev
+   enqueue", but dev profile is `verify`-only on every worker
+   `component.yaml` (no `profileRules` adding `deploy` on dev). No
+   live `*-dev` worker exists for any consumer in the repo, so
+   provisioning `notifications-worker-dev` alone does not give the
+   three callers a dev binding to consume. The candidate needs a
+   larger "introduce dev-deploy lane" design pass before the
+   dev-binding work has anywhere to land. Parked under a new key
+   (`notifications-worker-dev-reframe`) in `state.json` deferred list.
+
+### Next-task candidates after 0090
+
+1. Real notifications provider swap (when user names a provider).
+2. Pre-existing `identity-worker-tests` Fetcher/crypto TS-type fix
+   (reproduces on clean `main @ 9811919`:
+   `api-key-admin.ts:77,112,136 — TS2304 Cannot find name 'Fetcher'`,
    plus `tests/policy-engine` TS2688 'node'). Small follow-up.
-4. **Revive Task 0085b** when the user lifts the defer
-   (cloudflare-domain v4 → v5 + `import {}` re-adoption).
+3. Dev-deploy lane design (the reframed `notifications-worker-dev`
+   work).
+4. Revive Task 0085b when defer lifts.
 
 ## Repo health: green
 

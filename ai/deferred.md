@@ -35,16 +35,22 @@ selection pass.
   or wrangler edits to these while parked. Task 0089 must not touch
   `infra/terraform/cloudflare-domain/**` or the cloudflare provider pin.
 
-## notifications-worker-dev provisioning + dev binding
-- Deferred: 2026-05-30 (parked behind Task 0089, not blocked on user input —
-  scoped as a narrow follow-up so 0089 can stay focused on the third-caller
-  wire + shared-package extraction)
-- Blocking decision: none (technical follow-up, will be selected after 0089
-  merges).
-- Unblock signal: Task 0089 verified + merged.
-- Notes: After 0089 lands, identity-worker dev block AND both
-  membership-worker handler dev blocks remain bindings-less because no
-  `notifications-worker-dev` exists. Single-PR follow-up will provision
-  `notifications-worker-dev` and add the `NOTIFICATIONS_WORKER` service
-  binding to all three consumer wrangler dev blocks in one change,
-  closing the dev enqueue gap for the entire V1 caller set at once.
+## notifications-worker-dev provisioning + dev binding (REFRAMED → `notifications-worker-dev-reframe`)
+- Deferred: 2026-05-30 (originally parked behind Task 0089 as a narrow
+  follow-up; reframed during Task 0090 scoping after orchestrator
+  inspection of `apps/*/component.yaml`).
+- Blocking decision: technical reframe needed, not user input. The
+  original framing assumed a single wrangler/component change would
+  unlock dev enqueue for the three V1 callers. In reality, dev profile
+  is `verify`-only on every worker `component.yaml` (no `profileRules`
+  add `deploy` on dev), so no live `*-dev` Cloudflare worker exists for
+  any consumer in the repo. Provisioning `notifications-worker-dev`
+  alone gives the three callers no dev binding to consume.
+- Unblock signal: a separate "introduce dev-deploy lane" design pass
+  lands first (component-spec change adding `profileRules: deploy` for
+  dev plus the Cloudflare account/binding policy), THEN this candidate
+  becomes a normal narrow follow-up.
+- Notes: Task 0090 (V1 notifications idempotency keys) supersedes this
+  as the next safe PR — it is a strictly stage/prod hardening change
+  that lands on the existing deploy lane and does not depend on dev
+  enqueue working.

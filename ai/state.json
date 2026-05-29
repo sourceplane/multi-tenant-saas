@@ -1,6 +1,6 @@
 {
   "goal": "Supabase/Postgres-backed multi-organization Orun SaaS control plane",
-  "current_task": null,
+  "current_task": "0090",
   "completed": [
     "0001", "0001.1", "0002", "0003", "0003.1", "0004", "0005",
     "0006", "0006.1", "0007", "0007.1", "0008", "0009", "0009.1",
@@ -16,19 +16,17 @@
     "0079", "0080", "0081", "0082", "0082.1", "0083", "0083.1", "0084",
     "0085a", "0086", "0087", "0088", "0089"
   ],
-  "deferred": ["0085b", "notifications-provider-swap"],
+  "deferred": ["0085b", "notifications-provider-swap", "notifications-worker-dev-reframe"],
   "repo_health": "green",
-  "next_focus": "notifications-worker-dev provisioning + dev binding for identity-worker login-start, membership-worker create-invitation, and membership-worker accept-invitation — closes the dev-wire gap exposed in Tasks 0087/0088/0089 (all three callers currently bindings-less on dev, intentionally short-circuiting to no_binding).",
+  "next_focus": "Populate idempotencyKey on the three V1 notifications callers (identity-worker login-start, membership-worker create-invitation, membership-worker accept-invitation) so retries collapse to one notification row + one provider attempt via the existing notifications-worker idempotent-hit path. Hardening required before any real provider swap can ship safely. No infra, no contract, no notifications-worker edits.",
   "last_verified": "2026-05-29T22:45:34Z",
   "waiting_for_input": "false",
-  "task_agent": null,
+  "task_agent": "/ai/tasks/task-0090.md",
   "notes": [
     "Orchestrator policy: human-input-blocked candidates DEFERRED to /ai/deferred.md, loop continues. waiting_for_input only flips true if every candidate is blocked.",
-    "Deferred (orchestrator skips): (a) notifications-provider-swap — needs Resend/Postmark/SES choice; (b) Task 0085b cloudflare-domain v4->v5 — explicit user defer (do not touch infra/terraform/cloudflare-domain/** or cloudflare ~> 4.52 pin).",
-    "Task 0086 (notifications-worker V1) VERIFIED + MERGED (PR #134, 2bb088f).",
-    "Task 0087 (identity-worker -> notifications magic-link) VERIFIED + MERGED (PR #135, 5192ffd).",
-    "Task 0088 (membership-worker create-invitation -> notifications invitation.created) VERIFIED + MERGED (PR #136, d9968ad).",
-    "Task 0089 (shared @saas/notifications-client + accept-invitation invitation.accepted wire) VERIFIED + MERGED (PR #137, 8d4eb26 at 2026-05-29T22:45:34Z). Post-merge main-CI 26666036515 = 13/13 SUCCESS. Worker version IDs: identity-worker stage=3f3dc275-6af4-405b-9211-c60ae4b29c24, identity-worker prod=bc663ade-3574-4273-987f-4a0fb80f9658, membership-worker stage=a8d5c614-2891-4b61-9aa5-bd7a337b1d1f, membership-worker prod=04692796-ac62-48b6-9cff-c4427ee04a59. Three live notifications-V1 callers now consume the shared package (identity-worker login-start, membership-worker create-invitation, membership-worker accept-invitation). notifications-worker stays on local-debug.",
-    "Next-task candidate (orchestrator pick): notifications-worker-dev provisioning + dev binding — single wrangler/component change closes the dev-wire gap for all three callers in one move. Provider swap stays deferred until user names a provider; Task 0085b stays deferred per explicit user defer."
+    "Deferred (orchestrator skips): (a) notifications-provider-swap — needs Resend/Postmark/SES choice; (b) Task 0085b cloudflare-domain v4->v5 — explicit user defer (do not touch infra/terraform/cloudflare-domain/** or cloudflare ~> 4.52 pin); (c) notifications-worker-dev-reframe — original 'provision dev worker + bind' candidate is partially redundant: dev profile is verify-only on every worker (no deploy profileRules on dev), so no live *-dev worker exists for any consumer. Needs a larger 'introduce dev-deploy lane' design pass before the dev-binding work has anywhere to land.",
+    "Task 0089 (shared @saas/notifications-client + accept-invitation invitation.accepted wire) VERIFIED + MERGED (PR #137, 8d4eb26 at 2026-05-29T22:45:34Z). Post-merge main-CI 26666036515 = 13/13 SUCCESS. Three live notifications-V1 callers consume the shared package.",
+    "Task 0090 SCOPED 2026-05-30: populate idempotencyKey on all three V1 callers using request-stable, secret-free, template-scoped values (challengeId for magic-link, inv.id for invitation.created, public-id composite for invitation.accepted). Closes the V1 risk note from Task 0088 verifier. Required hardening before provider swap can ship safely. Strict PR Boundary: only the three caller files (+ optional small shared-client helper) + tests + ai/ docs. Zero edits to apps/notifications-worker/**, packages/contracts/, packages/db/**, infra/terraform/cloudflare-domain/**, the cloudflare provider pin, or any wrangler.jsonc / component.yaml.",
+    "Architect Brief on prompt: Stripe-quality idempotency, implementer has latitude on key shape and an optional shared-client helper, must NOT regress best-effort enqueue semantics or leak rawCode/tokens into keys."
   ]
 }
