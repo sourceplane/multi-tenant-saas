@@ -1,6 +1,6 @@
 {
   "goal": "Supabase/Postgres-backed multi-organization Orun SaaS control plane",
-  "current_task": null,
+  "current_task": "0087",
   "completed": [
     "0001", "0001.1", "0002", "0003", "0003.1", "0004", "0005",
     "0006", "0006.1", "0007", "0007.1", "0008", "0009", "0009.1",
@@ -16,15 +16,16 @@
     "0079", "0080", "0081", "0082", "0082.1", "0083", "0083.1", "0084",
     "0085a", "0086"
   ],
-  "deferred": ["0085b"],
+  "deferred": ["0085b", "notifications-provider-swap"],
   "repo_health": "green",
-  "next_focus": "notifications-caller-wiring-or-real-provider-swap (user-selected)",
+  "next_focus": "identity-worker → notifications-worker magic-link wiring (task 0087)",
   "last_verified": "2026-05-29T18:15:00Z",
-  "waiting_for_input": "true",
-  "task_agent": null,
+  "waiting_for_input": "false",
+  "task_agent": "/ai/tasks/task-0087.md",
   "notes": [
-    "Task 0086 (notifications-worker V1) VERIFIED + MERGED. PR #134 squashed to main at 2bb088f (2026-05-29T18:03:51Z). PR-CI run 26649268365 = 13/13 SUCCESS; post-merge main-CI run 26653759859 = 13/13 SUCCESS. Real wrangler deploys logged for notifications-worker-stage (1.23s) + notifications-worker-prod (1.57s). Migration 120_notifications_core applied on both envs (stage job 78558535815, prod job 78558535920). Live /health on *.workers.dev returns 404 + error code 1042 — EXPECTED (workers_dev:false, private worker, matches membership-worker pattern). Apex stage.sourceplane.ai + prod.sourceplane.ai still 307→/orgs→200 with `Sourceplane Console` (no regression on Task 0085a `0 destroyed` invariant). Migration checksum 868cc1092b4b385b6ed3d203efe5302191865131bb98d0e9f5fe5ad6d16f01bb recomputed match. wrangler.jsonc bindings (Hyperdrive 08f7c…/ab2c2…, EVENTS_WORKER service binding) confirmed to be the real shared values — implementer Follow-up #3 closed informational, not a blocker. Post-merge `orun plan --changed` = 0 jobs (durability ✓). Verifier report: ai/reports/task-0086-verifier.md.",
-    "Next-task candidates (user picks): (1) notifications caller wiring — identity-worker magic-link send and/or membership-worker invitation email through notifications-worker (unblocks roadmap B1 real auth); (2) real provider swap — Resend/SES/Postmark into apps/notifications-worker/src/providers/ gated on NOTIFICATIONS_PROVIDER; (3) revive Task 0085b (cloudflare-domain v4→v5 provider bump + import block) when user lifts the defer; (4) pre-existing identity-worker-tests `crypto` TS-type fix (unrelated to 0086, reproduces on clean main).",
-    "Task 0085b remains EXPLICITLY DEFERRED. Narrow Terraform-tracking risk window on cloudflare-domain still open. No manual Cloudflare changes permitted to the two live custom-domain attachments (stage id 052eaece5e989d5a7280b6c206e562c42950e3a6 / prod id 31e5f2ed1b1e4a5700e8ae0678846a0d753840e1)."
+    "Orchestrator policy updated: human-input-blocked candidates are now DEFERRED to /ai/deferred.md, not paused. waiting_for_input only flips to true if EVERY candidate is blocked. See agents/orchestrator.md → Deferred Decision Protocol.",
+    "Task 0087 scoped: wire identity-worker magic-link (apps/identity-worker/src/handlers/login-start.ts) through notifications-worker via NOTIFICATIONS_WORKER service binding. Best-effort delivery (notifications failure must NOT 5xx login). Uses existing local-debug provider on notifications-worker — no real provider swap required. Pattern mirrors apps/notifications-worker/src/events-client.ts.",
+    "Deferred candidates parked (orchestrator skips, keeps loop running): (a) real notifications provider swap — needs user decision between Resend/Postmark/SES; (b) Task 0085b cloudflare-domain v4→v5 re-import — explicit user defer, narrow Terraform-tracking risk window still open on the two live custom-domain attachments (stage 052eaece5e989d5a7280b6c206e562c42950e3a6 / prod 31e5f2ed1b1e4a5700e8ae0678846a0d753840e1).",
+    "Task 0086 (notifications-worker V1) VERIFIED + MERGED. PR #134 squashed to main at 2bb088f. Post-merge main-CI run 26653759859 = 13/13 SUCCESS. Notifications-worker deployed on stage/prod with NOTIFICATIONS_PROVIDER=local-debug, internal-only, EVENTS_WORKER binding active. Task 0087 is the first caller wiring on top of that surface."
   ]
 }

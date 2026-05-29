@@ -154,9 +154,55 @@ All three share the same four-reason matrix (`disabled` /
 fail-closed 503 envelope — the contract Task 0082's
 `PreconditionInsight` UI surfaces.
 
+## Current Task — 0087 (scoped, awaiting Implementer)
+
+Wire `identity-worker` magic-link login through `notifications-worker`
+over a new `NOTIFICATIONS_WORKER` service binding. First caller on the
+Task 0086 surface. Best-effort delivery: notifications failure MUST NOT
+5xx login. Uses existing `local-debug` provider on notifications-worker
+— no real provider swap needed (that's deferred, see below).
+
+- Prompt: `ai/tasks/task-0087.md`
+- Branch (to be created): `impl/task-0087-identity-notifications-wire`
+- Files in scope: `apps/identity-worker/wrangler.jsonc`,
+  `apps/identity-worker/src/notifications-client.ts` (new),
+  `apps/identity-worker/src/handlers/login-start.ts`, identity-worker
+  unit tests. **No edits** outside identity-worker app + tests + this
+  task's state files.
+- Login response contract unchanged. `DEBUG_DELIVERY=true` still inlines
+  the code and does NOT enqueue.
+
+## Orchestrator Policy — Deferred Decision Protocol (NEW)
+
+Per the updated `agents/orchestrator.md`, candidates that would require
+human input are now **deferred to `/ai/deferred.md`** instead of pausing
+the loop. `waiting_for_input` only flips to `"true"` if EVERY candidate
+is genuinely blocked on a human decision. This keeps the loop moving
+when the human is unavailable.
+
+Currently deferred (see `/ai/deferred.md` for full entries):
+
+- Real notifications provider swap (Resend / Postmark / SES) — awaiting
+  user provider choice. Notifications-worker stays on `local-debug`
+  until lifted; Task 0087 is unaffected.
+- Task 0085b cloudflare-domain v4→v5 + import — explicit user defer
+  carried over; narrow Terraform-tracking risk window on the two live
+  custom-domain attachments remains open. No task may touch
+  `infra/terraform/cloudflare-domain/**` or the cloudflare provider
+  pin until 0085b is lifted.
+
+## Roadmap Position
+
+- Baseline cluster: B2 (notifications worker) shipped in Task 0086.
+- Task 0087 begins B1 (real auth) by wiring the first caller (identity
+  magic-link) onto B2. Membership-worker invitation-email wiring is the
+  natural next caller (own task), then real provider swap when the user
+  picks one.
+
 ## Repo Reality
 
-- Tasks 0001–0086 verified and merged. No active task.
+- Tasks 0001–0086 verified and merged. Task 0087 scoped, Implementer up
+  next.
 - Task 0085 split into 0085a (Phase 1, DONE) + 0085b (Phase 2,
   EXPLICITLY DEFERRED by user) per accepted spec proposal.
 - Active spec pack: reusable SaaS starter under `specs/**`.

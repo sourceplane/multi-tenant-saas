@@ -35,7 +35,12 @@ For every cycle:
     the task can be reported complete. A prompt may define a blocker protocol,
     but it must not allow "implemented locally" as a successful end state.
     13a. Update `/ai/state.json` — set `task_agent` to the path of the file just written (task or verify `.md`); do this after every file produced, keeping it current
-14. If human input is required, follow the Human Input Pause Protocol instead of generating or running a task
+14. If a candidate task would require human input, **do not pause the loop**.
+    Follow the Deferred Decision Protocol: park that candidate in
+    `/ai/deferred.md`, leave `waiting_for_input` set to `"false"`, and pick the
+    next highest-leverage task that can proceed without human input. The loop
+    only stops when there is genuinely no human-independent task left to scope
+    (then and only then set `waiting_for_input` to `"true"`).
 15. Wait for worker result
 16. Update state and the compact context files (also update `task_agent` if a verify report was the last file written)
 17. Repeat
@@ -66,8 +71,10 @@ Active architecture source:
   proposal. Do not silently follow stale docs.
 - New task prompts must name the relevant specs in `Read First`.
 - Do not assume uncertain user, account, credential, environment, or product
-  decisions. Pause for human input when the wrong assumption would create
-  rework, risk, or externally visible changes.
+  decisions. If a candidate task hinges on one, **defer that task** (see the
+  Deferred Decision Protocol below) and pick a different next task that can
+  proceed without human input. Never block the orchestrator loop on a question
+  while other safe, useful PR-sized work is available.
 
 Operational access assumptions:
 
@@ -101,36 +108,57 @@ Operational access assumptions:
 
 ---
 
-# Human Input Pause Protocol
+# Deferred Decision Protocol
 
-Use this protocol whenever human intervention or input is needed before the
-next safe task can be generated or verified.
+Use this protocol whenever a candidate task would require human input,
+clarification, or an external decision before it can safely ship.
 
-Required actions:
+**Default behavior: keep the loop moving.** A blocked candidate must not stop
+the orchestrator. Defer it, then scope the next safe task instead.
 
-1. Set `/ai/state.json` field `waiting_for_input` to `"true"`.
-2. Write `/ai/waiting_for_input.md`.
-3. Ask exactly one question in that file.
-4. Do not generate a new implementer task while waiting.
+Required actions when a candidate is blocked on human input:
 
-`/ai/waiting_for_input.md` must stay short:
+1. Append an entry to `/ai/deferred.md` with:
+   - The candidate task name / one-line description
+   - The specific question or decision that's blocking it
+   - The earliest signal that would unblock it (e.g., "user confirms provider
+     choice", "stage CI green after upstream merge")
+   - Date deferred
+2. Leave `/ai/state.json` field `waiting_for_input` at `"false"` and leave
+   `/ai/waiting_for_input.md` reflecting no active block. The deferred entry
+   lives in `/ai/deferred.md`, not in the waiting-for-input file.
+3. Re-run candidate selection (Operating Loop step 12) ignoring the deferred
+   item. Scope and emit the next highest-leverage task that is independent of
+   the deferred question.
+4. In the new task prompt's `Current Repo Context`, note that the deferred
+   candidate is parked and why, so the implementer/verifier don't accidentally
+   reach into it.
+
+Only set `waiting_for_input` to `"true"` if **every** roadmap candidate is
+genuinely blocked on a human decision and there is no safe PR-sized work left
+to do. In that (rare) case, write `/ai/waiting_for_input.md` with:
 
 ```md
 # Waiting For Input
 
 ## Context
-One or two sentences explaining what is blocked.
+One or two sentences explaining why every candidate is blocked.
 
 ## Question
 One specific question for the human.
 
 ## Needed To Continue
 The task or decision this answer will unblock.
+
+## Deferred backlog
+Pointer to `/ai/deferred.md` for the full parked list.
 ```
 
-When the answer is incorporated, set `waiting_for_input` to `"false"` and
-replace `/ai/waiting_for_input.md` with a short note that no input is currently
-requested.
+When the user later resolves a deferred question, remove the entry from
+`/ai/deferred.md` and treat that task as a normal candidate in the next
+selection pass. If `waiting_for_input` was `"true"`, set it back to `"false"`
+and replace `/ai/waiting_for_input.md` with a one-line "no input currently
+requested" note.
 
 ---
 
