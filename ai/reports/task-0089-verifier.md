@@ -151,11 +151,52 @@ PR mergeable status: `state=OPEN`, `mergeable=MERGEABLE`,
 
 ### Post-merge main-CI evidence
 
-(filled in below after merge)
+`gh pr merge 137 --squash` →
+mergeCommit `8d4eb26ca28473566de3ecccb49c3717e86f3a63`,
+mergedAt `2026-05-29T22:45:34Z`.
+
+Local main fast-forwarded to `origin/main` (`8d4eb26`), branch
+`impl/task-0089-shared-notifications-client` deleted locally.
+
+Post-merge main-CI run **`26666036515`** = **13/13 SUCCESS**:
+
+| Job | Conclusion |
+|---|---|
+| `plan` | success |
+| `notifications-client · {dev,stage,prod} · Verify` | success ×3 |
+| `notifications-client-tests · dev · Verify` | success |
+| `identity-worker · {dev,stage,prod} · Verify deploy` | success ×3 |
+| `identity-worker-tests · dev · Verify` | success |
+| `membership-worker · {dev,stage,prod} · Verify deploy` | success ×3 |
+| `membership-worker-tests · dev · Verify` | success |
+
+**Worker version IDs** captured from the four consumer-worker
+`Verify deploy` job logs (`Current Version ID: <uuid>` after
+`Uploaded <name> (Xs sec)`):
+
+| Worker · Env | Current Version ID |
+|---|---|
+| `identity-worker · stage` | `3f3dc275-6af4-405b-9211-c60ae4b29c24` |
+| `identity-worker · prod`  | `bc663ade-3574-4273-987f-4a0fb80f9658` |
+| `membership-worker · stage` | `a8d5c614-2891-4b61-9aa5-bd7a337b1d1f` |
+| `membership-worker · prod`  | `04692796-ac62-48b6-9cff-c4427ee04a59` |
+
+All four `Uploaded …` + `Verify deploy completed` lines present in
+their respective logs — the import-swap (and accept-invitation
+enqueue wire on membership-worker) shipped to all four live worker
+versions.
 
 ### Live invariant probes
 
-(filled in below after merge)
+| Probe | Expected | Actual |
+|---|---|---|
+| `https://stage.sourceplane.ai/` (`-L`) | 200 (→ `/orgs`) | ✅ 200 (final `https://stage.sourceplane.ai/orgs`) |
+| `https://prod.sourceplane.ai/`  (`-L`) | 200 (→ `/orgs`) | ✅ 200 (final `https://prod.sourceplane.ai/orgs`) |
+| `https://sourceplane-notifications-worker-stage.rahulvarghesepullely.workers.dev/health` | 404 + Cloudflare error `1042` (private worker) | ✅ 404, body contains `1042` |
+| `https://sourceplane-notifications-worker-prod.rahulvarghesepullely.workers.dev/health`  | 404 + Cloudflare error `1042` (private worker) | ✅ 404, body contains `1042` |
+
+Apex hostnames healthy; notifications-worker private `1042` invariants
+intact on both envs.
 
 ## Issues
 
