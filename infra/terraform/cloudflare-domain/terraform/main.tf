@@ -193,12 +193,27 @@ locals {
 #
 # Renamed in the cloudflare provider v5 line from `cloudflare_workers_domain`
 # to `cloudflare_workers_custom_domain`. The attribute shape is unchanged
-# (hostname, service, environment, account_id, zone_id), so the migration
-# is state-only: the `moved` block below carries the existing Cloudflare
-# resource IDs across the rename so no resource is destroyed or recreated.
-# Pre-rename live IDs (stage / prod) are preserved byte-identical:
+# (hostname, service, environment, account_id, zone_id).
+#
+# State migration: the cloudflare v5 provider does NOT implement
+# cross-resource-type MoveState for this rename, so a bare `moved {}`
+# block fails with "Unable to Move Resource State". The v5 upgrade
+# guide's canonical pattern is the `removed { lifecycle { destroy = false } }`
+# + `import {}` pair — drop the v4-typed state entry without touching
+# the live Cloudflare resource, then re-adopt it under the v5 resource
+# type by its known immutable ID. This preserves both live resource
+# IDs byte-identical and produces a zero-churn plan:
 #   stage: 052eaece5e989d5a7280b6c206e562c42950e3a6
 #   prod:  31e5f2ed1b1e4a5700e8ae0678846a0d753840e1
+
+locals {
+  # Pre-rename live Cloudflare resource IDs, keyed by environment.
+  # Pinned so the v4→v5 re-import is deterministic per workspace.
+  workers_custom_domain_ids = {
+    stage = "052eaece5e989d5a7280b6c206e562c42950e3a6"
+    prod  = "31e5f2ed1b1e4a5700e8ae0678846a0d753840e1"
+  }
+}
 
 resource "cloudflare_workers_custom_domain" "console" {
   count = local.has_custom_domain ? 1 : 0
@@ -210,9 +225,18 @@ resource "cloudflare_workers_custom_domain" "console" {
   environment = "production"
 }
 
-moved {
+removed {
   from = cloudflare_workers_domain.console
-  to   = cloudflare_workers_custom_domain.console
+
+  lifecycle {
+    destroy = false
+  }
+}
+
+import {
+  for_each = local.has_custom_domain && contains(keys(local.workers_custom_domain_ids), var.environment) ? toset([0]) : toset([])
+  id       = "${var.cloudflare_account_id}/${local.workers_custom_domain_ids[var.environment]}"
+  to       = cloudflare_workers_custom_domain.console[each.key]
 }
 
 # --- Outputs (non-secret) ---
