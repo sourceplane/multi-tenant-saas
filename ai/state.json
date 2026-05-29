@@ -1,6 +1,6 @@
 {
   "goal": "Supabase/Postgres-backed multi-organization Orun SaaS control plane",
-  "current_task": "next-orchestrator-cycle",
+  "current_task": "0079",
   "completed": [
     "0001",
     "0001.1",
@@ -83,19 +83,20 @@
     "0074",
     "0075",
     "0076",
-    "0077"
+    "0077",
+    "0078"
   ],
   "repo_health": "green",
-  "next_focus": "evaluate-next-billing-task-after-task-0077-web-console-billing-tab-merged",
-  "last_verified": "2026-05-29T01:30:28Z",
+  "next_focus": "scope-first-internal-caller-of-billing-entitlement-check-seam",
+  "last_verified": "2026-05-29T02:25:00Z",
   "waiting_for_input": "false",
-  "task_agent": "ai/tasks/task-0077-verifier.md",
+  "task_agent": "ai/tasks/task-0078-verifier.md",
   "notes": [
-    "Task 0077 verified PASS and merged via PR #120 (squash merge commit 5bf21b4) on 2026-05-29.",
-    "PR CI run 26612485212: all 4 jobs SUCCESS (plan + web-console dev/stage/prod Verify deploy).",
-    "Read-only Billing tab live in web-console: api.ts adds 5 typed billing read methods (listBillingPlans, getBillingCustomer, getBillingSummary, listBillingInvoices, getBillingEntitlements) using @saas/contracts/billing public types. main.ts adds Billing sidebar tab + summary, plans grid, customer card, entitlements table, and cursor-paginated invoices table. style.css adds scoped billing classes consistent with Task 0073 design language.",
-    "All API-derived strings rendered via h() / document.createTextNode (no innerHTML for API data). 404 on /billing/customer rendered as explicit empty state. Provider fields displayed as opaque references only.",
-    "Strictly read-only: no mutations, no provider SDK, no checkout/portal/webhook code, no infra/schema/Worker runtime/policy/metering changes.",
-    "Verifier report: ai/reports/task-0077-verifier.md."
+    "Task 0078 verified PASS and merged via PR #121 (squash commit 9f83468) on 2026-05-29.",
+    "Private internal seam POST /v1/internal/billing/entitlements/check is live on billing-worker, registered before public route matching and before resolveActor; api-edge facade tests pin non-exposure of the internal path and the exact five Task 0076 public read routes.",
+    "Contracts now export CheckBillingEntitlementRequest / CheckBillingEntitlementResponse / BillingEntitlementDeniedReason ('disabled' | 'not_configured'), provider-neutral and secret-safe (allowed decision exposes only valueType, limitValue, source, subscriptionId).",
+    "CI evidence: PR runs 26613640343 (initial) and 26613978472 (post implementer-report commit), both 16/16 SUCCESS; verifier report at ai/reports/task-0078-verifier.md, implementer report committed to PR branch.",
+    "Verifier-only fix applied: committed ai/reports/task-0078-implementer.md as adfa372 on the PR branch before merge (recurring gap from prior tasks).",
+    "Next focus: scope Task 0079 around the first internal caller of the entitlement seam (projects-worker limit.projects gating OR policy-worker decision lookup) and introduce caller-identity gating at that point."
   ]
 }

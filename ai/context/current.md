@@ -2,7 +2,33 @@
 
 Last updated: 2026-05-29
 
+## Latest Task — 0078 (verified PASS, merged)
+
+- PR [#121](https://github.com/sourceplane/multi-tenant-saas/pull/121) squash-merged on `main` as commit `9f83468` ("feat(billing): internal entitlement decision seam (task 0078)"). Branch `impl/task-0078-billing-entitlement-check` deleted.
+- Verifier report: `ai/reports/task-0078-verifier.md`. Implementer report: `ai/reports/task-0078-implementer.md` (verifier committed the implementer report to the PR branch as `adfa372` before merge — recurring gap consistent with prior tasks).
+- Live on main: private internal seam `POST /v1/internal/billing/entitlements/check` on `billing-worker`, registered before public route matching and before `resolveActor()`. Service-binding-only; api-edge facade allow-list pinned to exactly the five Task 0076 public read routes by new regression tests; the internal path is verified non-routed publicly.
+- Contracts: `CheckBillingEntitlementRequest`, `CheckBillingEntitlementResponse` (discriminated union of allowed / denied), `BillingEntitlementDeniedReason = 'disabled' | 'not_configured'`, `BillingEntitlementAllowedDecision` (only `valueType`, `limitValue`, `source`, `subscriptionId`), `BillingEntitlementDeniedDecision`. Provider-neutral; no apiKey/secret/token/providerPayload/sql/metadata/provider-id fields.
+- Decision semantics: enabled → allowed; disabled → denied/`disabled`; missing → denied/`not_configured` (fail-closed, 200 not 5xx); validation failures before any repo call; non-`not_found` repo errors → 503 `internal_error` with generic message, no SQL/stack/provider/row leakage (unit-tested against a poisoned error string).
+- Tests: contracts 18/18 (+4 decision-contract tests), billing-worker 41/41 (+14 across router, parser, decider, handler), api-edge billing-facade 16/16 (+2 internal-non-exposure + exact public allow-list).
+- CI: PR runs `26613640343` (initial) and `26613978472` (post implementer-report commit), both 16/16 SUCCESS. Orun validate / changed-plan (7 components × 3 envs → 15 jobs, plan `943df57fd029`) / dry-run all PASS locally.
+
+## Next Task — 0079 (to scope)
+
+- Focus: scope the first internal caller of the entitlement seam. Two candidates:
+  1. projects-worker calls `entitlements/check` for `limit.projects` before allowing project creation.
+  2. policy-worker consults the seam from policy decisions where billing-gated capabilities apply.
+- At the same time introduce caller-identity gating on the internal route (mTLS shared-secret header / service-binding-only enforcement beyond api-edge allow-list), since today privacy of `/v1/internal/billing/entitlements/check` is implicit, not authenticated.
+- Out of scope for 0079: provider adapters / Stripe SDK / webhook ingest / Secrets Store / metering-worker / billing mutations / web-console writes. Those remain downstream.
+
 ## Repo Reality
+
+- Tasks 0001–0078 are verified.
+- Task 0078 squash-merged at `9f83468` via PR #121.
+- Task 0077 squash-merged at `5bf21b4` via PR #120 (web-console read-only Billing tab).
+- Task 0076 squash-merged at `fb66ff5` via PR #119 (billing-worker runtime + api-edge billing read facade).
+- Task 0075 squash-merged earlier (billing schema + `@saas/db/billing` + `@saas/contracts/billing` foundation).
+
+## Historical Notes
 
 - Task 0021 squash-merged at `324ca36` via PR #62.
 - Task 0022 squash-merged at `28dd671` via PR #63.
@@ -448,7 +474,7 @@ Task 0060 Verifier is scoped and ready.
 
 ## Current Task
 
-No active task — orchestrator should select the next billing surface task. See "Next Task After 0077" below.
+Task 0078.1 Verifier is scoped and ready. See `ai/tasks/task-0078-verifier.md`. PR #121 must be verified and merged (or failed with blockers) before a new implementer task is started.
 
 Task 0077 verified PASS and merged via PR #120 (squash merge `5bf21b4`) on 2026-05-29. PR CI run `26612485212` was 4/4 SUCCESS (plan + web-console dev/stage/prod Verify deploy).
 
@@ -458,7 +484,7 @@ Web-console Billing tab now live on main:
 - `apps/web-console/src/style.css` adds scoped Billing classes (`billing-summary-card`, `billing-plans-grid`, `billing-status-*`, etc.) consistent with the Task 0073 calm/editorial design language.
 - Strictly read-only: no mutations, no provider SDK, no checkout/portal/webhook code, no billing-worker/api-edge/policy-worker/metering-worker/database/contract changes. Provider fields displayed as opaque references only.
 
-Tasks 0001–0077 are complete and verified.
+Tasks 0001–0077 are complete and verified. Task 0078 is implementer-complete and awaiting verifier/merge.
 
 ## Current Roadmap Position
 
@@ -468,11 +494,11 @@ Tasks 0001–0077 are complete and verified.
 - Metering prerequisites are in place: persistence/contracts (Task 0071), public metering Worker/API surface (Task 0072), and rollup materialization (Task 0074).
 - Billing foundation + first read runtime/API are in place: persistence + provider-neutral contracts (Task 0075) and billing-worker runtime + api-edge billing read facade (Task 0076).
 
-## Next Task After 0077
+## Next Task After 0078 Verification
 
-With the web-console read-only Billing tab live (Task 0077), natural next candidates per `specs/components/11-billing.md` sequencing:
+After PR #121 is verified/merged, natural next candidates per `specs/components/11-billing.md` sequencing:
 
-1. `billing_admin` role wiring for `billing.read` in policy-worker if the product expects a billing-only persona to access these routes (currently only `owner`/`admin` paths satisfy policy).
-2. Provider-adapter scaffolding for a privileged read-sync job (e.g. Stripe customer/subscription read sync) kept private and behind webhook/poll boundaries — separate from any public surface and from the future mutation surface (checkout/portal/webhooks), which remains an explicit non-goal until scoped.
-3. Billing write surface scoping (customer provisioning, checkout/portal session creation) — likely behind a feature flag — once read surface and policy persona are settled.
+1. First caller wiring for the Task 0078 entitlement decision seam — likely a narrow project/resource operation gate that checks a named entitlement through a service binding before allowing an expensive or plan-limited behavior.
+2. Provider-adapter scaffolding for a privileged read-sync job (e.g. Stripe customer/subscription read sync) kept private and behind webhook/poll boundaries — separate from any public surface and from future mutation surfaces.
+3. Billing write surface scoping (customer provisioning, checkout/portal session creation) — likely behind a feature flag — once the internal entitlement decision seam is verified.
 
