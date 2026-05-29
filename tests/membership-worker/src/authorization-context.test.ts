@@ -38,6 +38,7 @@ function createFakeRepo(roleAssignments: RoleAssignment[] = []): MembershipRepos
     async revokeRoleAssignment() { return { ok: false, error: { kind: "not_found" as const } }; },
     async revokeAllRoleAssignments() { return { ok: true, value: [] }; },
     async countActiveOwners() { return { ok: true, value: 0 }; },
+    async countBillableMembers() { return { ok: true, value: 0 }; },
   };
 }
 

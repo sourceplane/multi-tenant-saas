@@ -88,6 +88,7 @@ function createFakeRepository(): MembershipRepository & { _orgs: Map<string, Org
     async revokeRoleAssignment() { return { ok: false, error: { kind: "internal" as const, message: "not implemented" } }; },
     async revokeAllRoleAssignments() { return { ok: false, error: { kind: "internal" as const, message: "not implemented" } }; },
     async countActiveOwners() { return { ok: false, error: { kind: "internal" as const, message: "not implemented" } }; },
+    async countBillableMembers() { return { ok: false, error: { kind: "internal" as const, message: "not implemented" } }; },
   };
 
   return repo;
@@ -1124,7 +1125,7 @@ describe("invitation administration", () => {
 
   describe("handleCreateInvitation", () => {
 
-    function createRepo(opts: { actorRolesFail?: boolean; createFail?: boolean } = {}) {
+    function createRepo(opts: { actorRolesFail?: boolean; createFail?: boolean; billableCount?: number; billableCountFail?: boolean } = {}) {
       const roles: RoleAssignment[] = [
         { id: "ra1", orgId: orgUuid, subjectId: "usr_admin", subjectType: "user", role: "admin", scopeKind: "organization", scopeRef: null, createdAt: fixedNowLocal, revokedAt: null },
       ];
@@ -1132,6 +1133,10 @@ describe("invitation administration", () => {
         listRoleAssignments: async () => {
           if (opts.actorRolesFail) return { ok: false as const, error: { kind: "internal" as const, message: "db error" } };
           return { ok: true as const, value: roles };
+        },
+        countBillableMembers: async (_orgId: string, _now: Date) => {
+          if (opts.billableCountFail) return { ok: false as const, error: { kind: "internal" as const, message: "db error" } };
+          return { ok: true as const, value: opts.billableCount ?? 0 };
         },
         createInvitation: async (input: any) => {
           if (opts.createFail) return { ok: false as const, error: { kind: "internal" as const, message: "db error" } };
@@ -1154,6 +1159,29 @@ describe("invitation administration", () => {
         },
       };
     }
+
+    /**
+     * Default checkEntitlement injected by tests below: returns an unlimited
+     * quantity entitlement so the billing gate (Task 0080) is effectively
+     * pass-through for tests that aren't exercising it. Dedicated billing
+     * gate tests pass their own checkEntitlement.
+     */
+    const allowBillingCheck = async (
+      _binding: Fetcher,
+      orgPublicIdArg: string,
+      entitlementKey: string,
+    ) => ({
+      kind: "decision" as const,
+      decision: {
+        allowed: true as const,
+        orgId: orgPublicIdArg,
+        entitlementKey,
+        valueType: "quantity" as const,
+        limitValue: null,
+        source: "plan" as const,
+        subscriptionId: null,
+      },
+    });
 
     function makeRequest(body: unknown): Request {
       return new Request("https://test.local/v1/organizations/" + orgPublicIdStr + "/invitations", {
@@ -1333,6 +1361,7 @@ describe("invitation administration", () => {
       let createCalled = false;
       const repo = {
         listRoleAssignments: async () => ({ ok: true as const, value: [] as RoleAssignment[] }),
+        countBillableMembers: async () => ({ ok: true as const, value: 0 }),
         createInvitation: async (input: any) => {
           createCalled = true;
           return { ok: true as const, value: { ...input, status: "pending", acceptedAt: null, revokedAt: null } };
@@ -1573,6 +1602,195 @@ describe("invitation administration", () => {
       expect(json.data.invitation.role).toBe("builder");
       expect(json.data.invitation.status).toBe("pending");
       expect(json.data.delivery).toEqual({ mode: "local_debug", token: "deadbeef".repeat(8) });
+    });
+
+    // ── Billing entitlement gate (Task 0080) ──────────────────────
+    describe("billing entitlement gate (limit.members)", () => {
+      function makeBillingDecision(decision: any) {
+        return async () => ({ kind: "decision" as const, decision });
+      }
+      const baseEnv = () => ({
+        POLICY_WORKER: createPolicyFetcher(true),
+        BILLING_WORKER: {} as Fetcher,
+        SOURCEPLANE_DB: {} as Hyperdrive,
+        ENVIRONMENT: "test",
+        DEBUG_DELIVERY: "false",
+      });
+
+      it("calls billing-worker with limit.members, the org public id, and a request id", async () => {
+        const repo = createRepo({ billableCount: 0 });
+        let captured: { binding: unknown; orgPublicIdArg: string; entitlementKey: string; requestId: string } | null = null;
+        const checkEntitlement = (async (binding: any, orgPublicIdArg: string, entitlementKey: string, requestId: string) => {
+          captured = { binding, orgPublicIdArg, entitlementKey, requestId };
+          return {
+            kind: "decision" as const,
+            decision: { allowed: true, orgId: orgPublicIdArg, entitlementKey, valueType: "quantity", limitValue: null, source: "plan", subscriptionId: null },
+          };
+        }) as any;
+
+        const response = await handleCreateInvitation(
+          makeRequest({ email: "u@x.com", role: "viewer" }),
+          baseEnv() as any, "req_abc", actor, orgPublicIdStr,
+          { repo, generateToken: async () => ({ raw: "r", hash: "h" }), now: () => fixedNowLocal, checkEntitlement },
+        );
+
+        expect(response.status).toBe(201);
+        expect(captured).not.toBeNull();
+        expect(captured!.orgPublicIdArg).toBe(orgPublicIdStr);
+        expect(captured!.entitlementKey).toBe("limit.members");
+        expect(captured!.requestId).toBe("req_abc");
+      });
+
+      it("allows creation when billable count is strictly under the quantity limit", async () => {
+        const repo = createRepo({ billableCount: 4 });
+        const checkEntitlement = makeBillingDecision({ allowed: true, orgId: orgPublicIdStr, entitlementKey: "limit.members", valueType: "quantity", limitValue: 5, source: "plan", subscriptionId: null }) as any;
+
+        const response = await handleCreateInvitation(
+          makeRequest({ email: "u@x.com", role: "viewer" }),
+          baseEnv() as any, "req_test", actor, orgPublicIdStr,
+          { repo, generateToken: async () => ({ raw: "r", hash: "h" }), now: () => fixedNowLocal, checkEntitlement },
+        );
+
+        expect(response.status).toBe(201);
+      });
+
+      it("allows creation when the entitlement is unlimited (limitValue null)", async () => {
+        const repo = createRepo({ billableCount: 9999 });
+        const checkEntitlement = makeBillingDecision({ allowed: true, orgId: orgPublicIdStr, entitlementKey: "limit.members", valueType: "quantity", limitValue: null, source: "plan", subscriptionId: null }) as any;
+
+        const response = await handleCreateInvitation(
+          makeRequest({ email: "u@x.com", role: "viewer" }),
+          baseEnv() as any, "req_test", actor, orgPublicIdStr,
+          { repo, generateToken: async () => ({ raw: "r", hash: "h" }), now: () => fixedNowLocal, checkEntitlement },
+        );
+
+        expect(response.status).toBe(201);
+      });
+
+      it("denies with 412 limit_reached when billable count meets the quantity limit", async () => {
+        let createCalls = 0;
+        const baseRepo = createRepo({ billableCount: 3 });
+        const repo = {
+          ...baseRepo,
+          createInvitation: async (input: any) => {
+            createCalls++;
+            return baseRepo.createInvitation(input);
+          },
+        };
+        const checkEntitlement = makeBillingDecision({ allowed: true, orgId: orgPublicIdStr, entitlementKey: "limit.members", valueType: "quantity", limitValue: 3, source: "plan", subscriptionId: null }) as any;
+
+        const response = await handleCreateInvitation(
+          makeRequest({ email: "u@x.com", role: "viewer" }),
+          baseEnv() as any, "req_test", actor, orgPublicIdStr,
+          { repo, generateToken: async () => ({ raw: "r", hash: "h" }), now: () => fixedNowLocal, checkEntitlement },
+        );
+
+        expect(response.status).toBe(412);
+        const json = await response.json() as { error: { code: string; details?: { reason?: string } } };
+        expect(json.error.code).toBe("precondition_failed");
+        expect(json.error.details?.reason).toBe("limit_reached");
+        expect(createCalls).toBe(0);
+      });
+
+      it("denies with 412 disabled when billing returns allowed:false reason:disabled", async () => {
+        const repo = createRepo();
+        const checkEntitlement = makeBillingDecision({ allowed: false, orgId: orgPublicIdStr, entitlementKey: "limit.members", reason: "disabled" }) as any;
+
+        const response = await handleCreateInvitation(
+          makeRequest({ email: "u@x.com", role: "viewer" }),
+          baseEnv() as any, "req_test", actor, orgPublicIdStr,
+          { repo, generateToken: async () => ({ raw: "r", hash: "h" }), now: () => fixedNowLocal, checkEntitlement },
+        );
+
+        expect(response.status).toBe(412);
+        const json = await response.json() as { error: { code: string; details?: { reason?: string } } };
+        expect(json.error.details?.reason).toBe("disabled");
+      });
+
+      it("denies with 412 not_configured when no entitlement exists for the org", async () => {
+        const repo = createRepo();
+        const checkEntitlement = makeBillingDecision({ allowed: false, orgId: orgPublicIdStr, entitlementKey: "limit.members", reason: "not_configured" }) as any;
+
+        const response = await handleCreateInvitation(
+          makeRequest({ email: "u@x.com", role: "viewer" }),
+          baseEnv() as any, "req_test", actor, orgPublicIdStr,
+          { repo, generateToken: async () => ({ raw: "r", hash: "h" }), now: () => fixedNowLocal, checkEntitlement },
+        );
+
+        expect(response.status).toBe(412);
+        const json = await response.json() as { error: { code: string; details?: { reason?: string } } };
+        expect(json.error.details?.reason).toBe("not_configured");
+      });
+
+      it("returns 503 when billing-client surfaces service_error (fail-closed)", async () => {
+        const repo = createRepo();
+        const checkEntitlement = (async () => ({ kind: "service_error" as const })) as any;
+
+        const response = await handleCreateInvitation(
+          makeRequest({ email: "u@x.com", role: "viewer" }),
+          baseEnv() as any, "req_test", actor, orgPublicIdStr,
+          { repo, generateToken: async () => ({ raw: "r", hash: "h" }), now: () => fixedNowLocal, checkEntitlement },
+        );
+
+        expect(response.status).toBe(503);
+      });
+
+      it("returns 503 when countBillableMembers fails (fail-closed)", async () => {
+        const repo = createRepo({ billableCountFail: true });
+        const checkEntitlement = makeBillingDecision({ allowed: true, orgId: orgPublicIdStr, entitlementKey: "limit.members", valueType: "quantity", limitValue: 5, source: "plan", subscriptionId: null }) as any;
+
+        const response = await handleCreateInvitation(
+          makeRequest({ email: "u@x.com", role: "viewer" }),
+          baseEnv() as any, "req_test", actor, orgPublicIdStr,
+          { repo, generateToken: async () => ({ raw: "r", hash: "h" }), now: () => fixedNowLocal, checkEntitlement },
+        );
+
+        expect(response.status).toBe(503);
+      });
+
+      it("returns 412 malformed_limit when entitlement valueType is not 'quantity'", async () => {
+        const repo = createRepo();
+        const checkEntitlement = makeBillingDecision({ allowed: true, orgId: orgPublicIdStr, entitlementKey: "limit.members", valueType: "boolean", limitValue: true, source: "plan", subscriptionId: null }) as any;
+
+        const response = await handleCreateInvitation(
+          makeRequest({ email: "u@x.com", role: "viewer" }),
+          baseEnv() as any, "req_test", actor, orgPublicIdStr,
+          { repo, generateToken: async () => ({ raw: "r", hash: "h" }), now: () => fixedNowLocal, checkEntitlement },
+        );
+
+        expect(response.status).toBe(412);
+        const json = await response.json() as { error: { code: string; details?: { reason?: string } } };
+        expect(json.error.details?.reason).toBe("malformed_limit");
+      });
+
+      it("gate runs BEFORE token generation and DB write", async () => {
+        let tokenCalls = 0;
+        let createCalls = 0;
+        const baseRepo = createRepo({ billableCount: 5 });
+        const repo = {
+          ...baseRepo,
+          createInvitation: async (input: any) => {
+            createCalls++;
+            return baseRepo.createInvitation(input);
+          },
+        };
+        const checkEntitlement = makeBillingDecision({ allowed: true, orgId: orgPublicIdStr, entitlementKey: "limit.members", valueType: "quantity", limitValue: 5, source: "plan", subscriptionId: null }) as any;
+
+        const response = await handleCreateInvitation(
+          makeRequest({ email: "u@x.com", role: "viewer" }),
+          baseEnv() as any, "req_test", actor, orgPublicIdStr,
+          {
+            repo,
+            generateToken: async () => { tokenCalls++; return { raw: "r", hash: "h" }; },
+            now: () => fixedNowLocal,
+            checkEntitlement,
+          },
+        );
+
+        expect(response.status).toBe(412);
+        expect(tokenCalls).toBe(0);
+        expect(createCalls).toBe(0);
+      });
     });
   });
 

@@ -158,4 +158,24 @@ export interface MembershipRepository {
   revokeRoleAssignment(orgId: string, assignmentId: string, revokedAt: Date): Promise<MembershipResult<RoleAssignment>>;
   revokeAllRoleAssignments(orgId: string, subjectId: string, revokedAt: Date): Promise<MembershipResult<RoleAssignment[]>>;
   countActiveOwners(orgId: string): Promise<MembershipResult<number>>;
+
+  /**
+   * Counts billable members for an organization for the purposes of the
+   * `limit.members` billing entitlement. The count includes:
+   *   - active organization members (membership.organization_members.status = 'active'); and
+   *   - pending invitations whose `expires_at > now` and that have neither
+   *     been accepted nor revoked.
+   *
+   * Accepted invitations are not counted here because accepting an invitation
+   * already inserts an `organization_members` row and the active member is
+   * counted via the first clause; counting the accepted invitation again
+   * would double-count.
+   *
+   * Revoked invitations and expired pending invitations are excluded so
+   * that revoking or letting an invite expire frees a seat back up.
+   *
+   * The helper performs the count in a single parameterized SQL statement
+   * to avoid paging entire tables for billing decisions.
+   */
+  countBillableMembers(orgId: string, now: Date): Promise<MembershipResult<number>>;
 }

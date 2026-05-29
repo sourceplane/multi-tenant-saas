@@ -7,18 +7,28 @@ import { createSqlExecutor } from "@saas/db/hyperdrive";
 import { createMembershipRepository } from "@saas/db/membership";
 import { createEventsRepository } from "@saas/db/events";
 import { authorizeViaPolicy } from "../policy-client.js";
+import {
+  checkBillingEntitlement,
+  decideMembersLimit,
+} from "../billing-client.js";
 import { successResponse, errorResponse, validationError } from "../http.js";
-import { parseOrgPublicId, invitationPublicId, generateInvitationToken } from "../ids.js";
+import { parseOrgPublicId, orgPublicId, invitationPublicId, generateInvitationToken } from "../ids.js";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const INVITATION_EXPIRY_DAYS = 7;
+const MEMBERS_LIMIT_ENTITLEMENT_KEY = "limit.members";
 
 export interface CreateInvitationDeps {
-  repo: Pick<MembershipRepository, "listRoleAssignments" | "createInvitation">;
+  repo: Pick<MembershipRepository, "listRoleAssignments" | "createInvitation" | "countBillableMembers">;
   eventsRepo?: Pick<EventsRepository, "appendEventWithAudit">;
   generateToken?: () => Promise<{ raw: string; hash: string }>;
   now?: () => Date;
   generateId?: () => string;
+  /**
+   * Injectable billing entitlement check for tests. Defaults to a real call
+   * against env.BILLING_WORKER.
+   */
+  checkEntitlement?: typeof checkBillingEntitlement;
 }
 
 function randomHex(bytes: number): string {
@@ -79,6 +89,13 @@ export async function handleCreateInvitation(
     return errorResponse("internal_error", "Service unavailable", 503, requestId);
   }
 
+  if (!deps && !env.BILLING_WORKER) {
+    // Production code path: missing service binding fails closed before any
+    // policy / repo work runs. Tests that inject `deps` provide their own
+    // billing seam (or opt out entirely) and skip this check.
+    return errorResponse("internal_error", "Service unavailable", 503, requestId);
+  }
+
   const policyWorker = env.POLICY_WORKER;
   const executor = deps ? null : createSqlExecutor(env.SOURCEPLANE_DB!);
   try {
@@ -100,6 +117,56 @@ export async function handleCreateInvitation(
 
     if (!authResult.allow) {
       return errorResponse("not_found", "Organization not found", 404, requestId);
+    }
+
+    // ── Billing entitlement gate (Task 0080) ─────────────────────
+    // Invitation creation is gated on `limit.members` after policy allow and
+    // before any invitation / event / audit row is written. The billable
+    // count is `active members + pending invitations` so that pending
+    // invitations occupy seats until they accept, expire, or are revoked.
+    // Fails closed on any service / misconfiguration error.
+    //
+    // Tests that inject `deps` without an explicit `checkEntitlement` opt
+    // out of the gate entirely — preserving the original seam for handler
+    // tests that predate the gate. Production code path always passes
+    // through `checkBillingEntitlement` against `env.BILLING_WORKER`, which
+    // is asserted by the dedicated billing-gate test suite below.
+    const skipBillingGate = deps !== undefined && !deps.checkEntitlement;
+    if (!skipBillingGate) {
+      const entitlementFn = deps?.checkEntitlement ?? checkBillingEntitlement;
+      const billingBinding = env.BILLING_WORKER;
+      if (!billingBinding && !deps?.checkEntitlement) {
+        return errorResponse("internal_error", "Service unavailable", 503, requestId);
+      }
+      const entitlementResult = await entitlementFn(
+        billingBinding as Fetcher,
+        orgPublicId(orgUuid),
+        MEMBERS_LIMIT_ENTITLEMENT_KEY,
+        requestId,
+      );
+      if (entitlementResult.kind === "service_error") {
+        return errorResponse("internal_error", "Service unavailable", 503, requestId);
+      }
+
+      const nowForGate = deps?.now ? deps.now() : new Date();
+      const countResult = await repo.countBillableMembers(orgUuid, nowForGate);
+      if (!countResult.ok) {
+        return errorResponse("internal_error", "Service unavailable", 503, requestId);
+      }
+
+      const gate = decideMembersLimit(entitlementResult.decision, countResult.value);
+      if (gate.kind === "service_error") {
+        return errorResponse("internal_error", "Service unavailable", 503, requestId);
+      }
+      if (gate.kind === "deny") {
+        return errorResponse(
+          "precondition_failed",
+          gate.message,
+          412,
+          requestId,
+          { reason: gate.reason },
+        );
+      }
     }
 
     const now = deps?.now ? deps.now() : new Date();

@@ -655,5 +655,37 @@ export function createMembershipRepository(executor: SqlExecutor): MembershipRep
         return safeError("Failed to count active owners");
       }
     },
+
+    async countBillableMembers(orgId: string, now: Date): Promise<MembershipResult<number>> {
+      // A "billable" seat is anything that grows the active membership of an
+      // organization. We count:
+      //   1) active organization members; plus
+      //   2) pending invitations (not accepted, not revoked, not expired).
+      // The two populations are disjoint by construction: an invitation that
+      // has been accepted is no longer 'pending' and instead surfaces as an
+      // active organization_members row, which the first sub-count picks up.
+      // Both sub-counts are evaluated in a single round-trip to keep this
+      // helper cheap enough to call on the create-invitation hot path.
+      try {
+        const result = await executor.execute<Record<string, unknown>>(
+          `SELECT
+             (SELECT COUNT(*) FROM membership.organization_members
+                WHERE org_id = $1 AND status = 'active')
+             +
+             (SELECT COUNT(*) FROM membership.organization_invitations
+                WHERE org_id = $1
+                  AND status = 'pending'
+                  AND revoked_at IS NULL
+                  AND accepted_at IS NULL
+                  AND expires_at > $2)
+             AS cnt`,
+          [orgId, now.toISOString()],
+        );
+        const cnt = Number(result.rows[0]?.cnt ?? 0);
+        return { ok: true, value: cnt };
+      } catch {
+        return safeError("Failed to count billable members");
+      }
+    },
   };
 }

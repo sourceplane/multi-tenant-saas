@@ -1570,4 +1570,59 @@ describe("MembershipRepository", () => {
       }
     });
   });
+
+  describe("countBillableMembers", () => {
+    it("uses parameterized SQL summing active members and pending non-expired invitations", async () => {
+      const { executor, queries } = createFakeExecutor({ rows: [{ cnt: "5" }] });
+      const repo = createMembershipRepository(executor);
+      const now = new Date("2026-01-15T10:00:00Z");
+
+      await repo.countBillableMembers("org-001", now);
+
+      const sql = queries[0]!.text;
+      expect(sql).toContain("$1");
+      expect(sql).toContain("$2");
+      expect(sql).toContain("membership.organization_members");
+      expect(sql).toContain("status = 'active'");
+      expect(sql).toContain("membership.organization_invitations");
+      expect(sql).toContain("status = 'pending'");
+      expect(sql).toContain("revoked_at IS NULL");
+      expect(sql).toContain("accepted_at IS NULL");
+      expect(sql).toContain("expires_at > $2");
+      expect(queries[0]!.params).toEqual(["org-001", now.toISOString()]);
+    });
+
+    it("returns the combined billable count", async () => {
+      const { executor } = createFakeExecutor({ rows: [{ cnt: "7" }] });
+      const repo = createMembershipRepository(executor);
+
+      const result = await repo.countBillableMembers("org-001", new Date());
+
+      expect(result.ok).toBe(true);
+      if (result.ok) expect(result.value).toBe(7);
+    });
+
+    it("returns 0 when org has no members or pending invitations", async () => {
+      const { executor } = createFakeExecutor({ rows: [{ cnt: "0" }] });
+      const repo = createMembershipRepository(executor);
+
+      const result = await repo.countBillableMembers("org-empty", new Date());
+
+      expect(result.ok).toBe(true);
+      if (result.ok) expect(result.value).toBe(0);
+    });
+
+    it("maps generic errors to safe internal error", async () => {
+      const { executor } = createFakeExecutor({ error: new Error("connection refused") });
+      const repo = createMembershipRepository(executor);
+
+      const result = await repo.countBillableMembers("org-001", new Date());
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.kind).toBe("internal");
+        expect((result.error as { kind: "internal"; message: string }).message).not.toContain("connection refused");
+      }
+    });
+  });
 });
