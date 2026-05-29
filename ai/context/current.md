@@ -1,103 +1,87 @@
 # Current Context
 
-Last updated: 2026-05-29 (Task 0086 Implementer DONE — PR #134 OPEN with
-13/13 PR-CI green; Task 0086 Verifier scoped and ready)
+Last updated: 2026-05-29 (Task 0086 Verifier PASS — PR #134 merged at
+`2bb088f`, post-merge main-CI 13/13 SUCCESS, live deploys + migration
+confirmed on stage + prod)
 
-## Current Task — 0086 Verifier (notifications-worker V1 bring-up)
+## No active task
 
-Implementer landed `apps/notifications-worker` V1 on branch
-`impl/task-0086-notifications-worker` (tip `b611398`). PR #134 is
-OPEN, MERGEABLE, base=`main`, 13/13 CI SUCCESS on run `26649268365`.
-The verifier prompt at `ai/tasks/task-0086-verifier.md` carries the
-full pre- and post-merge acceptance contract.
+Task 0086 (notifications-worker V1 bring-up) is verified and merged.
+Awaiting user selection of the next focus.
 
-### What 0086 ships
+### Next-task candidates
 
-- New Cloudflare Worker `apps/notifications-worker` exposing an
-  internal-only HTTP API: `GET /health`, `POST /v1/notifications`,
-  `GET /v1/notifications/:id`, `GET|PUT /v1/notifications/preferences`,
-  `POST /v1/notifications/recipients/:recipient/suppress`.
-- Internal-actor gate on every non-health route via
-  `x-internal-actor` / `x-actor-subject-id` /
-  `x-actor-subject-type`. Allow-list:
-  `membership-worker`, `billing-worker`, `policy-worker`,
-  `events-worker`, `api-edge`.
-- Five canonical events emitted through `EVENTS_WORKER` service
-  binding: `notification.queued`, `notification.sent`,
-  `notification.failed`, `notification.preference_updated`,
-  `notification.suppressed`. `templateData` is excluded from event
-  payloads (asserted in tests).
-- New Postgres schema `notifications` with four tables
-  (`preferences`, `notifications`, `notification_attempts`,
-  `suppressions`) added by migration `120_notifications_core`
-  (claimed checksum
-  `868cc1092b4b385b6ed3d203efe5302191865131bb98d0e9f5fe5ad6d16f01bb`
-  — verifier recomputes).
-- New `packages/contracts/src/notifications.ts` (V1 contract).
-- New `packages/db/src/notifications/` repository (`pg`-backed,
-  Result-typed, mirroring `packages/db/src/membership/`).
-- New `tests/notifications-worker/` (Jest ESM; 20/20 passing).
-- V1 provider: `local-debug` only (synthetic
-  `local-debug-<short-id>` `providerMessageId`). Real provider swap
-  is a follow-up task.
-
-### What 0086 deliberately does NOT ship (verifier confirms)
-
-- No caller wiring (no `identity-worker` magic-link hookup, no
-  `membership-worker` invitation-email hookup, no `billing-worker`
-  receipt hookup). The V1 surface is reviewable in isolation.
-- No real provider adapter (Resend / SES / Postmark).
-- No Queues / Durable Objects / KV / Cron Triggers.
-- No `api-edge` route to notifications-worker — there is no public
-  `/v1/notifications/*` surface in V1.
-- **No touch to `infra/terraform/cloudflare-domain/**`** or any
-  cloudflare provider pin. Task 0085b's deferred risk window is
-  honored.
-- No change to `intent.yaml` parameter defaults, `kiox.lock`, or
-  `.terraform.lock.hcl`.
-- No modification of any other worker's `src/**` or any other
-  bounded context's `packages/db/src/**` folder.
-
-### Verifier post-merge load-bearing checks
-
-- `db-migrate · {stage,prod} · Migrate` apply main-CI jobs green;
-  `120_notifications_core` lands in both Supabase projects.
-- `notifications-worker · {stage,prod} · Verify deploy` main-CI jobs
-  green; wrangler live deploy logged for both env Worker names.
-- Live `/health` 200 on
-  `https://sourceplane-notifications-worker-{stage,prod}.rahulvarghesepullely.workers.dev/health`
-  (or whichever host the `wrangler.jsonc` `name` resolves to —
-  verifier records the exact URL).
-- Apex `stage.sourceplane.ai` / `prod.sourceplane.ai` still serve
-  200 with `Sourceplane Console` body — Task 0085a's `0 destroyed`
-  invariant on `cloudflare-domain` Terraform state must continue to
-  hold on any apply triggered by the merge (likely 0 jobs selected
-  because the diff does not touch that component; verifier
-  records).
+1. **Notifications caller wiring** — wire `identity-worker` magic-link
+   send and/or `membership-worker` invitation email through
+   notifications-worker. Unblocks roadmap B1 (real auth).
+2. **Real provider swap** — slot Resend / SES / Postmark into
+   `apps/notifications-worker/src/providers/` and gate via
+   `NOTIFICATIONS_PROVIDER`. Required before any real delivery.
+3. **Revive Task 0085b** when the user lifts the defer
+   (cloudflare-domain v4 → v5 provider bump + `import {}` re-adoption
+   of the two known immutable IDs).
+4. **Pre-existing `identity-worker-tests` `crypto` TS-type fix** —
+   reproduces on a clean stash of `main`; unrelated to 0086, scoped as
+   a separate small follow-up.
 
 ## Repo health: green
 
-Apex hostnames `stage.sourceplane.ai` and `prod.sourceplane.ai`
-remain live on the original Cloudflare Workers custom-domain
-attachments (stage id
+Apex hostnames `stage.sourceplane.ai` and `prod.sourceplane.ai` live on
+the original Cloudflare Workers custom-domain attachments (stage id
 `052eaece5e989d5a7280b6c206e562c42950e3a6`, prod id
 `31e5f2ed1b1e4a5700e8ae0678846a0d753840e1`). Rollback hatch
 `*.rahulvarghesepullely.workers.dev` still serves 200 on both envs.
 Provider pin holds at `cloudflare ~> 4.52` (Task 0085b deferred).
 `kiox.lock` pinned at orun v2.3.0. `main` tip on `origin/main` is
-`9f9ea1a` (post Task 0085a verifier close-out).
+`2bb088f` (post Task 0086 verifier close-out).
+
+notifications-worker V1 is now deployed on stage + prod (private —
+`workers_dev: false`, no public custom domain). Migration
+`120_notifications_core` applied on both Supabase projects. No caller
+wires it yet — that is the highest-leverage next candidate.
+
+## Recently completed — Task 0086 (notifications-worker V1, PASS)
+
+- **PR #134** (`impl/task-0086-notifications-worker`), squash `2bb088f`
+  at 2026-05-29T18:03:51Z. Files: `apps/notifications-worker/**`,
+  `packages/contracts/src/notifications.ts`,
+  `packages/db/src/{migrations/120_notifications_core,notifications,manifest.ts}`,
+  `tests/notifications-worker/**`, `pnpm-lock.yaml`, ai/ docs.
+- PR-CI run `26649268365` (3/3 envs + db-migrate stage+prod + worker
+  Verify deploy stage+prod + tests on dev) = 13/13 SUCCESS.
+- Post-merge main-CI run `26653759859` = 13/13 SUCCESS. Real wrangler
+  uploads: notifications-worker-stage (1.23s), notifications-worker-prod
+  (1.57s). Migration `120_notifications_core` in `applied` array on
+  both env jobs.
+- Live `/health` on `sourceplane-notifications-worker-{stage,prod}.rahulvarghesepullely.workers.dev`
+  returns HTTP 404 + Cloudflare error `1042` — EXPECTED (private
+  worker, matches membership-worker pattern, documented in
+  `orun-saas-verifier` skill). Acceptance criterion #8 recorded as
+  met-in-spirit.
+- Apex `stage.sourceplane.ai` / `prod.sourceplane.ai` still serve
+  `Sourceplane Console` 200 (no regression on Task 0085a's `0 destroyed`
+  invariant).
+- Migration checksum
+  `868cc1092b4b385b6ed3d203efe5302191865131bb98d0e9f5fe5ad6d16f01bb`
+  recomputed match.
+- `wrangler.jsonc` Hyperdrive + service-binding IDs confirmed to be the
+  real shared values (identical to events-worker / membership-worker on
+  `main`) — implementer Follow-up #3 closed informational.
+- Post-merge `orun plan --changed` = `0 components × 3 envs → 0 jobs`
+  (durability ✓).
+- Reports: `ai/reports/task-0086-implementer.md`,
+  `ai/reports/task-0086-verifier.md`.
 
 ## Deferred — Task 0085b (cloudflare-domain v4 → v5, Phase 2)
 
-User has explicitly deferred 0085b. The narrow Terraform-tracking
-risk window from Task 0085a remains open: the two live
-custom-domain attachments are **not** Terraform-managed between the
-0085a merge and the eventual 0085b apply. Cloudflare-side drift
-would not be detected by `terraform plan`. Mitigation: no manual
-Cloudflare-dashboard or wrangler edits to those attachments while
-0085b is parked. Task 0086 was verified at scoping time to NOT
-touch `infra/terraform/cloudflare-domain/**` so the window does not
-widen.
+User has explicitly deferred 0085b. The narrow Terraform-tracking risk
+window from Task 0085a remains open: the two live custom-domain
+attachments are **not** Terraform-managed between the 0085a merge and
+the eventual 0085b apply. Cloudflare-side drift would not be detected
+by `terraform plan`. Mitigation: no manual Cloudflare-dashboard or
+wrangler edits to those attachments while 0085b is parked. Task 0086
+was verified post-merge to NOT touch
+`infra/terraform/cloudflare-domain/**` so the window does not widen.
 
 When the user lifts the defer, scope 0085b as previously laid out:
 bump `required_providers.cloudflare.version` from `~> 4.52` to
@@ -113,33 +97,10 @@ envs; post-merge apply
 `Apply complete! Resources: 1 imported, 0 added, 0 changed, 0 destroyed.`
 on both envs; four live probes still 200.
 
-## Next task after 0086 verifier PASS
-
-Candidates (orchestrator selects after verifier closes, based on
-user priority):
-
-1. **Notifications caller wiring** — wire `identity-worker`
-   magic-link send and/or `membership-worker` invitation email
-   through notifications-worker. Unblocks roadmap B1 (real auth).
-2. **Real provider swap** — slot Resend / SES / Postmark into
-   `apps/notifications-worker/src/providers/` and gate via
-   `NOTIFICATIONS_PROVIDER`. Required before any real delivery.
-3. **Real Hyperdrive + service-binding IDs** in
-   `apps/notifications-worker/wrangler.jsonc` if the verifier's
-   placeholder audit confirms the events-worker-copied placeholders
-   are still in place. Scope depends on what the verifier finds.
-4. **Revive Task 0085b** when the user lifts the defer.
-5. **Pre-existing identity-worker-tests `crypto` type fix** (unrelated
-   to 0086; implementer confirmed it fails on a clean stash too).
-
 ## Recently completed — Task 0085a (PASS, post-merge soak clean)
 
 - **PR #133** (`impl/task-0085a-cloudflare-v4-removed-state-drop`),
-  squash `efa539c` at 2026-05-29T15:06:12Z. 5 files: 2 in
-  `infra/terraform/cloudflare-domain/` (`main.tf`, `README.md`) +
-  3 ai/ docs (`tasks/task-0085a.md`,
-  `reports/task-0085a-implementer.md`,
-  `proposals/task-0085-spec-update.md`).
+  squash `efa539c` at 2026-05-29T15:06:12Z.
 - PR CI run `26644307676` (3/3 SUCCESS); post-merge main-CI run
   `26645041830` (3/3 SUCCESS — `Apply complete! Resources: 0 added,
   0 changed, 0 destroyed.` on both envs).
@@ -149,8 +110,7 @@ user priority):
 ## Recently completed — Task 0084 (PASS)
 
 - **PR #131** (`impl/task-0084-drop-pages-residuals`), squash `305520a`
-  at 2026-05-29T13:53Z. 4 files: 3 in
-  `infra/terraform/cloudflare-domain/` + implementer report.
+  at 2026-05-29T13:53Z.
 - PR CI run `26640690294` (3/3 SUCCESS); post-merge main-CI run
   `26641282273` (3/3 SUCCESS) — clean no-op apply on both envs.
 - Reports: `ai/reports/task-0084-implementer.md`,
@@ -196,8 +156,7 @@ fail-closed 503 envelope — the contract Task 0082's
 
 ## Repo Reality
 
-- Tasks 0001–0085a verified and merged. Task 0086 implementer DONE
-  and PR #134 open; verifier scoped at `ai/tasks/task-0086-verifier.md`.
+- Tasks 0001–0086 verified and merged. No active task.
 - Task 0085 split into 0085a (Phase 1, DONE) + 0085b (Phase 2,
   EXPLICITLY DEFERRED by user) per accepted spec proposal.
 - Active spec pack: reusable SaaS starter under `specs/**`.
@@ -208,7 +167,6 @@ fail-closed 503 envelope — the contract Task 0082's
   original Cloudflare Workers custom-domain attachments (untracked
   by Terraform between 0085a merge and the eventual 0085b
   re-import).
-- Notifications-worker V1 is internal-only, no public surface; will
-  go live in stage/prod after PR #134 merges and the post-merge
-  Verify-deploy lands. No caller wires it yet (intentional —
-  follow-up task).
+- Notifications-worker V1 is internal-only, deployed on stage/prod,
+  no public surface, no caller wires it yet (the next-task candidate
+  list captures the wiring + provider-swap follow-ups).
