@@ -43,7 +43,6 @@ vars) for runtime CORS decisions.
 | `baseDomain` | yes | Root domain (e.g. `sourceplane.ai`) |
 | `zoneMode` | yes | `existing` or `managed` |
 | `workerNamePrefix` | yes | Worker name prefix (e.g. `sourceplane-web-console-next`); fully-qualified service name is `{workerNamePrefix}-{environment}` |
-| `pagesProjectPrefix` | legacy | Retained read-only for one soak cycle post task-0083; no resource consumes it. Slated for removal in a follow-up task. |
 | `stackName` | yes | Terraform stack identifier |
 | `terraformDir` | yes | Path to Terraform root |
 | `terraformVersion` | yes | Terraform CLI version |
@@ -90,5 +89,4 @@ After merge to main, verify:
 - `zone_name` — Domain name
 - `zone_status` — Zone activation status
 - `console_custom_domain` — The custom domain hostname for this environment
-- `pages_project_name` — Legacy Pages project name (read-only output retained one soak cycle; slated for removal)
 - `worker_custom_domain_id` — ID of the `cloudflare_workers_domain.console` resource
