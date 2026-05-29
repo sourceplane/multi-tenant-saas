@@ -1,5 +1,0 @@
-{
-  "extends": "../../tooling/tsconfig/web.json",
-  "include": ["src/**/*.ts"],
-  "exclude": ["node_modules", "dist"]
-}

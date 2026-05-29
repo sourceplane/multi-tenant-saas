@@ -18,7 +18,7 @@ This Terraform component provisions **Cloudflare Hyperdrive** resources for stag
 ```
 ┌─────────────────────────────────────────────────────┐
 │ Cloudflare Workers (runtime)                        │
-│ (apps/api-edge, apps/web-console, etc.)            │
+│ (apps/api-edge, apps/web-console-next, etc.)       │
 └──────────────────┬──────────────────────────────────┘
                    │
                    │ Hyperdrive binding

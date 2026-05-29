@@ -5,7 +5,7 @@ Status: Starter module pending implementation
 Primary monorepo targets:
 
 - `apps/admin-worker`
-- support-facing routes in `apps/web-console` when enabled
+- support-facing routes in `apps/web-console-next` when enabled
 
 Primary dependencies:
 

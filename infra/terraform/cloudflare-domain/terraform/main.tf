@@ -14,7 +14,7 @@ terraform {
     }
     cloudflare = {
       source  = "cloudflare/cloudflare"
-      version = "~> 4.30"
+      version = "~> 4.52"
     }
   }
 }
@@ -135,7 +135,13 @@ variable "zoneMode" {
 variable "pagesProjectPrefix" {
   type        = string
   default     = "sourceplane-web-console"
-  description = "Pages project name prefix; full name is {prefix}-{environment}"
+  description = "Legacy Pages project name prefix; kept read-only on the local + output for state-file diffing during the soak period. Removed in a follow-up cleanup task after the legacy Pages projects are manually deleted."
+}
+
+variable "workerNamePrefix" {
+  type        = string
+  default     = "sourceplane-web-console-next"
+  description = "Worker name prefix for the new console; full Worker service name is {prefix}-{environment}"
 }
 
 variable "CONSOLE_CUSTOM_DOMAIN" {
@@ -149,6 +155,7 @@ variable "CONSOLE_CUSTOM_DOMAIN" {
 locals {
   console_custom_domain = var.CONSOLE_CUSTOM_DOMAIN
   pages_project_name    = "${var.pagesProjectPrefix}-${var.environment}"
+  worker_name           = "${var.workerNamePrefix}-${var.environment}"
   has_custom_domain     = local.console_custom_domain != ""
 }
 
@@ -174,14 +181,24 @@ locals {
   zone_status = var.zoneMode == "existing" ? data.cloudflare_zone.existing[0].status : cloudflare_zone.managed[0].status
 }
 
-# --- Pages custom domain attachment ---
+# --- Worker custom domain attachment ---
+#
+# Note: in the cloudflare TF provider v4.x line this resource is named
+# `cloudflare_workers_domain` (description: "Creates a Worker Custom Domain.").
+# It is renamed to `cloudflare_workers_custom_domain` in v5. Task 0083 spec
+# references the v5 name; we use the v4 name here because the rest of the repo
+# (and this component's provider pin `~> 4.52`) is on the v4 line. Functionality
+# is equivalent. Tracked as a follow-up: bump provider to v5 across the repo
+# and rename this resource at that time.
 
-resource "cloudflare_pages_domain" "console" {
+resource "cloudflare_workers_domain" "console" {
   count = local.has_custom_domain ? 1 : 0
 
-  account_id   = var.cloudflare_account_id
-  project_name = local.pages_project_name
-  domain       = local.console_custom_domain
+  account_id  = var.cloudflare_account_id
+  zone_id     = local.zone_id
+  hostname    = local.console_custom_domain
+  service     = local.worker_name
+  environment = "production"
 }
 
 # --- Outputs (non-secret) ---
@@ -207,11 +224,16 @@ output "console_custom_domain" {
 }
 
 output "pages_project_name" {
-  description = "Pages project name for this environment"
+  description = "Legacy Pages project name for this environment (read-only; retained for soak-period diffing)"
   value       = local.pages_project_name
 }
 
-output "pages_domain_status" {
-  description = "Pages custom domain activation status"
-  value       = local.has_custom_domain ? try(cloudflare_pages_domain.console[0].status, "pending") : "not_configured"
+output "worker_name" {
+  description = "Worker service name bound to the custom domain"
+  value       = local.worker_name
+}
+
+output "worker_custom_domain_id" {
+  description = "Cloudflare Workers custom domain attachment ID"
+  value       = local.has_custom_domain ? try(cloudflare_workers_domain.console[0].id, "pending") : "not_configured"
 }

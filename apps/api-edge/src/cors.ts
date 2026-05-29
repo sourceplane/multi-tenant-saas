@@ -1,26 +1,18 @@
 import type { Env } from "./env";
 
-// Static origins per env. Includes the legacy Pages projects for
-// `apps/web-console` (vanilla Vite) and the Workers + Static Assets
-// hostnames for `apps/web-console-next` (Next.js + opennextjs/cloudflare).
-const PAGES_ORIGINS: Record<string, string> = {
-  stage: "https://sourceplane-web-console-stage.pages.dev",
-  prod: "https://sourceplane-web-console-prod.pages.dev",
-};
-
-// `<worker-name>.<workers-dev-subdomain>.workers.dev` — the deploy hostname
-// for web-console-next under the cloudflare-workers-assets-turbo composition.
-// Per-env naming mirrors PAGES_ORIGINS so cutover keeps the same shape.
+// Deploy hostnames for `apps/web-console-next` (Next.js + opennextjs/cloudflare)
+// under the cloudflare-workers-assets-turbo composition. Per-env naming via
+// `${prefix}-${env}` so the cutover keeps a stable shape across environments.
+//
+// Legacy `apps/web-console` (vanilla Vite, Pages) was decommissioned in Task 0083
+// (custom-domain swing to web-console-next Workers). No CORS allowlist entry is
+// needed for the now-orphaned `sourceplane-web-console-{stage,prod}.pages.dev`
+// hostnames — they are not served by any current frontend.
 const WORKERS_DEV_SUBDOMAIN = "rahulvarghesepullely";
 const WORKERS_ORIGINS: Record<string, string> = {
   dev: `https://sourceplane-web-console-next-dev.${WORKERS_DEV_SUBDOMAIN}.workers.dev`,
   stage: `https://sourceplane-web-console-next-stage.${WORKERS_DEV_SUBDOMAIN}.workers.dev`,
   prod: `https://sourceplane-web-console-next-prod.${WORKERS_DEV_SUBDOMAIN}.workers.dev`,
-};
-
-const PREVIEW_RE: Record<string, RegExp> = {
-  stage: /^https:\/\/[a-z0-9-]+\.sourceplane-web-console-stage\.pages\.dev$/,
-  prod: /^https:\/\/[a-z0-9-]+\.sourceplane-web-console-prod\.pages\.dev$/,
 };
 
 const LOCALHOST_RE = /^https?:\/\/localhost(:\d+)?$/;
@@ -52,21 +44,13 @@ export function isAllowedOrigin(origin: string | null, env: Env): boolean {
 
   if (environment === "stage" || environment === "prod") {
     if (customDomain && origin === `https://${customDomain}`) return true;
-    if (origin === PAGES_ORIGINS[environment]) return true;
     if (origin === WORKERS_ORIGINS[environment]) return true;
-    if (PREVIEW_RE[environment]?.test(origin)) return true;
     return false;
   }
 
   if (customDomain && origin === `https://${customDomain}`) return true;
-  for (const pagesOrigin of Object.values(PAGES_ORIGINS)) {
-    if (origin === pagesOrigin) return true;
-  }
   for (const workerOrigin of Object.values(WORKERS_ORIGINS)) {
     if (origin === workerOrigin) return true;
-  }
-  for (const re of Object.values(PREVIEW_RE)) {
-    if (re.test(origin)) return true;
   }
 
   return false;

@@ -3,7 +3,7 @@ kind: Component
 
 metadata:
   name: cloudflare-domain
-  description: Manages the Cloudflare zone and attaches custom domains to environment-specific Pages projects
+  description: Manages the Cloudflare zone and attaches custom domains to environment-specific Worker services (web-console-next)
   labels:
     domain: infra
     scope: dns-and-custom-domains
@@ -19,13 +19,17 @@ spec:
     terraformVersion: "1.15.3"
     baseDomain: sourceplane.ai
     zoneMode: existing
+    # Legacy Pages project prefix — retained for one cycle for state-file output
+    # diffing during the soak. Not consumed by any resource. Removed in a
+    # follow-up cleanup task after the legacy Pages projects are manually deleted.
     pagesProjectPrefix: sourceplane-web-console
+    workerNamePrefix: sourceplane-web-console-next
 
   env:
     AWS_EC2_METADATA_DISABLED: "true"
 
   dependsOn:
-    - component: web-console
+    - component: web-console-next
 
   subscribe:
     environments:
