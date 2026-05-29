@@ -56,7 +56,10 @@ spec:
     # Smoke: follow redirects (root `redirect("/orgs")` is a 307) and confirm
     # the SSR'd page contains the console marker. The api-edge worker is the
     # same hostname pattern as before.
-    smokeCommand: "curl -sfL ${DEPLOYED_URL}/ | grep -q 'Sourceplane Console' && curl -sf https://api-edge-${ORUN_ENVIRONMENT}.rahulvarghesepullely.workers.dev/health | grep -q ok"
+    # Buffer curl into a variable before grepping so `grep -q` matching early
+    # cannot SIGPIPE curl and produce a flaky exit-23 race (observed on prod
+    # in main CI run 26628207777 even though the site was live).
+    smokeCommand: "html=$(curl -sfL \"${DEPLOYED_URL}/\") && echo \"${html}\" | grep -q 'Sourceplane Console' && health=$(curl -sf \"https://api-edge-${ORUN_ENVIRONMENT}.rahulvarghesepullely.workers.dev/health\") && echo \"${health}\" | grep -q ok"
   labels:
     team: platform
     layer: delivery
