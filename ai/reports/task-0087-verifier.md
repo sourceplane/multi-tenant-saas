@@ -292,7 +292,83 @@ spec 14 and the contract enum as-is; no spec change is required.
 
 ## Live Deployment Status
 
-To be appended after merge (post-merge main-CI run + live smoke).
+- **Merge commit:** `5192ffd` — `feat(identity): wire login-start to
+  notifications-worker via service binding (#135)` merged squash at
+  2026-05-29T19:19:59Z.
+- **Post-merge main-CI run:** [`26657375953`](https://github.com/sourceplane/multi-tenant-saas/actions/runs/26657375953)
+  — `status=completed`, `conclusion=success`, 5/5 jobs green
+  (`plan`, `identity-worker-tests · dev · Verify`,
+  `identity-worker · {dev,stage,prod} · Verify deploy`).
+- **Worker deploys (from main-CI deploy job logs):**
+  - `identity-worker-stage` — version
+    `5b84bcce-e14e-4fd8-9332-e313f94e7084`, uploaded + deployed at
+    2026-05-29T19:21:08Z.
+  - `identity-worker-prod` — version
+    `5ca2ff26-9e06-4d02-ae12-6f316df97d4e`, uploaded + deployed at
+    2026-05-29T19:21:58Z. Total upload 199.63 KiB / 42.96 KiB gzip
+    (the new `notifications-client.ts` adds ~0.1 KiB gzip over the
+    pre-PR baseline — sanity check).
+- **Live smoke — `POST /v1/auth/login/start`:**
+
+  ```
+  $ curl -sS -X POST -H 'content-type: application/json' \
+      -H 'x-request-id: verifier-0087-stage-1780082609' \
+      -d '{"email":"verifier-task0087+stage-1780082609@example.com"}' \
+      https://api-edge-stage.rahulvarghesepullely.workers.dev/v1/auth/login/start
+
+  HTTP 200
+  {"data":{"challengeId":"chl_938f9aaf97054ab9965dedb8a9a00fa8",
+            "expiresAt":"2026-05-29T19:33:29.724Z",
+            "delivery":{"mode":"local_debug",
+                        "emailHint":"v***@example.com",
+                        "code":"809956"}},
+   "meta":{"requestId":"verifier-0087-stage-1780082609","cursor":null}}
+  ```
+
+  Stage returns `code` inline (`DEBUG_DELIVERY=true` baseline preserved
+  → enqueue branch correctly skipped). 200, no 5xx.
+
+  ```
+  $ curl -sS -X POST -H 'content-type: application/json' \
+      -H 'x-request-id: verifier-0087-prod-1780082609' \
+      -d '{"email":"verifier-task0087+prod-1780082609@example.com"}' \
+      https://api-edge-prod.rahulvarghesepullely.workers.dev/v1/auth/login/start
+
+  HTTP 200
+  {"data":{"challengeId":"chl_e1f6795a4de341eba9f361b278981900",
+            "expiresAt":"2026-05-29T19:33:30.929Z",
+            "delivery":{"mode":"email",
+                        "emailHint":"v***@example.com"}},
+   "meta":{"requestId":"verifier-0087-prod-1780082609","cursor":null}}
+  ```
+
+  **Prod returns no `code` field** — confirms the non-debug enqueue
+  branch fired and the login lifecycle stayed decoupled from
+  notifications. 200, no 5xx. If notifications-worker had not been
+  reachable through the binding, the best-effort client would have
+  silently returned `{ ok: false, reason }` and the user-facing
+  response would look identical — exactly the contract this PR
+  promised.
+
+- **Wrangler tail of `local-debug` provider emission**: not attempted
+  in this verification pass; the in-band 200-without-`code` signal plus
+  the unit-test coverage of all four client failure modes is the
+  acceptance evidence. Flagged in Risk Notes — a future pass could add
+  a `wrangler tail notifications-worker-prod --format pretty` window
+  during a smoke call to capture the local-debug row.
+
+- **Regression invariants (re-checked post-merge):**
+  - `https://stage.sourceplane.ai/` → 307 → `/orgs` → 200 (Sourceplane
+    Console). `https://prod.sourceplane.ai/` → 307 → `/orgs` → 200.
+    Task 0085a hostnames healthy.
+  - `https://notifications-worker-stage.rahulvarghesepullely.workers.dev/health`
+    → HTTP 404 with Cloudflare `Error 1042`.
+    `https://notifications-worker-prod.rahulvarghesepullely.workers.dev/health`
+    → HTTP 404 with Cloudflare `Error 1042`. V1 private-worker
+    invariant intact.
+  - `orun plan --changed` on `main` (post-merge) →
+    `0 components × 3 envs → 0 jobs` (plan id `f13a079b58c7`).
+    Durability invariant intact.
 
 ## Recommended Next Move
 

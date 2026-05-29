@@ -1,6 +1,6 @@
 {
   "goal": "Supabase/Postgres-backed multi-organization Orun SaaS control plane",
-  "current_task": "0087",
+  "current_task": null,
   "completed": [
     "0001", "0001.1", "0002", "0003", "0003.1", "0004", "0005",
     "0006", "0006.1", "0007", "0007.1", "0008", "0009", "0009.1",
@@ -14,18 +14,19 @@
     "0066", "0067", "0068", "0069", "0070", "0071", "0072", "0073",
     "0074", "0075", "0076", "0077", "0078",
     "0079", "0080", "0081", "0082", "0082.1", "0083", "0083.1", "0084",
-    "0085a", "0086"
+    "0085a", "0086", "0087"
   ],
   "deferred": ["0085b", "notifications-provider-swap"],
   "repo_health": "green",
-  "next_focus": "identity-worker → notifications-worker magic-link wiring (task 0087)",
-  "last_verified": "2026-05-29T18:15:00Z",
+  "next_focus": "membership-worker invitation-email wiring on the same NOTIFICATIONS_WORKER binding pattern (orchestrator re-picks on next tick; alt: provision notifications-worker-dev to close the dev-wire gap)",
+  "last_verified": "2026-05-29T19:22:00Z",
   "waiting_for_input": "false",
-  "task_agent": "/ai/tasks/task-0087.md",
+  "task_agent": null,
   "notes": [
     "Orchestrator policy updated: human-input-blocked candidates are now DEFERRED to /ai/deferred.md, not paused. waiting_for_input only flips to true if EVERY candidate is blocked. See agents/orchestrator.md → Deferred Decision Protocol.",
-    "Task 0087 scoped: wire identity-worker magic-link (apps/identity-worker/src/handlers/login-start.ts) through notifications-worker via NOTIFICATIONS_WORKER service binding. Best-effort delivery (notifications failure must NOT 5xx login). Uses existing local-debug provider on notifications-worker — no real provider swap required. Pattern mirrors apps/notifications-worker/src/events-client.ts.",
     "Deferred candidates parked (orchestrator skips, keeps loop running): (a) real notifications provider swap — needs user decision between Resend/Postmark/SES; (b) Task 0085b cloudflare-domain v4→v5 re-import — explicit user defer, narrow Terraform-tracking risk window still open on the two live custom-domain attachments (stage 052eaece5e989d5a7280b6c206e562c42950e3a6 / prod 31e5f2ed1b1e4a5700e8ae0678846a0d753840e1).",
-    "Task 0086 (notifications-worker V1) VERIFIED + MERGED. PR #134 squashed to main at 2bb088f. Post-merge main-CI run 26653759859 = 13/13 SUCCESS. Notifications-worker deployed on stage/prod with NOTIFICATIONS_PROVIDER=local-debug, internal-only, EVENTS_WORKER binding active. Task 0087 is the first caller wiring on top of that surface."
+    "Task 0086 (notifications-worker V1) VERIFIED + MERGED. PR #134 squashed to main at 2bb088f. Post-merge main-CI run 26653759859 = 13/13 SUCCESS. Notifications-worker deployed on stage/prod with NOTIFICATIONS_PROVIDER=local-debug, internal-only, EVENTS_WORKER binding active.",
+    "Task 0087 (identity-worker → notifications-worker magic-link wire) VERIFIED + MERGED. PR #135 squashed to main at 5192ffd. Post-merge main-CI run 26657375953 = 5/5 SUCCESS. identity-worker-stage @ 5b84bcce / identity-worker-prod @ 5ca2ff26 redeployed with NOTIFICATIONS_WORKER service binding. Live smoke against api-edge-{stage,prod} returned HTTP 200; prod response correctly omits `code` (non-debug → enqueue fired) and stage returns `code` inline (DEBUG_DELIVERY=true baseline preserved). Best-effort contract held — notifications failure cannot 5xx login. Three implementer deviations all accepted by verifier: category=\"security\" (contract enum has no \"transactional\"; spec 14 maps auth flows to security), orgId=zero-UUID (no FK / no RLS on notifications.org_id, established repo sentinel from migrations 070/080), env.dev binding omitted (dev block is bindings-less, no notifications-worker-dev exists, DEBUG_DELIVERY short-circuits the enqueue branch in dev). Verifier report: ai/reports/task-0087-verifier.md.",
+    "Recommended next-focus candidates for orchestrator: (a) membership-worker invitation-email wiring on the same NOTIFICATIONS_WORKER binding pattern (consolidates a second real caller on notifications V1 before any provider swap); (b) provision notifications-worker-dev + add dev binding (closes the dev-wire gap so the enqueue path is locally testable)."
   ]
 }
