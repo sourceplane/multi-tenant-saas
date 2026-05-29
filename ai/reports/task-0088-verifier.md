@@ -148,4 +148,53 @@ After 0088 closes, orchestrator's strongest candidates:
 
 ---
 
-(Post-merge main-CI evidence + worker version IDs + live curl probes appended on close-out commit to `main` after merge.)
+## Post-Merge Main-CI Evidence
+
+- Squash merge commit: `d9968ad3b6861a1b36e099935378a9545107b718` (`d9968ad`) at `2026-05-29T19:59:13Z`
+- Local `main` fast-forwarded to `origin/main`. Branch `impl/task-0088-membership-notifications-wire` deleted locally.
+- Post-merge main-CI run: **`26659213313`** — conclusion **success** (5/5):
+
+| Job | Conclusion | Job ID |
+|---|---|---|
+| `plan` | success | 78577182130 |
+| `membership-worker · dev · Verify deploy` | success | 78577205956 |
+| `membership-worker · stage · Verify deploy` | success | 78577205975 |
+| `membership-worker · prod · Verify deploy` | success | 78577205961 |
+| `membership-worker-tests · dev · Verify` | success | 78577205963 |
+
+### Stage Worker Deploy (job 78577205975)
+
+Log evidence (`/tmp/stage.log` line 431, 435, 437):
+```
+env.NOTIFICATIONS_WORKER (notifications-worker-stage)            Worker
+Uploaded membership-worker-stage (2.65 sec)
+Current Version ID: ad86086a-4d93-434a-991c-c0531f2d1784
+Worker Startup Time: 14 ms
+```
+**Stage Worker Version ID:** `ad86086a-4d93-434a-991c-c0531f2d1784` ✅
+**Stage `NOTIFICATIONS_WORKER` binding shipped:** confirmed via deploy log ✅
+
+### Prod Worker Deploy (job 78577205961)
+
+Log evidence (line 440, 444, 446):
+```
+env.NOTIFICATIONS_WORKER (notifications-worker-prod)             Worker
+Uploaded membership-worker-prod (1.70 sec)
+Current Version ID: ed626b76-6d3b-4126-81a6-3df608b15ef5
+```
+**Prod Worker Version ID:** `ed626b76-6d3b-4126-81a6-3df608b15ef5` ✅
+**Prod `NOTIFICATIONS_WORKER` binding shipped:** confirmed via deploy log ✅
+
+### Live Curl Probes (Apex / Notifications-Worker Invariants)
+
+| Probe | Expected | Actual | Verdict |
+|---|---|---|---|
+| `https://stage.sourceplane.ai/` (with redirects) | 200 | 200 → `https://stage.sourceplane.ai/orgs` | ✅ |
+| `https://prod.sourceplane.ai/` (with redirects) | 200 | 200 → `https://prod.sourceplane.ai/orgs` | ✅ |
+| `https://sourceplane-notifications-worker-stage.rahulvarghesepullely.workers.dev/health` | 404 + Cloudflare error 1042 | 404 + `error code: 1042` | ✅ |
+| `https://sourceplane-notifications-worker-prod.rahulvarghesepullely.workers.dev/health` | 404 + Cloudflare error 1042 | 404 + `error code: 1042` | ✅ |
+
+All apex / private-worker invariants intact post-merge.
+
+## Final Verdict: PASS — task complete.
+
