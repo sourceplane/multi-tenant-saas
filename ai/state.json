@@ -1,6 +1,6 @@
 {
   "goal": "Supabase/Postgres-backed multi-organization Orun SaaS control plane",
-  "current_task": "0084",
+  "current_task": "0085",
   "completed": [
     "0001", "0001.1", "0002", "0003", "0003.1", "0004", "0005",
     "0006", "0006.1", "0007", "0007.1", "0008", "0009", "0009.1",
@@ -13,19 +13,17 @@
     "0058", "0059", "0060", "0061", "0062", "0063", "0064", "0065",
     "0066", "0067", "0068", "0069", "0070", "0071", "0072", "0073",
     "0074", "0075", "0076", "0077", "0078",
-    "0079", "0080", "0081", "0082", "0082.1", "0083", "0083.1"
+    "0079", "0080", "0081", "0082", "0082.1", "0083", "0083.1", "0084"
   ],
   "repo_health": "green",
-  "next_focus": "task-0084-drop-pages-residuals",
-  "last_verified": "2026-05-29T13:30:00Z",
+  "next_focus": "task-0085-cloudflare-provider-v5-workers-custom-domain-rename",
+  "last_verified": "2026-05-29T13:55:00Z",
   "waiting_for_input": "false",
-  "task_agent": "ai/tasks/task-0084.md",
+  "task_agent": null,
   "notes": [
-    "Task 0083.1 (PR #130, squash 2443826) merged at 2026-05-29T13:24Z. Main-CI run 26639840823 SUCCESS. cloudflare_workers_domain.console created on both stage (id=052eaece5e989d5a7280b6c206e562c42950e3a6) and prod (id=31e5f2ed1b1e4a5700e8ae0678846a0d753840e1). Apex probes stage.sourceplane.ai and prod.sourceplane.ai both 200 with Sourceplane Console body. CORS preflight from both apex origins to api-edge-{env}.rahulvarghesepullely.workers.dev returns 204 with matching access-control-allow-origin reflection. Rollback hatch workers.dev URLs still 200.",
-    "Fix shape: option (c) — promoted CONSOLE_CUSTOM_DOMAIN from environments.{env}.env into environments.{env}.parameterDefaults.terraform for dev/stage/prod in intent.yaml, and removed the shadowing component-level default CONSOLE_CUSTOM_DOMAIN: '' from infra/terraform/cloudflare-domain/component.yaml. The job template's existing range $key, $value := .parameters -> TF_VAR_<key> loop now exports TF_VAR_CONSOLE_CUSTOM_DOMAIN automatically (no job-template edits). Provider pin ~> 4.52 unchanged. orun toolchain v2.3.0 kept (the local v2.9.0 kiox.lock bump was reverted out of scope).",
-    "Verifier report: ai/reports/task-0083.1-verifier.md.",
-    "Task 0083 cutover is now fully live and verified. repo_health: green.",
-    "Next task scoped: 0084 — drop dead pagesProjectPrefix variable + pages_project_name output from infra/terraform/cloudflare-domain/ (kept for one soak cycle post-Task 0083, soak cycle now complete) and imperatively delete the legacy sourceplane-web-console-{dev,stage,prod} Cloudflare Pages projects via wrangler since Orun has no managed record of them. Prompt at ai/tasks/task-0084.md.",
-    "Follow-up candidate (deferred 0085): bump cloudflare TF provider to v5 and rename cloudflare_workers_domain -> cloudflare_workers_custom_domain for forward compatibility."
+    "Task 0084 (PR #131, squash 305520a) verified PASS and merged 2026-05-29T13:53Z. Dead pagesProjectPrefix variable + local.pages_project_name + output pages_project_name removed from infra/terraform/cloudflare-domain/; component.yaml parameter dropped; README rows dropped. Post-merge main-CI run 26641282273 (3/3 SUCCESS): both cloudflare-domain · {stage,prod} · Terraform · apply logged 'Apply complete! Resources: 0 added, 0 changed, 0 destroyed.' Live probes 200 on stage/prod apex and both rollback hatches; wrangler pages project list confirms sourceplane-web-console-{dev,stage,prod} stay absent. cloudflare_workers_domain.console shape unchanged; cloudflare ~> 4.52 holds.",
+    "repo_health: green. Apex hostnames stage.sourceplane.ai and prod.sourceplane.ai remain live on cloudflare_workers_domain.console (stage id 052eaece5e989d5a7280b6c206e562c42950e3a6, prod id 31e5f2ed1b1e4a5700e8ae0678846a0d753840e1). Rollback hatch *.rahulvarghesepullely.workers.dev still 200.",
+    "Verifier report: ai/reports/task-0084-verifier.md.",
+    "Next focus: Task 0085 — cloudflare TF provider v4 -> v5 + rename cloudflare_workers_domain -> cloudflare_workers_custom_domain. Must use moved {} block or terraform state mv to preserve the two live resource IDs across the upgrade. Acceptance gate: post-merge apply on both envs shows 0 added / 0 changed / 0 destroyed (or a documented moved no-op) AND apex + rollback hatches still 200."
   ]
 }

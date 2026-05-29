@@ -1,6 +1,6 @@
 # Task Ledger
 
-Last updated: 2026-05-29
+Last updated: 2026-05-29 (Task 0084 verified PASS and merged)
 
 ## Task 0001
 
@@ -1543,3 +1543,15 @@ Last updated: 2026-05-29
 |- Acceptance (pre-merge): orun `validate` / `plan --changed` / `run --dry-run` PASS; PR CI green. Terraform plan diff must be only the removal of the variable/output (no resource churn).
 |- Acceptance (post-merge): `cloudflare-domain · {stage,prod} · Terraform · apply` is a clean no-op (`0 added, 0 changed, 0 destroyed`); apex probes still 200; rollback hatch still 200; wrangler verification that `sourceplane-web-console-{dev,stage,prod}` Pages projects no longer exist.
 |- Expected outcome: legacy Pages residuals fully gone, repo housekeeping closed. Follow-up 0085 (cloudflare provider v5 + `cloudflare_workers_custom_domain` rename) unblocked.
+
+|- Implementer outcome (2026-05-29): PR #131 opened on branch `impl/task-0084-drop-pages-residuals` (head `47e34485`). Diff = 4 files (`infra/terraform/cloudflare-domain/{terraform/main.tf,component.yaml,README.md}` + `ai/reports/task-0084-implementer.md`). Out-of-band wrangler deletion done: `sourceplane-web-console-{stage,prod}` deleted; `sourceplane-web-console-dev` never existed (benign error). `kiox.lock` orun v2.3.0 -> v2.9.0 bump reverted out of scope. PR CI run `26640690294`: `plan` SUCCESS, `cloudflare-domain · {stage,prod} · Terraform` SUCCESS. mergeStateStatus=CLEAN, mergeable=MERGEABLE.
+
+||- Agent: Verifier (closed 2026-05-29T13:55Z, PASS)
+||- Prompt: `ai/tasks/task-0084-verifier.md`
+||- Status: verified and merged (PASS).
+||- PR: #131 (`impl/task-0084-drop-pages-residuals`) squash-merged at `305520a` (2026-05-29T13:53Z).
+||- PR CI run: `26640690294` (3/3 SUCCESS). Post-merge main-CI run: `26641282273` (3/3 SUCCESS — `plan`, `cloudflare-domain · stage · Terraform` job `78514773064`, `cloudflare-domain · prod · Terraform` job `78514773088`).
+||- Apply evidence (load-bearing no-op): both stage and prod Terraform apply jobs logged `Apply complete! Resources: 0 added, 0 changed, 0 destroyed.` PR-CI plan diff was purely `Changes to Outputs: pages_project_name -> null` with zero resource churn. `cloudflare_workers_domain.console` shape, provider pin `cloudflare ~> 4.52`, and live resource IDs (stage `052eaece5e989d5a7280b6c206e562c42950e3a6`, prod `31e5f2ed1b1e4a5700e8ae0678846a0d753840e1`) all preserved.
+||- Live probes (post-merge): `curl -sfL https://stage.sourceplane.ai/` -> 200 `<title>Sourceplane Console</title>`; same for `https://prod.sourceplane.ai/`; rollback hatch `sourceplane-web-console-next-{stage,prod}.rahulvarghesepullely.workers.dev` both 200. `wrangler pages project list` confirms `sourceplane-web-console-{dev,stage,prod}` stay absent (unsuffixed `sourceplane-web-console` and `*-next-stage` remain, both out of scope).
+||- Reports: `ai/reports/task-0084-implementer.md`, `ai/reports/task-0084-verifier.md`.
+||- Durable outcome: legacy Pages residuals fully gone from infra Terraform; `pagesProjectPrefix` variable, `local.pages_project_name`, and `output "pages_project_name"` removed from `infra/terraform/cloudflare-domain/{terraform/main.tf,component.yaml,README.md}`. Three legacy Pages projects `sourceplane-web-console-{dev,stage,prod}` confirmed absent from Cloudflare account. Task 0085 (cloudflare TF provider v4 -> v5 + `cloudflare_workers_domain` -> `cloudflare_workers_custom_domain` rename) unblocked as next candidate.

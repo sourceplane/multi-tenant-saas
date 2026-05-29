@@ -1,10 +1,7 @@
 # Waiting For Input
 
-None. Task 0083.1 verified PASS and closed at 2026-05-29T13:30Z.
-
-Repo is green. Next task `0084` is scoped at `ai/tasks/task-0084.md`
-(Implementer) — drop the now-dead `pagesProjectPrefix` variable +
-`pages_project_name` output from `infra/terraform/cloudflare-domain/`
-and imperatively delete the legacy
-`sourceplane-web-console-{dev,stage,prod}` Cloudflare Pages projects
-via wrangler (Orun has no managed record of them).
+None. Task 0084 verified PASS and merged (PR #131, squash `305520a`,
+post-merge clean no-op confirmed on both envs). Orchestrator may scope
+Task 0085 (cloudflare TF provider v4 → v5 +
+`cloudflare_workers_domain` → `cloudflare_workers_custom_domain` rename)
+whenever ready.
