@@ -24,8 +24,8 @@ kiox.lock                  Resolved Kiox provider lock
 /apps
   /api-edge                Public HTTP entry Worker
     component.yaml         Component descriptor (type: cloudflare-worker-turbo)
-  /web-console             Cloudflare Pages or Workers-based UI
-    component.yaml         Component descriptor (type: cloudflare-pages-turbo)
+  /web-console-next        Next.js console (Workers + Static Assets)
+    component.yaml         Component descriptor (type: cloudflare-workers-assets-turbo)
   /identity-worker
     component.yaml
   /policy-worker
@@ -75,7 +75,7 @@ kiox.lock                  Resolved Kiox provider lock
       component.yaml
     /identity-worker-tests
       component.yaml
-    /web-console-tests
+    /web-console-next-tests
       component.yaml
 
 /tooling
@@ -243,13 +243,13 @@ for Terraform, S3 backend, and environment structure.
 
 Composition types used:
 
-| Type                      | Used by                                           |
-| ------------------------- | ------------------------------------------------- |
-| `cloudflare-worker-turbo` | All Workers in `apps/` except `web-console`       |
-| `cloudflare-pages-turbo`  | `apps/web-console`                                |
-| `turbo-package`           | Shared packages in `packages/`                    |
-| `turbo-test`              | Test suites in `tests/components/`                |
-| `terraform`               | Optional repo-owned infra components in `infra/`  |
+| Type                              | Used by                                           |
+| --------------------------------- | ------------------------------------------------- |
+| `cloudflare-worker-turbo`         | All Workers in `apps/` except `web-console-next`  |
+| `cloudflare-workers-assets-turbo` | `apps/web-console-next` (Next.js + Static Assets) |
+| `turbo-package`                   | Shared packages in `packages/`                    |
+| `turbo-test`                      | Test suites in `tests/components/`                |
+| `terraform`                       | Optional repo-owned infra components in `infra/`  |
 
 The immediate operations tasks are to align the local Orun runtime and
 Stack Tectonic contracts with `aws-admin`, delete deprecated R2/core Terraform

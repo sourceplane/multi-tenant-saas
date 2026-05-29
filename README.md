@@ -37,7 +37,7 @@ pnpm build
 
 ```
 apps/api-edge         Cloudflare Worker — public HTTP entry point
-apps/web-console      Cloudflare Pages — web console scaffold
+apps/web-console-next Cloudflare Workers + Static Assets — Next.js console
 packages/contracts    Shared API, tenancy, and error types
 packages/db           Database migration harness and manifest
 packages/shared       Generic helpers (IDs, errors) — no domain logic

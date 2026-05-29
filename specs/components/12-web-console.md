@@ -4,7 +4,7 @@ Status: Ready for implementation
 
 Primary monorepo targets:
 
-- `apps/web-console`
+- `apps/web-console-next`
 - optional shared UI helpers in `packages/ui`
 
 Primary dependencies:
@@ -18,8 +18,8 @@ Primary dependencies:
 
 Cloudflare primitives:
 
-- Cloudflare Pages or Workers-based web app
-- optional service Worker only for frontend hosting concerns
+- Cloudflare Workers + Static Assets (Workers-hosted SPA/SSR)
+- Workers Custom Domain attached via the `cloudflare-domain` infra component
 
 ## Intent
 
@@ -79,7 +79,7 @@ Provide the usable SaaS starter console for humans without creating a second, UI
 
 ## Agent Freedom
 
-- The agent may choose React and its routing stack or another modern frontend stack that deploys well on Cloudflare. The current target is Next.js 15 (App Router) on Cloudflare Pages via `@opennextjs/cloudflare`; deviation requires a one-line rationale in the implementer report.
+- The agent may choose React and its routing stack or another modern frontend stack that deploys well on Cloudflare. The current target is Next.js 15 (App Router) on Cloudflare Workers + Static Assets via `@opennextjs/cloudflare`; deviation requires a one-line rationale in the implementer report.
 - The agent may build a small design system in `packages/ui`. Recommended baseline: shadcn/ui + Radix Primitives + Tailwind v4 with CSS-variable design tokens. The agent has full latitude on palette, type scale, motion, and component breadth.
 - Generated forms may be fully automatic or manifest-assisted, but they must remain driven by the shared component contract and by `packages/contracts` types (Zod schemas derived from or matched against the typed surface).
 
@@ -126,26 +126,31 @@ The web console is a client of the platform, not part of the platform core. It m
 
 ## Deployment Model
 
-The web console is deployed as environment-specific Cloudflare Pages projects:
+The web console is deployed as environment-specific Cloudflare Workers using
+the Workers + Static Assets model (composition `cloudflare-workers-assets-turbo`):
 
-- **Stage**: `sourceplane-web-console-stage` at `https://sourceplane-web-console-stage.pages.dev/`
+- **Stage**: Worker `sourceplane-web-console-next-stage` (shadow hostname
+  `https://sourceplane-web-console-next-stage.<workers-subdomain>.workers.dev/`)
   - Custom domain: `https://stage.sourceplane.ai/` (from `CONSOLE_CUSTOM_DOMAIN` env var)
-- **Prod**: `sourceplane-web-console-prod` at `https://sourceplane-web-console-prod.pages.dev/`
+- **Prod**: Worker `sourceplane-web-console-next-prod` (shadow hostname
+  `https://sourceplane-web-console-next-prod.<workers-subdomain>.workers.dev/`)
   - Custom domain: `https://prod.sourceplane.ai/` (from `CONSOLE_CUSTOM_DOMAIN` env var)
 
 Each deployed console is locked to a single API edge environment at build time
-via the `VITE_DEPLOY_ENV` variable. The stage console calls only the stage
+via the deploy-env variable. The stage console calls only the stage
 `api-edge`; the prod console calls only the prod `api-edge`. Cross-environment
 target switching is available only during local development and is stripped from
 deployed builds.
 
-The `cloudflare-pages-turbo` composition supports this via
-`environmentAwareProjectName: true`, which appends the Orun environment name as
-a suffix to the base `projectName`.
-
 Custom domains are managed by the `cloudflare-domain` infrastructure component
 (`infra/terraform/cloudflare-domain`). The domain component depends on
-`web-console` to ensure Pages projects exist before attaching custom domains.
+`web-console-next` to ensure the Worker exists before attaching the Workers
+Custom Domain (`cloudflare_workers_domain` in the Cloudflare TF provider v4).
 The source of truth for hostname assignments is `intent.yaml` →
 each environment's `env.CONSOLE_CUSTOM_DOMAIN` declaration. To change domains,
 update the environment variable values in `intent.yaml` and re-deploy.
+
+> Historical note: prior to task-0083 the console was hosted on Cloudflare
+> Pages (`apps/web-console`, composition `cloudflare-pages-turbo`). That app
+> was deleted and its custom domains were cut over to the Workers-hosted
+> `apps/web-console-next`.
