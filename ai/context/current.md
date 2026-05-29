@@ -448,7 +448,17 @@ Task 0060 Verifier is scoped and ready.
 
 ## Current Task
 
-No active task — orchestrator should select the next billing surface task. See "Next Task After 0076" below.
+No active task — orchestrator should select the next billing surface task. See "Next Task After 0077" below.
+
+Task 0077 verified PASS and merged via PR #120 (squash merge `5bf21b4`) on 2026-05-29. PR CI run `26612485212` was 4/4 SUCCESS (plan + web-console dev/stage/prod Verify deploy).
+
+Web-console Billing tab now live on main:
+- `apps/web-console/src/api.ts` adds five typed billing read methods on `ApiClient` (`listBillingPlans`, `getBillingCustomer`, `getBillingSummary`, `listBillingInvoices`, `getBillingEntitlements`) using `@saas/contracts/billing` public types. All call `raw("GET", "/v1/organizations/${orgId}/billing/...")` — public api-edge paths only; no internal Worker URLs, no bindings, no raw bearer handling outside the established envelope.
+- `apps/web-console/src/main.ts` adds a Billing sidebar tab (between Config and Audit) rendering summary card, available-plans grid, customer profile card, entitlements table, and cursor-paginated invoices table. All API-derived strings rendered via `h()` / `document.createTextNode`; the only `innerHTML` reference is the pre-existing `clear()` helper. 404 on `/billing/customer` rendered as explicit empty state.
+- `apps/web-console/src/style.css` adds scoped Billing classes (`billing-summary-card`, `billing-plans-grid`, `billing-status-*`, etc.) consistent with the Task 0073 calm/editorial design language.
+- Strictly read-only: no mutations, no provider SDK, no checkout/portal/webhook code, no billing-worker/api-edge/policy-worker/metering-worker/database/contract changes. Provider fields displayed as opaque references only.
+
+Tasks 0001–0077 are complete and verified.
 
 ## Current Roadmap Position
 
@@ -458,11 +468,11 @@ No active task — orchestrator should select the next billing surface task. See
 - Metering prerequisites are in place: persistence/contracts (Task 0071), public metering Worker/API surface (Task 0072), and rollup materialization (Task 0074).
 - Billing foundation + first read runtime/API are in place: persistence + provider-neutral contracts (Task 0075) and billing-worker runtime + api-edge billing read facade (Task 0076).
 
-## Next Task After 0076
+## Next Task After 0077
 
-Natural next candidates per `specs/components/11-billing.md` sequencing:
+With the web-console read-only Billing tab live (Task 0077), natural next candidates per `specs/components/11-billing.md` sequencing:
 
-1. Web-console billing read UI consuming the five new public org-scoped routes (plans/customer/summary/invoices/entitlements). Mirrors the read-only Config tab pattern from Task 0058.
-2. `billing_admin` role wiring for `billing.read` in policy-worker if the product expects a billing-only persona to access these routes (currently only `owner`/`admin` paths satisfy policy).
-3. Provider-adapter scaffolding for a privileged read-sync job (e.g. Stripe customer/subscription read sync) kept private and behind webhook/poll boundaries — separate from any public surface and from the future mutation surface (checkout/portal/webhooks), which remains an explicit non-goal until scoped.
+1. `billing_admin` role wiring for `billing.read` in policy-worker if the product expects a billing-only persona to access these routes (currently only `owner`/`admin` paths satisfy policy).
+2. Provider-adapter scaffolding for a privileged read-sync job (e.g. Stripe customer/subscription read sync) kept private and behind webhook/poll boundaries — separate from any public surface and from the future mutation surface (checkout/portal/webhooks), which remains an explicit non-goal until scoped.
+3. Billing write surface scoping (customer provisioning, checkout/portal session creation) — likely behind a feature flag — once read surface and policy persona are settled.
 

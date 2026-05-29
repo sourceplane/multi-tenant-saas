@@ -1372,6 +1372,21 @@ Last updated: 2026-05-28
 
 
 
+## Task 0077
+
+|- Agent: Implementer -> Verifier
+|- Prompt: `ai/tasks/task-0077.md`
+|- Verifier prompt: `ai/tasks/task-0077-verifier.md`
+|- Status: verified PASS, merged (2026-05-29)
+|- Implementation: PR #120 (`impl/task-0077-billing-tab`), squash merge commit `5bf21b4`
+|- PR CI run: `26612485212` (4/4 SUCCESS — plan + web-console dev/stage/prod Verify deploy). No verifier fixes required; implementer report present in PR.
+|- Reports: `ai/reports/task-0077-implementer.md`, `ai/reports/task-0077-verifier.md`
+|- Objective: deliver a read-only web-console Billing tab consuming only the five public org-scoped billing read routes shipped in Task 0076, so authenticated org users can inspect plans, customer profile, current subscription, entitlements, and invoices without any provider write paths.
+|- Scope boundary: `apps/web-console/src/api.ts` typed billing read client methods (`listBillingPlans`, `getBillingCustomer`, `getBillingSummary`, `listBillingInvoices`, `getBillingEntitlements`) using `@saas/contracts/billing` public types; `apps/web-console/src/main.ts` Billing sidebar/workspace tab; `apps/web-console/src/style.css` scoped Billing styling preserving the Task 0073 calm/editorial design language; and Task 0077 prompt/report only. No mutations (no checkout/portal/subscription/customer write/entitlement edit/invoice payment), no Stripe/payment SDK, no provider credentials, no webhook handling, no Secrets Store/Queue/KV/Durable Object/Analytics Engine/Terraform/Wrangler-binding changes, no billing-worker/api-edge/policy-worker/metering-worker/database/contract changes, no fake billing data, no framework migration, no `specs-v2/**` work.
+|- Durable outcome: Billing tab now lives in the web-console workspace navigation (between Config and Audit) and renders for authenticated users with a selected organization. `ApiClient` exposes five typed billing read methods that call only public api-edge paths under `/v1/organizations/{orgId}/billing/...` and forward optional query params (`cursor`, `limit`, `status`, `subscriptionId`, `source`) through the existing `raw()` envelope. The tab renders summary card (active plan, subscription status pill, current period, trial/cancel dates, plan price, customer reference, entitlement count), available-plans grid (status pill + code + description + price/interval), customer profile card (name, email, status pill, provider, opaque truncated provider reference, created timestamp), entitlements table (key/type/enabled/limit/source), and cursor-paginated invoices table (number, status, amount due/paid, issued, period) with a "Load More" button that re-uses `meta.cursor`. All API-derived strings are inserted via `h()` / `document.createTextNode`; no `innerHTML` assignment with API data. 404 on `/billing/customer` is handled as an explicit "No billing customer" empty state via `result.error.code === "not_found"`. Provider fields surface only as opaque references — provider name as plain text, `providerCustomerId` truncated to 40 chars in `<code>`. Local `pnpm --filter @saas/web-console {typecheck,build,lint}` all clean (0 errors; 43 pre-existing `no-explicit-any` warnings unrelated to billing). Local `orun validate / plan --changed / run --dry-run` select the same 3-job web-console matrix that CI executed — no plan drift.
+
+
+
 ## Historical Notes
 
 - PR #1 split product-specific V2 Git catalog work away from the reusable SaaS
