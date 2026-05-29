@@ -79,9 +79,40 @@ Provide the usable SaaS starter console for humans without creating a second, UI
 
 ## Agent Freedom
 
-- The agent may choose React and its routing stack or another modern frontend stack that deploys well on Cloudflare.
-- The agent may build a small design system in `packages/ui`.
-- Generated forms may be fully automatic or manifest-assisted, but they must remain driven by the shared component contract.
+- The agent may choose React and its routing stack or another modern frontend stack that deploys well on Cloudflare. The current target is Next.js 15 (App Router) on Cloudflare Pages via `@opennextjs/cloudflare`; deviation requires a one-line rationale in the implementer report.
+- The agent may build a small design system in `packages/ui`. Recommended baseline: shadcn/ui + Radix Primitives + Tailwind v4 with CSS-variable design tokens. The agent has full latitude on palette, type scale, motion, and component breadth.
+- Generated forms may be fully automatic or manifest-assisted, but they must remain driven by the shared component contract and by `packages/contracts` types (Zod schemas derived from or matched against the typed surface).
+
+## Design Direction (Normative)
+
+The console is the buyer-facing artifact. It must look credible against the
+Vercel / Linear / Stripe Dashboard bar before any product surface is declared
+done.
+
+Required design properties:
+
+- **URL-driven scope.** The multi-tenant invariant (`org → project → environment`) is reflected in the URL: `/orgs/:orgSlug/projects/:projectSlug/environments/:envSlug/...`. `sessionStorage` for navigation state is forbidden. `localStorage` for auth-token persistence is acceptable.
+- **Persistent scope switcher.** A top-left switcher renders `[Org] / [Project] / [Env]` and is visible on every authenticated page.
+- **Cmd-K command palette.** Global palette covering at minimum: switch org, switch project, jump to each page, create invitation, create API key, logout. Registry pattern so new product areas can register actions.
+- **Designed empty states.** Every list view ships a designed empty state with a primary CTA and a one-line explanation of what the resource is. No `"No X yet"` + emoji placeholders.
+- **Skeleton loading states.** Every list and detail view has a designed skeleton state. No `"Loading..."` plain text spinners.
+- **Designed `precondition_failed` upgrade UX.** When a create flow returns `412 precondition_failed` from the entitlement seam, the UI renders a designed upgrade prompt distinguishing the four reason codes (`disabled`, `not_configured`, `malformed_limit`, `limit_reached`). Usage vs limit shown when available. CTA + "talk to sales" fallback. RequestId behind a Details disclosure.
+- **Dark mode by default**, with a working light-mode toggle. Theming via CSS variables; no hard-coded color literals in components. This is also the foundation for white-label theming.
+- **Optimistic mutations where safe** (rename, archive, role change) with clean rollback on error.
+- **Personal organization on first login.** A user lands in a working scope, not a chooser screen. (Implementation owner: identity-worker + membership-worker; this spec just states the UX invariant.)
+
+Required design-system properties:
+
+- Every UI primitive used in the console comes from `packages/ui` (or a documented in-app design-system directory).
+- No bespoke per-page styling beyond layout composition.
+- Tokens (color, spacing, radii, type, motion) live in a single source file and are CSS variables, not Tailwind config constants.
+- Primitives required at minimum: Button, Input, Select, Dialog, Sheet, DropdownMenu, Tabs, Table, Toast, Skeleton, Badge, Card, Form primitives, EmptyState, CommandPalette wrapper.
+
+## API Consumption
+
+- The console must consume `apps/api-edge` only. No internal service bindings, no direct database access, no admin-only routes.
+- Types come from `packages/contracts`. No forked or duplicated types.
+- After `packages/sdk` lands (see `specs/roadmap.md` B4), the console consumes the generated SDK rather than a bespoke `api.ts`.
 
 ## Acceptance Criteria
 

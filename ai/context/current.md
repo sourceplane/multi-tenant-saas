@@ -2,6 +2,46 @@
 
 Last updated: 2026-05-29
 
+## Current Task — 0082 Verifier (OPEN, PR CI RED)
+
+- Implementer PR: **#125** (`impl/task-0082-web-console-next`), head `9f3ec6b`.
+- Verifier prompt: `ai/tasks/task-0082-verifier.md`.
+- PR CI run `26622616478`: `plan = SUCCESS`; **all three
+  `web-console-next · {dev,stage,prod} · Verify deploy` jobs = FAILURE**.
+- Root failure: `/demo` route prerender threw
+  `TypeError: Cannot read properties of undefined (reading 'url')`
+  inside `useMemo` during Next.js 15 static export.
+  See https://nextjs.org/docs/messages/prerender-error.
+- Verifier remit: drive the `/demo` failure to green with a single
+  scoped fix on the PR branch (Suspense wrapper or
+  `export const dynamic = "force-dynamic"`) within
+  `apps/web-console-next/**`, then merge. If the fix doesn't land
+  cleanly, FAIL with explicit blockers and leave PR #125 open.
+- `repo_health` is `yellow` until PR #125 is closed.
+
+## Recently Merged — 0079, 0080, 0081
+
+- **Task 0079** — PR #122 (`ab78aea`) — `projects-worker` gates
+  `POST /v1/organizations/{orgId}/projects` on `limit.projects` via the
+  Task 0078 entitlement seam. Billing-worker internal route hardened with
+  an `x-internal-caller` allow-list.
+- **Task 0080** — PR #123 (`009d853`) — `membership-worker` gates
+  invitation creation on `limit.members`. `countBillableMembers(orgId, now)`
+  counts active members + pending non-expired invitations. Caller allow-list
+  on billing-worker tightened to exactly `projects-worker` + `membership-worker`.
+  Dependency-graph flip: `billing-worker -> membership-worker` removed,
+  `membership-worker -> billing-worker` added (acyclic; peer service-binding
+  deploy semantics accepted).
+- **Task 0081** — PR #124 (`2037922`) — `projects-worker` gates
+  environment creation on `limit.environments`. `decideQuantityGate(...)`
+  helper extracted; `decideProjectsLimit` behavior bit-identical.
+  PR CI 18/18 SUCCESS (`26618797766`).
+
+All three entitlement gates share the same four-reason matrix
+(`disabled` / `not_configured` / `malformed_limit` / `limit_reached`) and
+the same fail-closed 503 envelope for service errors, which is the
+contract Task 0082's `PreconditionInsight` UI surfaces.
+
 ## Latest Task — 0078 (verified PASS, merged)
 
 - PR [#121](https://github.com/sourceplane/multi-tenant-saas/pull/121) squash-merged on `main` as commit `9f83468` ("feat(billing): internal entitlement decision seam (task 0078)"). Branch `impl/task-0078-billing-entitlement-check` deleted.

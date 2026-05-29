@@ -1411,3 +1411,57 @@ Last updated: 2026-05-29
 - PRs #37, #38, and #39 attempted Worker binding/runtime/deployment work after
   Task 0009 but were reverted by PR #44. Do not treat those reverted changes as
   current repo reality.
+
+
+## Task 0079
+
+|- Agent: Implementer -> Verifier
+|- Prompt: `ai/tasks/task-0079.md` (verifier prompt not separately filed; verified in same cycle)
+|- Status: verified PASS, merged (2026-05-29)
+|- Implementation: PR #122 (`impl/task-0079-projects-entitlement-gate`), squash merge commit `ab78aea`
+|- Reports: `ai/reports/task-0079-implementer.md`
+|- Objective: wire `apps/projects-worker` as the first internal consumer of the Task 0078 billing-worker entitlement-check seam — `POST /v1/organizations/{orgId}/projects` now consults `limit.projects` after auth/membership/policy and before any project insert or `project.created` event/audit row.
+|- Scope boundary: new `apps/projects-worker/src/billing-client.ts` (service-binding call + `decideProjectsLimit` quantity decision logic); edit to `apps/projects-worker/src/handlers/create-project.ts` to gate before write; hardened billing-worker internal route with `x-internal-caller` allow-list; focused projects-worker tests. No public api-edge surface change, no schema/migration change, no UI change, no Stripe/provider work, no metering/policy edits.
+|- Durable outcome: project creation is fail-closed against billing — missing binding / non-OK response / malformed envelope / fetch exception / unknown caller / malformed limit / count failure all collapse to generic 503 with no row written; real disabled / not_configured / limit_reached deny with stable 412 `precondition_failed`. Proof that the bounded-context decision seam can shape Worker behavior without expanding the public API surface or sharing tables across domains.
+
+
+## Task 0080
+
+|- Agent: Implementer -> Verifier
+|- Prompt: `ai/tasks/task-0080.md`
+|- Status: verified PASS, merged (2026-05-29)
+|- Implementation: PR #123 (`impl/task-0080-membership-billing-gating`), squash merge commit `009d853`
+|- PR CI run: `26617445815` 16/16 SUCCESS; post-merge main CI run `26618000897` 16/16 SUCCESS.
+|- Reports: `ai/reports/task-0080-implementer.md`, `ai/reports/task-0080-verifier.md`
+|- Objective: extend the entitlement seam to a second caller — `apps/membership-worker` invitation creation now gates on `limit.members` through the billing-worker private entitlement-check service binding, before token generation / invitation insert / `invite.created` event/audit writes.
+|- Scope boundary: membership-worker billing client + handler ordering update; membership repository `countBillableMembers(orgId, now)` (active members + pending non-expired invitations, excludes accepted/revoked/expired); billing-worker caller allow-list tightened to exactly `projects-worker` and `membership-worker`; dependency-graph flip (`billing-worker -> membership-worker` removed, `membership-worker -> billing-worker` added — acyclic, peer service-binding deploy semantics accepted); focused tests. No public api-edge surface change, no schema/migration change, no UI change.
+|- Durable outcome: invitation creation is fail-closed against billing; counts include pending invitations so quota is enforced before sending; same TOCTOU profile as Task 0079 (accepted for V1). Bounded-context boundary still clean: membership-worker imports `@saas/contracts/billing` only — no `@saas/db/billing` import, no cross-context query.
+
+
+## Task 0081
+
+|- Agent: Implementer -> Verifier
+|- Prompt: `ai/tasks/task-0081.md`
+|- Verifier prompt: `ai/tasks/task-0081-verifier.md`
+|- Status: verified PASS, merged (2026-05-29)
+|- Implementation: PR #124 (`impl/task-0081-env-billing-gate`), squash merge commit `2037922`
+|- PR CI run: `26618797766` 18/18 SUCCESS (plan + 17 verify/verify-deploy jobs).
+|- Reports: `ai/reports/task-0081-implementer.md`, `ai/reports/task-0081-verifier.md`
+|- Objective: extend the entitlement seam to a third caller — `apps/projects-worker` environment creation (`POST /v1/organizations/{orgId}/projects/{projectId}/environments`) now gates on `limit.environments` after membership/policy and before any environment insert or `environment.created` event/audit row.
+|- Scope boundary: reuse Task 0079's billing client by extracting `decideQuantityGate(...)` helper backing both `decideProjectsLimit` (unchanged) and new `decideEnvironmentsLimit`; new repository `countActiveEnvironments(orgId, projectId)` scoped by `org_id + project_id + status='active'`; handler ordering update; focused projects-worker tests. No public api-edge surface change, no schema/migration change, no billing-worker change beyond what 0080 already shipped.
+|- Durable outcome: environment creation is fail-closed against billing; quota matrix (allow / unlimited / limit_reached / disabled / not_configured / malformed_limit) shared with project gate and unit-tested per branch; `limit.projects` gate behavior bit-identical (proved by passing extracted-helper tests). The three create paths (projects, members, environments) now share the same decision shape, ready for unified UI surfacing in Task 0082.
+
+
+## Task 0082
+
+|- Agent: Implementer -> Verifier (verifier OPEN)
+|- Prompt: `ai/tasks/task-0082.md`
+|- Verifier prompt: `ai/tasks/task-0082-verifier.md`
+|- Status: implementer complete; verifier OPEN; PR #125 CI RED
+|- Implementation: PR #125 (`impl/task-0082-web-console-next`), head `9f3ec6b` (`docs(reports): task-0082 implementer report`)
+|- PR CI run: `26622616478` — `plan` SUCCESS, all three `web-console-next.{dev,stage,prod}.verify-deploy` FAILURE.
+|- Root failure: `/demo` route prerender threw `TypeError: Cannot read properties of undefined (reading 'url')` inside `useMemo`. Canonical Next.js 15 App Router prerender-error (`https://nextjs.org/docs/messages/prerender-error`) — a client component using `useSearchParams` / `useRouter` / `usePathname` without a Suspense boundary, or reading `window`/`document` at module evaluation time.
+|- Reports: `ai/reports/task-0082-implementer.md`. Verifier report TBD at `ai/reports/task-0082-verifier.md`.
+|- Objective: stand up a Next.js 15 (App Router) console at `apps/web-console-next/` deployed via `@opennextjs/cloudflare`, parity with the existing vanilla `apps/web-console`, plus designed `precondition_failed` upgrade UX for the four reason codes, URL-driven scope, Cmd-K palette, Zod-driven create forms, dark-mode-default theming. Old console untouched until cutover (separate task).
+|- Scope boundary: new `apps/web-console-next/**` and its Orun composition (per-env Pages projects `sourceplane-web-console-next-{dev,stage,prod}`); `environmentBuildVar: NEXT_PUBLIC_DEPLOY_ENV`; no worker, contract, db, policy, api-edge, Terraform, or old-console changes.
+|- Durable outcome (pending PR #125 merge): replacement console at parity with five Zod-driven create flows, four-reason precondition UX (`limit_reached`, `disabled`, `not_configured`, `malformed_limit`), `cmdk` palette, dark-mode default with light toggle, URL-as-scope, 12 Playwright screenshots under `ai/reports/task-0082-shots/`. Verifier is empowered to commit a scoped `/demo` prerender fix on the PR branch (Suspense boundary or `export const dynamic = "force-dynamic"`) before merging; if the fix doesn't land cleanly, FAIL the PR and leave it open.

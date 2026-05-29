@@ -1,0 +1,290 @@
+# Architect Roadmap
+
+Status: Normative direction. Sequencing is the Orchestrator's call.
+
+## Purpose
+
+This document captures the forward direction for the Sourceplane SaaS starter
+in three clusters: **Baseline SaaS (B)**, **UI / Design (U)**, and
+**Product Areas (P)**. It is the single place an orchestrator should read to
+understand which leg of the roadmap a candidate task belongs to and what the
+durable end-state looks like.
+
+It is not a Gantt chart. The Orchestrator chooses sequence based on repo
+reality, dependency unlocks, and risk. Items inside a cluster are not strictly
+ordered. Each item is a candidate scope for one coherent PR-sized task (or a
+small number of follow-up tasks if a clean split exists).
+
+The architect-style ground rules:
+
+- Trust code reality over stale docs.
+- Prefer the largest coherent reviewable unit with one primary outcome.
+- Bounded contexts are non-negotiable; deployment count is.
+- Every product surface must look credible to an external buyer before being
+  declared done.
+- Every internal seam must be extraction-safe before being declared done.
+
+## Baseline SaaS (B) — table-stakes the starter must own
+
+### B1 — Real authentication
+
+Replace email-code + bearer-token paste with a production-credible auth surface.
+At minimum: passwordless email magic link via a real email provider behind a
+contract (see B2), plus at least one OAuth provider (GitHub or Google). Bearer
+token import remains as a dev-only affordance. Auto-create a personal
+organization on first login so the user lands in a working scope, not a chooser
+screen.
+
+Owner: identity-worker + membership-worker.
+Depends on: B2 for email delivery.
+Out: SSO/SAML (see B10), SCIM (see B10).
+
+### B2 — Notifications worker (real email)
+
+Stand up `apps/notifications-worker` per spec 14. Adapter pattern behind a
+provider contract (Resend / Postmark / SES). Templates for: magic-link login,
+invitation, billing receipt, security alert, webhook-down alert, generic
+transactional. Preferences API per identity. Delivery state recorded in events.
+
+Owner: new notifications-worker.
+Depends on: nothing hard; unlocks B1, B3 invitation flow polish, B5 webhook
+observability alerts, billing receipts.
+Out: in-app inbox UI (P4 surfaces it; this task ships the worker).
+
+### B3 — Edge idempotency and rate limiting
+
+Generalize idempotency at `api-edge` for unsafe POSTs (current open risk:
+duplicate POST creates duplicate pending invitations). Add per-org and
+per-identity rate limits at the edge with a deny-by-default policy and a single
+shared response envelope. Standardize the `Idempotency-Key` header surface in
+contracts.
+
+Owner: api-edge + contracts.
+Out: per-resource quota (lives in billing entitlements, already done).
+
+### B4 — SDK + CLI packages
+
+Generate a typed SDK from `packages/contracts` (one client, shared by console,
+CLI, and external customers). Ship `packages/cli` per spec 13 on top of the
+SDK. Token storage on keychain via `keytar` with a `~/.config/sourceplane/`
+fallback.
+
+Owner: new `packages/sdk` + `packages/cli`.
+Depends on: contracts are already the source of truth; nothing else hard.
+Unlocks: external automation, CI flows, future integrations.
+
+### B5 — Webhooks polish
+
+Spec 15 is implemented but missing the buyer-credible surfaces: signing-key
+rotation UX, per-endpoint delivery history with replay, failure-budget alerts
+(wired through B2), and signing-secret reveal-once-then-rotate flow. Document
+the verification recipe and ship a small `@sourceplane/webhook-verifier`
+helper.
+
+Owner: webhooks-worker + console + B2 wiring.
+
+### B6 — Billing UX completion
+
+Stripe provider adapter behind the billing contract (privileged read-sync +
+webhook intake); customer portal link from console; upgrade/downgrade flow that
+respects the existing entitlement seam; invoice list; failed-payment recovery
+copy. Keep provider-specific fields behind the adapter, never in contracts.
+
+Owner: billing-worker + console.
+Depends on: U7 (designed precondition_failed copy), B2 (receipts).
+
+### B7 — Audit-log UX
+
+Searchable audit history per org with filters by actor, resource, action,
+time range. Export to NDJSON. Surfaces what events-worker already records.
+
+Owner: console + events-worker (read API only; no model change).
+
+### B8 — Admin / support worker
+
+Spec 16 is Ready for implementation but has no app. Ship `apps/admin-worker`
+with audited support actions, impersonation with explicit audit trail, plan
+overrides, and entitlement inspection. Internal-only routing; never on
+api-edge.
+
+Owner: new admin-worker.
+
+### B9 — Entitlement-decision observability
+
+Counts only (no provider payloads, no secrets) by caller × entitlement key
+emitted from billing-worker. Analytics Engine or structured-log sink. Used by
+the admin-worker dashboard and by on-call to see who's hitting the gate.
+
+Owner: billing-worker + admin-worker.
+
+### B10 — SSO / SAML and SCIM
+
+After B1 and B8 are stable. SSO domains attached to organization; SCIM
+provisioning per Okta/AzureAD conventions; org-level lockout policy.
+
+Owner: identity-worker + membership-worker + admin-worker.
+
+## UI / Design (U) — buyer-credible product surface
+
+### U1 — Next.js 15 (App Router) on Cloudflare Pages
+
+Migrate web console from the vanilla-TS prototype to Next.js 15 App Router via
+`@opennextjs/cloudflare`. Stand up alongside the existing console first
+(Task 0082), then cutover. Old console becomes archive-only after parity is
+verified.
+
+Status: scoped as Task 0082.
+
+### U2 — Design system in packages/ui
+
+Shared design system (shadcn/ui + Radix Primitives + Tailwind v4 baseline,
+with full agent freedom on token names, palette, type scale, motion). Every
+primitive used in the console comes from `packages/ui`. No bespoke per-page
+styling. Dark-mode-by-default with a working light mode. Theming via CSS
+variables so a white-label fork is a tokens edit, not a refactor.
+
+Status: scoped inside Task 0082.
+
+### U3 — URL-driven scope selector
+
+`/orgs/:orgSlug/projects/:projectSlug/environments/:envSlug/...` is the source
+of truth for the multi-tenant invariant. `sessionStorage` for routing state is
+forbidden. Persistent scope switcher visible on every page.
+
+Status: scoped inside Task 0082.
+
+### U4 — Empty states as a product feature
+
+Every list view ships a designed empty state with a primary CTA and a one-line
+explanation of what the resource is. No `"No X yet"` + emoji placeholders.
+
+Status: scoped inside Task 0082.
+
+### U5 — Cmd-K command palette
+
+Global Cmd-K covering at minimum: switch org, switch project, jump to each
+page, create invitation, create API key, logout. Extensible registry pattern
+so each new product area can register its own actions.
+
+Status: scoped inside Task 0082.
+
+### U6 — Contract-driven forms
+
+`react-hook-form` + Zod (or equivalent), with form schemas derived from or
+matched against `packages/contracts`. Pattern + small helper extracted to
+`packages/ui`. New create forms in the product surface follow the pattern by
+default.
+
+Status: scoped inside Task 0082.
+
+### U7 — Designed precondition_failed / upgrade UX
+
+When any create flow returns `412 precondition_failed` from the entitlement
+seam, the UI renders a designed upgrade prompt distinguishing the four reason
+codes (`disabled`, `not_configured`, `malformed_limit`, `limit_reached`).
+Shows usage vs limit when available. Offers CTA + "talk to sales" fallback.
+RequestId behind a Details disclosure.
+
+Status: scoped inside Task 0082.
+
+### U8 — Skeleton + optimistic UI
+
+Every list and detail view has a designed skeleton state. Mutation flows are
+optimistic where safe (rename, archive, role change) and roll back cleanly on
+error.
+
+Status: scoped inside Task 0082 for skeletons; optimistic flows can be follow-up.
+
+### U9 — White-label-ready theming
+
+Token-driven theming so a customer fork can rebrand by editing
+`packages/ui/tokens.css`. No hard-coded color literals in components.
+Logo/wordmark via a swappable component. This is a design-system property,
+not a feature.
+
+Status: scoped inside Task 0082 for the foundation; full white-label kit can
+be follow-up.
+
+### U10 — Console-as-SDK-client
+
+After B4 lands, the new console consumes the generated SDK rather than a
+bespoke `api.ts`. Single client surface, single retry/auth/idempotency story.
+
+Depends on: B4.
+
+## Product Areas (P) — differentiation
+
+### P1 — Per-environment env vars + promote
+
+Per-env config surface (already partly done in config-worker), plus a
+"promote stage → prod" flow with a diff and explicit confirmation. Audit
+records both states.
+
+Owner: config-worker + console.
+
+### P2 — Resources and component-manifest extension (the moat)
+
+Spec 06 + spec 08. The platform's differentiator. Component manifests describe
+project-scoped resources; the runtime orchestrator drives create/update/status
+through provider adapters. Status surfaces in console. Treat this as the
+differentiator that justifies the bounded-context discipline elsewhere.
+
+Owner: new resources-worker + runtime-worker; large multi-task program.
+
+### P3 — Observability tab per project
+
+Live logs, errors, request rates per project from edge + workers. Time-series
+in Analytics Engine; query surface in console. Distinct from audit (P5 of B7);
+this is operational, not compliance.
+
+Owner: console + a thin observability-worker read API.
+
+### P4 — Notification inbox + delivery preferences UX
+
+In-app inbox surfacing what notifications-worker (B2) delivered. Per-channel
+preferences (email / webhook / in-app) per identity. Mark-as-read state.
+
+Depends on: B2.
+
+### P5 — Integration marketplace primitives
+
+Per-org installation of third-party integrations via OAuth + a manifest. Lives
+alongside webhooks but is install/configure rather than send. Treat each
+integration as a manifested resource (uses P2).
+
+Depends on: P2 ideally, B5 for outbound, B2 for inbound notifications.
+
+### P6 — Hosted changelog + status page
+
+Per-product changelog rendered from a content source (MDX in repo or Notion);
+hosted status page reading from observability (P3) + uptime checks. White-label
+ready via U9.
+
+### P7 — AI-native affordances
+
+Natural-language audit search ("show me everyone who deleted a project last
+month"), anomaly detection on usage curves, NL → entitlement query, NL →
+webhook filter. Treat as separate sub-tasks once P3 and B9 give us the data.
+
+## Sequencing Notes for the Orchestrator
+
+- B1 + B2 are the highest-leverage baseline pair: they together kill the
+  "demo-only auth" problem and unblock invitation + billing receipts + alerts.
+  Order is B2 → B1 because B1 needs real email.
+- U1 (Task 0082) is in flight. After cutover, U10 becomes blocked only on B4.
+- P2 is the differentiator and the largest single program. Do not start it
+  before B4 (SDK), because the resources contract should ship as a typed
+  client surface from day one.
+- B6 (Stripe) should not start until U7 lands so upgrade CTAs have somewhere
+  to go.
+- Anything in B / U should be preferred over P until baseline buyer-credibility
+  is reached. The platform's defining bet is in P2, but a customer cannot reach
+  P2 without B1–B4 being credible.
+
+## What This Document Is Not
+
+- Not a delivery date list.
+- Not a substitute for the per-component specs under `specs/components/*.md` —
+  those remain the contract.
+- Not a frozen plan. The Orchestrator may propose reordering, splits, merges,
+  or new clusters via the spec-change-proposal flow in `agents/orchestrator.md`.
