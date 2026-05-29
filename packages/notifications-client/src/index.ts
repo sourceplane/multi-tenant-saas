@@ -54,6 +54,51 @@ export type EnqueueNotificationResult =
 
 const ENQUEUE_URL = "https://notifications.internal/v1/notifications";
 
+/**
+ * Build a deterministic, template-scoped idempotency key for the
+ * notifications-worker enqueue path.
+ *
+ * The `(orgId, idempotencyKey)` uniqueness invariant on the notifications
+ * row drives the worker's `idempotent_hit` outcome — a retry of the same
+ * logical event collapses to one row + (eventually) one provider attempt.
+ *
+ * Shape: `<scope>:<part>[:<part>...]`. `scope` SHOULD match the caller's
+ * `templateKey` (e.g. `"auth.magic_link"`, `"invitation.created"`,
+ * `"invitation.accepted"`) so two logically-distinct events that share
+ * an upstream id never collide.
+ *
+ * Constraints (enforced at runtime):
+ *   - `scope` and every `part` must be a non-empty string.
+ *   - No `part` may contain whitespace, `:`, or any control character —
+ *     keys end up in DB rows and logs and must be cheaply roundtrippable.
+ *
+ * Inputs MUST be values that are stable across retries of the same
+ * logical action (e.g. a row id materialised by a prior commit, a
+ * challenge id that is itself the durable handle for the challenge).
+ * Callers MUST NOT pass raw secret material (tokens, codes, password
+ * equivalents) — keys are persisted server-side.
+ */
+export function buildIdempotencyKey(scope: string, ...parts: string[]): string {
+  if (typeof scope !== "string" || scope.length === 0) {
+    throw new TypeError("buildIdempotencyKey: scope must be a non-empty string");
+  }
+  if (parts.length === 0) {
+    throw new TypeError("buildIdempotencyKey: at least one part is required");
+  }
+  const segments = [scope, ...parts];
+  for (const seg of segments) {
+    if (typeof seg !== "string" || seg.length === 0) {
+      throw new TypeError("buildIdempotencyKey: all segments must be non-empty strings");
+    }
+    if (/[\s:\u0000-\u001f\u007f]/.test(seg)) {
+      throw new TypeError(
+        "buildIdempotencyKey: segments must not contain whitespace, ':' or control characters",
+      );
+    }
+  }
+  return segments.join(":");
+}
+
 export async function enqueueNotification(
   env: NotificationsEnvBinding,
   ctx: NotificationsClientContext,

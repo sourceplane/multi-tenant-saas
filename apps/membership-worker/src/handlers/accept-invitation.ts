@@ -8,6 +8,7 @@ import { successResponse, errorResponse, validationError } from "../http.js";
 import { parseOrgPublicId, orgPublicId, invitationPublicId, memberPublicId, hashToken } from "../ids.js";
 import {
   enqueueNotification,
+  buildIdempotencyKey,
   type EnqueueNotificationResult,
 } from "@saas/notifications-client";
 
@@ -219,6 +220,23 @@ export async function handleAcceptInvitation(
             channel: "email",
             address: actor.email.toLowerCase(),
           },
+          // Stripe-quality idempotency: a retry of this same
+          // post-transaction enqueue (same logical acceptance) must
+          // collapse to one notification row + one provider attempt.
+          // Composite of `invitationPublicId(inv.id)` +
+          // `memberPublicId(member.id)`: acceptance is a one-shot
+          // transition that creates `member.id` inside the same
+          // committed transaction, so both ids are durable and stable
+          // for any future retry. Template-scoped to prevent collision
+          // with `invitation.created` on the same invitation. No raw
+          // token participates in the key — the inbound token is
+          // already hashed before any persistence; only the public-id
+          // forms travel here.
+          idempotencyKey: buildIdempotencyKey(
+            "invitation.accepted",
+            invitationPublicId(inv.id),
+            memberPublicId(member.id),
+          ),
           correlationId: requestId,
         },
       );
@@ -336,6 +354,13 @@ export async function handleAcceptInvitation(
             channel: "email",
             address: actor.email.toLowerCase(),
           },
+          // Same idempotency contract as the transactional path; see
+          // the comment block above for the full rationale.
+          idempotencyKey: buildIdempotencyKey(
+            "invitation.accepted",
+            invitationPublicId(inv.id),
+            memberPublicId(member.id),
+          ),
           correlationId: requestId,
         },
       );
