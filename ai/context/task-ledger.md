@@ -1624,3 +1624,35 @@ Last updated: 2026-05-29 (Task 0085a Implementer DONE — PR #133 open 3/3 SUCCE
 |- Implementer outcome (2026-05-29): PR #134 (`feat(notifications): add notifications-worker V1 (task-0086)`, head `b611398`), `mergeable=MERGEABLE`, base=`main`, draft=`false`. PR-CI run `26649268365` 13/13 SUCCESS. Implementer report committed to PR branch and listed in PR file diff. Local checks per the implementer report: `orun validate` ✓, `orun component --changed --base main` ✓ (5 components: contracts, db, db-migrate, notifications-worker, notifications-worker-tests), `orun plan --changed --base main` → `5 components × 3 envs → 12 jobs` (plan `712b683413dd`), `orun run 712b683413dd --dry-run` all 12 jobs ✓; `pnpm exec turbo run build --filter=@saas/notifications-worker --filter=@saas/notifications-worker-tests --filter=@saas/contracts --filter=@saas/db` 4/4 ok; `cd tests/notifications-worker && pnpm test` 20/20 passing. Wrangler dry-run upload: 150.63 KiB / gzip 34.73 KiB.
 |- Implementer follow-ups (out of scope, surfaced for orchestrator): (1) real provider adapter (SES/Resend/Postmark) — slot into `apps/notifications-worker/src/providers/`, gate via `NOTIFICATIONS_PROVIDER`; (2) Queues + retry loop (V2 — `notification_attempts` table is already shaped for multi-attempt history); (3) Hyperdrive + service-binding IDs in `apps/notifications-worker/wrangler.jsonc` are currently the shared placeholders copied from events-worker — verifier confirms during deploy-step inspection; (4) pre-existing `@saas/identity-worker-tests` `crypto` type error on `main` (reproduces on clean stash of this branch — unrelated, needs its own task).
 |- Expected outcome: deployable internal notifications-worker live on stage/prod via the post-merge Verify-deploy CI step; new `notifications` Postgres schema with the four V1 tables applied via `120_notifications_core` migration on both Supabase projects; spec 14 V1 surface unlocked; ready for caller wiring (identity magic-link, membership invitation email, billing receipts) in subsequent tasks.
+
+## Task 0086 (Verifier — FAIL)
+
+|- Agent: Verifier
+|- Prompt: `ai/tasks/task-0086-verifier.md`
+|- Report: `ai/reports/task-0086-verifier.md`
+|- Status: FAIL (2026-05-29) — single blocker. PR #134 left OPEN with FAIL comment; orchestrator to scope Task 0086.1 as surgical revert.
+|- Blocker: undisclosed `kiox.lock` bump on `impl/task-0086-notifications-worker` (orun runtime `v2.3.0` → `v2.9.0`, 4 lines: `source`, `version`, `resolved` sha, `store` hash). Not mentioned in implementer report. Verifier prompt invariant violated: "`kiox.lock` is byte-identical to `main`"; verifier prompt enumerates `kiox.lock` in the "automatic FAIL" surface. Surgical-commit allowance does not extend to reverting (prompt: "If the PR needs anything beyond the verifier report add to pass, FAIL and surface to orchestrator").
+|- CI-green note: PR-CI run `26649268365` is 13/13 SUCCESS but green is incidental — v2.9.0 was already cached on the runners from prior workflows. CI passing does not validate the bump nor override the explicit prompt constraint.
+|- What verified-clean (carry forward for re-verify after 0086.1):
+|  - Migration `120_notifications_core` checksum `868cc1092b4b385b6ed3d203efe5302191865131bb98d0e9f5fe5ad6d16f01bb` recomputes byte-identical.
+|  - All 5 canonical events present in `packages/contracts/src/notifications.ts`; enums correct.
+|  - `templateData` excluded from emitted event payloads (asserted at `tests/notifications-worker/src/notifications-service.test.ts:270`).
+|  - Internal-actor gate present on every non-health route in `apps/notifications-worker/src/router.ts`.
+|  - `recipient_address` lower-cased at repository layer.
+|  - `apps/notifications-worker/wrangler.jsonc` Hyperdrive IDs are REAL (stage `08f7c6055f544a3890a585d88fd92348`, prod `ab2c21c2db6245a59c91588fcac7107a` — match canonical events-worker/membership-worker bindings), `EVENTS_WORKER` resolves to real `events-worker-{stage,prod}`.
+|  - `orun validate` ✓; `orun component --changed --base main` returns exactly the 5 expected components; `orun plan --changed` ✓; `orun run --dry-run --runner github-actions` 12/12 ✓.
+|  - `pnpm exec turbo run build` for contracts + db + notifications-worker + notifications-worker-tests 4/4 cached success.
+|  - `tests/notifications-worker pnpm test` 20/20 passing.
+|  - PR-CI db-migrate jobs already applied `120_notifications_core` to both Supabase projects (stage job `78543110891`, prod job `78543110838`). Post-merge main-CI db-migrate on this migration will be a no-op.
+|  - Wrangler dry-run upload 150.63 KiB / gzip 34.80 KiB (stage+prod identical).
+|  - Secrets in CI logs properly masked (`token: ***`, `password: ***`).
+|  - No touch to `infra/terraform/cloudflare-domain/**` — Task 0085b deferred risk window honored.
+|- Post-merge soak: SKIPPED (no merge — FAIL outcome).
+
+## Task 0086.1 (scope handoff — orchestrator pickup)
+
+|- Agent: (orchestrator to scope; no implementer task file yet)
+|- Trigger: Task 0086 verifier FAIL on PR #134.
+|- Objective: Surgical revert of `kiox.lock` on branch `impl/task-0086-notifications-worker` back to the four `main` lines (orun runtime v2.3.0, sha `0efcf1f8dc0500675ef43495977c17f7296f627e771a5018ddc04581b6fe7f4c`, store `ad17befb8dc63f35e483be8f8b1769988b090e05a9b7f28236efd033e0db99dc`). No other file change. Push to PR #134. Re-run PR-CI.
+|- Acceptance: `git diff origin/main...HEAD -- infra/ kiox.lock .terraform.lock.hcl intent.yaml stack-tectonic/` is empty; PR-CI all-green re-run; verifier re-picks up #134 and PASSes (every other check from the FAIL pass is already green).
+|- Out of scope: any other change to source / contracts / db / wrangler.jsonc / migrations; no rebase that could pull additional drift.

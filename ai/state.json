@@ -1,6 +1,6 @@
 {
   "goal": "Supabase/Postgres-backed multi-organization Orun SaaS control plane",
-  "current_task": "0086-verifier",
+  "current_task": "0086.1-revert-kiox-lock-bump",
   "completed": [
     "0001", "0001.1", "0002", "0003", "0003.1", "0004", "0005",
     "0006", "0006.1", "0007", "0007.1", "0008", "0009", "0009.1",
@@ -17,15 +17,18 @@
     "0085a"
   ],
   "deferred": ["0085b"],
+  "blocked": ["0086"],
   "repo_health": "green",
-  "next_focus": "task-0086-notifications-worker-verifier",
-  "last_verified": "2026-05-29T15:08:00Z",
+  "next_focus": "task-0086.1-revert-kiox-lock-bump-on-PR-134",
+  "last_verified": "2026-05-29T16:45:00Z",
   "waiting_for_input": "false",
-  "task_agent": "/ai/tasks/task-0086-verifier.md",
+  "task_agent": "/ai/tasks/task-0086.1-revert-kiox-lock-bump.md (to be scoped by orchestrator)",
   "notes": [
-    "Task 0086 (Implementer) DONE — notifications-worker V1 bring-up landed on branch `impl/task-0086-notifications-worker`. PR #134 OPEN, MERGEABLE, base=main, draft=false. PR-CI run 26649268365 reports 13/13 SUCCESS: plan + contracts/db Verify on 3 envs + db-migrate Migrate on stage,prod + notifications-worker Verify deploy on 3 envs + notifications-worker-tests on dev. Implementer report committed to PR branch and listed in PR file diff. Branch tip: b611398 `feat(notifications): add notifications-worker V1 (task-0086)`.",
-    "Task 0086 verifier scoped at ai/tasks/task-0086-verifier.md. Acceptance gates: PR scope confined to apps/notifications-worker + packages/contracts notifications.ts + packages/db notifications + migration 120_notifications_core + tests/notifications-worker + lockfile + ai/tasks+reports; no touch to infra/terraform/cloudflare-domain (Task 0085b deferred surface). Load-bearing post-merge soak: db-migrate stage+prod apply for 120_notifications_core green, notifications-worker stage+prod Verify deploy green, live /health 200 on both Worker URLs, apex hostnames stage.sourceplane.ai + prod.sourceplane.ai still 200 with `Sourceplane Console` (no regression on the Task 0085a `0 destroyed` invariant). Verifier must also recompute migration checksum vs manifest (claimed 868cc1092b4b385b6ed3d203efe5302191865131bb98d0e9f5fe5ad6d16f01bb) and audit `wrangler.jsonc` for placeholder bindings flagged by implementer Follow-up #3 (record but not blocker).",
-    "Task 0085b (Phase 2 cloudflare-domain v4→v5 — provider bump + cloudflare_workers_custom_domain + import{} re-adopting the two known immutable IDs 052eaece5e989d5a7280b6c206e562c42950e3a6 / 31e5f2ed1b1e4a5700e8ae0678846a0d753840e1) remains EXPLICITLY DEFERRED by the user. Narrow Terraform-tracking risk window stays open on cloudflare-domain (no Terraform-tracked record of the two live custom-domain attachments). Mitigation: no manual Cloudflare changes to those attachments; Task 0086 confirmed-scoped to NOT touch infra/terraform/cloudflare-domain. Next-candidate task slate after 0086 verifier PASS: (a) notifications caller wiring (identity magic-link OR membership invitation email), (b) real notifications provider swap (Resend/SES/Postmark), (c) revive 0085b when user lifts the defer.",
-    "Pre-existing failure on main: `@saas/identity-worker-tests` `crypto` type error reproduces on a clean stash of the 0086 branch — unrelated, NOT introduced by 0086, scope is a separate follow-up task (add node:crypto import or @types/node globals)."
+    "Task 0086 (Verifier) FAIL — PR #134 left OPEN. Single blocker: undisclosed kiox.lock bump (orun runtime v2.3.0 → v2.9.0). The verifier prompt explicitly forbids any change to kiox.lock and lists it as automatic FAIL. Implementer report does not mention the bump. Everything else on the PR is clean: 13/13 PR-CI SUCCESS, real Hyperdrive + EVENTS_WORKER bindings resolved at Verify-deploy, 120_notifications_core applied on both Supabase projects (stage+prod) at PR-CI time, manifest checksum byte-matches (868cc1092b4b385b6ed3d203efe5302191865131bb98d0e9f5fe5ad6d16f01bb), 20/20 tests pass locally, templateData excluded from all 5 event emits, recipient_address lowercased at repository layer, no Task 0085b surface drift, no secret leaks. Full evidence in ai/reports/task-0086-verifier.md.",
+    "NEXT — orchestrator must scope task-0086.1 as a single-commit revert on the PR #134 branch (impl/task-0086-notifications-worker): `git checkout origin/main -- kiox.lock` to restore v2.3.0, commit `revert(orun): drop incidental kiox.lock bump from task-0086 (v2.9.0 → v2.3.0)`, push, wait for PR-CI to re-run green, then the verifier re-runs Phases 1/3/5-7 (code inspection from this pass is already captured) for the merge + post-merge soak. Acceptance is the verifier prompt at ai/tasks/task-0086-verifier.md as-is — no new acceptance shape needed.",
+    "PR-CI db-migrate profile applies migrations on PR runs (not plan-only). 120_notifications_core is already applied on both Supabase projects from run 26649268365 jobs 78543110891 (stage) and 78543110838 (prod). Post-merge main-CI db-migrate jobs will report no-op / already-applied; that is expected, not a regression.",
+    "wrangler.jsonc placeholder concern (implementer Follow-up #3) — RESOLVED as overstated. The Hyperdrive cluster IDs (stage 08f7c6055f544a3890a585d88fd92348 / prod ab2c21c2db6245a59c91588fcac7107a) are canonical and shared with events-worker and membership-worker. PR-CI Verify-deploy logs confirm `env.SOURCEPLANE_DB (...)  Hyperdrive Config` and `env.EVENTS_WORKER (events-worker-{env}) Worker` resolve to real resources. No placeholder-swap follow-up needed.",
+    "Task 0085b (cloudflare-domain v4→v5 Phase 2) remains EXPLICITLY DEFERRED. Task 0086 PR did not touch infra/terraform/cloudflare-domain/** so the narrow Terraform-tracking risk window did not widen.",
+    "Pre-existing @saas/identity-worker-tests crypto type error on main reproduces on the PR branch; unaffected by 0086; separate follow-up."
   ]
 }
