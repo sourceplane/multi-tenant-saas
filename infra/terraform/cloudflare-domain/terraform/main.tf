@@ -176,23 +176,60 @@ locals {
 
 # --- Worker custom domain attachment ---
 #
-# Note: in the cloudflare TF provider v4.x line this resource is named
+# Phase 1 of 2 — state entry dropped here; v5 re-import lands in Task 0085b.
+#
+# Background: in the cloudflare TF provider v4.x line this resource is named
 # `cloudflare_workers_domain` (description: "Creates a Worker Custom Domain.").
-# It is renamed to `cloudflare_workers_custom_domain` in v5. Task 0083 spec
-# references the v5 name; we use the v4 name here because the rest of the repo
-# (and this component's provider pin `~> 4.52`) is on the v4 line. Functionality
-# is equivalent. Tracked as a follow-up: bump provider to v5 across the repo
-# and rename this resource at that time.
+# It is renamed to `cloudflare_workers_custom_domain` in v5. The v5 provider
+# does not implement cross-resource-type `MoveState` for this rename, so a
+# single-PR migration is impossible (proven by failed PR-CI runs 26642692516
+# and 26642904336 — see ai/proposals/task-0085-spec-update.md).
+#
+# The v5 upgrade guide's sanctioned pattern (same shape `tf-migrate` produces
+# for `cloudflare_zone_settings_override`) is a two-phase migration gated on
+# a real v4 apply between the phases:
+#
+#   - Phase 1 (THIS PR, Task 0085a): stay on `cloudflare ~> 4.52`, drop the
+#     v4-typed state entry via `removed { lifecycle { destroy = false } }`.
+#     The live Cloudflare custom-domain resource is NOT touched — only the
+#     Terraform state file in S3 is mutated. Expected plan diff:
+#       Plan: 0 to add, 0 to change, 1 to forget.
+#     After post-merge apply, `stage.sourceplane.ai` and `prod.sourceplane.ai`
+#     continue to serve from their existing Workers (immutable IDs
+#     052eaece5e989d5a7280b6c206e562c42950e3a6 and
+#     31e5f2ed1b1e4a5700e8ae0678846a0d753840e1) but are no longer tracked.
+#
+#   - Phase 2 (Task 0085b, separate PR after 0085a's apply lands on both
+#     envs): bump `required_providers.cloudflare.version` to `~> 5.0`,
+#     replace the fenced block below with a v5
+#     `resource "cloudflare_workers_custom_domain" "console"`, and use an
+#     `import {}` block keyed by env to re-adopt the live resources by their
+#     known immutable IDs.
 
-resource "cloudflare_workers_domain" "console" {
-  count = local.has_custom_domain ? 1 : 0
-
-  account_id  = var.cloudflare_account_id
-  zone_id     = local.zone_id
-  hostname    = local.console_custom_domain
-  service     = local.worker_name
-  environment = "production"
+removed {
+  from = cloudflare_workers_domain.console
+  lifecycle {
+    destroy = false
+  }
 }
+
+# REMOVED IN 0085a, REPLACED IN 0085b
+# The original v4 resource block is fenced (not deleted) so the diff is
+# obviously a state-only drop and the v5 replacement in 0085b is easy to
+# diff against the v4 shape. Do not uncomment this block — uncommenting it
+# under the ~> 4.52 pin would re-create the state entry on the next apply
+# and undo Phase 1. Phase 2 replaces it with the v5 resource type, not by
+# reviving this block.
+#
+# resource "cloudflare_workers_domain" "console" {
+#   count = local.has_custom_domain ? 1 : 0
+#
+#   account_id  = var.cloudflare_account_id
+#   zone_id     = local.zone_id
+#   hostname    = local.console_custom_domain
+#   service     = local.worker_name
+#   environment = "production"
+# }
 
 # --- Outputs (non-secret) ---
 
@@ -222,6 +259,6 @@ output "worker_name" {
 }
 
 output "worker_custom_domain_id" {
-  description = "Cloudflare Workers custom domain attachment ID"
-  value       = local.has_custom_domain ? try(cloudflare_workers_domain.console[0].id, "pending") : "not_configured"
+  description = "Cloudflare Workers custom domain attachment ID (placeholder during 0085a — the resource is intentionally untracked between Phase 1 state drop and Phase 2 v5 re-import; downstream consumers should not read this value during the 0085a → 0085b window)."
+  value       = local.has_custom_domain ? "pending_v5_reimport_task_0085b" : "not_configured"
 }
