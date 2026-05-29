@@ -1,6 +1,6 @@
 {
   "goal": "Supabase/Postgres-backed multi-organization Orun SaaS control plane",
-  "current_task": "0082",
+  "current_task": "0082.1",
   "completed": [
     "0001", "0001.1", "0002", "0003", "0003.1", "0004", "0005",
     "0006", "0006.1", "0007", "0007.1", "0008", "0009", "0009.1",
@@ -16,16 +16,16 @@
     "0079", "0080", "0081"
   ],
   "repo_health": "yellow",
-  "next_focus": "verify-and-merge-task-0082-web-console-next-after-fixing-/demo-prerender-failure",
-  "last_verified": "2026-05-29T05:08:00Z",
+  "next_focus": "task-0082.1-opennextjs-cloudflare-wiring-on-pr-125",
+  "last_verified": "2026-05-29T07:25:00Z",
   "waiting_for_input": "false",
-  "task_agent": "ai/tasks/task-0082-verifier.md",
+  "task_agent": "ai/tasks/task-0082.1.md",
   "notes": [
-    "Tasks 0079/0080/0081 are merged on main (PRs #122, #123, #124). limit.projects, limit.members, and limit.environments entitlement gates are live on projects-worker, membership-worker, and projects-worker (environments) respectively.",
-    "Task 0082 implementer PR #125 (impl/task-0082-web-console-next) is OPEN with PR CI RED on PR run 26622616478. plan=SUCCESS but all three web-console-next.{dev,stage,prod}.verify-deploy jobs FAILED. Root cause: /demo route prerender threw TypeError: Cannot read properties of undefined (reading 'url') inside useMemo — Next.js 15 prerender-error, see https://nextjs.org/docs/messages/prerender-error.",
-    "repo_health = yellow until Task 0082 PR #125 is verified/merged or failed.",
-    "Verifier task 0082 is empowered to commit a single scoped fix to the PR branch within apps/web-console-next/** (Suspense wrapper around the client navigation hook in /demo, or export const dynamic = 'force-dynamic'). MUST NOT merge while any web-console-next verify-deploy job is FAILURE.",
-    "ai/reports/task-0080-verifier.md and ai/reports/task-0081-verifier.md exist on disk but were not committed alongside the merges; the orchestration commit captured here adds them with the architect-mode spec/orchestrator updates and the new specs/roadmap.md.",
-    "Next focus after PR #125 is merged: Task 0083 = cutover from apps/web-console to apps/web-console-next (Pages project repoint / domain switch), preserving rollback via the existing console build."
+    "Task 0082 verifier returned FAIL (report at ai/reports/task-0082-verifier.md on PR branch head 4d8b6d2). Verifier successfully landed the /demo prerender fix via root layout `export const dynamic = \"force-dynamic\"` (commit 875e6e6) on impl/task-0082-web-console-next. Next.js build now succeeds for all 16 routes.",
+    "Remaining blocker is implementer-territory: apps/web-console-next/component.yaml declares outputDir `.open-next/assets` and `cloudflare-pages-turbo`, but package.json has no @opennextjs/cloudflare dependency and no opennextjs-cloudflare build step — `next build` emits `.next/`, root turbo.json outputs only `dist/**` and `.wrangler/**`, so orun's `verify-build-output` step fails on all three web-console-next.{dev,stage,prod}.verify-deploy jobs (PR CI run 26623666583).",
+    "Task 0082.1 scoped: single follow-up implementer commit (or small series) onto the SAME PR #125 branch — add @opennextjs/cloudflare adapter, update build script to produce `.open-next/assets/**`, surface assets in turbo cache via per-package turbo.json override (preferred) or narrow root turbo.json outputs entry. Diff confined to apps/web-console-next/**, root turbo.json (only if necessary), pnpm-lock.yaml, and ai/reports/task-0082.1-implementer.md. Verifier prerender fix on layout.tsx must be preserved.",
+    "PR #125 remains OPEN. No new PR. Once Task 0082.1 implementer pushes and all three verify-deploy jobs go green, a Task 0082.1 Verifier will merge PR #125 and close out Task 0082+0082.1 together.",
+    "Task 0083 (cutover from apps/web-console to apps/web-console-next: Pages project repoint / domain switch) remains blocked until PR #125 is merged and stage/prod Pages URLs return 'Sourceplane Console'.",
+    "repo_health stays yellow until PR #125 is merged or PR #125 is closed unmerged with a documented retreat."
   ]
 }

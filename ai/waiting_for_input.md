@@ -6,17 +6,34 @@ No human input is currently requested.
 
 ## Ready To Proceed
 
-Tasks 0079, 0080, and 0081 are verified and merged (PRs #122, #123, #124).
-The entitlement quota gates for projects, members, and environments are live on main.
+Task 0082 verifier returned **FAIL** with the prerender fix landed on PR
+#125 (commit `875e6e6`, root layout `force-dynamic`) and an
+implementer-territory blocker at the orun `verify-build-output` step:
+the `apps/web-console-next` build does not produce
+`.open-next/assets/**` because `@opennextjs/cloudflare` is not wired,
+despite `component.yaml` declaring `outputDir: .open-next/assets`.
 
-Task 0082 implementer PR #125 (`impl/task-0082-web-console-next`) is open
-and **PR CI is RED**. The next agent in the cycle is the **Task 0082
-Verifier** (`ai/tasks/task-0082-verifier.md`), who must either drive the
-`/demo` Next.js prerender failure to green with a scoped fix on the PR
-branch and merge, OR FAIL the PR with explicit blockers.
+The next agent in the cycle is the **Task 0082.1 Implementer**
+(`ai/tasks/task-0082.1.md`), who will push a scoped follow-up commit (or
+small series) onto the **same** PR #125 branch
+`impl/task-0082-web-console-next`:
 
-`repo_health` is `yellow` until PR #125 is closed (merged or failed).
+- add `@opennextjs/cloudflare` to `apps/web-console-next/package.json`,
+- update the `build` script to emit `.open-next/assets/**`,
+- surface those assets in the Turborepo cache (per-package
+  `apps/web-console-next/turbo.json` override preferred over widening
+  root `turbo.json`),
+- preserve the verifier's root-layout `force-dynamic` fix,
+- keep diff confined to `apps/web-console-next/**`, root `turbo.json`
+  (only if strictly necessary), `pnpm-lock.yaml`, and
+  `ai/reports/task-0082.1-implementer.md`.
+
+No new branch, no new PR. PR #125 stays OPEN; merge will follow a Task
+0082.1 Verifier pass once all three `web-console-next ·
+{dev,stage,prod} · Verify deploy` jobs go SUCCESS.
+
+`repo_health` is `yellow` until PR #125 is merged.
 
 ## Needed To Continue
 
-Nothing blocking. Verifier may proceed.
+Nothing blocking. Implementer may proceed.
