@@ -5,6 +5,7 @@ import { handleGetBillingCustomer } from "./handlers/get-customer.js";
 import { handleGetBillingSummary } from "./handlers/get-summary.js";
 import { handleListInvoices } from "./handlers/list-invoices.js";
 import { handleListEntitlements } from "./handlers/list-entitlements.js";
+import { handleCheckEntitlement } from "./handlers/check-entitlement.js";
 import { errorResponse, notFound, methodNotAllowed } from "./http.js";
 import { generateRequestId, parseOrgPublicId } from "./ids.js";
 
@@ -68,6 +69,14 @@ export async function route(request: Request, env: Env): Promise<Response> {
   try {
     if (url.pathname === "/health" && request.method === "GET") {
       return handleHealth(env, requestId);
+    }
+
+    // Private internal routes (service-binding only — not exposed via api-edge).
+    // These do NOT require an x-actor-* identity because the caller is another
+    // bounded-context Worker over a service binding, not an end user. Public
+    // exposure is prevented by the api-edge billing facade routing allow-list.
+    if (url.pathname === "/v1/internal/billing/entitlements/check") {
+      return handleCheckEntitlement(request, env, requestId);
     }
 
     const matched = matchRoute(url.pathname);
