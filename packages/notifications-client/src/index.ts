@@ -6,15 +6,10 @@ import type {
 /**
  * Best-effort internal client for `notifications-worker`.
  *
- * Mirrors `apps/identity-worker/src/notifications-client.ts` — same shape,
- * same never-throws contract, same internal route. Duplicated in-place
- * (rather than extracted to a shared package) per Task 0088 scope: the
- * shared `@saas/notifications-client` package extraction is deferred until
- * a third caller appears.
- *
  * Posts the V1 enqueue contract to the internal route
  * `POST https://notifications.internal/v1/notifications` over the
- * `NOTIFICATIONS_WORKER` service binding.
+ * `NOTIFICATIONS_WORKER` service binding, mirroring the established
+ * internal-binding pattern (see `apps/notifications-worker/src/events-client.ts`).
  *
  * Best-effort semantics:
  *
@@ -25,10 +20,14 @@ import type {
  * The function NEVER throws. Call sites treat the result as advisory and
  * MUST NOT propagate notifications failures to the user-facing response —
  * the notifications surface is downstream of, and decoupled from, the
- * invitation lifecycle. In particular, the raw invitation token MUST NOT
- * appear in `templateData`; only the token hash is persisted, and only the
- * existing `DEBUG_DELIVERY === "true"` response-body path is allowed to
- * carry the raw token.
+ * caller's primary lifecycle (auth, invitations, etc.).
+ *
+ * No secret material (raw codes, raw invitation tokens, provider responses)
+ * MUST be placed in `templateData`. Allowed values are a bounded
+ * redaction-safe subset (presentation hints + the message payload itself
+ * where the payload IS the message — e.g. magic-link login codes — but
+ * never the authoritative secret of the originating state — token hashes
+ * are persisted server-side, never the raw token).
  */
 
 export interface NotificationsEnvBinding {
@@ -36,9 +35,12 @@ export interface NotificationsEnvBinding {
 }
 
 export interface NotificationsClientContext {
-  /** Caller identifier — for membership-worker this is `"membership-worker"`. */
+  /**
+   * Caller identifier — e.g. `"identity-worker"`, `"membership-worker"`.
+   * Forwarded as `x-internal-actor` for tracing / audit.
+   */
   internalActor: string;
-  /** Actor subject type as known to the caller (e.g. `"user"`, `"system"`). */
+  /** Actor subject type as known to the caller (e.g. `"system"`, `"user"`). */
   actorSubjectType: string;
   /** Actor subject id as known to the caller. */
   actorSubjectId: string;

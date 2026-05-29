@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@saas/contracts": "workspace:*",
-    "@saas/db": "workspace:*"
+    "@saas/db": "workspace:*",
+    "@saas/notifications-client": "workspace:*"
   }
 }
