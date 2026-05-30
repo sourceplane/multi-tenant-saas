@@ -51,7 +51,7 @@ export async function handleConfigRoute(
     return errorResponse("unsupported", "Method not allowed", 405, requestId);
   }
 
-  return replayOrExecute(request, requestId, env, async () => {
+  return replayOrExecute(request, requestId, env, "config", async () => {
 
     if (!env.IDENTITY_WORKER) {
       return errorResponse("internal_error", "Authentication service unavailable", 503, requestId);

@@ -67,6 +67,11 @@ import {
 
 import type { Env } from "./env.js";
 import { errorResponse } from "./http.js";
+import {
+  enforceRateLimit,
+  mergeRateLimitHeaders,
+  type RouteFamily,
+} from "./rate-limit.js";
 
 const UNSAFE_METHODS: ReadonlySet<string> = new Set(["POST", "PATCH", "PUT", "DELETE"]);
 
@@ -150,36 +155,48 @@ export async function replayOrExecute(
   request: Request,
   requestId: string,
   env: Env,
+  routeFamily: RouteFamily,
   downstream: () => Promise<Response>,
 ): Promise<Response> {
-  // Safe methods: never cache, never validate; pass through.
+  // Rate-limit gate runs FIRST — before any KV cache lookup, before any
+  // cross-binding fetch. Failure-open is handled inside `enforceRateLimit`.
+  const rateDecision = await enforceRateLimit(request, requestId, env, routeFamily);
+  if (rateDecision.kind === "denied") {
+    return rateDecision.response;
+  }
+  const rateHeaders = rateDecision.headers;
+
+  // Safe methods: never cache, never validate; pass through (still decorated).
   if (!UNSAFE_METHODS.has(request.method)) {
-    return downstream();
+    return mergeRateLimitHeaders(await downstream(), rateHeaders);
   }
 
   const raw = request.headers.get("idempotency-key");
   const parsed = parseIdempotencyKey(raw);
 
   if (!parsed.ok) {
-    return errorResponse(
-      "validation_failed",
-      describeIdempotencyKeyParseError(parsed.reason),
-      400,
-      requestId,
-      { header: IDEMPOTENCY_KEY_HEADER, reason: parsed.reason },
+    return mergeRateLimitHeaders(
+      errorResponse(
+        "validation_failed",
+        describeIdempotencyKeyParseError(parsed.reason),
+        400,
+        requestId,
+        { header: IDEMPOTENCY_KEY_HEADER, reason: parsed.reason },
+      ),
+      rateHeaders,
     );
   }
 
   // Header absent on an unsafe method is allowed (Task 0094 contract).
   // Pass through without any cache touch.
   if (parsed.key === null) {
-    return downstream();
+    return mergeRateLimitHeaders(await downstream(), rateHeaders);
   }
 
   // KV binding missing → degrade open.
   const kv = env.IDEMPOTENCY_KV;
   if (!kv) {
-    return downstream();
+    return mergeRateLimitHeaders(await downstream(), rateHeaders);
   }
 
   const url = new URL(request.url);
@@ -198,7 +215,7 @@ export async function replayOrExecute(
   }
 
   if (stored) {
-    return reconstructResponse(stored);
+    return mergeRateLimitHeaders(reconstructResponse(stored), rateHeaders);
   }
 
   // --- Cache miss: execute downstream, then store. ---
@@ -225,10 +242,8 @@ export async function replayOrExecute(
     }
   }
 
-  return response;
+  return mergeRateLimitHeaders(response, rateHeaders);
 }
-
-// --- Internals ---
 
 async function buildCacheKey(
   idempotencyKey: string,

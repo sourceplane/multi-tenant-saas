@@ -119,9 +119,10 @@ describe("api-edge idempotency replay store (Task 0095)", () => {
 
       expect(response.status).toBe(200);
       expect(calls).toHaveLength(1);
-      expect(kv.putCalls).toHaveLength(1);
-      expect(kv.putCalls[0]!.options?.expirationTtl).toBe(86400);
-      expect(kv.store.size).toBe(1);
+      const idemPuts = kv.putCalls.filter(c => c.key.startsWith("idem:"));
+      expect(idemPuts).toHaveLength(1);
+      expect(idemPuts[0]!.options?.expirationTtl).toBe(86400);
+      expect([...kv.store.keys()].filter(k => k.startsWith("idem:")).length).toBe(1);
     });
 
     it("cache hit → downstream NOT called, replayed envelope returned with x-saas-replay-source", async () => {
@@ -150,7 +151,7 @@ describe("api-edge idempotency replay store (Task 0095)", () => {
       await handleAuthRoute(makePost(VALID_KEY_B), env, "req_b", "/v1/auth/login/start");
 
       expect(calls).toHaveLength(2);
-      expect(kv.store.size).toBe(2);
+      expect([...kv.store.keys()].filter(k => k.startsWith("idem:")).length).toBe(2);
     });
 
     it("absent Idempotency-Key on POST → passthrough, NOT cached", async () => {
@@ -166,8 +167,8 @@ describe("api-edge idempotency replay store (Task 0095)", () => {
 
       expect(response.status).toBe(200);
       expect(calls).toHaveLength(1);
-      expect(kv.putCalls).toHaveLength(0);
-      expect(kv.getCalls).toHaveLength(0);
+      expect(kv.putCalls.filter(c => c.key.startsWith("idem:"))).toHaveLength(0);
+      expect(kv.getCalls.filter(k => k.startsWith("idem:"))).toHaveLength(0);
     });
 
     it("IDEMPOTENCY_KV unbound → degrades open, downstream still called", async () => {
@@ -200,7 +201,7 @@ describe("api-edge idempotency replay store (Task 0095)", () => {
         "/v1/auth/login/start",
       );
 
-      expect(kv.putCalls).toHaveLength(0);
+      expect(kv.putCalls.filter(c => c.key.startsWith("idem:"))).toHaveLength(0);
     });
 
     it("4xx response IS cached (stable client errors replay deterministically)", async () => {
@@ -219,7 +220,7 @@ describe("api-edge idempotency replay store (Task 0095)", () => {
         "/v1/auth/login/start",
       );
 
-      expect(kv.putCalls).toHaveLength(1);
+      expect(kv.putCalls.filter(c => c.key.startsWith("idem:"))).toHaveLength(1);
     });
   });
 
@@ -233,15 +234,15 @@ describe("api-edge idempotency replay store (Task 0095)", () => {
       let downstreamCalls = 0;
       const get = new Request("https://api.example.com/v1/auth/session", { method: "GET" });
 
-      const response = await replayOrExecute(get, "req_test", makeEnv(kv.binding), () => {
+      const response = await replayOrExecute(get, "req_test", makeEnv(kv.binding), "auth", () => {
         downstreamCalls += 1;
         return Promise.resolve(new Response("ok", { status: 200 }));
       });
 
       expect(response.status).toBe(200);
       expect(downstreamCalls).toBe(1);
-      expect(kv.getCalls).toHaveLength(0);
-      expect(kv.putCalls).toHaveLength(0);
+      expect(kv.getCalls.filter(k => k.startsWith("idem:"))).toHaveLength(0);
+      expect(kv.putCalls.filter(c => c.key.startsWith("idem:"))).toHaveLength(0);
     });
 
     it("malformed Idempotency-Key on POST → 400 validation_failed, downstream NOT called", async () => {
@@ -253,14 +254,14 @@ describe("api-edge idempotency replay store (Task 0095)", () => {
         body: "{}",
       });
 
-      const response = await replayOrExecute(req, "req_test", makeEnv(kv.binding), () => {
+      const response = await replayOrExecute(req, "req_test", makeEnv(kv.binding), "auth", () => {
         downstreamCalls += 1;
         return Promise.resolve(new Response("ok"));
       });
 
       expect(response.status).toBe(400);
       expect(downstreamCalls).toBe(0);
-      expect(kv.getCalls).toHaveLength(0);
+      expect(kv.getCalls.filter(k => k.startsWith("idem:"))).toHaveLength(0);
     });
 
     it("KV get failure → degrades to cache-miss, downstream still called once", async () => {
@@ -279,7 +280,7 @@ describe("api-edge idempotency replay store (Task 0095)", () => {
         body: "{}",
       });
 
-      const response = await replayOrExecute(req, "req_test", makeEnv(failing), () => {
+      const response = await replayOrExecute(req, "req_test", makeEnv(failing), "auth", () => {
         downstreamCalls += 1;
         return Promise.resolve(new Response("ok", { status: 200 }));
       });
@@ -307,10 +308,10 @@ describe("api-edge idempotency replay store (Task 0095)", () => {
         body: "{}",
       });
 
-      const first = await replayOrExecute(req1, "req_a", makeEnv(kv.binding), downstream);
+      const first = await replayOrExecute(req1, "req_a", makeEnv(kv.binding), "auth", downstream);
       expect(first.status).toBe(200);
       expect(downstreamCalls).toBe(1);
-      const stored = kv.putCalls[0]!.value;
+      const stored = kv.putCalls.find(c => c.key.startsWith("idem:"))!.value;
       const env = JSON.parse(stored) as { bodyEncoding: string; v: number };
       expect(env.bodyEncoding).toBe("base64");
       expect(env.v).toBe(1);
@@ -321,7 +322,7 @@ describe("api-edge idempotency replay store (Task 0095)", () => {
         headers: { "idempotency-key": VALID_KEY_A },
         body: "{}",
       });
-      const replay = await replayOrExecute(req2, "req_b", makeEnv(kv.binding), downstream);
+      const replay = await replayOrExecute(req2, "req_b", makeEnv(kv.binding), "auth", downstream);
       expect(downstreamCalls).toBe(1); // not called again
       const replayBytes = new Uint8Array(await replay.arrayBuffer());
       expect(Array.from(replayBytes)).toEqual(Array.from(bytes));
@@ -355,8 +356,8 @@ describe("api-edge idempotency replay store (Task 0095)", () => {
       });
 
       const env = makeEnv(kv.binding);
-      const first = await replayOrExecute(r1, "req_a", env, downstream);
-      const second = await replayOrExecute(r2, "req_b", env, downstream);
+      const first = await replayOrExecute(r1, "req_a", env, "org", downstream);
+      const second = await replayOrExecute(r2, "req_b", env, "org", downstream);
 
       expect(first.status).toBe(200);
       expect(second.status).toBe(200);

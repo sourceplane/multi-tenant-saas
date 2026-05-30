@@ -1,5 +1,6 @@
 import type { Env } from "./env.js";
 import { errorResponse } from "./http.js";
+import { enforceRateLimit, mergeRateLimitHeaders } from "./rate-limit.js";
 import { resolveActor } from "./resolve-actor.js";
 
 const ORG_AUDIT_RE = /^\/v1\/organizations\/[^/]+\/audit$/;
@@ -25,17 +26,29 @@ export async function handleAuditRoute(
     return errorResponse("unsupported", "Method not allowed", 405, requestId);
   }
 
+  const rateDecision = await enforceRateLimit(request, requestId, env, "audit");
+  if (rateDecision.kind === "denied") {
+    return rateDecision.response;
+  }
+  const rateHeaders = rateDecision.headers;
+
   if (!env.IDENTITY_WORKER) {
-    return errorResponse("internal_error", "Authentication service unavailable", 503, requestId);
+    return mergeRateLimitHeaders(
+      errorResponse("internal_error", "Authentication service unavailable", 503, requestId),
+      rateHeaders,
+    );
   }
 
   if (!env.EVENTS_WORKER) {
-    return errorResponse("internal_error", "Events service unavailable", 503, requestId);
+    return mergeRateLimitHeaders(
+      errorResponse("internal_error", "Events service unavailable", 503, requestId),
+      rateHeaders,
+    );
   }
 
   const sessionResult = await resolveActor(request, env, requestId);
   if ("error" in sessionResult) {
-    return sessionResult.error;
+    return mergeRateLimitHeaders(sessionResult.error, rateHeaders);
   }
 
   const headers = new Headers();
@@ -60,11 +73,17 @@ export async function handleAuditRoute(
       method: "GET",
       headers,
     });
-    return new Response(downstream.body, {
-      status: downstream.status,
-      headers: downstream.headers,
-    });
+    return mergeRateLimitHeaders(
+      new Response(downstream.body, {
+        status: downstream.status,
+        headers: downstream.headers,
+      }),
+      rateHeaders,
+    );
   } catch {
-    return errorResponse("internal_error", "Events service unavailable", 503, requestId);
+    return mergeRateLimitHeaders(
+      errorResponse("internal_error", "Events service unavailable", 503, requestId),
+      rateHeaders,
+    );
   }
 }
