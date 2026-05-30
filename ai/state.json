@@ -1,6 +1,6 @@
 {
   "goal": "Supabase/Postgres-backed multi-organization Orun SaaS control plane",
-  "current_task": "0096b",
+  "current_task": "orchestrator",
   "completed": [
     "0001",
     "0001.1",
@@ -103,7 +103,8 @@
     "0092",
     "0093",
     "0094",
-    "0096"
+    "0096",
+    "0096b"
   ],
   "deferred": [
     "0085b",
@@ -111,12 +112,12 @@
     "notifications-worker-dev-reframe"
   ],
   "repo_health": "green",
-  "next_focus": "Task 0096b \u2014 class-B warning cleanup wave 2 (tests/membership-worker, 350 no-explicit-any \u2192 0). Track A (Task 0095.1) STILL waiting on implementer fix-up commits to PR #143; loop continues per Deferred Decision Protocol with an independent tests-only task that cannot collide with PR #143's apps/api-edge / cloudflare-kv / tests/api-edge surface.",
-  "last_verified": "2026-05-30T05:32:00Z",
+  "next_focus": "Task 0096c \u2014 class-B warning cleanup wave 3 (tests/config-worker, 126 no-explicit-any \u2192 0). Largest remaining single workspace, same shape as 0096b (single-workspace PR, no apps/api-edge or cloudflare-kv collision with PR #143). Track A (Task 0095.1 / PR #143) still waiting on implementer fix-up commits.",
+  "last_verified": "2026-05-30T06:44:24Z",
   "waiting_for_input": "false",
-  "task_agent": "/ai/tasks/task-0096b.md",
+  "task_agent": "/ai/reports/task-0096b-verifier.md",
   "notes": [
-    "Task 0096b SCOPED 2026-05-30 by orchestrator while Track A waits on implementer. Wave 2 of class-B warning cleanup: tests/membership-worker only (350 / 627 residual warnings, all @typescript-eslint/no-explicit-any across 5 test files; membership-worker.test.ts at 3637 LOC dominates). Single-workspace PR boundary chosen so it cannot collide with PR #143 rebase territory (apps/api-edge / infra/terraform/cloudflare-kv / tests/api-edge \u2014 explicit out-of-scope). Prompt at ai/tasks/task-0096b.md mirrors Task 0096 discipline: real types from @saas/contracts / @saas/db/membership / apps/membership-worker, no eslint-disable / @ts-ignore / @ts-expect-error / as unknown as in the diff, behaviour preservation, suite/test count must match d2187f1 baseline, post-PR residual must be 277 warnings (627 \u2212 350) all in tests/** with apps-source still 0.",
+    "Task 0096b VERIFIED + MERGED 2026-05-30 (PR #145, squash 6b738c0). Post-merge main-CI run 26677189951 on 6b738c0 = 2/2 SUCCESS (plan + membership-worker-tests \u00b7 dev \u00b7 Verify). Diff: 5 files \u2014 4 tests/membership-worker/src/*.test.ts (membership-worker, accept-invitation-notifications, create-invitation-notifications, service-principal-bindings) + ai/reports/task-0096b-implementer.md NEW; authorization-context.test.ts untouched (already 0 anys). Per-workspace lint exit 0 with 0 warnings (was 350). Global pnpm -r --no-bail lint = 277 warnings, all in tests/**: tests/config-worker 126, tests/identity-worker 80, tests/api-edge 45, tests/projects-worker 10, tests/events-worker 7, tests/policy-engine 7, tests/policy-worker 1, tests/webhooks-worker 1; apps source still 0 (Task 0096 invariant holds). pnpm -r typecheck exit 0 (Task 0091 baseline). it()/test() count parity vs main @ d2187f1 holds for all 4 modified files (179, 11, 11, 27). Hazard scan empty. Reports: ai/reports/task-0096b-{implementer,verifier}.md. Next-largest tests/** wave: tests/config-worker (126) \u2192 tests/identity-worker (80) for orchestrator's Task 0096c scoping.",
     "Orchestrator policy: human-input-blocked candidates DEFERRED to /ai/deferred.md, loop continues. waiting_for_input only flips true if every candidate is blocked.",
     "Deferred (orchestrator skips): (a) notifications-provider-swap \u2014 needs Resend/Postmark/SES choice; (b) Task 0085b cloudflare-domain v4->v5 \u2014 explicit user defer (do not touch infra/terraform/cloudflare-domain/** or cloudflare ~> 4.52 pin); (c) notifications-worker-dev-reframe \u2014 needs a 'introduce dev-deploy lane' design pass before the dev-binding work has anywhere to land.",
     "Task 0092 (ESLint v9 flat-config scaffold) VERIFIED + MERGED (PR #140, fde9723). Post-merge main-CI 26669593757 = 31/31 SUCCESS. Class-A 'couldn't find an eslint.config' fully eliminated.",

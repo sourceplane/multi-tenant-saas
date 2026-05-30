@@ -1,105 +1,74 @@
 # Current Context
 
-Last updated: 2026-05-30 (Track B (Task 0096) CLOSED — verifier PASS,
-PR #144 squash-merged at `e9e432b`, post-merge main-CI `26675733754`
-10/10 SUCCESS, console smoke unchanged. Track A (Task 0095.1) STILL
-waiting on implementer fix-up commits to PR #143; head still
-`db00843`, mergeStateStatus DIRTY/CONFLICTING vs main — rebase is
-implementer's job before fix-ups land. Orchestrator output today:
-**Task 0096b SCOPED** — class-B warning cleanup wave 2,
-`tests/membership-worker` only (350 / 627 residual warnings → 0).
-Repo health: green; PR #143 is the single open PR; main @ `d2187f1`.)
+Last updated: 2026-05-30 (Task 0096b CLOSED — verifier PASS, PR #145
+squash-merged at `6b738c0`, post-merge main-CI `26677189951` 2/2
+SUCCESS, 350 `@typescript-eslint/no-explicit-any` in
+`tests/membership-worker` → 0, global residual lint 627 → 277 (all in
+other `tests/**` workspaces, apps-source still 0 — Task 0096 invariant
+holds), 5 suites / 244 tests unchanged vs `d2187f1`, hazard scan empty.
+Track A (Task 0095.1 / PR #143) STILL waiting on implementer fix-up
+commits — head still `db00843`, mergeStateStatus DIRTY/CONFLICTING vs
+main. Repo health: green; PR #143 is the single open PR; main @
+`6b738c0`.)
 
-## Active task — Task 0096b (class-B warning cleanup wave 2, tests/membership-worker)
+## Active task — orchestrator scoping (Task 0096c candidate)
 
-The orchestrator advanced the loop while Track A waits on its
-implementer. Task 0096b is the **largest single concentration** of the
-post-Task-0096 residual lint surface: 350 of 627 warnings live in
-`tests/membership-worker`, all of them `@typescript-eslint/no-explicit-any`,
-distributed across five test files in a single workspace.
+The orchestrator's next loop iteration should scope Task 0096c — the
+class-B warning cleanup wave 3, targeting `tests/config-worker` (126
+warnings, the largest remaining single workspace). Same PR shape as
+0096b: single workspace, `@typescript-eslint/no-explicit-any` only,
+real types from `@saas/contracts` / `@saas/db/config` /
+`apps/config-worker/src/**` exports, no eslint-disable / @ts-ignore /
+@ts-expect-error / as-unknown-as introductions, behaviour-preserving,
+suite + test count parity vs `main` @ `6b738c0`. Will not collide with
+PR #143 (apps/api-edge / cloudflare-kv / tests/api-edge).
 
-### Why this task, why now
+After 0096c, the residual lint surface should be ~151 warnings, all
+in `tests/{identity-worker, api-edge, projects-worker, events-worker,
+policy-engine, policy-worker, webhooks-worker}`. Track A's verifier
+prompt at `ai/tasks/task-0095.1-verifier.md` is sealed and runnable
+the moment its implementer fix-up lands.
 
-- Track A (Task 0095.1) cannot move without implementer fix-up commits
-  on PR #143 (still at `db00843`, conflicting). Verifier prompt is
-  sealed at `ai/tasks/task-0095.1-verifier.md` and waits.
-- Track B (Task 0096) closed today and locked in apps-source 0 class-B
-  warnings. The user's recorded preference after Task 0096 is to
-  "drain `tests/**`."
-- A single-workspace PR scoped to `tests/membership-worker/src/**`
-  cannot collide with PR #143's surface (`apps/api-edge/**`,
-  `infra/terraform/cloudflare-kv/**`, `tests/api-edge/**`), so Track A
-  can rebase and ship at any moment without conflict.
-- Single-rule, single-workspace, behaviour-preserving cleanup is a
-  clean PR-sized unit: one primary outcome, one ownership boundary,
-  one test suite, one validation pass. It also establishes the
-  template for the remaining seven workspace waves.
+## Recently completed — Task 0096b (Class-B warning cleanup wave 2, tests/membership-worker, PASS)
 
-### PR boundary (Task 0096b)
-
-In scope (one PR):
-
-1. Edits inside `tests/membership-worker/src/**/*.ts` only — five
-   files (`membership-worker.test.ts` 3637 LOC dominates with ~330 of
-   the 350 warnings; `accept-invitation-notifications.test.ts`,
-   `authorization-context.test.ts`,
-   `create-invitation-notifications.test.ts`,
-   `service-principal-bindings.test.ts`).
-2. Optional in-workspace `_types.ts` for shared fixture types when it
-   materially reduces duplication.
-3. `ai/reports/task-0096b-implementer.md` (NEW).
-
-Out of scope (hard non-goals):
-
-- No edits under `apps/**`, `packages/**`, `infra/**`, `tooling/**`,
-  `.github/**`, `specs/**`, or any other `tests/<workspace>/**`.
-- No `eslint-disable*`, `@ts-ignore`, `@ts-expect-error`, or
-  `as unknown as` introductions in the diff.
-- **No touching of PR #143 surface (`apps/api-edge/**`,
-  `infra/terraform/cloudflare-kv/**`, `tests/api-edge/**`)** — Track A
-  territory.
-- No rule-severity flip from `warn` to `error`.
-- No assertion / fixture-value / suite-ordering changes.
-
-### Type-source preference (mirrors Task 0096 discipline)
-
-Replace `any` with the narrowest accurate real type. Preference order:
-
-1. `@saas/contracts` (request/response contracts the worker exposes).
-2. `@saas/db/membership` (row shapes used in fixtures).
-3. `apps/membership-worker/src/**` exported types (handler IO).
-4. In-workspace `_types.ts` (last resort, only when the fixture shape
-   is genuinely synthetic).
-
-`as T` is acceptable only when the call-site value is provably a
-superset of `T`; `as unknown as T` is forbidden in the diff.
-
-### Acceptance (Task 0096b)
-
-✅ `pnpm --filter tests/membership-worker lint` → exit 0, **0 warnings** (was 350).
-
-✅ `pnpm --filter tests/membership-worker test` → exit 0, suite +
-test count UNCHANGED vs `main` @ `d2187f1` (record both).
-
-✅ `pnpm -r typecheck` → exit 0 (Task 0091 baseline holds).
-
-✅ `pnpm -r --no-bail lint` → exit 0, **277 residual warnings**
-(627 − 350), all in `tests/**` other workspaces, apps-source still 0.
-
-✅ `git diff origin/main --stat` shows files only under
-`tests/membership-worker/src/**` plus
-`ai/reports/task-0096b-implementer.md`.
-
-✅ Hazard scan empty:
-`git diff origin/main -- 'tests/membership-worker/**' | grep -E '^\+.*(eslint-disable|@ts-(ignore|expect-error)|as unknown as)'`
-→ no output.
-
-✅ PR opened on
-`impl/task-0096b-tests-membership-worker-class-b`, real PR number
-substituted into the report before final push.
-
-Prompt: `ai/tasks/task-0096b.md`. Branch (to be created):
-`impl/task-0096b-tests-membership-worker-class-b`.
+- **PR #145** (`impl/task-0096b-tests-membership-worker-class-b`),
+  squash `6b738c0` at 2026-05-30 (clean fast-forward; branch deleted
+  on merge).
+- Diff: 5 files — 4 test files in `tests/membership-worker/src/**`
+  (`membership-worker.test.ts` 305 → 0,
+  `create-invitation-notifications.test.ts` 20 → 0,
+  `accept-invitation-notifications.test.ts` 16 → 0,
+  `service-principal-bindings.test.ts` 9 → 0; sum 350) +
+  `ai/reports/task-0096b-implementer.md` (NEW).
+  `authorization-context.test.ts` was at 0 anys at baseline and was
+  untouched.
+- Type sources: real exports from `@saas/contracts/billing`
+  (`CheckBillingEntitlementResponse`), `@saas/db/membership`
+  (`AcceptInvitationInput`, `CreateInvitationInput`,
+  `CreateRoleAssignmentInput`, `MembershipResult`,
+  `OrganizationInvitation`), `@saas/db/events`
+  (`AppendEventWithAuditInput`, `StoredEvent`, `StoredAuditEntry`),
+  `apps/membership-worker/src/env` (`Env`),
+  `apps/membership-worker/src/billing-client`
+  (`typeof checkBillingEntitlement`). Three small in-file structural
+  types added (`JsonResp` envelope family, `CapturedPolicyBody`,
+  inlined `NotificationsClientContext`).
+- Zero `+eslint-disable*` / `+@ts-ignore` / `+@ts-expect-error` /
+  `+as unknown as` introductions in the diff.
+- Per-workspace lint: exit 0, 0 warnings (was 350).
+  `pnpm --filter @saas/membership-worker-tests test`: 5 suites / 244
+  tests, unchanged vs `main` @ `d2187f1` (it()/test() count parity
+  holds per file: 179, 11, 11, 27). `pnpm -r typecheck` exit 0.
+  `pnpm -r --no-bail lint` exit 0 with **277 residual warnings**
+  (627 − 350), all in other `tests/**` workspaces; apps-source
+  remains 0.
+- PR-CI rollup at `d68cf19`: 2/2 SUCCESS (`plan` + `membership-worker-tests
+  · dev · Verify`). Plan job emitted 1 component × 3 envs → 1 jobs,
+  components: `membership-worker-tests` — diff was correctly
+  picked up.
+- Post-merge main-CI run `26677189951` on `6b738c0` = 2/2 SUCCESS.
+- Reports: `ai/reports/task-0096b-implementer.md`,
+  `ai/reports/task-0096b-verifier.md`.
 
 ## Track A — Task 0095.1 (verifier resumption staged on PR #143)
 
@@ -189,18 +158,21 @@ head); verifier report goes to `ai/reports/task-0095.1-verifier.md`
 
 ## Repo health: green
 
-`main` tip on `origin/main` is `d2187f1` (post Task 0096 verifier
-state-files commit on top of squash `e9e432b`). PR #143 is the single
-open PR. `kiox.lock` pinned at orun v2.9.0. Provider pin holds at
+`main` tip on `origin/main` is `6b738c0` (squash of PR #145 / Task
+0096b on top of `6f1e65d` which itself sat on `e9e432b` — Task 0096
+verifier state-files commit). PR #143 is the single open PR.
+`kiox.lock` pinned at orun v2.9.0. Provider pin holds at
 `cloudflare ~> 4.52` (Task 0085b deferred). Apex hostnames
 `stage.sourceplane.ai` and `prod.sourceplane.ai` live.
 
 Workspace-wide `pnpm -r typecheck` exits 0 cleanly (Task 0091 baseline
-holds through 0096). Workspace-wide `pnpm -r --no-bail lint` exits 0
-across all 33 lint-bearing workspaces with 627 residual warnings, all
-in `tests/**` (apps source 0 — Tasks 0093 + 0096 outcome). Task 0096b
-targets 350 of those (`tests/membership-worker`); the remaining 277
-will be drained by subsequent waves.
+holds through 0096b). Workspace-wide `pnpm -r --no-bail lint` exits 0
+across all 33 lint-bearing workspaces with **277 residual warnings**,
+all in other `tests/**` workspaces (apps source 0 — Tasks 0093 + 0096
+outcome; `tests/membership-worker` 0 — Task 0096b outcome). Remaining
+distribution: tests/config-worker 126, tests/identity-worker 80,
+tests/api-edge 45, tests/projects-worker 10, tests/events-worker 7,
+tests/policy-engine 7, tests/policy-worker 1, tests/webhooks-worker 1.
 
 Notifications-worker V1 stays deployed on stage + prod (private,
 `workers_dev: false`, `NOTIFICATIONS_PROVIDER=local-debug`).
@@ -229,10 +201,11 @@ Per `agents/orchestrator.md`, candidates that would require human input
 are **deferred to `/ai/deferred.md`** instead of pausing the loop.
 `waiting_for_input` only flips to `"true"` if EVERY candidate is
 genuinely blocked on a human decision. Currently `waiting_for_input` is
-`false` and the loop is on Task 0096b — Track A waits on its
-implementer, but Track A is not blocked on the user, it is blocked on
-the implementer agent's next run, so the orchestrator is free to ship
-parallel independent tests-only work.
+`false` and the loop is between tasks — Task 0096b just shipped; Track
+A waits on its implementer, but Track A is not blocked on the user, it
+is blocked on the implementer agent's next run, so the orchestrator is
+free to ship parallel independent tests-only work (next wave:
+tests/config-worker).
 
 ## Roadmap Position
 
@@ -245,17 +218,18 @@ parallel independent tests-only work.
   durable replay store (PR #143) and is currently blocked on the Task
   0095.1 implementer fix-up; Task 0097 (rate limiting) is the explicit
   successor and reuses the `cloudflare-kv` slice from 0095.
-- Lint hygiene track (parallel to B3): Tasks 0092 → 0093 → 0096
-  drained apps-source class-B warnings to 0; Task 0096b drains
-  `tests/membership-worker` (350 of 627 residual); subsequent waves
-  drain the remaining seven test workspaces (277).
+- Lint hygiene track (parallel to B3): Tasks 0092 → 0093 → 0096 →
+  0096b drained apps-source class-B warnings to 0 and
+  `tests/membership-worker` to 0; subsequent waves drain the remaining
+  seven test workspaces (277 warnings, largest = `tests/config-worker`
+  126).
 
 ## Repo Reality
 
-- 100 tasks on the completed list (0001–0096 plus splits and `.1`
-  follow-ups, with Task 0095 still open). Task 0095 is **not**
-  completed yet — implementer phase shipped on PR #143, verifier
-  returned FAIL, Task 0095.1 fix-up scoped.
+- 101 tasks on the completed list (0001–0096 plus splits and `.1`
+  follow-ups plus 0096b, with Task 0095 still open). Task 0095 is
+  **not** completed yet — implementer phase shipped on PR #143,
+  verifier returned FAIL, Task 0095.1 fix-up scoped.
 - Task 0085 split into 0085a (Phase 1, DONE) + 0085b (Phase 2,
   EXPLICITLY DEFERRED by user).
 - Active spec pack: reusable SaaS starter under `specs/**`.
@@ -265,8 +239,9 @@ parallel independent tests-only work.
   (Task 0092). `pnpm -r --no-bail lint` exits 0 across all of them
   (Task 0093). `pnpm -r typecheck` exits 0 (Task 0091). Apps source
   class-B warnings eliminated for config/metering/webhooks workers
-  (Task 0096); `tests/membership-worker` cleanup is the active task
-  (0096b); remaining `tests/**` workspaces queue for subsequent waves.
+  (Task 0096); `tests/membership-worker` class-B warnings eliminated
+  (Task 0096b); remaining seven `tests/**` workspaces queue for
+  subsequent waves (next: `tests/config-worker` 126 → Task 0096c).
 - api-edge `Idempotency-Key` validation gate live in production
   (Task 0094). Durable replay layer in flight on PR #143 (Task 0095,
   gated by 0095.1).
