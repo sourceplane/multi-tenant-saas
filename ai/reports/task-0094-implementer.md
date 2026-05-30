@@ -2,7 +2,7 @@
 
 **Task:** Edge idempotency-key contract (B3, partial)
 **Branch:** `impl/task-0094-edge-idempotency-contract`
-**PR Number:** TBD
+**PR Number:** [#142](https://github.com/sourceplane/multi-tenant-saas/pull/142)
 
 ## Summary
 
@@ -102,4 +102,4 @@ Task 0095 (durable edge replay) should:
 
 ## PR Number
 
-TBD — will be filled in after `gh pr create` runs.
+[#142](https://github.com/sourceplane/multi-tenant-saas/pull/142)
