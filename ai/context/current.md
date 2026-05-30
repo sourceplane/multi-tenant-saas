@@ -5,7 +5,32 @@ wave 1, 39 `no-unused-vars` errors across 9 workspaces, prompt at
 `ai/tasks/task-0093.md`. `main` tip is `3cdde80` post-Task-0092
 verifier squash. Repo health: green.)
 
-## Active task: 0093 — class-B lint cleanup, wave 1
+## Active task: 0093 (Verifier) — verify PR #141 (class-B lint cleanup wave 1)
+
+Implementer (Task 0093) opened PR #141 on
+`impl/task-0093-lint-cleanup-wave-1`. 17 files changed; 15/15 required
+PR CI checks SUCCESS; `mergeable: MERGEABLE`. Implementer report claims
+39 → 0 `@typescript-eslint/no-unused-vars` (deletion-only fix; no
+`_`-prefix renames; no `eslint-disable` introduced). `pnpm -r --no-bail
+lint` exit 0, `pnpm -r typecheck` exit 0 (Task 0091 baseline holds),
+`pnpm install --frozen-lockfile` exit 0.
+
+Verifier prompt: `ai/tasks/task-0093-verifier.md`. Verifier must:
+diff-boundary audit (only `src/**` in 9 named workspaces +
+`ai/reports/task-0093-implementer.md`), reject any new
+`+eslint-disable*`, re-run `pnpm install --frozen-lockfile` /
+`pnpm -r --no-bail lint` / `pnpm -r typecheck` locally on the PR
+branch, gate merge on `mergeStateStatus: CLEAN` + 15/15 SUCCESS,
+squash-merge per PRs #137-#140 convention, fast-forward `main`, then
+**wait for the post-merge main CI run to complete** and confirm
+overall + per-job `success` for `{config,metering,projects}-worker ×
+{dev,stage,prod}` deploy-gated profiles (post-merge-deploy-profile-gap
+rule applies because three deploy-gated apps had src changes), then
+`curl -sSI` stage + prod consoles to confirm `/` → 307 `/orgs`
+unchanged. Commit `ai/reports/task-0093-verifier.md` and state-file
+updates to `main`.
+
+### Original Task 0093 implementer goal (kept for context)
 
 Goal: drive `pnpm -r --no-bail lint` to a clean exit (zero errors
 across all 33 lint-bearing workspaces) by mechanically resolving the
