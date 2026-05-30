@@ -48,7 +48,7 @@ export async function handleAuthRoute(
     return errorResponse("unsupported", "Method not allowed", 405, requestId);
   }
 
-  return replayOrExecute(request, requestId, env, async () => {
+  return replayOrExecute(request, requestId, env, "auth", async () => {
     if (!env.IDENTITY_WORKER) {
       return errorResponse(
         "internal_error",

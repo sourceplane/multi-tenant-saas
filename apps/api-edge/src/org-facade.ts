@@ -70,7 +70,7 @@ export async function handleOrgRoute(
     return errorResponse("unsupported", "Method not allowed", 405, requestId);
   }
 
-  return replayOrExecute(request, requestId, env, async () => {
+  return replayOrExecute(request, requestId, env, "org", async () => {
 
     if (!env.IDENTITY_WORKER) {
       return errorResponse(
