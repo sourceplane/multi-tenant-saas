@@ -27,13 +27,13 @@ export default {
     // Phase 1: Dispatch new events
     const dispatchResult = await dispatchNewEvents(ctx);
     if (dispatchResult.dispatched > 0 || dispatchResult.errors > 0) {
-      console.log(`[scheduled] dispatch: ${dispatchResult.dispatched} delivered, ${dispatchResult.errors} errors`);
+      console.warn(`[scheduled] dispatch: ${dispatchResult.dispatched} delivered, ${dispatchResult.errors} errors`);
     }
 
     // Phase 2: Retry failed deliveries
     const retryResult = await retryFailedDeliveries(ctx);
     if (retryResult.retried > 0 || retryResult.errors > 0) {
-      console.log(`[scheduled] retry: ${retryResult.retried} retried, ${retryResult.errors} errors`);
+      console.warn(`[scheduled] retry: ${retryResult.retried} retried, ${retryResult.errors} errors`);
     }
   },
 } satisfies ExportedHandler<Env>;

@@ -144,7 +144,7 @@ export async function runScheduledMaterialization(env: Env): Promise<void> {
   const repo = createMeteringRepository(executor);
   const result = await materializeRecentRollups(repo);
   for (const w of result.windows) {
-    console.log(
+    console.warn(
       `[scheduled] rollup ${w.bucketType} ${w.windowStart}..${w.windowEnd} ok=${w.ok} rows=${w.rollupsWritten}`,
     );
   }
