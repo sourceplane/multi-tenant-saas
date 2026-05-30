@@ -2,7 +2,7 @@
 
 Branch: `impl/task-0096b-tests-membership-worker-class-b`
 Base: `main` @ `6f1e65d`
-PR Number: #[PR]
+PR Number: #145
 
 ## Summary
 
@@ -183,4 +183,4 @@ None. Task 0097 is independent and gated only on Track A.
 
 ## PR Number
 
-#[PR]
+#145
