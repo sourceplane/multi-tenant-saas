@@ -51,4 +51,4 @@ None.
 - Verifier should confirm post-merge that `IDEMPOTENCY_KV` binding IDs are populated by the pipeline and that replay actually fires on stage / prod (e.g. POST same Idempotency-Key twice to a benign route, expect `x-saas-replay-source: edge-idempotency` on the 2nd response).
 
 ## PR Number
-TBD — recorded after `gh pr create` below.
+#143 — https://github.com/sourceplane/multi-tenant-saas/pull/143
