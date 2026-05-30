@@ -1,30 +1,88 @@
 # Current Context
 
-Last updated: 2026-05-30 (Task 0093 VERIFIED + MERGED — class-B lint
-cleanup wave 1, no-unused-vars 39→0 across 9 workspaces. PR #141
-squash-merged at `de0bca1`. Post-merge main-CI 26670675280 = 15/15
-SUCCESS including all nine deploy-gated jobs. `main` tip is `de0bca1`.
-Repo health: green.)
+Last updated: 2026-05-30 (Task 0094 VERIFIED + MERGED — edge
+idempotency-key contract + edge validation gate, B3 partial. PR #142
+squash-merged at `71cf34f`. Post-merge main-CI 26671444227 = 9/9
+SUCCESS including all three `api-edge · {dev,stage,prod} · Verify
+deploy` jobs. `main` tip is `71cf34f`. Repo health: green.)
 
 ## Active task: orchestrator turn — pick next task
 
-Task 0093 closed cleanly. Workspace-wide `pnpm -r --no-bail lint` now
-exits 0 across all 33 lint-bearing workspaces (zero errors; warnings
-preserved by design). Two natural next candidates:
+Task 0094 closed cleanly. The `parseIdempotencyKey` contract is now
+exported from `@saas/contracts` (barrel) and `@saas/contracts/idempotency`
+(subpath); the edge validation gate is live in production for unsafe
+POSTs across all seven facades (`auth`, `org`, `project`, `metering`,
+`config`, `webhooks`, `billing`). Live smoke confirms 400
+`validation_failed` for `empty` / `too_long` / `illegal_characters`
+keys, and pass-through for absent or valid keys. Console
+`/` → 307 `/orgs` unchanged on stage + prod.
 
-1. **B3 — Edge idempotency and rate limiting** (specs/roadmap.md:54).
-   Generalize idempotency at `api-edge` for unsafe POSTs;
-   `idempotency-key` is already in `cors.ts`
-   Access-Control-Allow-Headers but not yet in `packages/contracts`
-   as a contract or wired through the edge. Builds directly on Task
-   0090's caller-side idempotency keys for the V1 notifications path.
-2. **Class-B warning cleanup wave** — `no-explicit-any` (and
+Strongest next candidate: **Task 0095 — durable idempotency replay
+store**. Builds directly on the Task 0094 contract; resolves the
+storage decision (KV vs DO vs DB) and turns the validation seam into
+real replay semantics. Same shape as Task 0090's caller-side hardening
+but server-side at the edge.
+
+Alternatives:
+
+1. **Class-B warning cleanup wave** — `no-explicit-any` (and
    optionally `no-console`) hygiene pass mirroring Task 0093 boundary
-   discipline on warnings instead of errors.
+   discipline on warnings instead of errors. Always available filler.
+2. **Revisit a deferred candidate** if any unblocks (none did during
+   the Task 0094 window).
 
-Both fully unblocked. Orchestrator chooses on next loop turn.
+Task 0096 (rate limiting) is best deferred until Task 0095 lands so
+replay and rate-limit can share a storage primitive.
 
-## Recently completed — Task 0093 (Class-B lint cleanup wave 1, PASS)
+## Recently completed — Task 0094 (Edge idempotency-key contract + gate, PASS)
+
+- **PR #142** (`impl/task-0094-edge-idempotency-contract`), squash
+  `71cf34f` at 2026-05-30. Diff: 15 files —
+  `packages/contracts/src/idempotency.ts` (NEW), barrel re-export in
+  `packages/contracts/src/index.ts`, `./idempotency` subpath in
+  `packages/contracts/package.json`, `apps/api-edge/src/idempotency.ts`
+  (NEW edge helper), 7 facade call-site insertions, 2 new test files
+  (`tests/contracts/src/idempotency.test.ts` 17 cases,
+  `tests/api-edge/src/idempotency-edge.test.ts` 9 cases),
+  `ai/context/open-risks.md` partial-closure update, implementer
+  report.
+- PR-CI rollup: 9/9 required SUCCESS, `mergeable: MERGEABLE`,
+  `mergeStateStatus: CLEAN` at merge time. No `update-branch` needed.
+- Post-merge main-CI: `26671444227` = 9/9 SUCCESS on SHA `71cf34f`.
+  All three `api-edge · {dev,stage,prod} · Verify deploy` jobs green
+  — deploy-profile-gap rule satisfied.
+- Live gate evidence (api-edge stage `*.workers.dev`):
+  - `Idempotency-Key;` (truly empty) on POST → 400
+    `validation_failed reason=empty`.
+  - 256-char key on POST → 400 `validation_failed reason=too_long`.
+  - `Idempotency-Key: bad\tkey` on POST → 400
+    `validation_failed reason=illegal_characters`.
+  - No header on POST → 422 (existing identity-worker email validator)
+    — gate not invoked, passthrough confirmed.
+  - Valid key on POST → 422 (same body validator) — gate accepts.
+  - `Idempotency-Key;` on GET `/v1/auth/session` → 401 unauthenticated
+    — safe-method short-circuit confirmed live.
+- Verifier-validated: `pnpm install --frozen-lockfile` exit 0;
+  `pnpm -r typecheck` exit 0; `pnpm -r --no-bail lint` exit 0;
+  `pnpm --filter @saas/contracts-tests test` 7/7 suites 94/94 cases;
+  `pnpm --filter @saas/api-edge-tests test` 10/10 suites 270/270
+  cases; kiox/orun triple ✓; zero `+eslint-disable*` /
+  `+@ts-ignore` source additions; deferred boundaries intact
+  (`infra/terraform/cloudflare-domain/**`, `cloudflare ~> 4.52` pin,
+  `apps/notifications-worker/**`, `apps/web-console-next/**`,
+  `tooling/eslint/index.js`, `pnpm-lock.yaml`,
+  all non-`@saas/contracts` `package.json`).
+- Durable outcome: B3 charter advances to "contract + edge gate
+  landed". `parseIdempotencyKey` is reusable from Task 0095 (durable
+  replay) and Task 0096 (rate limiting). The unsafe-POST surface
+  now rejects malformed `Idempotency-Key` values at the edge before
+  any cross-binding fetch — early failure mode is now visible to
+  callers as a typed 400 envelope rather than an opaque downstream
+  error.
+- Reports: `ai/reports/task-0094-implementer.md`,
+  `ai/reports/task-0094-verifier.md`.
+
+## Previously completed — Task 0093 (Class-B lint cleanup wave 1, PASS)
 
 - **PR #141** (`impl/task-0093-lint-cleanup-wave-1`), squash `de0bca1`
   at 2026-05-30. Diff: 17 files — 16 `src/**` edits in the 9 named
