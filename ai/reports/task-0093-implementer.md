@@ -195,5 +195,4 @@ sweep, `no-console` sweep) without further sequencing.
 
 ## PR Number
 
-TBD — will be filled in after `gh pr create` and committed in a
-follow-up patch on the same branch.
+#141 — https://github.com/sourceplane/multi-tenant-saas/pull/141
