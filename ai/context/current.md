@@ -63,33 +63,44 @@ confirmed). Verifier report: `ai/reports/task-0095.1-verifier.md`.
 ## Current task
 
 **Task 0097 — Edge per-org + per-identity rate limiting (B3 second half).**
-Implementer prompt at `ai/tasks/task-0097.md`. Branch
-`impl/task-0097-edge-rate-limiting`. Agent: Implementer.
+VERIFIED PASS + MERGED 2026-05-30 via PR #151 squash `adba1a3`. Single-pass
+closure (Implementer + Verifier same session). Post-merge main-CI run
+`26687672741` = 5/5 SUCCESS on `plan` + `api-edge × {dev,stage,prod} Verify
+deploy` + `api-edge-tests × dev Verify`. Track B3 (Edge idempotency + rate
+limiting) **CLOSED** — both halves shipped.
 
-Single chokepoint extension: a new `enforceRateLimit(...)` in
-`apps/api-edge/src/rate-limit.ts`, called from inside the existing
-`replayOrExecute(...)` in `idempotency.ts` BEFORE the KV cache lookup.
-Each facade passes a `routeFamily` literal so the limiter doesn't have
-to parse URLs. Two independent buckets: `org` (when org-scoped actor
-resolved) and `identity` (actor or anon `CF-Connecting-IP` fallback).
-429 with `rate_limited` envelope (code already in
-`specs/contracts/api-guidelines.md`) + `Retry-After` + full
-`X-RateLimit-*` headers on every response.
+Durable outcome: `enforceRateLimit(...)` lives in `apps/api-edge/src/rate-limit.ts`
+(377 LOC), wired as the FIRST step inside `replayOrExecute` and called
+directly from `audit-facade.ts` (GET-only path). Two independent token
+buckets per request — `org` (path-extracted from `/v1/organizations/{orgId}/...`,
+skipped when no orgId) and `identity` (SHA-256 of bearer token, falls back
+to `anon:<family>:<CF-Connecting-IP>`). 429 if either overflows; standard
+`rate_limited` envelope + `Retry-After` + `X-RateLimit-*` headers on every
+response. Backend: reuses `IDEMPOTENCY_KV` with mandatory `rl:v1:` key
+prefix (vs `idem:v1:` replay store) — single-PR ship without sentinel-ID
+dance. Caps: auth 10/60 identity 60/60 org; ops families (org/project/
+config/webhooks/metering/billing) 60/60 identity 300/60 org; audit 120/60
+identity 600/60 org. Failure-open posture matches replay store. 35 new
+it() in `tests/api-edge/src/rate-limit.test.ts` (api-edge-tests 263 → 298).
 
-Backend default: token-bucket on a new sibling KV namespace
-`api_edge_rate_limit_{stage,prod}` added to the existing
-`infra/terraform/cloudflare-kv/` component as
-`cloudflare_workers_kv_namespace.api_edge_rate_limit` — no new TF
-slice. Cloudflare provider pin in `cloudflare-kv` stays at `~> 4.30`
-(do NOT touch the `cloudflare-domain` `~> 4.52` pin behind deferred
-0085b). New wrangler binding `RATE_LIMIT_KV` under `env.stage` and
-`env.prod`; `verify-bindings.mjs` extended with an `EXPECTED_KV` entry
-for it using the same regex + sentinel pattern as `IDEMPOTENCY_KV`.
-Fail-open posture identical to the replay store.
+Reports: `ai/reports/task-0097-{implementer,verifier}.md`.
 
-Parallel-safe with Task 0096f (`tests/api-edge` 45→0 closes Track B
-globally) — that PR touches only `tests/**`, zero overlap with
-`apps/api-edge/**` source.
+## Next focus
+
+Two PRs scoped and parallel-safe vs main @ `adba1a3`:
+
+- **Task 0096f** — `tests/api-edge` class-B drain (45 → 0
+  no-explicit-any, closes Track B globally). Branch
+  `impl/task-0096f-tests-api-edge-class-b`. Implementer prompt at
+  `ai/tasks/task-0096f.md`; sealed verifier prompt at
+  `ai/tasks/task-0096f-verifier.md`.
+- **Task 0098** — `packages/sdk` scaffold + base client + orgs/projects
+  pilot (B4 first half). Branch `impl/task-0098-packages-sdk-scaffold`.
+  Implementer prompt at `ai/tasks/task-0098.md`.
+
+Both have zero file overlap with the merged Task 0097 surface and zero
+overlap with each other (Task 0096f owns `tests/api-edge/src/**` only;
+Task 0098 owns the new `packages/sdk/**` workspace only).
 
 ## Parallel sibling: Task 0096f (scoped 2026-05-30)
 
