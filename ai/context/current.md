@@ -91,14 +91,36 @@ Parallel-safe with Task 0096f (`tests/api-edge` 45→0 closes Track B
 globally) — that PR touches only `tests/**`, zero overlap with
 `apps/api-edge/**` source.
 
-## Next focus (after 0097)
+## Parallel sibling: Task 0096f (scoped 2026-05-30)
 
-1. **Task 0096f** — drain `tests/api-edge` 45→0
-   `@typescript-eslint/no-explicit-any` (closes Track B globally; was
-   gated behind Track A landing).
-2. Beyond 0097 / 0096f: the road forks per `specs/roadmap.md` —
-   B4 SDK rollout (required-key enforcement on POST routes lives there)
-   or B5 per-tenant rate-limit overrides.
+**Task 0096f — drain `tests/api-edge` 45→0
+`@typescript-eslint/no-explicit-any` (closes Track B globally).**
+Implementer prompt at `ai/tasks/task-0096f.md`. Sealed verifier
+prompt at `ai/tasks/task-0096f-verifier.md`. Branch
+`impl/task-0096f-tests-api-edge-class-b`. Agent: Implementer.
+
+Five files in scope at `main` @ `2991229` (live eslint baseline):
+`org-facade.test.ts` 15, `project-facade.test.ts` 11,
+`auth-facade.test.ts` 9, `audit-facade.test.ts` 8,
+`api-key-routes.test.ts` 2. Six byte-identical-locked files at 0 anys:
+`webhooks-facade`, `idempotency-replay`, `idempotency-edge`, `cors`,
+`config-facade`, `billing-facade`. Per-file it+test parity targets:
+64/42/38/12/7/19/12/9/37/26/16 = 252 total.
+
+**Parallel-safety vs Task 0097**: zero file overlap. Task 0097 owns
+`apps/api-edge/src/**`, `apps/api-edge/scripts/verify-bindings.mjs`,
+`apps/api-edge/wrangler.jsonc`, and `infra/terraform/cloudflare-kv/**`.
+Task 0096f owns `tests/api-edge/src/**`. Both PRs can ship in either
+order.
+
+After both merge: `pnpm -r --no-bail lint` exits 0 with 0 residual
+warnings repo-wide (Track B class-B drain CLOSED globally).
+
+## Next focus (after 0097 / 0096f)
+
+The road forks per `specs/roadmap.md` — B4 SDK rollout (required-key
+enforcement on POST routes lives there) or B5 per-tenant rate-limit
+overrides.
 
 Deferred candidates unchanged: `0085b`, `notifications-provider-swap`,
 `notifications-worker-dev-reframe` (see `ai/deferred.md`).
