@@ -2260,3 +2260,53 @@ now consume the complete SDK surface as its sole transport.
   binary auths + reads orgs/projects through the SDK, foundation in
   place for Task 0101 to fan out write commands and close Track B4.
 
+
+## Task 0100 Verifier (sealed)
+
+- Agent: Verifier
+- Prompt: `ai/tasks/task-0100-verifier.md`
+- Status: sealed at scoping time 2026-05-31 (orchestrator); activates
+  the moment the Task 0100 implementer opens the PR on
+  `impl/task-0100-packages-cli-scaffold`.
+- Sealing snapshot: main `c5dbd99` (post-Task 0099 close, scope of
+  Task 0100 implementer prompt).
+- Shape: 7-phase, mirroring Tasks 0095.1 / 0096b–f / 0098 / 0099
+  verifier prompts. Phase 1 PR sanity → Phase 2 hazard + boundary
+  scan (incl. `keytar` static-import guard, public-API-only boundary,
+  no `apps/**` / `packages/db/**` / worker imports) → Phase 3 local
+  quality gates (per-workspace typecheck/lint/test/build; repo-wide
+  `pnpm -r typecheck` exit 0; `pnpm -r --no-bail lint` exactly 45
+  residual warnings all in `tests/api-edge`; POSIX 0600/0700 file-
+  mode assertions present; JSON envelope shape assertion present)
+  → Phase 4 Orun validate/component/plan/run --dry-run with byte-
+  shape diff vs `packages/sdk/component.yaml` allowing only
+  `name` / `description` / `domain` / `surface` deltas → Phase 5
+  PR-CI 4/4 (plan + cli × {dev,stage,prod} · Verify) with no deploy
+  step → Phase 6 squash merge (`--admin` if `BEHIND`, mirroring
+  0098 / 0099) + post-merge main-CI watch → Phase 7 PASS bookkeeping
+  (state.json / current.md / ledger / commit on main) or FAIL
+  bookkeeping (PR comment + verifier report on PR branch, no merge).
+- Latitude allowed: framework choice (commander / cac / clipanion /
+  hand-rolled) and auth flow (device-flow vs token-paste fallback)
+  — verifier accepts whichever is shipped provided the implementer
+  report records the choice + one-line rationale.
+- Sealed pitfalls: Stripe-parity regression guard (no transparent
+  idempotency-generation layer that Task 0101 would inherit by
+  accident), lint baseline drift bisect, lockfile churn allowed but
+  no new top-level runtime deps under workspace root, sealed-snapshot
+  drift check via `git log --oneline main..HEAD`.
+- Out-of-scope territory: `tests/api-edge/**` (Task 0096f),
+  `apps/api-edge/src/**` + `wrangler.jsonc` + `cloudflare-kv/**`
+  (Task 0097), `packages/sdk/**` (consume only),
+  `packages/contracts/**` + `apps/**` (no consumer or contract drift),
+  `infra/terraform/cloudflare-domain/**` + cloudflare `~> 4.52` pin
+  (deferred 0085b), `apps/notifications-worker/**` (deferred
+  provider-swap and dev-reframe), `tooling/eslint/**` (sealed since
+  Task 0092).
+- Recommended next move on PASS: scope **Task 0101 — CLI
+  write-command fan-out + remaining read commands** (org invite,
+  project create, env create, api-key create, webhook create, usage
+  summary, billing summary, audit list, plus optional spec-13
+  commands). Closes Track B4 second half; unlocks U10
+  (console-as-SDK-client). Mirrors the Task 0098 → 0099 cadence on
+  the CLI side. Same hazard ban + Stripe parity invariants.

@@ -75,6 +75,22 @@ idempotency, no transparent generation layer).
 (device-flow if `api-edge` already serves it; else token-paste
 fallback validated by `client.organizations.list()`).
 
+## Verifier prompt sealed
+
+`ai/tasks/task-0100-verifier.md` is sealed at scoping time (snapshot
+`c5dbd99`) and activates the moment the Task 0100 implementer opens
+the PR on `impl/task-0100-packages-cli-scaffold`. Same 7-phase shape
+as Tasks 0095.1 / 0096b–f / 0098 / 0099 verifiers: PR sanity →
+hazard + boundary scan (incl. `keytar` static-import guard) → local
+quality gates (per-workspace + repo-wide; 45-warning baseline must
+hold) → Orun validate/plan/dry-run with byte-shape diff vs
+`packages/sdk/component.yaml` → PR-CI 4/4 (plan + cli ×
+{dev,stage,prod} Verify, no deploy step) → squash merge + post-merge
+main-CI watch → bookkeeping. Pitfalls sealed: Stripe-parity
+regression guard (no transparent idempotency-generation layer that
+Task 0101 would inherit), lockfile churn allowed but no new
+top-level runtime deps.
+
 ## Still in flight
 
 - **Task 0096f** — `tests/api-edge` class-B drain (45 → 0
