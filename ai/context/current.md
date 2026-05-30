@@ -116,11 +116,43 @@ order.
 After both merge: `pnpm -r --no-bail lint` exits 0 with 0 residual
 warnings repo-wide (Track B class-B drain CLOSED globally).
 
-## Next focus (after 0097 / 0096f)
+## Parallel sibling: Task 0098 (scoped 2026-05-30)
 
-The road forks per `specs/roadmap.md` — B4 SDK rollout (required-key
-enforcement on POST routes lives there) or B5 per-tenant rate-limit
-overrides.
+**Task 0098 — `packages/sdk` scaffold + base client + orgs/projects
+pilot (B4 first half).** Implementer prompt at `ai/tasks/task-0098.md`.
+Branch `impl/task-0098-packages-sdk-scaffold`. Agent: Implementer.
+
+Greenfield workspace under `packages/sdk/` (`name: "@saas/sdk"`).
+Architect-Mode brief targets **Stripe SDK quality**: runtime-agnostic
+(browser / Node ≥ 20 / Workers / Bun), zero runtime deps preferred,
+typed error hierarchy keyed 1:1 on `ERROR_CODES` from
+`@saas/contracts/errors`, `RateLimitError` decoding the exact headers
+Task 0097 will emit (`Retry-After`, `X-RateLimit-{Limit,Remaining,Reset}-<scope>`),
+caller-owned `idempotencyKey` per request (Stripe parity — sdk does NOT
+auto-generate). Two pilot resource clients only: `organizations.{list,get,create}`
+and `projects.{list,get,create,archive}`. Task 0099 will fan out the
+remaining 8 resource clients off the contract this PR establishes.
+
+**Parallel-safety vs Tasks 0097 and 0096f**: zero file overlap. Task 0098
+lives entirely under `packages/sdk/**`. Task 0097 owns `apps/api-edge/**`
++ `infra/terraform/cloudflare-kv/**`; Task 0096f owns
+`tests/api-edge/src/**`. All three PRs can ship in any order.
+
+Same hazard ban as Tasks 0096b–f / 0097: no new `eslint-disable*`,
+`@ts-ignore`, `@ts-expect-error`, `as unknown as`, or `as any` introduced
+by the PR.
+
+## Next focus (after 0097 / 0096f / 0098)
+
+The road forks per `specs/roadmap.md`:
+- **Task 0099** — fan out the remaining 8 SDK resource clients
+  (memberships, api-keys, webhooks, metering, billing, events,
+  security-events, config, notifications) off the orgs/projects contract
+  established by Task 0098.
+- **Task 0100** — `packages/cli` per spec 13 on top of the SDK (B4
+  second half).
+- **B5 per-tenant rate-limit overrides** — natural extension of Task 0097
+  once the chokepoint is live.
 
 Deferred candidates unchanged: `0085b`, `notifications-provider-swap`,
 `notifications-worker-dev-reframe` (see `ai/deferred.md`).
