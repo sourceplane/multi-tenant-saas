@@ -1,5 +1,6 @@
 import type { Env } from "./env.js";
 import { errorResponse } from "./http.js";
+import { validateIdempotencyKey } from "./idempotency.js";
 import { resolveActor } from "./resolve-actor.js";
 
 const ORG_USAGE_RE = /^\/v1\/organizations\/[^/]+\/usage$/;
@@ -35,6 +36,9 @@ export async function handleMeteringRoute(
   if (!allowedMethods.includes(request.method)) {
     return errorResponse("unsupported", "Method not allowed", 405, requestId);
   }
+
+  const idempotencyError = validateIdempotencyKey(request, requestId);
+  if (idempotencyError) return idempotencyError;
 
   if (!env.IDENTITY_WORKER) {
     return errorResponse("internal_error", "Authentication service unavailable", 503, requestId);

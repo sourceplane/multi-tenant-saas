@@ -1,5 +1,6 @@
 export * from "./health.js";
 export * from "./errors.js";
+export * from "./idempotency.js";
 export * from "./tenancy.js";
 export * from "./auth.js";
 export * from "./membership.js";

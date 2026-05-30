@@ -1,5 +1,6 @@
 import type { Env } from "./env";
 import { errorResponse } from "./http";
+import { validateIdempotencyKey } from "./idempotency";
 
 const AUTH_ROUTES: Record<string, string> = {
   "/v1/auth/login/start": "POST",
@@ -46,6 +47,9 @@ export async function handleAuthRoute(
   if (allowedMethods && !allowedMethods.has(request.method)) {
     return errorResponse("unsupported", "Method not allowed", 405, requestId);
   }
+
+  const idempotencyError = validateIdempotencyKey(request, requestId);
+  if (idempotencyError) return idempotencyError;
 
   if (!env.IDENTITY_WORKER) {
     return errorResponse(

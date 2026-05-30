@@ -1,5 +1,6 @@
 import type { Env } from "./env.js";
 import { errorResponse } from "./http.js";
+import { validateIdempotencyKey } from "./idempotency.js";
 import { resolveActor } from "./resolve-actor.js";
 
 const ORG_ROUTES: Record<string, string> = {
@@ -68,6 +69,9 @@ export async function handleOrgRoute(
   if (ORG_ID_RE.test(pathname) && !ORG_API_KEYS_RE.test(pathname) && !ORG_API_KEY_ID_RE.test(pathname) && request.method !== "GET") {
     return errorResponse("unsupported", "Method not allowed", 405, requestId);
   }
+
+  const idempotencyError = validateIdempotencyKey(request, requestId);
+  if (idempotencyError) return idempotencyError;
 
   if (!env.IDENTITY_WORKER) {
     return errorResponse(

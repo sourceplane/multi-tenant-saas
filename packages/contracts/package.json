@@ -20,7 +20,8 @@
     "./webhooks": "./src/webhooks.ts",
     "./metering": "./src/metering.ts",
     "./billing": "./src/billing.ts",
-    "./notifications": "./src/notifications.ts"
+    "./notifications": "./src/notifications.ts",
+    "./idempotency": "./src/idempotency.ts"
   },
   "scripts": {
     "build": "tsc --project tsconfig.build.json",
