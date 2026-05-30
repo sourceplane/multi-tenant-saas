@@ -2,134 +2,141 @@
 
 Last updated: 2026-05-30 (Track B (Task 0096) CLOSED — verifier PASS,
 PR #144 squash-merged at `e9e432b`, post-merge main-CI `26675733754`
-10/10 SUCCESS, console smoke unchanged. Track A (Task 0095.1) still
+10/10 SUCCESS, console smoke unchanged. Track A (Task 0095.1) STILL
 waiting on implementer fix-up commits to PR #143; head still
 `db00843`, mergeStateStatus DIRTY/CONFLICTING vs main — rebase is
-implementer's job before fix-ups land. Repo health: green; PR #143 is
-the single open PR; main @ `e9e432b`.)
+implementer's job before fix-ups land. Orchestrator output today:
+**Task 0096b SCOPED** — class-B warning cleanup wave 2,
+`tests/membership-worker` only (350 / 627 residual warnings → 0).
+Repo health: green; PR #143 is the single open PR; main @ `d2187f1`.)
 
-## Active task — Task 0095.1 (verifier resumption staged on PR #143)
+## Active task — Task 0096b (class-B warning cleanup wave 2, tests/membership-worker)
 
-The verifier ran on PR #143 today and returned **FAIL** with a single,
-specific Phase-5 blocker. Phases 1–4 PASSED (code path correct, 282/282
-api-edge-tests green, terraform fmt/validate clean, zero
-`eslint-disable` / `@ts-ignore` / boundary breaches). Phases 6–10
-(merge, post-merge CI, live stage/prod evidence, KV resource verify,
-open-risks closure, state files) are gated by Phase 5 and were not run.
+The orchestrator advanced the loop while Track A waits on its
+implementer. Task 0096b is the **largest single concentration** of the
+post-Task-0096 residual lint surface: 350 of 627 warnings live in
+`tests/membership-worker`, all of them `@typescript-eslint/no-explicit-any`,
+distributed across five test files in a single workspace.
 
-### The Phase-5 blocker (verbatim from `ai/reports/task-0095-verifier.md`)
+### Why this task, why now
 
-`apps/api-edge/wrangler.jsonc` declares:
+- Track A (Task 0095.1) cannot move without implementer fix-up commits
+  on PR #143 (still at `db00843`, conflicting). Verifier prompt is
+  sealed at `ai/tasks/task-0095.1-verifier.md` and waits.
+- Track B (Task 0096) closed today and locked in apps-source 0 class-B
+  warnings. The user's recorded preference after Task 0096 is to
+  "drain `tests/**`."
+- A single-workspace PR scoped to `tests/membership-worker/src/**`
+  cannot collide with PR #143's surface (`apps/api-edge/**`,
+  `infra/terraform/cloudflare-kv/**`, `tests/api-edge/**`), so Track A
+  can rebase and ship at any moment without conflict.
+- Single-rule, single-workspace, behaviour-preserving cleanup is a
+  clean PR-sized unit: one primary outcome, one ownership boundary,
+  one test suite, one validation pass. It also establishes the
+  template for the remaining seven workspace waves.
 
-```jsonc
-"env": {
-  "stage": { "kv_namespaces": [{ "binding": "IDEMPOTENCY_KV",
-    "id": "0000000000000000000000000000000a" }] },
-  "prod":  { "kv_namespaces": [{ "binding": "IDEMPOTENCY_KV",
-    "id": "0000000000000000000000000000000b" }] }
-}
-```
+### PR boundary (Task 0096b)
 
-These are sentinel placeholder IDs. **No substitution mechanism exists
-anywhere in the deploy plumbing** — `.github/workflows/ci.yml`, the
-`stack-tectonic` `cloudflare-worker-turbo-verify-deploy` composition,
-`apps/api-edge/component.yaml`'s `preDeployCommand` (set to a no-op
-echo), and `apps/api-edge/scripts/verify-bindings.mjs` (validates only
-Hyperdrive + Service bindings — does not even know `IDEMPOTENCY_KV`
-exists) were all checked. The Terraform output
-`api_edge_idempotency_kv_id` is emitted but never consumed.
+In scope (one PR):
 
-**Consequence if merged as-is:** post-merge main-CI either rejects the
-deploy outright with "KV namespace not found", or — worse — succeeds
-with a phantom binding. Every replay `kv.get` / `kv.put` then throws,
-the `logKvFailure` catch-all degrades open, and **the entire B3 replay
-store is silently inert in production** while tests and dashboards
-report green. The deferred-path failure mode the verifier skill is
-explicitly designed to catch.
+1. Edits inside `tests/membership-worker/src/**/*.ts` only — five
+   files (`membership-worker.test.ts` 3637 LOC dominates with ~330 of
+   the 350 warnings; `accept-invitation-notifications.test.ts`,
+   `authorization-context.test.ts`,
+   `create-invitation-notifications.test.ts`,
+   `service-principal-bindings.test.ts`).
+2. Optional in-workspace `_types.ts` for shared fixture types when it
+   materially reduces duplication.
+3. `ai/reports/task-0096b-implementer.md` (NEW).
 
-### Task 0095.1 fix-up shape (suggested, mirrors existing repo precedent)
+Out of scope (hard non-goals):
 
-Per `agents/orchestrator.md` § PR-Sized Task Standard ("Fixes requested
-by verification stay in the same PR when they are required to complete
-the task"), Task 0095.1 is **NOT a new PR**. It is an additional commit
-(or two) on `impl/task-0095-edge-idempotency-replay-store` so PR #143
-becomes mergeable.
+- No edits under `apps/**`, `packages/**`, `infra/**`, `tooling/**`,
+  `.github/**`, `specs/**`, or any other `tests/<workspace>/**`.
+- No `eslint-disable*`, `@ts-ignore`, `@ts-expect-error`, or
+  `as unknown as` introductions in the diff.
+- **No touching of PR #143 surface (`apps/api-edge/**`,
+  `infra/terraform/cloudflare-kv/**`, `tests/api-edge/**`)** — Track A
+  territory.
+- No rule-severity flip from `warn` to `error`.
+- No assertion / fixture-value / suite-ordering changes.
 
-The repo precedent is already in the same `wrangler.jsonc`: real
-Hyperdrive namespace IDs are hardcoded for stage and prod and
-`verify-bindings.mjs` asserts them. Mirror that pattern for KV:
+### Type-source preference (mirrors Task 0096 discipline)
 
-1. Apply the new `cloudflare-kv` Terraform slice on stage + prod ONCE
-   (via main-CI on a small no-op trigger, or via a manual apply through
-   the `aws-admin`-managed role path — implementer's call, document
-   which).
-2. Replace the sentinels in `apps/api-edge/wrangler.jsonc` with the
-   real 32-char hex namespace IDs.
-3. Extend `apps/api-edge/scripts/verify-bindings.mjs` with an
-   `EXPECTED_KV` block (binding `IDEMPOTENCY_KV`, ID matches
-   `^[0-9a-f]{32}$`, ID is NOT `…000a` / `…000b`).
-4. Commit `ai/context/open-risks.md` lines 83–91 closure under
-   "Resolved Risks" (the implementer claimed this in the report but
-   omitted the file from the original diff).
-5. Optional CI guard: fail the verify-bindings script if `wrangler.jsonc`
-   ever again contains the sentinel strings.
+Replace `any` with the narrowest accurate real type. Preference order:
 
-**Sealed (must not change in 0095.1):**
-`apps/api-edge/src/idempotency.ts`, `apps/api-edge/src/env.ts`, and the
-seven facade call sites — verifier Phase-4 explicitly PASSED these.
-Touching them re-opens the entire code path review.
+1. `@saas/contracts` (request/response contracts the worker exposes).
+2. `@saas/db/membership` (row shapes used in fixtures).
+3. `apps/membership-worker/src/**` exported types (handler IO).
+4. In-workspace `_types.ts` (last resort, only when the fixture shape
+   is genuinely synthetic).
 
-Prompt: `ai/tasks/task-0095.1.md`. Branch:
-`impl/task-0095-edge-idempotency-replay-store` (existing, head still
-`db00843`, currently CONFLICTING vs main — rebase before fix-ups).
+`as T` is acceptable only when the call-site value is provably a
+superset of `T`; `as unknown as T` is forbidden in the diff.
+
+### Acceptance (Task 0096b)
+
+✅ `pnpm --filter tests/membership-worker lint` → exit 0, **0 warnings** (was 350).
+
+✅ `pnpm --filter tests/membership-worker test` → exit 0, suite +
+test count UNCHANGED vs `main` @ `d2187f1` (record both).
+
+✅ `pnpm -r typecheck` → exit 0 (Task 0091 baseline holds).
+
+✅ `pnpm -r --no-bail lint` → exit 0, **277 residual warnings**
+(627 − 350), all in `tests/**` other workspaces, apps-source still 0.
+
+✅ `git diff origin/main --stat` shows files only under
+`tests/membership-worker/src/**` plus
+`ai/reports/task-0096b-implementer.md`.
+
+✅ Hazard scan empty:
+`git diff origin/main -- 'tests/membership-worker/**' | grep -E '^\+.*(eslint-disable|@ts-(ignore|expect-error)|as unknown as)'`
+→ no output.
+
+✅ PR opened on
+`impl/task-0096b-tests-membership-worker-class-b`, real PR number
+substituted into the report before final push.
+
+Prompt: `ai/tasks/task-0096b.md`. Branch (to be created):
+`impl/task-0096b-tests-membership-worker-class-b`.
+
+## Track A — Task 0095.1 (verifier resumption staged on PR #143)
+
+Unchanged from last update. PR #143 head still `db00843`,
+mergeStateStatus DIRTY/CONFLICTING vs main. Implementer needs to
+rebase onto `d2187f1`, apply the Phase-5 fix-up (real 32-char hex KV
+IDs in `apps/api-edge/wrangler.jsonc` for stage + prod, `EXPECTED_KV`
+block in `apps/api-edge/scripts/verify-bindings.mjs`,
+`ai/context/open-risks.md` lines 83–91 closure), and push. The
+verifier prompt at `ai/tasks/task-0095.1-verifier.md` is sealed
+(Phases 1–4 PASS) and runs Phase 5-delta → 2-delta → 3-delta →
+6 squash → 7 post-merge main-CI watch + `wrangler kv namespace list`
+provider verification → 8 live cases (a)–(g) on stage and
+(a)/(isolation)/(g) on prod → 9 open-risks closure → 10 alarm window.
+
+Sealed (must not change in 0095.1):
+`apps/api-edge/src/idempotency.ts`, `apps/api-edge/src/env.ts`, and
+the seven facade call sites — verifier Phase-4 explicitly PASSED these.
 
 ## Verifier re-run plan after Task 0095.1
 
-The verifier resumption is **scoped as a dedicated prompt** at
-`ai/tasks/task-0095.1-verifier.md`. It does NOT redo Phases 1–4 (those
-are sealed: code path PASS, 282/282 tests, hazard scan clean,
-terraform validate green) — only delta-scans the 0095.1 commits
-against `e47248e` (the prior verifier head). It then runs:
+Unchanged. Verifier prompt at `ai/tasks/task-0095.1-verifier.md`
+delta-scans the 0095.1 commits against `e47248e` (the prior verifier
+head); verifier report goes to `ai/reports/task-0095.1-verifier.md`
+(separate from the existing 0095 FAIL report).
 
-- **Phase 5-delta** — real 32-char hex KV IDs in `wrangler.jsonc` for
-  stage AND prod, `verify-bindings.mjs` extended with an
-  `EXPECTED_KV` block mirroring `EXPECTED_HYPERDRIVE`, local script
-  exits 0.
-- **Phase 2-delta** — `git diff e47248e..HEAD --name-only` shows ONLY
-  IN-scope paths; zero `+eslint-disable*` / `+@ts-ignore` / `+as any`
-  in the new diff; sealed Phase-4 source files untouched.
-- **Phase 3-delta** — typecheck / lint / 282 tests / terraform fmt
-  + validate / `kiox -- orun validate-plan-dry-run` all green.
-- **Phase 6** — squash-merge PR #143, fast-forward `main`, delete
-  branch at the remote.
-- **Phase 7** — post-merge main-CI watch with deploy-log inspection
-  (per `references/post-merge-deploy-profile-gap.md`), plus
-  `wrangler kv namespace list` direct provider verification —
-  non-negotiable, because the deferred-path failure mode is exactly
-  a phantom binding that succeeds at deploy time but throws on first
-  KV op. Only provider-side verification catches it.
-- **Phase 8** — live cases (a)–(g) on stage + (a)/(isolation)/(g) on
-  prod, including KV isolation between stage and prod namespaces;
-  console smoke (307 → `/orgs`) on stage + prod unchanged.
-- **Phase 9** — `open-risks.md` lines 83–91 closed under "Resolved
-  Risks", state files updated.
-- **Phase 10** — working-tree clean, PR closed, 5-min post-merge
-  alarm window observation.
+## Next-task candidates after Task 0096b PASS + merge
 
-Verifier report committed to `ai/reports/task-0095.1-verifier.md`
-(separate from the existing 0095 FAIL report — cleaner for cron/log
-audit).
-
-## Next-task candidates after Task 0095 finally PASS
-
-1. **Task 0097 — rate limiting (B3 second half).** Reuses the same
-   `cloudflare-kv` slice for storage; the slice was deliberately
-   structured as a single component for this reason.
-2. **Task 0096b — class-B warning cleanup wave 2 (tests/**).** ~625
-   warnings across 9 test workspaces (`tests/membership-worker` ~351,
-   `tests/config-worker` ~127, `tests/identity-worker` ~81,
-   `tests/api-edge` ~46, others). Scope after Track A closes.
-3. Revisit deferred candidates if any unblock (none have).
+1. **If Track A (Task 0095.1) has shipped by then** — run
+   `ai/tasks/task-0095.1-verifier.md` against PR #143's new head.
+2. **Class-B wave 3** — `tests/config-worker` (126 warnings, the
+   largest remaining single workspace). Same PR-shape template as
+   0096b.
+3. **Task 0097 — rate limiting (B3 second half)** — reuses the
+   `cloudflare-kv` slice from Task 0095, so this is gated on Track A
+   actually merging.
+4. Revisit deferred candidates if any unblock (none have).
 
 ## Recently completed — Task 0096 (Class-B warning cleanup wave 1, apps source, PASS)
 
@@ -155,7 +162,8 @@ audit).
   · Verify deploy`).
 - Per-workspace lint: exit 0, 0 warnings on each of the three touched
   apps. `pnpm -r typecheck` exit 0. `pnpm -r --no-bail lint` exit 0
-  with **625 residual warnings, all in `tests/**`** (apps source 0).
+  with **627 residual warnings, all in `tests/**`** (apps source 0 —
+  Task 0096b will drain `tests/membership-worker` 350 of those).
 - Touched test suites green: `tests/config-worker` 5 suites / 174
   tests, `tests/metering-worker` 2 suites / 32 tests,
   `tests/webhooks-worker` 2 suites / 66 tests.
@@ -181,16 +189,18 @@ audit).
 
 ## Repo health: green
 
-`main` tip on `origin/main` is `e9e432b` (post Task 0096 verifier
-squash). PR #143 is the single open PR. `kiox.lock` pinned at orun
-v2.9.0. Provider pin holds at `cloudflare ~> 4.52` (Task 0085b
-deferred). Apex hostnames `stage.sourceplane.ai` and
-`prod.sourceplane.ai` live.
+`main` tip on `origin/main` is `d2187f1` (post Task 0096 verifier
+state-files commit on top of squash `e9e432b`). PR #143 is the single
+open PR. `kiox.lock` pinned at orun v2.9.0. Provider pin holds at
+`cloudflare ~> 4.52` (Task 0085b deferred). Apex hostnames
+`stage.sourceplane.ai` and `prod.sourceplane.ai` live.
 
 Workspace-wide `pnpm -r typecheck` exits 0 cleanly (Task 0091 baseline
 holds through 0096). Workspace-wide `pnpm -r --no-bail lint` exits 0
-across all 33 lint-bearing workspaces with 625 residual warnings, all
-in `tests/**` (apps source 0 — Tasks 0093 + 0096 outcome).
+across all 33 lint-bearing workspaces with 627 residual warnings, all
+in `tests/**` (apps source 0 — Tasks 0093 + 0096 outcome). Task 0096b
+targets 350 of those (`tests/membership-worker`); the remaining 277
+will be drained by subsequent waves.
 
 Notifications-worker V1 stays deployed on stage + prod (private,
 `workers_dev: false`, `NOTIFICATIONS_PROVIDER=local-debug`).
@@ -219,7 +229,10 @@ Per `agents/orchestrator.md`, candidates that would require human input
 are **deferred to `/ai/deferred.md`** instead of pausing the loop.
 `waiting_for_input` only flips to `"true"` if EVERY candidate is
 genuinely blocked on a human decision. Currently `waiting_for_input` is
-`false` and the loop is on Task 0095.1.
+`false` and the loop is on Task 0096b — Track A waits on its
+implementer, but Track A is not blocked on the user, it is blocked on
+the implementer agent's next run, so the orchestrator is free to ship
+parallel independent tests-only work.
 
 ## Roadmap Position
 
@@ -230,8 +243,12 @@ genuinely blocked on a human decision. Currently `waiting_for_input` is
 - B3 (Edge idempotency + rate limiting) is in flight: Task 0094 landed
   the contract + edge validation gate; Task 0095 is shipping the
   durable replay store (PR #143) and is currently blocked on the Task
-  0095.1 fix-up; Task 0097 (rate limiting) is the explicit successor
-  and reuses the `cloudflare-kv` slice from 0095.
+  0095.1 implementer fix-up; Task 0097 (rate limiting) is the explicit
+  successor and reuses the `cloudflare-kv` slice from 0095.
+- Lint hygiene track (parallel to B3): Tasks 0092 → 0093 → 0096
+  drained apps-source class-B warnings to 0; Task 0096b drains
+  `tests/membership-worker` (350 of 627 residual); subsequent waves
+  drain the remaining seven test workspaces (277).
 
 ## Repo Reality
 
@@ -248,7 +265,8 @@ genuinely blocked on a human decision. Currently `waiting_for_input` is
   (Task 0092). `pnpm -r --no-bail lint` exits 0 across all of them
   (Task 0093). `pnpm -r typecheck` exits 0 (Task 0091). Apps source
   class-B warnings eliminated for config/metering/webhooks workers
-  (Task 0096); tests/** cleanup deferred to Task 0096b.
+  (Task 0096); `tests/membership-worker` cleanup is the active task
+  (0096b); remaining `tests/**` workspaces queue for subsequent waves.
 - api-edge `Idempotency-Key` validation gate live in production
   (Task 0094). Durable replay layer in flight on PR #143 (Task 0095,
   gated by 0095.1).
