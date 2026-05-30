@@ -6,17 +6,18 @@ import type {
   PolicySubject,
   PolicyResource,
 } from "@saas/contracts/policy";
+import type { TenancyRole } from "@saas/contracts/tenancy";
 
 const subject: PolicySubject = { type: "user", id: "usr_abc123" };
 
 function orgFact(role: string, orgId: string): MembershipFact {
-  return { kind: "role_assignment", role: role as any, scope: { kind: "organization", orgId } };
+  return { kind: "role_assignment", role: role as TenancyRole, scope: { kind: "organization", orgId } };
 }
 
 function projectFact(role: string, orgId: string, projectId: string): MembershipFact {
   return {
     kind: "role_assignment",
-    role: role as any,
+    role: role as TenancyRole,
     scope: { kind: "project", orgId, projectId },
   };
 }
