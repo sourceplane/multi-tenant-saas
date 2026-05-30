@@ -1,6 +1,6 @@
 {
   "goal": "Supabase/Postgres-backed multi-organization Orun SaaS control plane",
-  "current_task": "0091",
+  "current_task": "0092",
   "completed": [
     "0001", "0001.1", "0002", "0003", "0003.1", "0004", "0005",
     "0006", "0006.1", "0007", "0007.1", "0008", "0009", "0009.1",
@@ -14,19 +14,19 @@
     "0066", "0067", "0068", "0069", "0070", "0071", "0072", "0073",
     "0074", "0075", "0076", "0077", "0078",
     "0079", "0080", "0081", "0082", "0082.1", "0083", "0083.1", "0084",
-    "0085a", "0086", "0087", "0088", "0089", "0090"
+    "0085a", "0086", "0087", "0088", "0089", "0090", "0091"
   ],
   "deferred": ["0085b", "notifications-provider-swap", "notifications-worker-dev-reframe"],
   "repo_health": "green",
-  "next_focus": "Clean baseline `pnpm -F @saas/identity-worker-tests typecheck` and `pnpm -F @saas/policy-engine-tests typecheck` so a clean checkout is workspace-typecheck-clean. Smallest tsconfig/devDep fix; zero production-source edits; jest pass counts unchanged.",
-  "last_verified": "2026-05-29T23:53:44Z",
+  "next_focus": "ESLint v9 flat-config scaffold across the 16 workspaces missing eslint.config.js. Canonical 2-line re-export of tooling/eslint/index.js per workspace; zero rule-output edits; class-A (config-missing) lint failures eliminated, class-B (rule-violation) failures stay surfaced for a follow-up.",
+  "last_verified": "2026-05-30T00:16:16Z",
   "waiting_for_input": "false",
-  "task_agent": "/ai/tasks/task-0091.md",
+  "task_agent": "/ai/tasks/task-0092.md",
   "notes": [
     "Orchestrator policy: human-input-blocked candidates DEFERRED to /ai/deferred.md, loop continues. waiting_for_input only flips true if every candidate is blocked.",
     "Deferred (orchestrator skips): (a) notifications-provider-swap — needs Resend/Postmark/SES choice; (b) Task 0085b cloudflare-domain v4->v5 — explicit user defer (do not touch infra/terraform/cloudflare-domain/** or cloudflare ~> 4.52 pin); (c) notifications-worker-dev-reframe — needs a 'introduce dev-deploy lane' design pass before the dev-binding work has anywhere to land.",
-    "Task 0090 (V1 notifications idempotencyKey population on the three live callers) VERIFIED + MERGED (PR #138, a5aa47d at 2026-05-29T23:53:44Z). Post-merge main-CI 26668188122 = 13/13 SUCCESS. Worker version IDs: identity-worker-stage cd7e6c39, identity-worker-prod 4d3d0944, membership-worker-stage ba8f0b9f, membership-worker-prod 149c3df0. buildIdempotencyKey helper + scope-prefixed keys (auth.magic_link:{challengeId}, invitation.created:{invPubId}, invitation.accepted:{invPubId}:{memPubId}) closed the V1 risk note from Task 0088 verifier. Stripe-quality idempotency for V1 notifications is now live on stage + prod. Real provider swap is unblocked from a safety standpoint.",
-    "Task 0091 SCOPED 2026-05-30: typecheck-baseline cleanup for two pre-existing failing workspaces — @saas/identity-worker-tests (13 TS2339 'crypto' errors) and @saas/policy-engine-tests (1 TS2688 'node' error). Smallest tsconfig/types fix; zero production-source changes; no orun/CI shape change; no deferred-boundary touches. Implementer agent has latitude on tsconfig vs devDep vs ambient-types approach as long as both typecheck commands exit 0 and jest pass counts are unchanged.",
-    "Live on main @ a5aa47d: notifications-worker V1 stays internal-only (workers_dev:false, public DNS for notifications-worker-{stage,prod}.sourceplane.ai unresolvable - good); console live on https://{stage,prod}.sourceplane.ai (307 -> /orgs); cloudflare ~> 4.52 pin still in force (Task 0085b sealed)."
+    "Task 0091 (tests typecheck baseline cleanup) VERIFIED + MERGED (PR #139, 9081cff at 2026-05-30T00:16:16Z). Post-merge main-CI 26668839091 = 3/3 SUCCESS. Diff: tests/identity-worker/tsconfig.json (lib += DOM), tests/policy-engine/tsconfig.json (drop \"node\" types), zero production-source edits. Workspace-wide pnpm -r typecheck now exits 0 cleanly on a clean checkout — first time in repo history.",
+    "Task 0092 SCOPED 2026-05-30: ESLint v9 flat-config scaffold across the 16 workspaces missing eslint.config.js (7 apps + 1 package + 8 tests). Canonical 2-line re-export of tooling/eslint/index.js per workspace, zero rule-output edits, no production-source touches. Implementer has latitude to add per-workspace devDeps only if transitive resolution of @typescript-eslint fails; otherwise pure config-file additions. Newly-surfaced class-B rule violations stay surfaced for a follow-up task.",
+    "Live on main @ 9081cff: notifications-worker V1 stays internal-only (workers_dev:false, public DNS for notifications-worker-{stage,prod}.sourceplane.ai unresolvable - good); console live on https://{stage,prod}.sourceplane.ai (307 -> /orgs); cloudflare ~> 4.52 pin still in force (Task 0085b sealed); Stripe-quality V1 idempotency hardening from Task 0090 stays live."
   ]
 }
