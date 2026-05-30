@@ -6,12 +6,21 @@
  * do not enqueue.
  */
 import { handleCreateInvitation } from "@membership-worker/handlers/create-invitation";
-import type { RoleAssignment } from "@saas/db/membership";
+import type { CreateInvitationInput, RoleAssignment } from "@saas/db/membership";
+import type { Env } from "@membership-worker/env";
+import type { EnqueueNotificationRequest } from "@saas/contracts/notifications";
+
+type NotificationsClientContext = {
+  internalActor: string;
+  actorSubjectType: string;
+  actorSubjectId: string;
+  requestId: string;
+};
 
 type EnqueueArgs = {
   env: unknown;
-  ctx: unknown;
-  request: any;
+  ctx: NotificationsClientContext;
+  request: EnqueueNotificationRequest;
 };
 
 const orgUuid = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
@@ -47,7 +56,7 @@ function baseRepo() {
   return {
     listRoleAssignments: async () => ({ ok: true as const, value: roles }),
     countBillableMembers: async () => ({ ok: true as const, value: 0 }),
-    createInvitation: async (input: any) => ({
+    createInvitation: async (input: CreateInvitationInput) => ({
       ok: true as const,
       value: {
         id: input.id,
@@ -76,7 +85,7 @@ function makeRequest(body: unknown): Request {
 
 function makeRecorder() {
   const calls: EnqueueArgs[] = [];
-  const fn = async (env: unknown, ctx: unknown, request: any) => {
+  const fn = async (env: unknown, ctx: NotificationsClientContext, request: EnqueueNotificationRequest) => {
     calls.push({ env, ctx, request });
     return { ok: true as const, notificationId: "ntf_test_123" };
   };
@@ -88,7 +97,7 @@ const fakeToken = { raw: RAW_TOKEN, hash: "hash_" + "a".repeat(60) };
 describe("create-invitation → notifications-worker wire (Task 0088)", () => {
   it("enqueues invitation.created with category invitation and lower-cased recipient", async () => {
     const recorder = makeRecorder();
-    const env = {
+    const env: Env = {
       POLICY_WORKER: policyFetcher(true),
       SOURCEPLANE_DB: {} as Hyperdrive,
       ENVIRONMENT: "test",
@@ -98,7 +107,7 @@ describe("create-invitation → notifications-worker wire (Task 0088)", () => {
 
     const response = await handleCreateInvitation(
       makeRequest({ email: "INVITE@Example.COM", role: "builder" }),
-      env as any,
+      env,
       "req_test",
       actor,
       orgPublicIdStr,
@@ -121,7 +130,7 @@ describe("create-invitation → notifications-worker wire (Task 0088)", () => {
     expect(call.request.orgId).toBe(orgUuid);
     expect(call.request.correlationId).toBe("req_test");
 
-    const ctx = call.ctx as any;
+    const ctx = call.ctx;
     expect(ctx.internalActor).toBe("membership-worker");
     expect(ctx.actorSubjectType).toBe("user");
     expect(ctx.actorSubjectId).toBe("usr_admin");
@@ -130,7 +139,7 @@ describe("create-invitation → notifications-worker wire (Task 0088)", () => {
 
   it("never includes the raw invitation token in the enqueue payload", async () => {
     const recorder = makeRecorder();
-    const env = {
+    const env: Env = {
       POLICY_WORKER: policyFetcher(true),
       SOURCEPLANE_DB: {} as Hyperdrive,
       ENVIRONMENT: "test",
@@ -140,7 +149,7 @@ describe("create-invitation → notifications-worker wire (Task 0088)", () => {
 
     await handleCreateInvitation(
       makeRequest({ email: "user@test.com", role: "viewer" }),
-      env as any,
+      env,
       "req_test",
       actor,
       orgPublicIdStr,
@@ -159,7 +168,7 @@ describe("create-invitation → notifications-worker wire (Task 0088)", () => {
   });
 
   it("returns 201 unchanged when enqueue fails (non_2xx)", async () => {
-    const env = {
+    const env: Env = {
       POLICY_WORKER: policyFetcher(true),
       SOURCEPLANE_DB: {} as Hyperdrive,
       ENVIRONMENT: "test",
@@ -169,7 +178,7 @@ describe("create-invitation → notifications-worker wire (Task 0088)", () => {
 
     const response = await handleCreateInvitation(
       makeRequest({ email: "user@test.com", role: "viewer" }),
-      env as any,
+      env,
       "req_test",
       actor,
       orgPublicIdStr,
@@ -182,13 +191,13 @@ describe("create-invitation → notifications-worker wire (Task 0088)", () => {
     );
 
     expect(response.status).toBe(201);
-    const json = (await response.json()) as any;
+    const json = (await response.json()) as { data: { invitation: { email: string; role: string } } };
     expect(json.data.invitation.email).toBe("user@test.com");
     expect(json.data.invitation.role).toBe("viewer");
   });
 
   it("returns 201 unchanged when enqueue returns no_binding (NOTIFICATIONS_WORKER undefined)", async () => {
-    const env = {
+    const env: Env = {
       POLICY_WORKER: policyFetcher(true),
       SOURCEPLANE_DB: {} as Hyperdrive,
       ENVIRONMENT: "test",
@@ -201,16 +210,29 @@ describe("create-invitation → notifications-worker wire (Task 0088)", () => {
     // when env.NOTIFICATIONS_WORKER is undefined, the real client returns
     // `{ ok: false, reason: "no_binding" }` without performing any side
     // effect. The handler must not branch on the result.
-    const fn = async (envArg: any) => {
+    const fn = async (envArg: { NOTIFICATIONS_WORKER?: Fetcher }) => {
       if (!envArg?.NOTIFICATIONS_WORKER) {
         return { ok: false as const, reason: "no_binding" as const };
       }
-      return recorder.fn(envArg, null, null as any);
+      // Bypass: the no_binding short-circuit returns before recorder.fn
+      // would ever be invoked with these arguments; the fall-through is here
+      // to satisfy the type checker on the unused branch.
+      return recorder.fn(
+        envArg,
+        { internalActor: "membership-worker", actorSubjectType: "user", actorSubjectId: actor.subjectId, requestId: "req_test" },
+        {
+          orgId: orgUuid,
+          category: "invitation",
+          templateKey: "invitation.created",
+          recipient: { channel: "email", address: "user@test.com" },
+          templateData: {},
+        },
+      );
     };
 
     const response = await handleCreateInvitation(
       makeRequest({ email: "user@test.com", role: "viewer" }),
-      env as any,
+      env,
       "req_test",
       actor,
       orgPublicIdStr,
@@ -227,7 +249,7 @@ describe("create-invitation → notifications-worker wire (Task 0088)", () => {
 
   it("does NOT enqueue on validation failure", async () => {
     const recorder = makeRecorder();
-    const env = {
+    const env: Env = {
       POLICY_WORKER: policyFetcher(true),
       SOURCEPLANE_DB: {} as Hyperdrive,
       ENVIRONMENT: "test",
@@ -237,7 +259,7 @@ describe("create-invitation → notifications-worker wire (Task 0088)", () => {
 
     const response = await handleCreateInvitation(
       makeRequest({ email: "not-an-email", role: "viewer" }),
-      env as any,
+      env,
       "req_test",
       actor,
       orgPublicIdStr,
@@ -255,7 +277,7 @@ describe("create-invitation → notifications-worker wire (Task 0088)", () => {
 
   it("does NOT enqueue on policy denial", async () => {
     const recorder = makeRecorder();
-    const env = {
+    const env: Env = {
       POLICY_WORKER: policyFetcher(false),
       SOURCEPLANE_DB: {} as Hyperdrive,
       ENVIRONMENT: "test",
@@ -265,7 +287,7 @@ describe("create-invitation → notifications-worker wire (Task 0088)", () => {
 
     const response = await handleCreateInvitation(
       makeRequest({ email: "user@test.com", role: "viewer" }),
-      env as any,
+      env,
       "req_test",
       actor,
       orgPublicIdStr,
@@ -283,7 +305,7 @@ describe("create-invitation → notifications-worker wire (Task 0088)", () => {
 
   it("does NOT enqueue on billing precondition_failed deny", async () => {
     const recorder = makeRecorder();
-    const env = {
+    const env: Env = {
       POLICY_WORKER: policyFetcher(true),
       BILLING_WORKER: {} as Fetcher,
       SOURCEPLANE_DB: {} as Hyperdrive,
@@ -299,7 +321,7 @@ describe("create-invitation → notifications-worker wire (Task 0088)", () => {
 
     const response = await handleCreateInvitation(
       makeRequest({ email: "user@test.com", role: "viewer" }),
-      env as any,
+      env,
       "req_test",
       actor,
       orgPublicIdStr,
@@ -329,7 +351,7 @@ describe("create-invitation → notifications-worker wire (Task 0088)", () => {
 
   it("does NOT enqueue under DEBUG_DELIVERY=true (skipped in dev to avoid duplicate local_debug rows)", async () => {
     const recorder = makeRecorder();
-    const env = {
+    const env: Env = {
       POLICY_WORKER: policyFetcher(true),
       SOURCEPLANE_DB: {} as Hyperdrive,
       ENVIRONMENT: "test",
@@ -339,7 +361,7 @@ describe("create-invitation → notifications-worker wire (Task 0088)", () => {
 
     const response = await handleCreateInvitation(
       makeRequest({ email: "user@test.com", role: "viewer" }),
-      env as any,
+      env,
       "req_test",
       actor,
       orgPublicIdStr,
@@ -354,13 +376,13 @@ describe("create-invitation → notifications-worker wire (Task 0088)", () => {
     expect(response.status).toBe(201);
     expect(recorder.calls).toHaveLength(0);
     // Existing local_debug response-body contract preserved.
-    const json = (await response.json()) as any;
+    const json = (await response.json()) as { data: { delivery: { mode: string; token: string } } };
     expect(json.data.delivery).toEqual({ mode: "local_debug", token: RAW_TOKEN });
   });
 
   it("templateData contains expected redaction-safe keys only", async () => {
     const recorder = makeRecorder();
-    const env = {
+    const env: Env = {
       POLICY_WORKER: policyFetcher(true),
       SOURCEPLANE_DB: {} as Hyperdrive,
       ENVIRONMENT: "test",
@@ -370,7 +392,7 @@ describe("create-invitation → notifications-worker wire (Task 0088)", () => {
 
     await handleCreateInvitation(
       makeRequest({ email: "user@test.com", role: "builder" }),
-      env as any,
+      env,
       "req_test",
       actor,
       orgPublicIdStr,
@@ -400,7 +422,7 @@ describe("create-invitation → notifications-worker wire (Task 0088)", () => {
 
   // ── Task 0090 — idempotency-key population ────────────────────────────
   describe("idempotencyKey (Task 0090)", () => {
-    function makeEnv() {
+    function makeEnv(): Env {
       return {
         POLICY_WORKER: policyFetcher(true),
         SOURCEPLANE_DB: {} as Hyperdrive,
@@ -413,7 +435,7 @@ describe("create-invitation → notifications-worker wire (Task 0088)", () => {
     async function callOnce(genId: () => string, recorder: ReturnType<typeof makeRecorder>) {
       return handleCreateInvitation(
         makeRequest({ email: "user@test.com", role: "builder" }),
-        makeEnv() as any,
+        makeEnv(),
         "req_test",
         actor,
         orgPublicIdStr,
@@ -437,17 +459,17 @@ describe("create-invitation → notifications-worker wire (Task 0088)", () => {
       // upstream id verbatim).
       const STABLE_INV_UUID = "12345678-1234-1234-1234-123456789012";
       const origRandomUUID = crypto.randomUUID;
-      (crypto as any).randomUUID = () => STABLE_INV_UUID;
+      (crypto as { randomUUID: () => string }).randomUUID = () => STABLE_INV_UUID;
       try {
         await callOnce(() => "evt_1", recorder);
         await callOnce(() => "evt_2", recorder);
       } finally {
-        (crypto as any).randomUUID = origRandomUUID;
+        (crypto as { randomUUID: () => string }).randomUUID = origRandomUUID;
       }
 
       expect(recorder.calls).toHaveLength(2);
-      const k1 = recorder.calls[0]!.request.idempotencyKey;
-      const k2 = recorder.calls[1]!.request.idempotencyKey;
+      const k1 = recorder.calls[0]!.request.idempotencyKey!;
+      const k2 = recorder.calls[1]!.request.idempotencyKey!;
       expect(typeof k1).toBe("string");
       expect(k1).toBe(k2);
       // Template-scoped + carries the public-id form of the invitation row.

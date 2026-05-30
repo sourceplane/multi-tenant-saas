@@ -14,7 +14,86 @@ import { handleCreateInvitation } from "@membership-worker/handlers/create-invit
 import { handleListInvitations } from "@membership-worker/handlers/list-invitations";
 import { handleRevokeInvitation } from "@membership-worker/handlers/revoke-invitation";
 import { handleAcceptInvitation } from "@membership-worker/handlers/accept-invitation";
-import type { MembershipRepository, Organization, OrganizationMember, RoleAssignment } from "@saas/db/membership";
+import type { CheckBillingEntitlementResponse } from "@saas/contracts/billing";
+import type { checkBillingEntitlement } from "@membership-worker/billing-client";
+import type {
+  AcceptInvitationInput,
+  CreateInvitationInput,
+  CreateRoleAssignmentInput,
+  MembershipRepository,
+  MembershipResult,
+  Organization,
+  OrganizationInvitation,
+  OrganizationMember,
+  RoleAssignment,
+} from "@saas/db/membership";
+import type { AppendEventWithAuditInput, StoredEvent, StoredAuditEntry } from "@saas/db/events";
+import type { Env } from "@membership-worker/env";
+
+// Permissive response envelope used across the suite. Tests assert deep-property
+// shapes ad-hoc; this lets each call site narrow what it reads without needing a
+// precise per-handler DTO. Replaces the previous ubiquitous `as any` cast.
+// Structural envelope used at every `await response.json() as JsonResp` site.
+// All fields the suite reads are required (non-optional) — `as JsonResp` is a
+// type assertion, not validation, so this lets callers chain reads without `!`
+// dance while still catching typos at compile time. Replaces the prior
+// per-site `as any` cast.
+type RoleEntry = { role: string; scopeKind?: string; scopeType?: string; scopeRef?: string | null };
+type MemberView = {
+  id: string;
+  subjectId: string;
+  status: string;
+  roles: ReadonlyArray<RoleEntry>;
+  joinedAt: string;
+  userId: string;
+  organizationId: string;
+};
+type InvitationView = {
+  id: string;
+  email: string;
+  role: string;
+  status: string;
+  invitedBy: string;
+  revokedAt: string | null;
+  expiresAt: string;
+  acceptedAt: string | null;
+  organizationId: string;
+  invitedByUserId: string;
+};
+type MembershipView = {
+  id: string;
+  role: string;
+  status: string;
+  joinedAt: string;
+  userId: string;
+  organizationId: string;
+};
+type DeliveryView = Record<string, unknown>;
+type ErrorDetailFields = Record<string, ReadonlyArray<string>>;
+type JsonResp = {
+  data: {
+    member: MemberView;
+    members: ReadonlyArray<MemberView>;
+    membership: MembershipView;
+    invitation: InvitationView;
+    invitations: ReadonlyArray<InvitationView>;
+    delivery: DeliveryView;
+    organization: Record<string, unknown>;
+    organizations: ReadonlyArray<Record<string, unknown>>;
+    role: string;
+    membersCount: number;
+    nextCursor: string | null;
+  };
+  error: {
+    code: string;
+    message: string;
+    details: { fields: ErrorDetailFields; reason: string };
+    requestId: string;
+  };
+  meta: { requestId: string; cursor: string | null };
+};
+// Captured policy-worker request body (tests JSON.parse + read action/resource).
+type CapturedPolicyBody = { action: string; resource: { kind: string; id: string; orgId: string } };
 
 if (!(globalThis as Record<string, unknown>).crypto) {
   (globalThis as Record<string, unknown>).crypto = crypto;
@@ -711,23 +790,23 @@ describe("handleListMembers handler integration", () => {
 
   it("returns full member list with correct response shape on success", async () => {
     const repo = createFakeRepo();
-    const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+    const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
-    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, undefined, { repo });
+    const response = await handleListMembers(env, "req_test", actor, orgPublicIdStr, undefined, { repo });
 
     expect(response.status).toBe(200);
-    const json = await response.json() as any;
+    const json = await response.json() as JsonResp;
     expect(json.data.members).toHaveLength(2);
-    expect(json.data.members[0].id).toMatch(/^mem_[0-9a-f]{32}$/);
-    expect(json.data.members[0].subjectId).toBe("usr_owner");
-    expect(json.data.members[0].status).toBe("active");
-    expect(json.data.members[0].joinedAt).toBe(fixedNow.toISOString());
-    expect(json.data.members[0].roles).toEqual([{ role: "owner", scopeKind: "organization" }]);
-    expect(json.data.members[1].roles).toHaveLength(2);
+    expect(json.data.members[0]!.id).toMatch(/^mem_[0-9a-f]{32}$/);
+    expect(json.data.members[0]!.subjectId).toBe("usr_owner");
+    expect(json.data.members[0]!.status).toBe("active");
+    expect(json.data.members[0]!.joinedAt).toBe(fixedNow.toISOString());
+    expect(json.data.members[0]!.roles).toEqual([{ role: "owner", scopeKind: "organization" }]);
+    expect(json.data.members[1]!.roles).toHaveLength(2);
   });
 
   it("sends organization.member.list action to policy-worker", async () => {
-    let capturedBody: any;
+    let capturedBody: CapturedPolicyBody | undefined;
     const policyFetcher = {
       fetch: async (_url: string, init: RequestInit) => {
         capturedBody = JSON.parse(init.body as string);
@@ -739,21 +818,21 @@ describe("handleListMembers handler integration", () => {
     } as unknown as Fetcher;
 
     const repo = createFakeRepo();
-    const env = { POLICY_WORKER: policyFetcher, SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
-    await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, undefined, { repo });
+    const env: Env = { POLICY_WORKER: policyFetcher, SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+    await handleListMembers(env, "req_test", actor, orgPublicIdStr, undefined, { repo });
 
-    expect(capturedBody.action).toBe("organization.member.list");
-    expect(capturedBody.resource).toEqual({ kind: "organization", id: orgUuid, orgId: orgUuid });
+    expect(capturedBody!.action).toBe("organization.member.list");
+    expect(capturedBody!.resource).toEqual({ kind: "organization", id: orgUuid, orgId: orgUuid });
   });
 
   it("returns not_found when policy denies", async () => {
     const repo = createFakeRepo();
-    const env = { POLICY_WORKER: createPolicyFetcher(false), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+    const env: Env = { POLICY_WORKER: createPolicyFetcher(false), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
-    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, undefined, { repo });
+    const response = await handleListMembers(env, "req_test", actor, orgPublicIdStr, undefined, { repo });
 
     expect(response.status).toBe(404);
-    const json = await response.json() as any;
+    const json = await response.json() as JsonResp;
     expect(json.error.code).toBe("not_found");
     expect(JSON.stringify(json)).not.toContain("forbidden");
     expect(JSON.stringify(json)).not.toContain("denied");
@@ -761,23 +840,23 @@ describe("handleListMembers handler integration", () => {
 
   it("returns not_found when actor role-list fails (fail closed)", async () => {
     const repo = createFakeRepo({ actorRolesFail: true });
-    const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+    const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
-    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, undefined, { repo });
+    const response = await handleListMembers(env, "req_test", actor, orgPublicIdStr, undefined, { repo });
 
     expect(response.status).toBe(404);
-    const json = await response.json() as any;
+    const json = await response.json() as JsonResp;
     expect(json.error.code).toBe("not_found");
   });
 
   it("returns internal_error when member role-list fails without partial data", async () => {
     const repo = createFakeRepo({ memberRolesFail: true });
-    const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+    const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
-    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, undefined, { repo });
+    const response = await handleListMembers(env, "req_test", actor, orgPublicIdStr, undefined, { repo });
 
     expect(response.status).toBe(500);
-    const json = await response.json() as any;
+    const json = await response.json() as JsonResp;
     expect(json.error.code).toBe("internal_error");
     expect(JSON.stringify(json)).not.toContain("members");
     expect(JSON.stringify(json)).not.toContain("usr_owner");
@@ -785,41 +864,41 @@ describe("handleListMembers handler integration", () => {
 
   it("returns internal_error when listMembers fails", async () => {
     const repo = createFakeRepo({ membersFail: true });
-    const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+    const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
-    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, undefined, { repo });
+    const response = await handleListMembers(env, "req_test", actor, orgPublicIdStr, undefined, { repo });
 
     expect(response.status).toBe(500);
-    const json = await response.json() as any;
+    const json = await response.json() as JsonResp;
     expect(json.error.code).toBe("internal_error");
   });
 
   it("fails closed when policy binding throws", async () => {
     const repo = createFakeRepo();
     const policyFetcher = { fetch: async () => { throw new Error("network"); } } as unknown as Fetcher;
-    const env = { POLICY_WORKER: policyFetcher, SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+    const env: Env = { POLICY_WORKER: policyFetcher, SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
-    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, undefined, { repo });
+    const response = await handleListMembers(env, "req_test", actor, orgPublicIdStr, undefined, { repo });
 
     expect(response.status).toBe(404);
-    const json = await response.json() as any;
+    const json = await response.json() as JsonResp;
     expect(json.error.code).toBe("not_found");
   });
 
   it("returns not_found for invalid orgId param", async () => {
     const repo = createFakeRepo();
-    const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+    const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
-    const response = await handleListMembers(env as any, "req_test", actor, "invalid_id", undefined, { repo });
+    const response = await handleListMembers(env, "req_test", actor, "invalid_id", undefined, { repo });
 
     expect(response.status).toBe(404);
   });
 
   it("does not expose raw UUIDs or project scopeRef in response", async () => {
     const repo = createFakeRepo();
-    const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+    const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
-    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, undefined, { repo });
+    const response = await handleListMembers(env, "req_test", actor, orgPublicIdStr, undefined, { repo });
     const text = await response.text();
 
     expect(text).not.toContain("11111111-2222-3333-4444-555555555555");
@@ -832,12 +911,12 @@ describe("handleListMembers handler integration", () => {
 
   it("returns 503 when POLICY_WORKER binding is missing", async () => {
     const repo = createFakeRepo();
-    const env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+    const env: Env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
-    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, undefined, { repo });
+    const response = await handleListMembers(env, "req_test", actor, orgPublicIdStr, undefined, { repo });
 
     expect(response.status).toBe(503);
-    const json = await response.json() as any;
+    const json = await response.json() as JsonResp;
     expect(json.error.code).toBe("internal_error");
   });
 });
@@ -884,85 +963,85 @@ describe("pagination", () => {
 
   it("defaults to limit 50 when no query params provided", async () => {
     const repo = createPagedRepo();
-    const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+    const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
-    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, undefined, { repo });
+    const response = await handleListMembers(env, "req_test", actor, orgPublicIdStr, undefined, { repo });
 
     expect(response.status).toBe(200);
-    const json = await response.json() as any;
+    const json = await response.json() as JsonResp;
     expect(json.data.members).toHaveLength(1);
     expect(json.meta.cursor).toBeNull();
   });
 
   it("uses explicit limit when provided", async () => {
     const repo = createPagedRepo();
-    const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+    const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
     const url = new URL("http://localhost/v1/organizations/x/members?limit=10");
 
-    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, url, { repo });
+    const response = await handleListMembers(env, "req_test", actor, orgPublicIdStr, url, { repo });
 
     expect(response.status).toBe(200);
   });
 
   it("returns validation_failed for invalid limit", async () => {
     const repo = createPagedRepo();
-    const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+    const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
     const url = new URL("http://localhost/v1/organizations/x/members?limit=999");
 
-    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, url, { repo });
+    const response = await handleListMembers(env, "req_test", actor, orgPublicIdStr, url, { repo });
 
     expect(response.status).toBe(422);
-    const json = await response.json() as any;
+    const json = await response.json() as JsonResp;
     expect(json.error.code).toBe("validation_failed");
   });
 
   it("returns validation_failed for non-integer limit", async () => {
     const repo = createPagedRepo();
-    const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+    const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
     const url = new URL("http://localhost/v1/organizations/x/members?limit=abc");
 
-    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, url, { repo });
+    const response = await handleListMembers(env, "req_test", actor, orgPublicIdStr, url, { repo });
 
     expect(response.status).toBe(422);
-    const json = await response.json() as any;
+    const json = await response.json() as JsonResp;
     expect(json.error.code).toBe("validation_failed");
   });
 
   it("returns validation_failed for invalid cursor", async () => {
     const repo = createPagedRepo();
-    const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+    const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
     const url = new URL("http://localhost/v1/organizations/x/members?cursor=not_valid_base64!!!");
 
-    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, url, { repo });
+    const response = await handleListMembers(env, "req_test", actor, orgPublicIdStr, url, { repo });
 
     expect(response.status).toBe(422);
-    const json = await response.json() as any;
+    const json = await response.json() as JsonResp;
     expect(json.error.code).toBe("validation_failed");
   });
 
   it("returns validation_failed for valid base64 cursor with invalid timestamp", async () => {
     const repo = createPagedRepo();
-    const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+    const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
     const badCursor = btoa(JSON.stringify({ v: 1, t: "not-a-timestamp", i: "aaaaaaaa-1111-2222-3333-444444444444" }));
     const url = new URL(`http://localhost/v1/organizations/x/members?cursor=${badCursor}`);
 
-    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, url, { repo });
+    const response = await handleListMembers(env, "req_test", actor, orgPublicIdStr, url, { repo });
 
     expect(response.status).toBe(422);
-    const json = await response.json() as any;
+    const json = await response.json() as JsonResp;
     expect(json.error.code).toBe("validation_failed");
   });
 
   it("returns validation_failed for valid base64 cursor with invalid id", async () => {
     const repo = createPagedRepo();
-    const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+    const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
     const badCursor = btoa(JSON.stringify({ v: 1, t: "2026-01-15T10:00:00.000Z", i: "not-a-uuid" }));
     const url = new URL(`http://localhost/v1/organizations/x/members?cursor=${badCursor}`);
 
-    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, url, { repo });
+    const response = await handleListMembers(env, "req_test", actor, orgPublicIdStr, url, { repo });
 
     expect(response.status).toBe(422);
-    const json = await response.json() as any;
+    const json = await response.json() as JsonResp;
     expect(json.error.code).toBe("validation_failed");
   });
 
@@ -975,55 +1054,55 @@ describe("pagination", () => {
         return { ok: true as const, value: { items: [], nextCursor: null } };
       },
     };
-    const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+    const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
     const cursorPayload = btoa(JSON.stringify({ v: 1, t: "2026-01-15T10:00:00.000Z", i: "aaaaaaaa-1111-2222-3333-444444444444" }));
     const url = new URL(`http://localhost/v1/organizations/x/members?cursor=${cursorPayload}`);
 
-    await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, url, { repo });
+    await handleListMembers(env, "req_test", actor, orgPublicIdStr, url, { repo });
 
     expect(receivedParams).toEqual({ limit: 50, cursor: { createdAt: "2026-01-15T10:00:00.000Z", id: "aaaaaaaa-1111-2222-3333-444444444444" } });
   });
 
   it("sets meta.cursor when another page exists", async () => {
     const repo = createPagedRepo({ hasNext: true });
-    const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+    const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
-    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, undefined, { repo });
+    const response = await handleListMembers(env, "req_test", actor, orgPublicIdStr, undefined, { repo });
 
     expect(response.status).toBe(200);
-    const json = await response.json() as any;
+    const json = await response.json() as JsonResp;
     expect(json.meta.cursor).not.toBeNull();
     expect(typeof json.meta.cursor).toBe("string");
   });
 
   it("sets meta.cursor to null when no more pages", async () => {
     const repo = createPagedRepo({ hasNext: false });
-    const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+    const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
-    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, undefined, { repo });
+    const response = await handleListMembers(env, "req_test", actor, orgPublicIdStr, undefined, { repo });
 
     expect(response.status).toBe(200);
-    const json = await response.json() as any;
+    const json = await response.json() as JsonResp;
     expect(json.meta.cursor).toBeNull();
   });
 
   it("still authorizes before page query", async () => {
     const repo = createPagedRepo();
-    const env = { POLICY_WORKER: createPolicyFetcher(false), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+    const env: Env = { POLICY_WORKER: createPolicyFetcher(false), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
-    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, undefined, { repo });
+    const response = await handleListMembers(env, "req_test", actor, orgPublicIdStr, undefined, { repo });
 
     expect(response.status).toBe(404);
-    const json = await response.json() as any;
+    const json = await response.json() as JsonResp;
     expect(json.error.code).toBe("not_found");
   });
 
   it("does not leak cursor format details in validation error", async () => {
     const repo = createPagedRepo();
-    const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+    const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
     const url = new URL("http://localhost/v1/organizations/x/members?cursor=broken");
 
-    const response = await handleListMembers(env as any, "req_test", actor, orgPublicIdStr, url, { repo });
+    const response = await handleListMembers(env, "req_test", actor, orgPublicIdStr, url, { repo });
 
     const text = await response.text();
     expect(text).not.toContain("JSON");
@@ -1105,7 +1184,7 @@ describe("invitation administration", () => {
           if (opts.billableCountFail) return { ok: false as const, error: { kind: "internal" as const, message: "db error" } };
           return { ok: true as const, value: opts.billableCount ?? 0 };
         },
-        createInvitation: async (input: any) => {
+        createInvitation: async (input: CreateInvitationInput) => {
           if (opts.createFail) return { ok: false as const, error: { kind: "internal" as const, message: "db error" } };
           return {
             ok: true as const,
@@ -1145,16 +1224,16 @@ describe("invitation administration", () => {
     it("creates invitation with expected response shape", async () => {
       const repo = createRepo();
       const fakeToken = { raw: "deadbeef".repeat(8), hash: "cafebabe".repeat(8) };
-      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
 
       const response = await handleCreateInvitation(
         makeRequest({ email: "invite@test.com", role: "builder" }),
-        env as any, "req_test", actor, orgPublicIdStr,
+        env, "req_test", actor, orgPublicIdStr,
         { repo, generateToken: async () => fakeToken, now: () => fixedNowLocal },
       );
 
       expect(response.status).toBe(201);
-      const json = await response.json() as any;
+      const json = await response.json() as JsonResp;
       expect(json.data.invitation.id).toMatch(/^inv_[0-9a-f]{32}$/);
       expect(json.data.invitation.email).toBe("invite@test.com");
       expect(json.data.invitation.role).toBe("builder");
@@ -1166,27 +1245,27 @@ describe("invitation administration", () => {
     it("includes debug delivery token when DEBUG_DELIVERY is true", async () => {
       const repo = createRepo();
       const fakeToken = { raw: "secret_raw_token_hex", hash: "hash_hex" };
-      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "true" };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "true" };
 
       const response = await handleCreateInvitation(
         makeRequest({ email: "invite@test.com", role: "viewer" }),
-        env as any, "req_test", actor, orgPublicIdStr,
+        env, "req_test", actor, orgPublicIdStr,
         { repo, generateToken: async () => fakeToken, now: () => fixedNowLocal },
       );
 
       expect(response.status).toBe(201);
-      const json = await response.json() as any;
+      const json = await response.json() as JsonResp;
       expect(json.data.delivery).toEqual({ mode: "local_debug", token: "secret_raw_token_hex" });
     });
 
     it("prod delivery never includes raw token", async () => {
       const repo = createRepo();
       const fakeToken = { raw: "secret_raw_token", hash: "hash" };
-      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "prod", DEBUG_DELIVERY: "false" };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "prod", DEBUG_DELIVERY: "false" };
 
       const response = await handleCreateInvitation(
         makeRequest({ email: "invite@test.com", role: "admin" }),
-        env as any, "req_test", actor, orgPublicIdStr,
+        env, "req_test", actor, orgPublicIdStr,
         { repo, generateToken: async () => fakeToken, now: () => fixedNowLocal },
       );
 
@@ -1195,30 +1274,30 @@ describe("invitation administration", () => {
     });
 
     it("passes token hash to repository and not raw token", async () => {
-      let capturedInput: any;
+      let capturedInput: CreateInvitationInput | null = null;
       const repo = {
         ...createRepo(),
-        createInvitation: async (input: any) => {
+        createInvitation: async (input: CreateInvitationInput) => {
           capturedInput = input;
           return { ok: true as const, value: { ...input, status: "pending", acceptedAt: null, revokedAt: null } };
         },
       };
       const fakeToken = { raw: "raw_secret", hash: "hashed_value_only" };
-      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
 
       await handleCreateInvitation(
         makeRequest({ email: "test@x.com", role: "viewer" }),
-        env as any, "req_test", actor, orgPublicIdStr,
+        env, "req_test", actor, orgPublicIdStr,
         { repo, generateToken: async () => fakeToken, now: () => fixedNowLocal },
       );
 
-      expect(capturedInput.tokenHash).toBe("hashed_value_only");
+      expect(capturedInput!.tokenHash).toBe("hashed_value_only");
       expect(JSON.stringify(capturedInput)).not.toContain("raw_secret");
     });
 
     it("returns validation_failed for bad JSON", async () => {
       const repo = createRepo();
-      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
       const badReq = new Request("https://test.local/v1/organizations/" + orgPublicIdStr + "/invitations", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -1226,68 +1305,68 @@ describe("invitation administration", () => {
       });
 
       const response = await handleCreateInvitation(
-        badReq, env as any, "req_test", actor, orgPublicIdStr,
+        badReq, env, "req_test", actor, orgPublicIdStr,
         { repo, generateToken: async () => ({ raw: "x", hash: "y" }), now: () => fixedNowLocal },
       );
 
       expect(response.status).toBe(400);
-      const json = await response.json() as any;
+      const json = await response.json() as JsonResp;
       expect(json.error.code).toBe("bad_request");
     });
 
     it("returns validation_failed for invalid email", async () => {
       const repo = createRepo();
-      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
 
       const response = await handleCreateInvitation(
         makeRequest({ email: "not-an-email", role: "viewer" }),
-        env as any, "req_test", actor, orgPublicIdStr,
+        env, "req_test", actor, orgPublicIdStr,
         { repo, generateToken: async () => ({ raw: "x", hash: "y" }), now: () => fixedNowLocal },
       );
 
       expect(response.status).toBe(422);
-      const json = await response.json() as any;
+      const json = await response.json() as JsonResp;
       expect(json.error.code).toBe("validation_failed");
       expect(json.error.details.fields.email).toBeDefined();
     });
 
     it("returns validation_failed for missing role", async () => {
       const repo = createRepo();
-      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
 
       const response = await handleCreateInvitation(
         makeRequest({ email: "user@test.com" }),
-        env as any, "req_test", actor, orgPublicIdStr,
+        env, "req_test", actor, orgPublicIdStr,
         { repo, generateToken: async () => ({ raw: "x", hash: "y" }), now: () => fixedNowLocal },
       );
 
       expect(response.status).toBe(422);
-      const json = await response.json() as any;
+      const json = await response.json() as JsonResp;
       expect(json.error.details.fields.role).toBeDefined();
     });
 
     it("returns validation_failed for project-scoped role", async () => {
       const repo = createRepo();
-      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
 
       const response = await handleCreateInvitation(
         makeRequest({ email: "user@test.com", role: "project_admin" }),
-        env as any, "req_test", actor, orgPublicIdStr,
+        env, "req_test", actor, orgPublicIdStr,
         { repo, generateToken: async () => ({ raw: "x", hash: "y" }), now: () => fixedNowLocal },
       );
 
       expect(response.status).toBe(422);
-      const json = await response.json() as any;
+      const json = await response.json() as JsonResp;
       expect(json.error.details.fields.role).toBeDefined();
     });
 
     it("returns validation_failed for unknown role", async () => {
       const repo = createRepo();
-      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
 
       const response = await handleCreateInvitation(
         makeRequest({ email: "user@test.com", role: "superuser" }),
-        env as any, "req_test", actor, orgPublicIdStr,
+        env, "req_test", actor, orgPublicIdStr,
         { repo, generateToken: async () => ({ raw: "x", hash: "y" }), now: () => fixedNowLocal },
       );
 
@@ -1297,15 +1376,15 @@ describe("invitation administration", () => {
     it("sends organization.invitation.create action to policy", async () => {
       const captured: { value: unknown } = { value: null };
       const repo = createRepo();
-      const env = { POLICY_WORKER: createPolicyFetcher(true, captured), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true, captured), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
 
       await handleCreateInvitation(
         makeRequest({ email: "user@test.com", role: "viewer" }),
-        env as any, "req_test", actor, orgPublicIdStr,
+        env, "req_test", actor, orgPublicIdStr,
         { repo, generateToken: async () => ({ raw: "x", hash: "y" }), now: () => fixedNowLocal },
       );
 
-      expect((captured.value as any).action).toBe("organization.invitation.create");
+      expect((captured.value as { action: string }).action).toBe("organization.invitation.create");
     });
 
     it("authorizes before creating invitation", async () => {
@@ -1313,16 +1392,16 @@ describe("invitation administration", () => {
       const repo = {
         listRoleAssignments: async () => ({ ok: true as const, value: [] as RoleAssignment[] }),
         countBillableMembers: async () => ({ ok: true as const, value: 0 }),
-        createInvitation: async (input: any) => {
+        createInvitation: async (input: CreateInvitationInput) => {
           createCalled = true;
           return { ok: true as const, value: { ...input, status: "pending", acceptedAt: null, revokedAt: null } };
         },
       };
-      const env = { POLICY_WORKER: createPolicyFetcher(false), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(false), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
 
       const response = await handleCreateInvitation(
         makeRequest({ email: "user@test.com", role: "viewer" }),
-        env as any, "req_test", actor, orgPublicIdStr,
+        env, "req_test", actor, orgPublicIdStr,
         { repo, generateToken: async () => ({ raw: "x", hash: "y" }), now: () => fixedNowLocal },
       );
 
@@ -1332,26 +1411,26 @@ describe("invitation administration", () => {
 
     it("policy denial returns not_found", async () => {
       const repo = createRepo();
-      const env = { POLICY_WORKER: createPolicyFetcher(false), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(false), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
 
       const response = await handleCreateInvitation(
         makeRequest({ email: "user@test.com", role: "viewer" }),
-        env as any, "req_test", actor, orgPublicIdStr,
+        env, "req_test", actor, orgPublicIdStr,
         { repo, generateToken: async () => ({ raw: "x", hash: "y" }), now: () => fixedNowLocal },
       );
 
       expect(response.status).toBe(404);
-      const json = await response.json() as any;
+      const json = await response.json() as JsonResp;
       expect(json.error.code).toBe("not_found");
     });
 
     it("actor role-list failure fails closed", async () => {
       const repo = createRepo({ actorRolesFail: true });
-      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
 
       const response = await handleCreateInvitation(
         makeRequest({ email: "user@test.com", role: "viewer" }),
-        env as any, "req_test", actor, orgPublicIdStr,
+        env, "req_test", actor, orgPublicIdStr,
         { repo, generateToken: async () => ({ raw: "x", hash: "y" }), now: () => fixedNowLocal },
       );
 
@@ -1360,26 +1439,26 @@ describe("invitation administration", () => {
 
     it("database failure returns safe internal_error", async () => {
       const repo = createRepo({ createFail: true });
-      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
 
       const response = await handleCreateInvitation(
         makeRequest({ email: "user@test.com", role: "viewer" }),
-        env as any, "req_test", actor, orgPublicIdStr,
+        env, "req_test", actor, orgPublicIdStr,
         { repo, generateToken: async () => ({ raw: "x", hash: "y" }), now: () => fixedNowLocal },
       );
 
       expect(response.status).toBe(500);
-      const json = await response.json() as any;
+      const json = await response.json() as JsonResp;
       expect(json.error.code).toBe("internal_error");
     });
 
     it("invalid orgId returns not_found", async () => {
       const repo = createRepo();
-      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
 
       const response = await handleCreateInvitation(
         makeRequest({ email: "user@test.com", role: "viewer" }),
-        env as any, "req_test", actor, "bad_id",
+        env, "req_test", actor, "bad_id",
         { repo, generateToken: async () => ({ raw: "x", hash: "y" }), now: () => fixedNowLocal },
       );
 
@@ -1388,37 +1467,37 @@ describe("invitation administration", () => {
 
     it("successful create appends invite.created event/audit via eventsRepo", async () => {
       const repo = createRepo();
-      let appendedInput: any = null;
+      let appendedInput: AppendEventWithAuditInput | null = null;
       const eventsRepo = {
-        appendEventWithAudit: async (input: any) => {
+        appendEventWithAudit: async (input: AppendEventWithAuditInput) => {
           appendedInput = input;
-          return { ok: true as const, value: { event: {}, audit: {} } };
+          return { ok: true as const, value: { event: {} as StoredEvent, audit: {} as StoredAuditEntry } };
         },
-      } as any;
-      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+      };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
 
       const response = await handleCreateInvitation(
         makeRequest({ email: "invite@test.com", role: "builder" }),
-        env as any, "req_test", actor, orgPublicIdStr,
+        env, "req_test", actor, orgPublicIdStr,
         { repo, eventsRepo, generateToken: async () => ({ raw: "x", hash: "y" }), now: () => fixedNowLocal, generateId: () => "generated_id_1" },
       );
 
       expect(response.status).toBe(201);
       expect(appendedInput).not.toBeNull();
-      expect(appendedInput.event.type).toBe("invite.created");
-      expect(appendedInput.event.version).toBe(1);
-      expect(appendedInput.event.source).toBe("membership-worker");
-      expect(appendedInput.event.actorType).toBe("user");
-      expect(appendedInput.event.actorId).toBe("usr_admin");
-      expect(appendedInput.event.subjectKind).toBe("invitation");
-      expect(appendedInput.event.subjectId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
-      expect(appendedInput.event.orgId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
-      expect(appendedInput.event.requestId).toBe("req_test");
-      expect(appendedInput.event.payload.role).toBe("builder");
-      expect(appendedInput.event.payload.expiresAt).toBeDefined();
-      expect(appendedInput.event.payload.invitationId).toMatch(/^inv_[0-9a-f]{32}$/);
-      expect(appendedInput.audit.category).toBe("membership");
-      expect(appendedInput.audit.description).toContain("created");
+      expect(appendedInput!.event.type).toBe("invite.created");
+      expect(appendedInput!.event.version).toBe(1);
+      expect(appendedInput!.event.source).toBe("membership-worker");
+      expect(appendedInput!.event.actorType).toBe("user");
+      expect(appendedInput!.event.actorId).toBe("usr_admin");
+      expect(appendedInput!.event.subjectKind).toBe("invitation");
+      expect(appendedInput!.event.subjectId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+      expect(appendedInput!.event.orgId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+      expect(appendedInput!.event.requestId).toBe("req_test");
+      expect(appendedInput!.event.payload.role).toBe("builder");
+      expect(appendedInput!.event.payload.expiresAt).toBeDefined();
+      expect(appendedInput!.event.payload.invitationId).toMatch(/^inv_[0-9a-f]{32}$/);
+      expect(appendedInput!.audit.category).toBe("membership");
+      expect(appendedInput!.audit.description).toContain("created");
     });
 
     it("create event/audit append failure returns safe error and prevents commit", async () => {
@@ -1427,17 +1506,17 @@ describe("invitation administration", () => {
         appendEventWithAudit: async () => {
           return { ok: false as const, error: { kind: "internal" as const, message: "db error" } };
         },
-      } as any;
-      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+      };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
 
       const response = await handleCreateInvitation(
         makeRequest({ email: "invite@test.com", role: "viewer" }),
-        env as any, "req_test", actor, orgPublicIdStr,
+        env, "req_test", actor, orgPublicIdStr,
         { repo, eventsRepo, generateToken: async () => ({ raw: "x", hash: "y" }), now: () => fixedNowLocal, generateId: () => "gen_id" },
       );
 
       expect(response.status).toBe(500);
-      const json = await response.json() as any;
+      const json = await response.json() as JsonResp;
       expect(json.error.code).toBe("internal_error");
     });
 
@@ -1447,14 +1526,14 @@ describe("invitation administration", () => {
       const eventsRepo = {
         appendEventWithAudit: async () => {
           eventAppended = true;
-          return { ok: true as const, value: { event: {}, audit: {} } };
+          return { ok: true as const, value: { event: {} as StoredEvent, audit: {} as StoredAuditEntry } };
         },
-      } as any;
-      const env = { POLICY_WORKER: createPolicyFetcher(false), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+      };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(false), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
 
       const response = await handleCreateInvitation(
         makeRequest({ email: "invite@test.com", role: "viewer" }),
-        env as any, "req_test", actor, orgPublicIdStr,
+        env, "req_test", actor, orgPublicIdStr,
         { repo, eventsRepo, generateToken: async () => ({ raw: "x", hash: "y" }), now: () => fixedNowLocal },
       );
 
@@ -1468,14 +1547,14 @@ describe("invitation administration", () => {
       const eventsRepo = {
         appendEventWithAudit: async () => {
           eventAppended = true;
-          return { ok: true as const, value: { event: {}, audit: {} } };
+          return { ok: true as const, value: { event: {} as StoredEvent, audit: {} as StoredAuditEntry } };
         },
-      } as any;
-      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+      };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
 
       const response = await handleCreateInvitation(
         makeRequest({ email: "not-an-email", role: "viewer" }),
-        env as any, "req_test", actor, orgPublicIdStr,
+        env, "req_test", actor, orgPublicIdStr,
         { repo, eventsRepo, generateToken: async () => ({ raw: "x", hash: "y" }), now: () => fixedNowLocal },
       );
 
@@ -1489,14 +1568,14 @@ describe("invitation administration", () => {
       const eventsRepo = {
         appendEventWithAudit: async () => {
           eventAppended = true;
-          return { ok: true as const, value: { event: {}, audit: {} } };
+          return { ok: true as const, value: { event: {} as StoredEvent, audit: {} as StoredAuditEntry } };
         },
-      } as any;
-      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+      };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
 
       const response = await handleCreateInvitation(
         makeRequest({ email: "invite@test.com", role: "viewer" }),
-        env as any, "req_test", actor, orgPublicIdStr,
+        env, "req_test", actor, orgPublicIdStr,
         { repo, eventsRepo, generateToken: async () => ({ raw: "x", hash: "y" }), now: () => fixedNowLocal },
       );
 
@@ -1506,26 +1585,26 @@ describe("invitation administration", () => {
 
     it("create event/audit values use public IDs and do not expose raw UUIDs or tokens", async () => {
       const repo = createRepo();
-      let appendedInput: any = null;
+      let appendedInput: AppendEventWithAuditInput | null = null;
       const eventsRepo = {
-        appendEventWithAudit: async (input: any) => {
+        appendEventWithAudit: async (input: AppendEventWithAuditInput) => {
           appendedInput = input;
-          return { ok: true as const, value: { event: {}, audit: {} } };
+          return { ok: true as const, value: { event: {} as StoredEvent, audit: {} as StoredAuditEntry } };
         },
-      } as any;
-      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+      };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
 
       await handleCreateInvitation(
         makeRequest({ email: "invite@test.com", role: "viewer" }),
-        env as any, "req_test", actor, orgPublicIdStr,
+        env, "req_test", actor, orgPublicIdStr,
         { repo, eventsRepo, generateToken: async () => ({ raw: "secret_raw_token", hash: "secret_hash" }), now: () => fixedNowLocal, generateId: () => "gen_id" },
       );
 
       const eventStr = JSON.stringify(appendedInput);
       // Canonical fields now store raw UUIDs; public IDs are in payload/description
-      expect(appendedInput.event.orgId).toBe(orgUuid);
-      expect(appendedInput.event.subjectId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
-      expect(appendedInput.event.payload.invitationId).toMatch(/^inv_[0-9a-f]{32}$/);
+      expect(appendedInput!.event.orgId).toBe(orgUuid);
+      expect(appendedInput!.event.subjectId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+      expect(appendedInput!.event.payload.invitationId).toMatch(/^inv_[0-9a-f]{32}$/);
       // Tokens/secrets must not leak
       expect(eventStr).not.toContain("secret_raw_token");
       expect(eventStr).not.toContain("secret_hash");
@@ -1536,18 +1615,18 @@ describe("invitation administration", () => {
     it("create response shape remains compatible with existing tests", async () => {
       const repo = createRepo();
       const eventsRepo = {
-        appendEventWithAudit: async () => ({ ok: true as const, value: { event: {}, audit: {} } }),
-      } as any;
-      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "true" };
+        appendEventWithAudit: async () => ({ ok: true as const, value: { event: {} as StoredEvent, audit: {} as StoredAuditEntry } }),
+      };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "true" };
 
       const response = await handleCreateInvitation(
         makeRequest({ email: "invite@test.com", role: "builder" }),
-        env as any, "req_test", actor, orgPublicIdStr,
+        env, "req_test", actor, orgPublicIdStr,
         { repo, eventsRepo, generateToken: async () => ({ raw: "deadbeef".repeat(8), hash: "cafebabe".repeat(8) }), now: () => fixedNowLocal, generateId: () => "gen_id" },
       );
 
       expect(response.status).toBe(201);
-      const json = await response.json() as any;
+      const json = await response.json() as JsonResp;
       expect(json.data.invitation.id).toMatch(/^inv_[0-9a-f]{32}$/);
       expect(json.data.invitation.email).toBe("invite@test.com");
       expect(json.data.invitation.role).toBe("builder");
@@ -1557,10 +1636,24 @@ describe("invitation administration", () => {
 
     // ── Billing entitlement gate (Task 0080) ──────────────────────
     describe("billing entitlement gate (limit.members)", () => {
-      function makeBillingDecision(decision: any) {
-        return async () => ({ kind: "decision" as const, decision });
+      // Test helper. The `malformed_limit` cases intentionally fabricate a
+      // decision shape that violates the strict CheckBillingEntitlementResponse
+      // contract (e.g. boolean limitValue paired with non-quantity valueType) to
+      // exercise the gate's error branch — that's why the parameter is
+      // structurally typed and the helper is treated as a drop-in replacement
+      // for `checkBillingEntitlement` at the call site.
+      // Helper accepts the contract type plus a couple of fabricated-shape
+      // overloads used by the malformed_limit branch tests (boolean valueType,
+      // boolean limitValue, etc.). Returns a typed drop-in for
+      // checkBillingEntitlement.
+      function makeBillingDecision(
+        decision:
+          | CheckBillingEntitlementResponse
+          | { allowed: true; orgId: string; entitlementKey: string; valueType: "boolean"; limitValue: boolean; source: "plan"; subscriptionId: string | null },
+      ): typeof checkBillingEntitlement {
+        return (async () => ({ kind: "decision" as const, decision: decision as CheckBillingEntitlementResponse })) as typeof checkBillingEntitlement;
       }
-      const baseEnv = () => ({
+      const baseEnv = (): Env => ({
         POLICY_WORKER: createPolicyFetcher(true),
         BILLING_WORKER: {} as Fetcher,
         SOURCEPLANE_DB: {} as Hyperdrive,
@@ -1571,17 +1664,17 @@ describe("invitation administration", () => {
       it("calls billing-worker with limit.members, the org public id, and a request id", async () => {
         const repo = createRepo({ billableCount: 0 });
         let captured: { binding: unknown; orgPublicIdArg: string; entitlementKey: string; requestId: string } | null = null;
-        const checkEntitlement = (async (binding: any, orgPublicIdArg: string, entitlementKey: string, requestId: string) => {
+        const checkEntitlement = (async (binding: Fetcher, orgPublicIdArg: string, entitlementKey: string, requestId: string) => {
           captured = { binding, orgPublicIdArg, entitlementKey, requestId };
           return {
             kind: "decision" as const,
             decision: { allowed: true, orgId: orgPublicIdArg, entitlementKey, valueType: "quantity", limitValue: null, source: "plan", subscriptionId: null },
           };
-        }) as any;
+        }) as typeof checkBillingEntitlement;
 
         const response = await handleCreateInvitation(
           makeRequest({ email: "u@x.com", role: "viewer" }),
-          baseEnv() as any, "req_abc", actor, orgPublicIdStr,
+          baseEnv(), "req_abc", actor, orgPublicIdStr,
           { repo, generateToken: async () => ({ raw: "r", hash: "h" }), now: () => fixedNowLocal, checkEntitlement },
         );
 
@@ -1594,11 +1687,11 @@ describe("invitation administration", () => {
 
       it("allows creation when billable count is strictly under the quantity limit", async () => {
         const repo = createRepo({ billableCount: 4 });
-        const checkEntitlement = makeBillingDecision({ allowed: true, orgId: orgPublicIdStr, entitlementKey: "limit.members", valueType: "quantity", limitValue: 5, source: "plan", subscriptionId: null }) as any;
+        const checkEntitlement = makeBillingDecision({ allowed: true, orgId: orgPublicIdStr, entitlementKey: "limit.members", valueType: "quantity", limitValue: 5, source: "plan", subscriptionId: null }) as typeof checkBillingEntitlement;
 
         const response = await handleCreateInvitation(
           makeRequest({ email: "u@x.com", role: "viewer" }),
-          baseEnv() as any, "req_test", actor, orgPublicIdStr,
+          baseEnv(), "req_test", actor, orgPublicIdStr,
           { repo, generateToken: async () => ({ raw: "r", hash: "h" }), now: () => fixedNowLocal, checkEntitlement },
         );
 
@@ -1607,11 +1700,11 @@ describe("invitation administration", () => {
 
       it("allows creation when the entitlement is unlimited (limitValue null)", async () => {
         const repo = createRepo({ billableCount: 9999 });
-        const checkEntitlement = makeBillingDecision({ allowed: true, orgId: orgPublicIdStr, entitlementKey: "limit.members", valueType: "quantity", limitValue: null, source: "plan", subscriptionId: null }) as any;
+        const checkEntitlement = makeBillingDecision({ allowed: true, orgId: orgPublicIdStr, entitlementKey: "limit.members", valueType: "quantity", limitValue: null, source: "plan", subscriptionId: null }) as typeof checkBillingEntitlement;
 
         const response = await handleCreateInvitation(
           makeRequest({ email: "u@x.com", role: "viewer" }),
-          baseEnv() as any, "req_test", actor, orgPublicIdStr,
+          baseEnv(), "req_test", actor, orgPublicIdStr,
           { repo, generateToken: async () => ({ raw: "r", hash: "h" }), now: () => fixedNowLocal, checkEntitlement },
         );
 
@@ -1623,16 +1716,16 @@ describe("invitation administration", () => {
         const baseRepo = createRepo({ billableCount: 3 });
         const repo = {
           ...baseRepo,
-          createInvitation: async (input: any) => {
+          createInvitation: async (input: CreateInvitationInput) => {
             createCalls++;
             return baseRepo.createInvitation(input);
           },
         };
-        const checkEntitlement = makeBillingDecision({ allowed: true, orgId: orgPublicIdStr, entitlementKey: "limit.members", valueType: "quantity", limitValue: 3, source: "plan", subscriptionId: null }) as any;
+        const checkEntitlement = makeBillingDecision({ allowed: true, orgId: orgPublicIdStr, entitlementKey: "limit.members", valueType: "quantity", limitValue: 3, source: "plan", subscriptionId: null }) as typeof checkBillingEntitlement;
 
         const response = await handleCreateInvitation(
           makeRequest({ email: "u@x.com", role: "viewer" }),
-          baseEnv() as any, "req_test", actor, orgPublicIdStr,
+          baseEnv(), "req_test", actor, orgPublicIdStr,
           { repo, generateToken: async () => ({ raw: "r", hash: "h" }), now: () => fixedNowLocal, checkEntitlement },
         );
 
@@ -1645,11 +1738,11 @@ describe("invitation administration", () => {
 
       it("denies with 412 disabled when billing returns allowed:false reason:disabled", async () => {
         const repo = createRepo();
-        const checkEntitlement = makeBillingDecision({ allowed: false, orgId: orgPublicIdStr, entitlementKey: "limit.members", reason: "disabled" }) as any;
+        const checkEntitlement = makeBillingDecision({ allowed: false, orgId: orgPublicIdStr, entitlementKey: "limit.members", reason: "disabled" }) as typeof checkBillingEntitlement;
 
         const response = await handleCreateInvitation(
           makeRequest({ email: "u@x.com", role: "viewer" }),
-          baseEnv() as any, "req_test", actor, orgPublicIdStr,
+          baseEnv(), "req_test", actor, orgPublicIdStr,
           { repo, generateToken: async () => ({ raw: "r", hash: "h" }), now: () => fixedNowLocal, checkEntitlement },
         );
 
@@ -1660,11 +1753,11 @@ describe("invitation administration", () => {
 
       it("denies with 412 not_configured when no entitlement exists for the org", async () => {
         const repo = createRepo();
-        const checkEntitlement = makeBillingDecision({ allowed: false, orgId: orgPublicIdStr, entitlementKey: "limit.members", reason: "not_configured" }) as any;
+        const checkEntitlement = makeBillingDecision({ allowed: false, orgId: orgPublicIdStr, entitlementKey: "limit.members", reason: "not_configured" }) as typeof checkBillingEntitlement;
 
         const response = await handleCreateInvitation(
           makeRequest({ email: "u@x.com", role: "viewer" }),
-          baseEnv() as any, "req_test", actor, orgPublicIdStr,
+          baseEnv(), "req_test", actor, orgPublicIdStr,
           { repo, generateToken: async () => ({ raw: "r", hash: "h" }), now: () => fixedNowLocal, checkEntitlement },
         );
 
@@ -1675,11 +1768,11 @@ describe("invitation administration", () => {
 
       it("returns 503 when billing-client surfaces service_error (fail-closed)", async () => {
         const repo = createRepo();
-        const checkEntitlement = (async () => ({ kind: "service_error" as const })) as any;
+        const checkEntitlement: typeof checkBillingEntitlement = async () => ({ kind: "service_error" as const });
 
         const response = await handleCreateInvitation(
           makeRequest({ email: "u@x.com", role: "viewer" }),
-          baseEnv() as any, "req_test", actor, orgPublicIdStr,
+          baseEnv(), "req_test", actor, orgPublicIdStr,
           { repo, generateToken: async () => ({ raw: "r", hash: "h" }), now: () => fixedNowLocal, checkEntitlement },
         );
 
@@ -1688,11 +1781,11 @@ describe("invitation administration", () => {
 
       it("returns 503 when countBillableMembers fails (fail-closed)", async () => {
         const repo = createRepo({ billableCountFail: true });
-        const checkEntitlement = makeBillingDecision({ allowed: true, orgId: orgPublicIdStr, entitlementKey: "limit.members", valueType: "quantity", limitValue: 5, source: "plan", subscriptionId: null }) as any;
+        const checkEntitlement = makeBillingDecision({ allowed: true, orgId: orgPublicIdStr, entitlementKey: "limit.members", valueType: "quantity", limitValue: 5, source: "plan", subscriptionId: null }) as typeof checkBillingEntitlement;
 
         const response = await handleCreateInvitation(
           makeRequest({ email: "u@x.com", role: "viewer" }),
-          baseEnv() as any, "req_test", actor, orgPublicIdStr,
+          baseEnv(), "req_test", actor, orgPublicIdStr,
           { repo, generateToken: async () => ({ raw: "r", hash: "h" }), now: () => fixedNowLocal, checkEntitlement },
         );
 
@@ -1701,11 +1794,11 @@ describe("invitation administration", () => {
 
       it("returns 412 malformed_limit when entitlement valueType is not 'quantity'", async () => {
         const repo = createRepo();
-        const checkEntitlement = makeBillingDecision({ allowed: true, orgId: orgPublicIdStr, entitlementKey: "limit.members", valueType: "boolean", limitValue: true, source: "plan", subscriptionId: null }) as any;
+        const checkEntitlement = makeBillingDecision({ allowed: true, orgId: orgPublicIdStr, entitlementKey: "limit.members", valueType: "boolean", limitValue: true, source: "plan", subscriptionId: null }) as typeof checkBillingEntitlement;
 
         const response = await handleCreateInvitation(
           makeRequest({ email: "u@x.com", role: "viewer" }),
-          baseEnv() as any, "req_test", actor, orgPublicIdStr,
+          baseEnv(), "req_test", actor, orgPublicIdStr,
           { repo, generateToken: async () => ({ raw: "r", hash: "h" }), now: () => fixedNowLocal, checkEntitlement },
         );
 
@@ -1720,16 +1813,16 @@ describe("invitation administration", () => {
         const baseRepo = createRepo({ billableCount: 5 });
         const repo = {
           ...baseRepo,
-          createInvitation: async (input: any) => {
+          createInvitation: async (input: CreateInvitationInput) => {
             createCalls++;
             return baseRepo.createInvitation(input);
           },
         };
-        const checkEntitlement = makeBillingDecision({ allowed: true, orgId: orgPublicIdStr, entitlementKey: "limit.members", valueType: "quantity", limitValue: 5, source: "plan", subscriptionId: null }) as any;
+        const checkEntitlement = makeBillingDecision({ allowed: true, orgId: orgPublicIdStr, entitlementKey: "limit.members", valueType: "quantity", limitValue: 5, source: "plan", subscriptionId: null }) as typeof checkBillingEntitlement;
 
         const response = await handleCreateInvitation(
           makeRequest({ email: "u@x.com", role: "viewer" }),
-          baseEnv() as any, "req_test", actor, orgPublicIdStr,
+          baseEnv(), "req_test", actor, orgPublicIdStr,
           {
             repo,
             generateToken: async () => { tokenCalls++; return { raw: "r", hash: "h" }; },
@@ -1780,38 +1873,38 @@ describe("invitation administration", () => {
 
     it("lists invitations with expected response shape", async () => {
       const repo = createRepo();
-      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
 
-      const response = await handleListInvitations(env as any, "req_test", actor, orgPublicIdStr, undefined, { repo });
+      const response = await handleListInvitations(env, "req_test", actor, orgPublicIdStr, undefined, { repo });
 
       expect(response.status).toBe(200);
-      const json = await response.json() as any;
+      const json = await response.json() as JsonResp;
       expect(json.data.invitations).toHaveLength(1);
-      expect(json.data.invitations[0].id).toMatch(/^inv_[0-9a-f]{32}$/);
-      expect(json.data.invitations[0].email).toBe("invited@test.com");
-      expect(json.data.invitations[0].role).toBe("viewer");
-      expect(json.data.invitations[0].status).toBe("pending");
+      expect(json.data.invitations[0]!.id).toMatch(/^inv_[0-9a-f]{32}$/);
+      expect(json.data.invitations[0]!.email).toBe("invited@test.com");
+      expect(json.data.invitations[0]!.role).toBe("viewer");
+      expect(json.data.invitations[0]!.status).toBe("pending");
       expect(json.meta.cursor).toBeNull();
     });
 
     it("derives expired status from expiresAt without DB mutation", async () => {
       const repo = createRepo({ expired: true });
-      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
 
-      const response = await handleListInvitations(env as any, "req_test", actor, orgPublicIdStr, undefined, { repo });
+      const response = await handleListInvitations(env, "req_test", actor, orgPublicIdStr, undefined, { repo });
 
-      const json = await response.json() as any;
-      expect(json.data.invitations[0].status).toBe("expired");
+      const json = await response.json() as JsonResp;
+      expect(json.data.invitations[0]!.status).toBe("expired");
     });
 
     it("sends organization.invitation.list action to policy", async () => {
       const captured: { value: unknown } = { value: null };
       const repo = createRepo();
-      const env = { POLICY_WORKER: createPolicyFetcher(true, captured), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true, captured), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
 
-      await handleListInvitations(env as any, "req_test", actor, orgPublicIdStr, undefined, { repo });
+      await handleListInvitations(env, "req_test", actor, orgPublicIdStr, undefined, { repo });
 
-      expect((captured.value as any).action).toBe("organization.invitation.list");
+      expect((captured.value as { action: string }).action).toBe("organization.invitation.list");
     });
 
     it("returns meta.cursor when pagination has next page", async () => {
@@ -1825,49 +1918,49 @@ describe("invitation administration", () => {
           },
         }),
       };
-      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
 
-      const response = await handleListInvitations(env as any, "req_test", actor, orgPublicIdStr, undefined, { repo });
+      const response = await handleListInvitations(env, "req_test", actor, orgPublicIdStr, undefined, { repo });
 
-      const json = await response.json() as any;
+      const json = await response.json() as JsonResp;
       expect(json.meta.cursor).not.toBeNull();
       expect(typeof json.meta.cursor).toBe("string");
     });
 
     it("policy denial returns not_found", async () => {
       const repo = createRepo();
-      const env = { POLICY_WORKER: createPolicyFetcher(false), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(false), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
 
-      const response = await handleListInvitations(env as any, "req_test", actor, orgPublicIdStr, undefined, { repo });
+      const response = await handleListInvitations(env, "req_test", actor, orgPublicIdStr, undefined, { repo });
 
       expect(response.status).toBe(404);
     });
 
     it("actor role-list failure fails closed", async () => {
       const repo = createRepo({ actorRolesFail: true });
-      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
 
-      const response = await handleListInvitations(env as any, "req_test", actor, orgPublicIdStr, undefined, { repo });
+      const response = await handleListInvitations(env, "req_test", actor, orgPublicIdStr, undefined, { repo });
 
       expect(response.status).toBe(404);
     });
 
     it("database failure returns safe internal_error", async () => {
       const repo = createRepo({ listFail: true });
-      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
 
-      const response = await handleListInvitations(env as any, "req_test", actor, orgPublicIdStr, undefined, { repo });
+      const response = await handleListInvitations(env, "req_test", actor, orgPublicIdStr, undefined, { repo });
 
       expect(response.status).toBe(500);
-      const json = await response.json() as any;
+      const json = await response.json() as JsonResp;
       expect(json.error.code).toBe("internal_error");
     });
 
     it("does not expose raw invitation UUIDs", async () => {
       const repo = createRepo();
-      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
 
-      const response = await handleListInvitations(env as any, "req_test", actor, orgPublicIdStr, undefined, { repo });
+      const response = await handleListInvitations(env, "req_test", actor, orgPublicIdStr, undefined, { repo });
       const text = await response.text();
 
       expect(text).not.toContain("11111111-aaaa-bbbb-cccc-dddddddddddd");
@@ -1912,15 +2005,15 @@ describe("invitation administration", () => {
 
     it("revokes invitation and returns expected response shape", async () => {
       const repo = createRepo();
-      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
 
       const response = await handleRevokeInvitation(
-        env as any, "req_test", actor, orgPublicIdStr, invPublicIdStr,
+        env, "req_test", actor, orgPublicIdStr, invPublicIdStr,
         { repo, now: () => fixedNowLocal },
       );
 
       expect(response.status).toBe(200);
-      const json = await response.json() as any;
+      const json = await response.json() as JsonResp;
       expect(json.data.invitation.id).toMatch(/^inv_[0-9a-f]{32}$/);
       expect(json.data.invitation.status).toBe("revoked");
       expect(json.data.invitation.revokedAt).not.toBeNull();
@@ -1929,22 +2022,22 @@ describe("invitation administration", () => {
     it("sends organization.invitation.revoke action to policy", async () => {
       const captured: { value: unknown } = { value: null };
       const repo = createRepo();
-      const env = { POLICY_WORKER: createPolicyFetcher(true, captured), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true, captured), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
 
       await handleRevokeInvitation(
-        env as any, "req_test", actor, orgPublicIdStr, invPublicIdStr,
+        env, "req_test", actor, orgPublicIdStr, invPublicIdStr,
         { repo, now: () => fixedNowLocal },
       );
 
-      expect((captured.value as any).action).toBe("organization.invitation.revoke");
+      expect((captured.value as { action: string }).action).toBe("organization.invitation.revoke");
     });
 
     it("policy denial returns not_found", async () => {
       const repo = createRepo();
-      const env = { POLICY_WORKER: createPolicyFetcher(false), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(false), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
 
       const response = await handleRevokeInvitation(
-        env as any, "req_test", actor, orgPublicIdStr, invPublicIdStr,
+        env, "req_test", actor, orgPublicIdStr, invPublicIdStr,
         { repo, now: () => fixedNowLocal },
       );
 
@@ -1953,10 +2046,10 @@ describe("invitation administration", () => {
 
     it("returns not_found for already revoked/accepted invitation", async () => {
       const repo = createRepo({ notFound: true });
-      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
 
       const response = await handleRevokeInvitation(
-        env as any, "req_test", actor, orgPublicIdStr, invPublicIdStr,
+        env, "req_test", actor, orgPublicIdStr, invPublicIdStr,
         { repo, now: () => fixedNowLocal },
       );
 
@@ -1965,10 +2058,10 @@ describe("invitation administration", () => {
 
     it("invalid invitation ID returns not_found", async () => {
       const repo = createRepo();
-      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
 
       const response = await handleRevokeInvitation(
-        env as any, "req_test", actor, orgPublicIdStr, "bad_inv_id",
+        env, "req_test", actor, orgPublicIdStr, "bad_inv_id",
         { repo, now: () => fixedNowLocal },
       );
 
@@ -1977,10 +2070,10 @@ describe("invitation administration", () => {
 
     it("invalid org ID returns not_found", async () => {
       const repo = createRepo();
-      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
 
       const response = await handleRevokeInvitation(
-        env as any, "req_test", actor, "bad_org", invPublicIdStr,
+        env, "req_test", actor, "bad_org", invPublicIdStr,
         { repo, now: () => fixedNowLocal },
       );
 
@@ -1989,10 +2082,10 @@ describe("invitation administration", () => {
 
     it("actor role-list failure fails closed", async () => {
       const repo = createRepo({ actorRolesFail: true });
-      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
 
       const response = await handleRevokeInvitation(
-        env as any, "req_test", actor, orgPublicIdStr, invPublicIdStr,
+        env, "req_test", actor, orgPublicIdStr, invPublicIdStr,
         { repo, now: () => fixedNowLocal },
       );
 
@@ -2001,24 +2094,24 @@ describe("invitation administration", () => {
 
     it("database failure returns safe internal_error", async () => {
       const repo = createRepo({ revokeFail: true });
-      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
 
       const response = await handleRevokeInvitation(
-        env as any, "req_test", actor, orgPublicIdStr, invPublicIdStr,
+        env, "req_test", actor, orgPublicIdStr, invPublicIdStr,
         { repo, now: () => fixedNowLocal },
       );
 
       expect(response.status).toBe(500);
-      const json = await response.json() as any;
+      const json = await response.json() as JsonResp;
       expect(json.error.code).toBe("internal_error");
     });
 
     it("does not expose raw invitation UUID in response", async () => {
       const repo = createRepo();
-      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
 
       const response = await handleRevokeInvitation(
-        env as any, "req_test", actor, orgPublicIdStr, invPublicIdStr,
+        env, "req_test", actor, orgPublicIdStr, invPublicIdStr,
         { repo, now: () => fixedNowLocal },
       );
 
@@ -2028,33 +2121,33 @@ describe("invitation administration", () => {
 
     it("successful revoke appends invite.revoked event/audit via eventsRepo", async () => {
       const repo = createRepo();
-      let appendedInput: any = null;
+      let appendedInput: AppendEventWithAuditInput | null = null;
       const eventsRepo = {
-        appendEventWithAudit: async (input: any) => {
+        appendEventWithAudit: async (input: AppendEventWithAuditInput) => {
           appendedInput = input;
-          return { ok: true as const, value: { event: {}, audit: {} } };
+          return { ok: true as const, value: { event: {} as StoredEvent, audit: {} as StoredAuditEntry } };
         },
-      } as any;
-      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+      };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
 
       const response = await handleRevokeInvitation(
-        env as any, "req_test", actor, orgPublicIdStr, invPublicIdStr,
+        env, "req_test", actor, orgPublicIdStr, invPublicIdStr,
         { repo, eventsRepo, now: () => fixedNowLocal, generateId: () => "generated_id_1" },
       );
 
       expect(response.status).toBe(200);
       expect(appendedInput).not.toBeNull();
-      expect(appendedInput.event.type).toBe("invite.revoked");
-      expect(appendedInput.event.version).toBe(1);
-      expect(appendedInput.event.source).toBe("membership-worker");
-      expect(appendedInput.event.actorType).toBe("user");
-      expect(appendedInput.event.actorId).toBe("usr_admin");
-      expect(appendedInput.event.subjectKind).toBe("invitation");
-      expect(appendedInput.event.subjectId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
-      expect(appendedInput.event.orgId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
-      expect(appendedInput.event.requestId).toBe("req_test");
-      expect(appendedInput.audit.category).toBe("membership");
-      expect(appendedInput.audit.description).toContain("revoked");
+      expect(appendedInput!.event.type).toBe("invite.revoked");
+      expect(appendedInput!.event.version).toBe(1);
+      expect(appendedInput!.event.source).toBe("membership-worker");
+      expect(appendedInput!.event.actorType).toBe("user");
+      expect(appendedInput!.event.actorId).toBe("usr_admin");
+      expect(appendedInput!.event.subjectKind).toBe("invitation");
+      expect(appendedInput!.event.subjectId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+      expect(appendedInput!.event.orgId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+      expect(appendedInput!.event.requestId).toBe("req_test");
+      expect(appendedInput!.audit.category).toBe("membership");
+      expect(appendedInput!.audit.description).toContain("revoked");
     });
 
     it("event/audit append failure returns safe error and prevents commit", async () => {
@@ -2063,16 +2156,16 @@ describe("invitation administration", () => {
         appendEventWithAudit: async () => {
           return { ok: false as const, error: { kind: "internal" as const, message: "db error" } };
         },
-      } as any;
-      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+      };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
 
       const response = await handleRevokeInvitation(
-        env as any, "req_test", actor, orgPublicIdStr, invPublicIdStr,
+        env, "req_test", actor, orgPublicIdStr, invPublicIdStr,
         { repo, eventsRepo, now: () => fixedNowLocal, generateId: () => "gen_id" },
       );
 
       expect(response.status).toBe(500);
-      const json = await response.json() as any;
+      const json = await response.json() as JsonResp;
       expect(json.error.code).toBe("internal_error");
     });
 
@@ -2082,13 +2175,13 @@ describe("invitation administration", () => {
       const eventsRepo = {
         appendEventWithAudit: async () => {
           eventAppended = true;
-          return { ok: true as const, value: { event: {}, audit: {} } };
+          return { ok: true as const, value: { event: {} as StoredEvent, audit: {} as StoredAuditEntry } };
         },
-      } as any;
-      const env = { POLICY_WORKER: createPolicyFetcher(false), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+      };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(false), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
 
       const response = await handleRevokeInvitation(
-        env as any, "req_test", actor, orgPublicIdStr, invPublicIdStr,
+        env, "req_test", actor, orgPublicIdStr, invPublicIdStr,
         { repo, eventsRepo, now: () => fixedNowLocal },
       );
 
@@ -2102,13 +2195,13 @@ describe("invitation administration", () => {
       const eventsRepo = {
         appendEventWithAudit: async () => {
           eventAppended = true;
-          return { ok: true as const, value: { event: {}, audit: {} } };
+          return { ok: true as const, value: { event: {} as StoredEvent, audit: {} as StoredAuditEntry } };
         },
-      } as any;
-      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+      };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
 
       const response = await handleRevokeInvitation(
-        env as any, "req_test", actor, orgPublicIdStr, invPublicIdStr,
+        env, "req_test", actor, orgPublicIdStr, invPublicIdStr,
         { repo, eventsRepo, now: () => fixedNowLocal },
       );
 
@@ -2118,25 +2211,25 @@ describe("invitation administration", () => {
 
     it("event/audit values use public IDs and do not expose raw UUIDs or tokens", async () => {
       const repo = createRepo();
-      let appendedInput: any = null;
+      let appendedInput: AppendEventWithAuditInput | null = null;
       const eventsRepo = {
-        appendEventWithAudit: async (input: any) => {
+        appendEventWithAudit: async (input: AppendEventWithAuditInput) => {
           appendedInput = input;
-          return { ok: true as const, value: { event: {}, audit: {} } };
+          return { ok: true as const, value: { event: {} as StoredEvent, audit: {} as StoredAuditEntry } };
         },
-      } as any;
-      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
+      };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", DEBUG_DELIVERY: "false" };
 
       await handleRevokeInvitation(
-        env as any, "req_test", actor, orgPublicIdStr, invPublicIdStr,
+        env, "req_test", actor, orgPublicIdStr, invPublicIdStr,
         { repo, eventsRepo, now: () => fixedNowLocal, generateId: () => "gen_id" },
       );
 
       const eventStr = JSON.stringify(appendedInput);
       // Canonical fields now store raw UUIDs; public IDs are in payload/description
-      expect(appendedInput.event.orgId).toBe(orgUuid);
-      expect(appendedInput.event.subjectId).toBe(invUuid);
-      expect(appendedInput.event.payload.invitationId).toMatch(/^inv_[0-9a-f]{32}$/);
+      expect(appendedInput!.event.orgId).toBe(orgUuid);
+      expect(appendedInput!.event.subjectId).toBe(invUuid);
+      expect(appendedInput!.event.payload.invitationId).toMatch(/^inv_[0-9a-f]{32}$/);
       // Must not contain token-like strings
       expect(eventStr).not.toContain("token_hash");
       expect(eventStr).not.toContain("bearer");
@@ -2147,12 +2240,12 @@ describe("invitation administration", () => {
     const acceptActor = { subjectId: "usr_acceptor", subjectType: "user", email: "invite@example.com" };
     const validToken = "a".repeat(64);
 
-    function createAcceptRepo(opts: { result?: any; fail?: boolean } = {}) {
-      let capturedInput: any = null;
+    function createAcceptRepo(opts: { result?: MembershipResult<{ invitation: OrganizationInvitation; member: OrganizationMember; roleAssignment: RoleAssignment }>; fail?: boolean } = {}) {
+      let capturedInput: AcceptInvitationInput | null = null;
       const invUuid = "11111111-2222-3333-4444-555555555555";
       const memUuid = "66666666-7777-8888-9999-aaaaaaaaaaaa";
       return {
-        acceptInvitation: async (input: any) => {
+        acceptInvitation: async (input: AcceptInvitationInput) => {
           capturedInput = input;
           if (opts.fail) return { ok: false as const, error: { kind: "internal" as const, message: "db error" } };
           if (opts.result) return opts.result;
@@ -2191,16 +2284,16 @@ describe("invitation administration", () => {
 
     it("returns 200 with correct response shape on success", async () => {
       const repo = createAcceptRepo();
-      const env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+      const env: Env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
       const response = await handleAcceptInvitation(
         makeAcceptRequest({ token: validToken }),
-        env as any, "req_test", acceptActor, orgPublicIdStr,
+        env, "req_test", acceptActor, orgPublicIdStr,
         { repo, hashToken: async (t: string) => "hashed_" + t, now: () => fixedNowLocal },
       );
 
       expect(response.status).toBe(200);
-      const json = await response.json() as any;
+      const json = await response.json() as JsonResp;
       expect(json.data.invitation.id).toMatch(/^inv_[0-9a-f]{32}$/);
       expect(json.data.invitation.email).toBe("invite@example.com");
       expect(json.data.invitation.role).toBe("builder");
@@ -2213,7 +2306,7 @@ describe("invitation administration", () => {
 
     it("returns validation_failed for malformed JSON", async () => {
       const repo = createAcceptRepo();
-      const env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+      const env: Env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
       const request = new Request("https://test.local/v1/organizations/" + orgPublicIdStr + "/invitations/accept", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -2221,53 +2314,53 @@ describe("invitation administration", () => {
       });
 
       const response = await handleAcceptInvitation(
-        request, env as any, "req_test", acceptActor, orgPublicIdStr,
+        request, env, "req_test", acceptActor, orgPublicIdStr,
         { repo, hashToken: async (t: string) => "hashed_" + t, now: () => fixedNowLocal },
       );
 
       expect(response.status).toBe(400);
-      const json = await response.json() as any;
+      const json = await response.json() as JsonResp;
       expect(json.error.code).toBe("bad_request");
     });
 
     it("returns validation_failed for non-hex token", async () => {
       const repo = createAcceptRepo();
-      const env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+      const env: Env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
       const response = await handleAcceptInvitation(
         makeAcceptRequest({ token: "not-a-valid-token" }),
-        env as any, "req_test", acceptActor, orgPublicIdStr,
+        env, "req_test", acceptActor, orgPublicIdStr,
         { repo, hashToken: async (t: string) => "hashed_" + t, now: () => fixedNowLocal },
       );
 
       expect(response.status).toBe(422);
-      const json = await response.json() as any;
+      const json = await response.json() as JsonResp;
       expect(json.error.code).toBe("validation_failed");
       expect(json.error.details.fields.token).toBeDefined();
     });
 
     it("returns validation_failed for missing token field", async () => {
       const repo = createAcceptRepo();
-      const env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+      const env: Env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
       const response = await handleAcceptInvitation(
         makeAcceptRequest({}),
-        env as any, "req_test", acceptActor, orgPublicIdStr,
+        env, "req_test", acceptActor, orgPublicIdStr,
         { repo, hashToken: async (t: string) => "hashed_" + t, now: () => fixedNowLocal },
       );
 
       expect(response.status).toBe(422);
-      const json = await response.json() as any;
+      const json = await response.json() as JsonResp;
       expect(json.error.code).toBe("validation_failed");
     });
 
     it("returns validation_failed for too-short token", async () => {
       const repo = createAcceptRepo();
-      const env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+      const env: Env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
       const response = await handleAcceptInvitation(
         makeAcceptRequest({ token: "abc123" }),
-        env as any, "req_test", acceptActor, orgPublicIdStr,
+        env, "req_test", acceptActor, orgPublicIdStr,
         { repo, hashToken: async (t: string) => "hashed_" + t, now: () => fixedNowLocal },
       );
 
@@ -2276,11 +2369,11 @@ describe("invitation administration", () => {
 
     it("returns not_found for invalid public org ID", async () => {
       const repo = createAcceptRepo();
-      const env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+      const env: Env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
       const response = await handleAcceptInvitation(
         makeAcceptRequest({ token: validToken }),
-        env as any, "req_test", acceptActor, "org_invalid",
+        env, "req_test", acceptActor, "org_invalid",
         { repo, hashToken: async (t: string) => "hashed_" + t, now: () => fixedNowLocal },
       );
 
@@ -2289,27 +2382,27 @@ describe("invitation administration", () => {
 
     it("passes token hash to repository, not raw token", async () => {
       const repo = createAcceptRepo();
-      const env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+      const env: Env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
       let hashInput: string | null = null;
 
       await handleAcceptInvitation(
         makeAcceptRequest({ token: validToken }),
-        env as any, "req_test", acceptActor, orgPublicIdStr,
+        env, "req_test", acceptActor, orgPublicIdStr,
         { repo, hashToken: async (t: string) => { hashInput = t; return "hashed_value"; }, now: () => fixedNowLocal },
       );
 
       expect(hashInput).toBe(validToken);
-      expect(repo._capturedInput.tokenHash).toBe("hashed_value");
+      expect(repo._capturedInput!.tokenHash).toBe("hashed_value");
       expect(JSON.stringify(repo._capturedInput)).not.toContain(validToken);
     });
 
     it("maps not_found repository error to 404", async () => {
       const repo = createAcceptRepo({ result: { ok: false, error: { kind: "not_found" } } });
-      const env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+      const env: Env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
       const response = await handleAcceptInvitation(
         makeAcceptRequest({ token: validToken }),
-        env as any, "req_test", acceptActor, orgPublicIdStr,
+        env, "req_test", acceptActor, orgPublicIdStr,
         { repo, hashToken: async () => "hash", now: () => fixedNowLocal },
       );
 
@@ -2318,11 +2411,11 @@ describe("invitation administration", () => {
 
     it("maps expired repository error to 404", async () => {
       const repo = createAcceptRepo({ result: { ok: false, error: { kind: "expired" } } });
-      const env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+      const env: Env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
       const response = await handleAcceptInvitation(
         makeAcceptRequest({ token: validToken }),
-        env as any, "req_test", acceptActor, orgPublicIdStr,
+        env, "req_test", acceptActor, orgPublicIdStr,
         { repo, hashToken: async () => "hash", now: () => fixedNowLocal },
       );
 
@@ -2331,11 +2424,11 @@ describe("invitation administration", () => {
 
     it("maps revoked repository error to 404", async () => {
       const repo = createAcceptRepo({ result: { ok: false, error: { kind: "revoked" } } });
-      const env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+      const env: Env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
       const response = await handleAcceptInvitation(
         makeAcceptRequest({ token: validToken }),
-        env as any, "req_test", acceptActor, orgPublicIdStr,
+        env, "req_test", acceptActor, orgPublicIdStr,
         { repo, hashToken: async () => "hash", now: () => fixedNowLocal },
       );
 
@@ -2344,11 +2437,11 @@ describe("invitation administration", () => {
 
     it("maps already_accepted repository error to 404", async () => {
       const repo = createAcceptRepo({ result: { ok: false, error: { kind: "already_accepted" } } });
-      const env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+      const env: Env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
       const response = await handleAcceptInvitation(
         makeAcceptRequest({ token: validToken }),
-        env as any, "req_test", acceptActor, orgPublicIdStr,
+        env, "req_test", acceptActor, orgPublicIdStr,
         { repo, hashToken: async () => "hash", now: () => fixedNowLocal },
       );
 
@@ -2357,26 +2450,26 @@ describe("invitation administration", () => {
 
     it("maps conflict repository error to 409", async () => {
       const repo = createAcceptRepo({ result: { ok: false, error: { kind: "conflict", entity: "organization_member" } } });
-      const env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+      const env: Env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
       const response = await handleAcceptInvitation(
         makeAcceptRequest({ token: validToken }),
-        env as any, "req_test", acceptActor, orgPublicIdStr,
+        env, "req_test", acceptActor, orgPublicIdStr,
         { repo, hashToken: async () => "hash", now: () => fixedNowLocal },
       );
 
       expect(response.status).toBe(409);
-      const json = await response.json() as any;
+      const json = await response.json() as JsonResp;
       expect(json.error.code).toBe("conflict");
     });
 
     it("maps internal repository error to 500", async () => {
       const repo = createAcceptRepo({ fail: true });
-      const env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+      const env: Env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
       const response = await handleAcceptInvitation(
         makeAcceptRequest({ token: validToken }),
-        env as any, "req_test", acceptActor, orgPublicIdStr,
+        env, "req_test", acceptActor, orgPublicIdStr,
         { repo, hashToken: async () => "hash", now: () => fixedNowLocal },
       );
 
@@ -2385,11 +2478,11 @@ describe("invitation administration", () => {
 
     it("does not call policy-worker for acceptance", async () => {
       const repo = createAcceptRepo();
-      const env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test", POLICY_WORKER: undefined };
+      const env: Env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
       const response = await handleAcceptInvitation(
         makeAcceptRequest({ token: validToken }),
-        env as any, "req_test", acceptActor, orgPublicIdStr,
+        env, "req_test", acceptActor, orgPublicIdStr,
         { repo, hashToken: async () => "hash", now: () => fixedNowLocal },
       );
 
@@ -2398,11 +2491,11 @@ describe("invitation administration", () => {
 
     it("does not expose raw token, token hash, or raw UUIDs in response", async () => {
       const repo = createAcceptRepo();
-      const env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+      const env: Env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
       const response = await handleAcceptInvitation(
         makeAcceptRequest({ token: validToken }),
-        env as any, "req_test", acceptActor, orgPublicIdStr,
+        env, "req_test", acceptActor, orgPublicIdStr,
         { repo, hashToken: async () => "hashed_value", now: () => fixedNowLocal },
       );
 
@@ -2415,36 +2508,36 @@ describe("invitation administration", () => {
 
     it("successful accept appends invite.accepted event/audit via eventsRepo", async () => {
       const repo = createAcceptRepo();
-      let appendedInput: any = null;
+      let appendedInput: AppendEventWithAuditInput | null = null;
       const eventsRepo = {
-        appendEventWithAudit: async (input: any) => {
+        appendEventWithAudit: async (input: AppendEventWithAuditInput) => {
           appendedInput = input;
-          return { ok: true as const, value: { event: {}, audit: {} } };
+          return { ok: true as const, value: { event: {} as StoredEvent, audit: {} as StoredAuditEntry } };
         },
-      } as any;
-      const env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+      };
+      const env: Env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
       const response = await handleAcceptInvitation(
         makeAcceptRequest({ token: validToken }),
-        env as any, "req_test", acceptActor, orgPublicIdStr,
+        env, "req_test", acceptActor, orgPublicIdStr,
         { repo, eventsRepo, hashToken: async () => "hashed_value", now: () => fixedNowLocal, generateId: () => "generated_id_1" },
       );
 
       expect(response.status).toBe(200);
       expect(appendedInput).not.toBeNull();
-      expect(appendedInput.event.type).toBe("invite.accepted");
-      expect(appendedInput.event.version).toBe(1);
-      expect(appendedInput.event.source).toBe("membership-worker");
-      expect(appendedInput.event.actorType).toBe("user");
-      expect(appendedInput.event.actorId).toBe("usr_acceptor");
-      expect(appendedInput.event.subjectKind).toBe("invitation");
-      expect(appendedInput.event.subjectId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
-      expect(appendedInput.event.orgId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
-      expect(appendedInput.event.requestId).toBe("req_test");
-      expect(appendedInput.event.payload.role).toBe("builder");
-      expect(appendedInput.event.payload.memberId).toMatch(/^mem_[0-9a-f]{32}$/);
-      expect(appendedInput.audit.category).toBe("membership");
-      expect(appendedInput.audit.description).toContain("accepted");
+      expect(appendedInput!.event.type).toBe("invite.accepted");
+      expect(appendedInput!.event.version).toBe(1);
+      expect(appendedInput!.event.source).toBe("membership-worker");
+      expect(appendedInput!.event.actorType).toBe("user");
+      expect(appendedInput!.event.actorId).toBe("usr_acceptor");
+      expect(appendedInput!.event.subjectKind).toBe("invitation");
+      expect(appendedInput!.event.subjectId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+      expect(appendedInput!.event.orgId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+      expect(appendedInput!.event.requestId).toBe("req_test");
+      expect(appendedInput!.event.payload.role).toBe("builder");
+      expect(appendedInput!.event.payload.memberId).toMatch(/^mem_[0-9a-f]{32}$/);
+      expect(appendedInput!.audit.category).toBe("membership");
+      expect(appendedInput!.audit.description).toContain("accepted");
     });
 
     it("accept event/audit append failure returns safe error and prevents commit", async () => {
@@ -2453,17 +2546,17 @@ describe("invitation administration", () => {
         appendEventWithAudit: async () => {
           return { ok: false as const, error: { kind: "internal" as const, message: "db error" } };
         },
-      } as any;
-      const env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+      };
+      const env: Env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
       const response = await handleAcceptInvitation(
         makeAcceptRequest({ token: validToken }),
-        env as any, "req_test", acceptActor, orgPublicIdStr,
+        env, "req_test", acceptActor, orgPublicIdStr,
         { repo, eventsRepo, hashToken: async () => "hashed_value", now: () => fixedNowLocal, generateId: () => "gen_id" },
       );
 
       expect(response.status).toBe(500);
-      const json = await response.json() as any;
+      const json = await response.json() as JsonResp;
       expect(json.error.code).toBe("internal_error");
     });
 
@@ -2473,14 +2566,14 @@ describe("invitation administration", () => {
       const eventsRepo = {
         appendEventWithAudit: async () => {
           eventAppended = true;
-          return { ok: true as const, value: { event: {}, audit: {} } };
+          return { ok: true as const, value: { event: {} as StoredEvent, audit: {} as StoredAuditEntry } };
         },
-      } as any;
-      const env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+      };
+      const env: Env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
       const response = await handleAcceptInvitation(
         makeAcceptRequest({ token: validToken }),
-        env as any, "req_test", acceptActor, orgPublicIdStr,
+        env, "req_test", acceptActor, orgPublicIdStr,
         { repo, eventsRepo, hashToken: async () => "hash", now: () => fixedNowLocal },
       );
 
@@ -2494,14 +2587,14 @@ describe("invitation administration", () => {
       const eventsRepo = {
         appendEventWithAudit: async () => {
           eventAppended = true;
-          return { ok: true as const, value: { event: {}, audit: {} } };
+          return { ok: true as const, value: { event: {} as StoredEvent, audit: {} as StoredAuditEntry } };
         },
-      } as any;
-      const env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+      };
+      const env: Env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
       const response = await handleAcceptInvitation(
         makeAcceptRequest({ token: validToken }),
-        env as any, "req_test", acceptActor, orgPublicIdStr,
+        env, "req_test", acceptActor, orgPublicIdStr,
         { repo, eventsRepo, hashToken: async () => "hash", now: () => fixedNowLocal },
       );
 
@@ -2515,14 +2608,14 @@ describe("invitation administration", () => {
       const eventsRepo = {
         appendEventWithAudit: async () => {
           eventAppended = true;
-          return { ok: true as const, value: { event: {}, audit: {} } };
+          return { ok: true as const, value: { event: {} as StoredEvent, audit: {} as StoredAuditEntry } };
         },
-      } as any;
-      const env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+      };
+      const env: Env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
       const response = await handleAcceptInvitation(
         makeAcceptRequest({ token: validToken }),
-        env as any, "req_test", acceptActor, orgPublicIdStr,
+        env, "req_test", acceptActor, orgPublicIdStr,
         { repo, eventsRepo, hashToken: async () => "hash", now: () => fixedNowLocal },
       );
 
@@ -2536,14 +2629,14 @@ describe("invitation administration", () => {
       const eventsRepo = {
         appendEventWithAudit: async () => {
           eventAppended = true;
-          return { ok: true as const, value: { event: {}, audit: {} } };
+          return { ok: true as const, value: { event: {} as StoredEvent, audit: {} as StoredAuditEntry } };
         },
-      } as any;
-      const env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+      };
+      const env: Env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
       const response = await handleAcceptInvitation(
         makeAcceptRequest({ token: validToken }),
-        env as any, "req_test", acceptActor, orgPublicIdStr,
+        env, "req_test", acceptActor, orgPublicIdStr,
         { repo, eventsRepo, hashToken: async () => "hash", now: () => fixedNowLocal },
       );
 
@@ -2557,14 +2650,14 @@ describe("invitation administration", () => {
       const eventsRepo = {
         appendEventWithAudit: async () => {
           eventAppended = true;
-          return { ok: true as const, value: { event: {}, audit: {} } };
+          return { ok: true as const, value: { event: {} as StoredEvent, audit: {} as StoredAuditEntry } };
         },
-      } as any;
-      const env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+      };
+      const env: Env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
       const response = await handleAcceptInvitation(
         makeAcceptRequest({ token: validToken }),
-        env as any, "req_test", acceptActor, orgPublicIdStr,
+        env, "req_test", acceptActor, orgPublicIdStr,
         { repo, eventsRepo, hashToken: async () => "hash", now: () => fixedNowLocal },
       );
 
@@ -2574,26 +2667,26 @@ describe("invitation administration", () => {
 
     it("accept event/audit values use public IDs and do not expose raw UUIDs or tokens", async () => {
       const repo = createAcceptRepo();
-      let appendedInput: any = null;
+      let appendedInput: AppendEventWithAuditInput | null = null;
       const eventsRepo = {
-        appendEventWithAudit: async (input: any) => {
+        appendEventWithAudit: async (input: AppendEventWithAuditInput) => {
           appendedInput = input;
-          return { ok: true as const, value: { event: {}, audit: {} } };
+          return { ok: true as const, value: { event: {} as StoredEvent, audit: {} as StoredAuditEntry } };
         },
-      } as any;
-      const env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+      };
+      const env: Env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
       await handleAcceptInvitation(
         makeAcceptRequest({ token: validToken }),
-        env as any, "req_test", acceptActor, orgPublicIdStr,
+        env, "req_test", acceptActor, orgPublicIdStr,
         { repo, eventsRepo, hashToken: async () => "hashed_value", now: () => fixedNowLocal, generateId: () => "gen_id" },
       );
 
       const eventStr = JSON.stringify(appendedInput);
       // Canonical fields now store raw UUIDs; public IDs in payload/description
-      expect(appendedInput.event.orgId).toBe(orgUuid);
-      expect(appendedInput.event.subjectId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
-      expect(appendedInput.event.payload.memberId).toMatch(/^mem_/);
+      expect(appendedInput!.event.orgId).toBe(orgUuid);
+      expect(appendedInput!.event.subjectId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+      expect(appendedInput!.event.payload.memberId).toMatch(/^mem_/);
       expect(eventStr).not.toContain(validToken);
       expect(eventStr).not.toContain("hashed_value");
       expect(eventStr).not.toContain("token_hash");
@@ -2603,18 +2696,18 @@ describe("invitation administration", () => {
     it("accept response shape remains compatible", async () => {
       const repo = createAcceptRepo();
       const eventsRepo = {
-        appendEventWithAudit: async () => ({ ok: true as const, value: { event: {}, audit: {} } }),
-      } as any;
-      const env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+        appendEventWithAudit: async () => ({ ok: true as const, value: { event: {} as StoredEvent, audit: {} as StoredAuditEntry } }),
+      };
+      const env: Env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
       const response = await handleAcceptInvitation(
         makeAcceptRequest({ token: validToken }),
-        env as any, "req_test", acceptActor, orgPublicIdStr,
+        env, "req_test", acceptActor, orgPublicIdStr,
         { repo, eventsRepo, hashToken: async () => "hashed_value", now: () => fixedNowLocal, generateId: () => "gen_id" },
       );
 
       expect(response.status).toBe(200);
-      const json = await response.json() as any;
+      const json = await response.json() as JsonResp;
       expect(json.data.invitation.id).toMatch(/^inv_[0-9a-f]{32}$/);
       expect(json.data.invitation.status).toBe("accepted");
       expect(json.data.membership.id).toMatch(/^mem_/);
@@ -2724,9 +2817,9 @@ describe("member administration", () => {
         if (opts.revokeFail) return { ok: false as const, error: { kind: "internal" as const, message: "revoke failed" } };
         return { ok: true as const, value: currentRoles.map((r) => ({ ...r, revokedAt: fixedNowLocal })) };
       },
-      createRoleAssignment: async (input: any) => {
+      createRoleAssignment: async (input: CreateRoleAssignmentInput) => {
         if (opts.createRoleFail) return { ok: false as const, error: { kind: "internal" as const, message: "create failed" } };
-        return { ok: true as const, value: { ...input, revokedAt: null } };
+        return { ok: true as const, value: { ...input, scopeRef: input.scopeRef ?? null, revokedAt: null } };
       },
       removeMember: async (_orgId: string, _memberId: string, _at: Date) => {
         if (opts.removeFail) return { ok: false as const, error: { kind: "not_found" as const } };
@@ -2746,48 +2839,48 @@ describe("member administration", () => {
   describe("handleUpdateMemberRole", () => {
     it("successful role update authorizes through policy and appends membership.updated", async () => {
       const repo = createMemberRepo();
-      let appendedInput: any = null;
+      let appendedInput: AppendEventWithAuditInput | null = null;
       const eventsRepo = {
-        appendEventWithAudit: async (input: any) => {
+        appendEventWithAudit: async (input: AppendEventWithAuditInput) => {
           appendedInput = input;
-          return { ok: true as const, value: { event: {}, audit: {} } };
+          return { ok: true as const, value: { event: {} as StoredEvent, audit: {} as StoredAuditEntry } };
         },
-      } as any;
+      };
       const policyCapture = { value: null as unknown };
-      const env = { POLICY_WORKER: createPolicyFetcher(true, policyCapture), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true, policyCapture), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
       const response = await handleUpdateMemberRole(
         makeRequest({ role: "viewer" }),
-        env as any, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
+        env, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
         { repo, eventsRepo, now: () => fixedNowLocal, generateId: () => "generated_evt_1" },
       );
 
       expect(response.status).toBe(200);
-      const json = await response.json() as any;
+      const json = await response.json() as JsonResp;
       expect(json.data.member.id).toMatch(/^mem_/);
       expect(json.data.member.roles).toBeDefined();
 
       // Policy was called
       expect(policyCapture.value).not.toBeNull();
-      const policyBody = policyCapture.value as any;
+      const policyBody = policyCapture.value as { action: string; resource: { kind: string; id: string; orgId: string }; subject: { id: string; type: string }; context: Record<string, unknown> };
       expect(policyBody.action).toBe("organization.member.update_role");
 
       // Event was appended
       expect(appendedInput).not.toBeNull();
-      expect(appendedInput.event.type).toBe("membership.updated");
-      expect(appendedInput.event.version).toBe(1);
-      expect(appendedInput.event.source).toBe("membership-worker");
-      expect(appendedInput.event.actorType).toBe("user");
-      expect(appendedInput.event.actorId).toBe("usr_admin");
-      expect(appendedInput.event.subjectKind).toBe("member");
-      expect(appendedInput.event.subjectId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
-      expect(appendedInput.event.orgId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
-      expect(appendedInput.event.requestId).toBe("req_test");
-      expect(appendedInput.event.payload.role).toBe("viewer");
-      expect(appendedInput.event.payload.previousRoles).toContain("admin");
-      expect(appendedInput.event.payload.memberId).toMatch(/^mem_[0-9a-f]{32}$/);
-      expect(appendedInput.audit.category).toBe("membership");
-      expect(appendedInput.audit.description).toContain("updated");
+      expect(appendedInput!.event.type).toBe("membership.updated");
+      expect(appendedInput!.event.version).toBe(1);
+      expect(appendedInput!.event.source).toBe("membership-worker");
+      expect(appendedInput!.event.actorType).toBe("user");
+      expect(appendedInput!.event.actorId).toBe("usr_admin");
+      expect(appendedInput!.event.subjectKind).toBe("member");
+      expect(appendedInput!.event.subjectId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+      expect(appendedInput!.event.orgId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+      expect(appendedInput!.event.requestId).toBe("req_test");
+      expect(appendedInput!.event.payload.role).toBe("viewer");
+      expect(appendedInput!.event.payload.previousRoles).toContain("admin");
+      expect(appendedInput!.event.payload.memberId).toMatch(/^mem_[0-9a-f]{32}$/);
+      expect(appendedInput!.audit.category).toBe("membership");
+      expect(appendedInput!.audit.description).toContain("updated");
     });
 
     it("event/audit append failure returns safe error", async () => {
@@ -2796,17 +2889,17 @@ describe("member administration", () => {
         appendEventWithAudit: async () => {
           return { ok: false as const, error: { kind: "internal" as const, message: "db error" } };
         },
-      } as any;
-      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+      };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
       const response = await handleUpdateMemberRole(
         makeRequest({ role: "viewer" }),
-        env as any, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
+        env, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
         { repo, eventsRepo, now: () => fixedNowLocal, generateId: () => "gen_id" },
       );
 
       expect(response.status).toBe(500);
-      const json = await response.json() as any;
+      const json = await response.json() as JsonResp;
       expect(json.error.code).toBe("internal_error");
       const text = JSON.stringify(json);
       expect(text).not.toContain("db error");
@@ -2820,14 +2913,14 @@ describe("member administration", () => {
       const eventsRepo = {
         appendEventWithAudit: async () => {
           eventAppended = true;
-          return { ok: true as const, value: { event: {}, audit: {} } };
+          return { ok: true as const, value: { event: {} as StoredEvent, audit: {} as StoredAuditEntry } };
         },
-      } as any;
-      const env = { POLICY_WORKER: createPolicyFetcher(false), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+      };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(false), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
       const response = await handleUpdateMemberRole(
         makeRequest({ role: "viewer" }),
-        env as any, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
+        env, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
         { repo, eventsRepo, now: () => fixedNowLocal },
       );
 
@@ -2841,14 +2934,14 @@ describe("member administration", () => {
       const eventsRepo = {
         appendEventWithAudit: async () => {
           eventAppended = true;
-          return { ok: true as const, value: { event: {}, audit: {} } };
+          return { ok: true as const, value: { event: {} as StoredEvent, audit: {} as StoredAuditEntry } };
         },
-      } as any;
-      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+      };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
       const response = await handleUpdateMemberRole(
         makeRequest({ role: "viewer" }),
-        env as any, "req_test", actor, "bad_org_id", memberPublicIdStr,
+        env, "req_test", actor, "bad_org_id", memberPublicIdStr,
         { repo, eventsRepo, now: () => fixedNowLocal },
       );
 
@@ -2862,14 +2955,14 @@ describe("member administration", () => {
       const eventsRepo = {
         appendEventWithAudit: async () => {
           eventAppended = true;
-          return { ok: true as const, value: { event: {}, audit: {} } };
+          return { ok: true as const, value: { event: {} as StoredEvent, audit: {} as StoredAuditEntry } };
         },
-      } as any;
-      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+      };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
       const response = await handleUpdateMemberRole(
         makeRequest({ role: "viewer" }),
-        env as any, "req_test", actor, orgPublicIdStr, "invalid_member",
+        env, "req_test", actor, orgPublicIdStr, "invalid_member",
         { repo, eventsRepo, now: () => fixedNowLocal },
       );
 
@@ -2883,14 +2976,14 @@ describe("member administration", () => {
       const eventsRepo = {
         appendEventWithAudit: async () => {
           eventAppended = true;
-          return { ok: true as const, value: { event: {}, audit: {} } };
+          return { ok: true as const, value: { event: {} as StoredEvent, audit: {} as StoredAuditEntry } };
         },
-      } as any;
-      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+      };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
       const response = await handleUpdateMemberRole(
         makeRequest({ role: "superadmin" }),
-        env as any, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
+        env, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
         { repo, eventsRepo, now: () => fixedNowLocal },
       );
 
@@ -2904,14 +2997,14 @@ describe("member administration", () => {
       const eventsRepo = {
         appendEventWithAudit: async () => {
           eventAppended = true;
-          return { ok: true as const, value: { event: {}, audit: {} } };
+          return { ok: true as const, value: { event: {} as StoredEvent, audit: {} as StoredAuditEntry } };
         },
-      } as any;
-      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+      };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
       const response = await handleUpdateMemberRole(
         makeRequest({}),
-        env as any, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
+        env, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
         { repo, eventsRepo, now: () => fixedNowLocal },
       );
 
@@ -2925,14 +3018,14 @@ describe("member administration", () => {
       const eventsRepo = {
         appendEventWithAudit: async () => {
           eventAppended = true;
-          return { ok: true as const, value: { event: {}, audit: {} } };
+          return { ok: true as const, value: { event: {} as StoredEvent, audit: {} as StoredAuditEntry } };
         },
-      } as any;
-      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+      };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
       const response = await handleUpdateMemberRole(
         makeRequest({ role: "viewer" }),
-        env as any, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
+        env, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
         { repo, eventsRepo, now: () => fixedNowLocal },
       );
 
@@ -2946,14 +3039,14 @@ describe("member administration", () => {
       const eventsRepo = {
         appendEventWithAudit: async () => {
           eventAppended = true;
-          return { ok: true as const, value: { event: {}, audit: {} } };
+          return { ok: true as const, value: { event: {} as StoredEvent, audit: {} as StoredAuditEntry } };
         },
-      } as any;
-      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+      };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
       const response = await handleUpdateMemberRole(
         makeRequest({ role: "viewer" }),
-        env as any, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
+        env, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
         { repo, eventsRepo, now: () => fixedNowLocal },
       );
 
@@ -2980,19 +3073,19 @@ describe("member administration", () => {
       const eventsRepo = {
         appendEventWithAudit: async () => {
           eventAppended = true;
-          return { ok: true as const, value: { event: {}, audit: {} } };
+          return { ok: true as const, value: { event: {} as StoredEvent, audit: {} as StoredAuditEntry } };
         },
-      } as any;
-      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+      };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
       const response = await handleUpdateMemberRole(
         makeRequest({ role: "viewer" }),
-        env as any, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
+        env, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
         { repo: ownerRepo, eventsRepo, now: () => fixedNowLocal },
       );
 
       expect(response.status).toBe(422);
-      const json = await response.json() as any;
+      const json = await response.json() as JsonResp;
       expect(json.error.code).toBe("precondition_failed");
       expect(eventAppended).toBe(false);
     });
@@ -3003,14 +3096,14 @@ describe("member administration", () => {
       const eventsRepo = {
         appendEventWithAudit: async () => {
           eventAppended = true;
-          return { ok: true as const, value: { event: {}, audit: {} } };
+          return { ok: true as const, value: { event: {} as StoredEvent, audit: {} as StoredAuditEntry } };
         },
-      } as any;
-      const env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+      };
+      const env: Env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
       const response = await handleUpdateMemberRole(
         makeRequest({ role: "viewer" }),
-        env as any, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
+        env, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
         { repo, eventsRepo, now: () => fixedNowLocal },
       );
 
@@ -3019,33 +3112,33 @@ describe("member administration", () => {
     });
 
     it("missing SOURCEPLANE_DB without deps returns 503", async () => {
-      const env = { POLICY_WORKER: createPolicyFetcher(true), ENVIRONMENT: "test" };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true), ENVIRONMENT: "test" };
 
       const response = await handleUpdateMemberRole(
         makeRequest({ role: "viewer" }),
-        env as any, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
+        env, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
       );
 
       expect(response.status).toBe(503);
-      const json = await response.json() as any;
+      const json = await response.json() as JsonResp;
       expect(json.error.code).toBe("internal_error");
     });
 
     it("responses use public IDs and safe role summaries", async () => {
       const repo = createMemberRepo();
       const eventsRepo = {
-        appendEventWithAudit: async () => ({ ok: true as const, value: { event: {}, audit: {} } }),
-      } as any;
-      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+        appendEventWithAudit: async () => ({ ok: true as const, value: { event: {} as StoredEvent, audit: {} as StoredAuditEntry } }),
+      };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
       const response = await handleUpdateMemberRole(
         makeRequest({ role: "builder" }),
-        env as any, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
+        env, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
         { repo, eventsRepo, now: () => fixedNowLocal, generateId: () => "gen_id" },
       );
 
       expect(response.status).toBe(200);
-      const json = await response.json() as any;
+      const json = await response.json() as JsonResp;
       expect(json.data.member.id).toMatch(/^mem_[0-9a-f]{32}$/);
       expect(Array.isArray(json.data.member.roles)).toBe(true);
       for (const r of json.data.member.roles) {
@@ -3060,26 +3153,26 @@ describe("member administration", () => {
 
     it("event/audit values do not expose raw UUIDs, bearer tokens, SQL, stack traces, or provider details", async () => {
       const repo = createMemberRepo();
-      let appendedInput: any = null;
+      let appendedInput: AppendEventWithAuditInput | null = null;
       const eventsRepo = {
-        appendEventWithAudit: async (input: any) => {
+        appendEventWithAudit: async (input: AppendEventWithAuditInput) => {
           appendedInput = input;
-          return { ok: true as const, value: { event: {}, audit: {} } };
+          return { ok: true as const, value: { event: {} as StoredEvent, audit: {} as StoredAuditEntry } };
         },
-      } as any;
-      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+      };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
       await handleUpdateMemberRole(
         makeRequest({ role: "viewer" }),
-        env as any, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
+        env, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
         { repo, eventsRepo, now: () => fixedNowLocal, generateId: () => "gen_id" },
       );
 
       const eventStr = JSON.stringify(appendedInput);
       // Canonical fields now store raw UUIDs; public IDs in payload
-      expect(appendedInput.event.orgId).toBe(orgUuid);
-      expect(appendedInput.event.subjectId).toBe(memberUuid);
-      expect(appendedInput.event.payload.memberId).toMatch(/^mem_/);
+      expect(appendedInput!.event.orgId).toBe(orgUuid);
+      expect(appendedInput!.event.subjectId).toBe(memberUuid);
+      expect(appendedInput!.event.payload.memberId).toMatch(/^mem_/);
       // Must not contain sensitive patterns
       expect(eventStr.toLowerCase()).not.toContain("bearer");
       expect(eventStr).not.toMatch(/SELECT|INSERT|UPDATE|DELETE/);
@@ -3090,47 +3183,47 @@ describe("member administration", () => {
   describe("handleRemoveMember", () => {
     it("successful removal authorizes through policy and appends membership.removed", async () => {
       const repo = createMemberRepo();
-      let appendedInput: any = null;
+      let appendedInput: AppendEventWithAuditInput | null = null;
       const eventsRepo = {
-        appendEventWithAudit: async (input: any) => {
+        appendEventWithAudit: async (input: AppendEventWithAuditInput) => {
           appendedInput = input;
-          return { ok: true as const, value: { event: {}, audit: {} } };
+          return { ok: true as const, value: { event: {} as StoredEvent, audit: {} as StoredAuditEntry } };
         },
-      } as any;
+      };
       const policyCapture = { value: null as unknown };
-      const env = { POLICY_WORKER: createPolicyFetcher(true, policyCapture), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true, policyCapture), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
       const response = await handleRemoveMember(
-        env as any, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
+        env, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
         { repo, eventsRepo, now: () => fixedNowLocal, generateId: () => "generated_evt_2" },
       );
 
       expect(response.status).toBe(200);
-      const json = await response.json() as any;
+      const json = await response.json() as JsonResp;
       expect(json.data.member.id).toMatch(/^mem_/);
       expect(json.data.member.status).toBe("removed");
       expect(json.data.member.roles).toEqual([]);
 
       // Policy was called
       expect(policyCapture.value).not.toBeNull();
-      const policyBody = policyCapture.value as any;
+      const policyBody = policyCapture.value as { action: string; resource: { kind: string; id: string; orgId: string }; subject: { id: string; type: string }; context: Record<string, unknown> };
       expect(policyBody.action).toBe("organization.member.remove");
 
       // Event was appended
       expect(appendedInput).not.toBeNull();
-      expect(appendedInput.event.type).toBe("membership.removed");
-      expect(appendedInput.event.version).toBe(1);
-      expect(appendedInput.event.source).toBe("membership-worker");
-      expect(appendedInput.event.actorType).toBe("user");
-      expect(appendedInput.event.actorId).toBe("usr_admin");
-      expect(appendedInput.event.subjectKind).toBe("member");
-      expect(appendedInput.event.subjectId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
-      expect(appendedInput.event.orgId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
-      expect(appendedInput.event.requestId).toBe("req_test");
-      expect(appendedInput.event.payload.previousRoles).toContain("admin");
-      expect(appendedInput.event.payload.revokedRoleCount).toBeGreaterThanOrEqual(1);
-      expect(appendedInput.audit.category).toBe("membership");
-      expect(appendedInput.audit.description).toContain("removed");
+      expect(appendedInput!.event.type).toBe("membership.removed");
+      expect(appendedInput!.event.version).toBe(1);
+      expect(appendedInput!.event.source).toBe("membership-worker");
+      expect(appendedInput!.event.actorType).toBe("user");
+      expect(appendedInput!.event.actorId).toBe("usr_admin");
+      expect(appendedInput!.event.subjectKind).toBe("member");
+      expect(appendedInput!.event.subjectId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+      expect(appendedInput!.event.orgId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+      expect(appendedInput!.event.requestId).toBe("req_test");
+      expect(appendedInput!.event.payload.previousRoles).toContain("admin");
+      expect(appendedInput!.event.payload.revokedRoleCount).toBeGreaterThanOrEqual(1);
+      expect(appendedInput!.audit.category).toBe("membership");
+      expect(appendedInput!.audit.description).toContain("removed");
     });
 
     it("event/audit append failure returns safe error", async () => {
@@ -3139,16 +3232,16 @@ describe("member administration", () => {
         appendEventWithAudit: async () => {
           return { ok: false as const, error: { kind: "internal" as const, message: "db error" } };
         },
-      } as any;
-      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+      };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
       const response = await handleRemoveMember(
-        env as any, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
+        env, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
         { repo, eventsRepo, now: () => fixedNowLocal, generateId: () => "gen_id" },
       );
 
       expect(response.status).toBe(500);
-      const json = await response.json() as any;
+      const json = await response.json() as JsonResp;
       expect(json.error.code).toBe("internal_error");
       const text = JSON.stringify(json);
       expect(text).not.toContain("db error");
@@ -3162,13 +3255,13 @@ describe("member administration", () => {
       const eventsRepo = {
         appendEventWithAudit: async () => {
           eventAppended = true;
-          return { ok: true as const, value: { event: {}, audit: {} } };
+          return { ok: true as const, value: { event: {} as StoredEvent, audit: {} as StoredAuditEntry } };
         },
-      } as any;
-      const env = { POLICY_WORKER: createPolicyFetcher(false), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+      };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(false), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
       const response = await handleRemoveMember(
-        env as any, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
+        env, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
         { repo, eventsRepo, now: () => fixedNowLocal },
       );
 
@@ -3182,13 +3275,13 @@ describe("member administration", () => {
       const eventsRepo = {
         appendEventWithAudit: async () => {
           eventAppended = true;
-          return { ok: true as const, value: { event: {}, audit: {} } };
+          return { ok: true as const, value: { event: {} as StoredEvent, audit: {} as StoredAuditEntry } };
         },
-      } as any;
-      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+      };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
       const response = await handleRemoveMember(
-        env as any, "req_test", actor, "bad_org_id", memberPublicIdStr,
+        env, "req_test", actor, "bad_org_id", memberPublicIdStr,
         { repo, eventsRepo, now: () => fixedNowLocal },
       );
 
@@ -3202,13 +3295,13 @@ describe("member administration", () => {
       const eventsRepo = {
         appendEventWithAudit: async () => {
           eventAppended = true;
-          return { ok: true as const, value: { event: {}, audit: {} } };
+          return { ok: true as const, value: { event: {} as StoredEvent, audit: {} as StoredAuditEntry } };
         },
-      } as any;
-      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+      };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
       const response = await handleRemoveMember(
-        env as any, "req_test", actor, orgPublicIdStr, "invalid_member",
+        env, "req_test", actor, orgPublicIdStr, "invalid_member",
         { repo, eventsRepo, now: () => fixedNowLocal },
       );
 
@@ -3222,13 +3315,13 @@ describe("member administration", () => {
       const eventsRepo = {
         appendEventWithAudit: async () => {
           eventAppended = true;
-          return { ok: true as const, value: { event: {}, audit: {} } };
+          return { ok: true as const, value: { event: {} as StoredEvent, audit: {} as StoredAuditEntry } };
         },
-      } as any;
-      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+      };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
       const response = await handleRemoveMember(
-        env as any, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
+        env, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
         { repo, eventsRepo, now: () => fixedNowLocal },
       );
 
@@ -3242,13 +3335,13 @@ describe("member administration", () => {
       const eventsRepo = {
         appendEventWithAudit: async () => {
           eventAppended = true;
-          return { ok: true as const, value: { event: {}, audit: {} } };
+          return { ok: true as const, value: { event: {} as StoredEvent, audit: {} as StoredAuditEntry } };
         },
-      } as any;
-      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+      };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
       const response = await handleRemoveMember(
-        env as any, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
+        env, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
         { repo, eventsRepo, now: () => fixedNowLocal },
       );
 
@@ -3274,18 +3367,18 @@ describe("member administration", () => {
       const eventsRepo = {
         appendEventWithAudit: async () => {
           eventAppended = true;
-          return { ok: true as const, value: { event: {}, audit: {} } };
+          return { ok: true as const, value: { event: {} as StoredEvent, audit: {} as StoredAuditEntry } };
         },
-      } as any;
-      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+      };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
       const response = await handleRemoveMember(
-        env as any, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
+        env, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
         { repo: ownerRepo, eventsRepo, now: () => fixedNowLocal },
       );
 
       expect(response.status).toBe(422);
-      const json = await response.json() as any;
+      const json = await response.json() as JsonResp;
       expect(json.error.code).toBe("precondition_failed");
       expect(eventAppended).toBe(false);
     });
@@ -3296,13 +3389,13 @@ describe("member administration", () => {
       const eventsRepo = {
         appendEventWithAudit: async () => {
           eventAppended = true;
-          return { ok: true as const, value: { event: {}, audit: {} } };
+          return { ok: true as const, value: { event: {} as StoredEvent, audit: {} as StoredAuditEntry } };
         },
-      } as any;
-      const env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+      };
+      const env: Env = { SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
       const response = await handleRemoveMember(
-        env as any, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
+        env, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
         { repo, eventsRepo, now: () => fixedNowLocal },
       );
 
@@ -3311,26 +3404,26 @@ describe("member administration", () => {
     });
 
     it("missing SOURCEPLANE_DB without deps returns 503", async () => {
-      const env = { POLICY_WORKER: createPolicyFetcher(true), ENVIRONMENT: "test" };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true), ENVIRONMENT: "test" };
 
       const response = await handleRemoveMember(
-        env as any, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
+        env, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
       );
 
       expect(response.status).toBe(503);
-      const json = await response.json() as any;
+      const json = await response.json() as JsonResp;
       expect(json.error.code).toBe("internal_error");
     });
 
     it("responses use public IDs and safe role summaries", async () => {
       const repo = createMemberRepo();
       const eventsRepo = {
-        appendEventWithAudit: async () => ({ ok: true as const, value: { event: {}, audit: {} } }),
-      } as any;
-      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+        appendEventWithAudit: async () => ({ ok: true as const, value: { event: {} as StoredEvent, audit: {} as StoredAuditEntry } }),
+      };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
       const response = await handleRemoveMember(
-        env as any, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
+        env, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
         { repo, eventsRepo, now: () => fixedNowLocal, generateId: () => "gen_id" },
       );
 
@@ -3345,25 +3438,25 @@ describe("member administration", () => {
 
     it("event/audit values do not expose raw UUIDs, bearer tokens, SQL, stack traces, or provider details", async () => {
       const repo = createMemberRepo();
-      let appendedInput: any = null;
+      let appendedInput: AppendEventWithAuditInput | null = null;
       const eventsRepo = {
-        appendEventWithAudit: async (input: any) => {
+        appendEventWithAudit: async (input: AppendEventWithAuditInput) => {
           appendedInput = input;
-          return { ok: true as const, value: { event: {}, audit: {} } };
+          return { ok: true as const, value: { event: {} as StoredEvent, audit: {} as StoredAuditEntry } };
         },
-      } as any;
-      const env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+      };
+      const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
 
       await handleRemoveMember(
-        env as any, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
+        env, "req_test", actor, orgPublicIdStr, memberPublicIdStr,
         { repo, eventsRepo, now: () => fixedNowLocal, generateId: () => "gen_id" },
       );
 
       const eventStr = JSON.stringify(appendedInput);
       // Canonical fields now store raw UUIDs; public IDs in payload
-      expect(appendedInput.event.orgId).toBe(orgUuid);
-      expect(appendedInput.event.subjectId).toBe(memberUuid);
-      expect(appendedInput.event.payload.memberId).toMatch(/^mem_/);
+      expect(appendedInput!.event.orgId).toBe(orgUuid);
+      expect(appendedInput!.event.subjectId).toBe(memberUuid);
+      expect(appendedInput!.event.payload.memberId).toMatch(/^mem_/);
       // Must not contain sensitive patterns
       expect(eventStr.toLowerCase()).not.toContain("bearer");
       expect(eventStr).not.toMatch(/SELECT|INSERT|UPDATE|DELETE/);
@@ -3385,17 +3478,16 @@ describe("member administration", () => {
 
     it("emits organization.created and membership.added events on successful bootstrap", async () => {
       const repo = createFakeRepository();
-      const appendedInputs: any[] = [];
+      const appendedInputs: AppendEventWithAuditInput[] = [];
       const eventsRepo = {
-        appendEventWithAudit: async (input: any) => {
+        appendEventWithAudit: async (input: AppendEventWithAuditInput) => {
           appendedInputs.push(input);
-          return { ok: true as const, value: { event: {}, audit: {} } };
+          return { ok: true as const, value: { event: {} as StoredEvent, audit: {} as StoredAuditEntry } };
         },
-      } as any;
-
+      };
       const response = await handleCreateOrganization(
         createRequest({ name: "Acme Corp", slug: "acme-corp" }),
-        {} as any,
+        {} as Env,
         "req_bootstrap_1",
         actor,
         { repo, eventsRepo, now: () => fixedNowLocal, generateId: () => "gen_id_1" },
@@ -3403,23 +3495,22 @@ describe("member administration", () => {
 
       expect(response.status).toBe(201);
       expect(appendedInputs).toHaveLength(2);
-      expect(appendedInputs[0].event.type).toBe("organization.created");
-      expect(appendedInputs[1].event.type).toBe("membership.added");
+      expect(appendedInputs[0]!.event.type).toBe("organization.created");
+      expect(appendedInputs[1]!.event.type).toBe("membership.added");
     });
 
     it("stores raw UUIDs in canonical event fields", async () => {
       const repo = createFakeRepository();
-      const appendedInputs: any[] = [];
+      const appendedInputs: AppendEventWithAuditInput[] = [];
       const eventsRepo = {
-        appendEventWithAudit: async (input: any) => {
+        appendEventWithAudit: async (input: AppendEventWithAuditInput) => {
           appendedInputs.push(input);
-          return { ok: true as const, value: { event: {}, audit: {} } };
+          return { ok: true as const, value: { event: {} as StoredEvent, audit: {} as StoredAuditEntry } };
         },
-      } as any;
-
+      };
       await handleCreateOrganization(
         createRequest({ name: "Raw IDs Test", slug: "raw-ids" }),
-        {} as any,
+        {} as Env,
         "req_raw",
         actor,
         { repo, eventsRepo, now: () => fixedNowLocal, generateId: () => "gen_id_2" },
@@ -3427,43 +3518,42 @@ describe("member administration", () => {
 
       const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
       // organization.created
-      expect(appendedInputs[0].event.orgId).toMatch(uuidRe);
-      expect(appendedInputs[0].event.subjectId).toMatch(uuidRe);
-      expect(appendedInputs[0].event.subjectKind).toBe("organization");
+      expect(appendedInputs[0]!.event.orgId).toMatch(uuidRe);
+      expect(appendedInputs[0]!.event.subjectId).toMatch(uuidRe);
+      expect(appendedInputs[0]!.event.subjectKind).toBe("organization");
       // membership.added
-      expect(appendedInputs[1].event.orgId).toMatch(uuidRe);
-      expect(appendedInputs[1].event.subjectId).toMatch(uuidRe);
-      expect(appendedInputs[1].event.subjectKind).toBe("member");
+      expect(appendedInputs[1]!.event.orgId).toMatch(uuidRe);
+      expect(appendedInputs[1]!.event.subjectId).toMatch(uuidRe);
+      expect(appendedInputs[1]!.event.subjectKind).toBe("member");
       // orgId should be the same in both events
-      expect(appendedInputs[0].event.orgId).toBe(appendedInputs[1].event.orgId);
+      expect(appendedInputs[0]!.event.orgId).toBe(appendedInputs[1]!.event.orgId);
     });
 
     it("includes safe public IDs in event payloads", async () => {
       const repo = createFakeRepository();
-      const appendedInputs: any[] = [];
+      const appendedInputs: AppendEventWithAuditInput[] = [];
       const eventsRepo = {
-        appendEventWithAudit: async (input: any) => {
+        appendEventWithAudit: async (input: AppendEventWithAuditInput) => {
           appendedInputs.push(input);
-          return { ok: true as const, value: { event: {}, audit: {} } };
+          return { ok: true as const, value: { event: {} as StoredEvent, audit: {} as StoredAuditEntry } };
         },
-      } as any;
-
+      };
       await handleCreateOrganization(
         createRequest({ name: "Payload Test", slug: "payload-test" }),
-        {} as any,
+        {} as Env,
         "req_payload",
         actor,
         { repo, eventsRepo, now: () => fixedNowLocal, generateId: () => "gen_id_3" },
       );
 
       // organization.created payload has public org ID, name, slug
-      const orgPayload = appendedInputs[0].event.payload;
+      const orgPayload = appendedInputs[0]!.event.payload;
       expect(orgPayload.orgId).toMatch(/^org_[0-9a-f]{32}$/);
       expect(orgPayload.name).toBe("Payload Test");
       expect(orgPayload.slug).toBe("payload-test");
 
       // membership.added payload has public org/member IDs and role
-      const memPayload = appendedInputs[1].event.payload;
+      const memPayload = appendedInputs[1]!.event.payload;
       expect(memPayload.orgId).toMatch(/^org_[0-9a-f]{32}$/);
       expect(memPayload.memberId).toMatch(/^mem_[0-9a-f]{32}$/);
       expect(memPayload.role).toBe("owner");
@@ -3472,17 +3562,16 @@ describe("member administration", () => {
 
     it("does not expose bearer tokens, SQL, secrets, or stack traces in events", async () => {
       const repo = createFakeRepository();
-      const appendedInputs: any[] = [];
+      const appendedInputs: AppendEventWithAuditInput[] = [];
       const eventsRepo = {
-        appendEventWithAudit: async (input: any) => {
+        appendEventWithAudit: async (input: AppendEventWithAuditInput) => {
           appendedInputs.push(input);
-          return { ok: true as const, value: { event: {}, audit: {} } };
+          return { ok: true as const, value: { event: {} as StoredEvent, audit: {} as StoredAuditEntry } };
         },
-      } as any;
-
+      };
       await handleCreateOrganization(
         createRequest({ name: "Security Test", slug: "sec-test" }),
-        {} as any,
+        {} as Env,
         "req_sec",
         actor,
         { repo, eventsRepo, now: () => fixedNowLocal, generateId: () => "gen_id_4" },
@@ -3502,18 +3591,17 @@ describe("member administration", () => {
       const repo = createFakeRepository();
       const eventsRepo = {
         appendEventWithAudit: async () => ({ ok: false as const, error: { kind: "internal" as const, message: "db failure" } }),
-      } as any;
-
+      };
       const response = await handleCreateOrganization(
         createRequest({ name: "Failure Test", slug: "fail-test" }),
-        {} as any,
+        {} as Env,
         "req_fail",
         actor,
         { repo, eventsRepo, now: () => fixedNowLocal, generateId: () => "gen_id_5" },
       );
 
       expect(response.status).toBe(500);
-      const body = await response.json() as any;
+      const body = await response.json() as JsonResp;
       expect(body.error.code).toBe("internal_error");
     });
 
@@ -3524,41 +3612,39 @@ describe("member administration", () => {
         appendEventWithAudit: async () => {
           callCount++;
           if (callCount === 1) {
-            return { ok: true as const, value: { event: {}, audit: {} } };
+            return { ok: true as const, value: { event: {} as StoredEvent, audit: {} as StoredAuditEntry } };
           }
           return { ok: false as const, error: { kind: "internal" as const, message: "second event failed" } };
         },
-      } as any;
-
+      };
       const response = await handleCreateOrganization(
         createRequest({ name: "Partial Fail", slug: "partial-fail" }),
-        {} as any,
+        {} as Env,
         "req_partial",
         actor,
         { repo, eventsRepo, now: () => fixedNowLocal, generateId: () => "gen_id_6" },
       );
 
       expect(response.status).toBe(500);
-      const body = await response.json() as any;
+      const body = await response.json() as JsonResp;
       expect(body.error.code).toBe("internal_error");
     });
 
     it("preserves existing public response shape on success", async () => {
       const repo = createFakeRepository();
       const eventsRepo = {
-        appendEventWithAudit: async () => ({ ok: true as const, value: { event: {}, audit: {} } }),
-      } as any;
-
+        appendEventWithAudit: async () => ({ ok: true as const, value: { event: {} as StoredEvent, audit: {} as StoredAuditEntry } }),
+      };
       const response = await handleCreateOrganization(
         createRequest({ name: "Shape Test", slug: "shape-test" }),
-        {} as any,
+        {} as Env,
         "req_shape",
         actor,
         { repo, eventsRepo, now: () => fixedNowLocal, generateId: () => "gen_id_7" },
       );
 
       expect(response.status).toBe(201);
-      const body = await response.json() as any;
+      const body = await response.json() as JsonResp;
       expect(body.data.organization.id).toMatch(/^org_[0-9a-f]{32}$/);
       expect(body.data.organization.name).toBe("Shape Test");
       expect(body.data.organization.slug).toBe("shape-test");
@@ -3569,69 +3655,66 @@ describe("member administration", () => {
 
     it("audit entries use membership category", async () => {
       const repo = createFakeRepository();
-      const appendedInputs: any[] = [];
+      const appendedInputs: AppendEventWithAuditInput[] = [];
       const eventsRepo = {
-        appendEventWithAudit: async (input: any) => {
+        appendEventWithAudit: async (input: AppendEventWithAuditInput) => {
           appendedInputs.push(input);
-          return { ok: true as const, value: { event: {}, audit: {} } };
+          return { ok: true as const, value: { event: {} as StoredEvent, audit: {} as StoredAuditEntry } };
         },
-      } as any;
-
+      };
       await handleCreateOrganization(
         createRequest({ name: "Category Test", slug: "cat-test" }),
-        {} as any,
+        {} as Env,
         "req_cat",
         actor,
         { repo, eventsRepo, now: () => fixedNowLocal, generateId: () => "gen_id_8" },
       );
 
-      expect(appendedInputs[0].audit.category).toBe("membership");
-      expect(appendedInputs[1].audit.category).toBe("membership");
+      expect(appendedInputs[0]!.audit.category).toBe("membership");
+      expect(appendedInputs[1]!.audit.category).toBe("membership");
     });
 
     it("uses organization UUID as subject ID for organization.created", async () => {
       const repo = createFakeRepository();
-      const appendedInputs: any[] = [];
+      const appendedInputs: AppendEventWithAuditInput[] = [];
       const eventsRepo = {
-        appendEventWithAudit: async (input: any) => {
+        appendEventWithAudit: async (input: AppendEventWithAuditInput) => {
           appendedInputs.push(input);
-          return { ok: true as const, value: { event: {}, audit: {} } };
+          return { ok: true as const, value: { event: {} as StoredEvent, audit: {} as StoredAuditEntry } };
         },
-      } as any;
-
+      };
       await handleCreateOrganization(
         createRequest({ name: "Subject Test", slug: "subj-test" }),
-        {} as any,
+        {} as Env,
         "req_subj",
         actor,
         { repo, eventsRepo, now: () => fixedNowLocal, generateId: () => "gen_id_9" },
       );
 
       // The orgId and subjectId for organization.created must be the same UUID
-      expect(appendedInputs[0].event.orgId).toBe(appendedInputs[0].event.subjectId);
+      expect(appendedInputs[0]!.event.orgId).toBe(appendedInputs[0]!.event.subjectId);
     });
 
     it("uses membership UUID as subject ID for membership.added", async () => {
       const repo = createFakeRepository();
-      const appendedInputs: any[] = [];
+      const appendedInputs: AppendEventWithAuditInput[] = [];
       const eventsRepo = {
-        appendEventWithAudit: async (input: any) => {
+        appendEventWithAudit: async (input: AppendEventWithAuditInput) => {
           appendedInputs.push(input);
-          return { ok: true as const, value: { event: {}, audit: {} } };
+          return { ok: true as const, value: { event: {} as StoredEvent, audit: {} as StoredAuditEntry } };
         },
-      } as any;
-
+      };
       await handleCreateOrganization(
         createRequest({ name: "Member Subject", slug: "mem-subj" }),
-        {} as any,
+        {} as Env,
         "req_mem_subj",
         actor,
         { repo, eventsRepo, now: () => fixedNowLocal, generateId: () => "gen_id_10" },
       );
 
       // membership.added subjectId should be different from orgId (it's the member UUID)
-      expect(appendedInputs[1].event.subjectId).not.toBe(appendedInputs[1].event.orgId);
-      expect(appendedInputs[1].event.subjectId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-/);
+      expect(appendedInputs[1]!.event.subjectId).not.toBe(appendedInputs[1]!.event.orgId);
+      expect(appendedInputs[1]!.event.subjectId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-/);
     });
   });
 });
