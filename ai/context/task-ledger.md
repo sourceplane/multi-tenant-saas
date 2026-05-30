@@ -2126,6 +2126,23 @@ With Task 0095 / 0095.1 merged, Track A is closed. Remaining 45 `@typescript-esl
 - Risk note: live overflow probe against stage/prod NOT executed (would interfere with live traffic; 35 unit tests cover all overflow paths and 429 envelope shape). Recommended follow-up: synthetic probe against a sandbox org under deferred Task 0099-overflow-smoke. Non-blocking.
 - Track B3 (Edge idempotency + rate limiting) **CLOSED**: replay store (Task 0095/0095.1, PR #143) + rate limiting (Task 0097, PR #151) both live.
 
+## Task 0098 — Closure (Verifier PASS + Merge) (2026-05-30)
+
+- Agent: Verifier (post-implementer subagent)
+- Status: VERIFIED PASS + MERGED
+- Implementation: PR #150 squash `3a52f9b` on branch `impl/task-0098-packages-sdk-scaffold`
+- PR-CI: `plan` SUCCESS, `matrix.job-name` skipped (expected for packages-only PR)
+- Merge: `gh pr merge 150 --squash --admin` (branch was 1 commit behind main, no semantic conflict; full local validation already proved cleanliness)
+- Post-merge main-CI: plan job green; no apply jobs run for `packages/sdk/**` (library, not deployable)
+- Reports: `ai/reports/task-0098-implementer.md`, `ai/reports/task-0098-verifier.md`
+- Diff: 13 files / +2369 / −0. All net-new under `packages/sdk/**` plus `pnpm-lock.yaml` and the implementer report.
+- Durable outcome: `@saas/sdk` workspace live on main. Runtime-agnostic typed SaaS client with base `Transport` (configurable `baseUrl`, `auth: bearer | session`, `defaultHeaders`, per-request `idempotencyKey`/`signal`/`requestId`, request-id auto-generated via `globalThis.crypto.randomUUID` with `getRandomValues` fallback — zero `node:*` imports), typed `SourceplaneError` hierarchy keyed 1:1 on all 10 `ERROR_CODES` values from `@saas/contracts/errors` (`BadRequest`/`Unauthenticated`/`Forbidden`/`NotFound`/`Conflict`/`Validation`/`PreconditionFailed`/`Unsupported`/`Internal`/`RateLimit`), unknown-code fall-through to base class for forward compatibility. `RateLimitError` decodes Task 0097's headers (`Retry-After`, `X-RateLimit-{Limit,Remaining,Reset}-{org,identity}`) defensively — missing/malformed headers yield `null`, never throw. Two pilot resource clients: `organizations.{list,get,create}` and `projects.{list,get,create,archive}`. Stripe parity: `idempotencyKey` is caller-owned — sdk does NOT auto-generate.
+- Hazard scan `packages/sdk/**`: 0 hits across `eslint-disable*`, `@ts-ignore`, `@ts-expect-error`, `as unknown as`, `as any`.
+- Runtime audit: no `node:*`, no `apps/**`, no worker imports inside `packages/sdk/src`.
+- Local validation: `pnpm --filter @saas/sdk typecheck` exit 0; `pnpm --filter @saas/sdk lint` exit 0 with 0 warnings; `pnpm --filter @saas/sdk test` 31 tests pass; `pnpm -r typecheck` exit 0; `pnpm -r --no-bail lint` exit 0 with exactly 45 residual warnings (all in `tests/api-edge`, Task 0096f territory, baseline unchanged).
+- Unlocks: Task 0099 (remaining 8 resource clients — memberships, api-keys, webhooks, metering, billing, events, security-events, config, notifications — fan out off the orgs/projects pattern); Task 0098.1 (`packages/sdk/component.yaml` Orun manifest polish).
+- No spec proposals, no risk regressions, no verifier-side fix-up commits required.
+
 ## Task 0098.1 — packages/sdk Orun component alignment (scoped 2026-05-30)
 
 Follow-on polish for PR #150. Adds `packages/sdk/component.yaml` so Orun

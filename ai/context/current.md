@@ -87,20 +87,23 @@ Reports: `ai/reports/task-0097-{implementer,verifier}.md`.
 
 ## Next focus
 
-Two PRs scoped and parallel-safe vs main @ `adba1a3`:
+Task 0098 (`packages/sdk` scaffold + base client + orgs/projects pilot,
+B4 first half) **VERIFIED PASS + MERGED** 2026-05-30 via PR #150 squash
+`3a52f9b`. `@saas/sdk` workspace live on main. Verifier report:
+`ai/reports/task-0098-verifier.md`.
+
+One parallel-safe sibling still in flight:
 
 - **Task 0096f** — `tests/api-edge` class-B drain (45 → 0
   no-explicit-any, closes Track B globally). Branch
   `impl/task-0096f-tests-api-edge-class-b`. Implementer prompt at
   `ai/tasks/task-0096f.md`; sealed verifier prompt at
-  `ai/tasks/task-0096f-verifier.md`.
-- **Task 0098** — `packages/sdk` scaffold + base client + orgs/projects
-  pilot (B4 first half). Branch `impl/task-0098-packages-sdk-scaffold`.
-  Implementer prompt at `ai/tasks/task-0098.md`.
+  `ai/tasks/task-0096f-verifier.md`. Zero file overlap with the merged
+  Task 0098 surface (sdk lives entirely under `packages/sdk/**`).
 
-Both have zero file overlap with the merged Task 0097 surface and zero
-overlap with each other (Task 0096f owns `tests/api-edge/src/**` only;
-Task 0098 owns the new `packages/sdk/**` workspace only).
+Follow-on polish: **Task 0098.1** (`packages/sdk/component.yaml` Orun
+manifest) scoped on `impl/task-0098.1-sdk-component-yaml`. No source
+changes — manifest only.
 
 ## Parallel sibling: Task 0096f (scoped 2026-05-30)
 
