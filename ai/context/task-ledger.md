@@ -2003,3 +2003,47 @@ Last updated: 2026-05-30 (Task 0096b Verifier PASS + MERGED — PR #145 squash `
 - Phase shape: 7 phases identical to 0096b verifier — PR sanity → hazard+boundary scan → local gates (per-workspace lint, workspace tests, `tsc --noEmit`, `pnpm -r typecheck`, `pnpm -r --no-bail lint`) → it()/test() count parity → PR-CI log inspection (gh run view --log) → squash merge + main fast-forward + post-merge main-CI watch → PASS/FAIL bookkeeping (state.json, current.md, this ledger, task-0096c-verifier.md report committed to main).
 - Recommended next move on PASS: Task 0096d targeting `tests/identity-worker` (80 warnings, next-largest *after* the Track-A-blocked `tests/api-edge` 45). On FAIL: orchestrator scopes Task 0096c.1 fix-up (additive commits on the same PR).
 - Track A guardrail: `apps/api-edge/**`, `infra/terraform/cloudflare-kv/**`, `tests/api-edge/**` are explicitly out of scope; PR #143 (still DIRTY at `db00843`) is unaffected by this verifier and by the Task 0096c implementer phase.
+
+## Task 0096d
+
+- Agent: Implementer
+- Prompt: `ai/tasks/task-0096d.md`
+- Status: scoped and ready to begin (2026-05-30)
+- Branch: `impl/task-0096d-tests-identity-worker-class-b`
+- Objective: drive `pnpm --filter @saas/identity-worker-tests lint` warning count from 80 → 0 by replacing every `@typescript-eslint/no-explicit-any` site in `tests/identity-worker/src/**` with the narrowest accurate type — preferring real exports from `@saas/contracts/identity`, `@saas/db/identity`, `@saas/db/events`, and `apps/identity-worker/src/**` — without changing test behaviour, without introducing new `eslint-disable` / `@ts-ignore` / `@ts-expect-error` / `as unknown as` escapes, and without modifying any production source.
+- Scope boundary (in): edits inside `tests/identity-worker/src/**/*.ts` (5 files carry the warnings: `api-key-admin.test.ts` 33, `security-events.test.ts` 22, `profile.test.ts` 13, `login-start-notifications.test.ts` 8, `helpers/fake-repository.ts` 4) plus `ai/reports/task-0096d-implementer.md`.
+- Scope boundary (out): no `apps/**`, `packages/**`, `infra/**`, `tooling/**`, `.github/**`, `specs/**`, or any other `tests/**` workspace; no Track A surface (`apps/api-edge/**`, `infra/terraform/cloudflare-kv/**`, `tests/api-edge/**`); no Task 0096c surface (`tests/config-worker/**`); zero-baseline files (`auth-service.test.ts` 51 it(), `envelope.test.ts` 8 it(), `resolve-bearer.test.ts` 12 it()) byte-identical vs `main` @ `b0bc233`.
+- Acceptance: per-workspace lint exit 0 with 0 warnings (was 80); 7 suites / 122 tests with per-file it() parity (15/51/8/4/15/12/17); `pnpm -r typecheck` exit 0; `pnpm -r --no-bail lint` ≤ 197 residual (or ≤ 71 if 0096c merged ahead); diff scoped to `tests/identity-worker/src/**` + report; hazard scan empty; PR opened with real PR number written into the report on the final push.
+- Expected outcome: residual lint surface drops 80 warnings; remaining workspaces ≤ 45 each (or ≤ 26 across the five smallest if 0096c also merged), enabling the wave-5 mop-up bundle as Task 0096e.
+- Verifier prompt: sealed at `ai/tasks/task-0096d-verifier.md`.
+
+## Task 0096d — Verifier (sealed resumption prompt)
+
+- Agent: Verifier
+- Prompt: `ai/tasks/task-0096d-verifier.md`
+- Status: scoped + sealed 2026-05-30, runnable the moment the Task 0096d implementer opens a PR on `impl/task-0096d-tests-identity-worker-class-b`
+- Phase shape: same 7 phases as 0096b/c verifier prompts — PR sanity → hazard+boundary scan → local gates → behaviour-preservation it() parity vs `main` @ `b0bc233` → PR-CI log inspection → squash merge + main fast-forward + post-merge main-CI watch → PASS/FAIL bookkeeping.
+- Track A + Task 0096c guardrails: both surface sets explicitly out of scope.
+
+## Task 0096e
+
+- Agent: Implementer
+- Prompt: `ai/tasks/task-0096e.md`
+- Status: scoped and ready to begin (2026-05-30)
+- Branch: `impl/task-0096e-class-b-warning-cleanup-wave-5`
+- Objective: Track-B wave-5 mop-up — drive five smallest residual `tests/**` workspaces to 0 `@typescript-eslint/no-explicit-any` warnings in a single coherent PR. Targets: `tests/projects-worker` 10 + `tests/events-worker` 7 + `tests/policy-engine` 7 (split 2 + 5 across api-key-policy.test.ts + policy-engine.test.ts) + `tests/policy-worker` 1 + `tests/webhooks-worker` 1 = **26 anys total** across **6 source files in 5 workspaces**. Same discipline as Tasks 0096 / 0096b / 0096c / 0096d: prefer real exports from `@saas/contracts/**`, `@saas/db/**`, `apps/<worker>/src/**`; no new `eslint-disable*`, `@ts-ignore`, `@ts-expect-error`, or `as unknown as`.
+- Scope boundary (in): six listed source files (projects-worker.test.ts, events-worker.test.ts, api-key-policy.test.ts, policy-engine.test.ts, policy-worker.test.ts, delivery.test.ts) plus the new `ai/reports/task-0096e-implementer.md`. `tests/webhooks-worker/src/webhooks-worker.test.ts` already 0 anys at baseline — must stay byte-identical vs `main` @ `b565687`.
+- Scope boundary (out): no `apps/**`, `packages/**`, `infra/**`, `tooling/**`, `.github/**`, `specs/**`; no other `tests/**` workspace (membership / config / identity / api-edge); no Track A surface; no Task 0096c surface; no Task 0096d surface — zero file overlap with all three in-flight PR surfaces, so 0096e ships in parallel with PR #143 + Task 0096c PR + Task 0096d PR.
+- Rationale for bundling: per `agents/orchestrator.md` § Architect Mode → "When To Prefer A Large Coherent PR", the five workspaces share one primary outcome (lint cleanup), one ownership boundary, one rollback story (revert one squash), one acceptance block (5 lint exits + 6 it() counts). Splitting into five micro-PRs would be the anti-pattern explicitly called out in that section.
+- Acceptance: each of the five per-workspace lints exit 0 with 0 warnings (was 10/7/7/1/1); per-workspace tests at parity counts (1×170 / 1×20 / 2×177 / 1×20 / 2×66); per-file `it()` parity vs `main` @ `b565687` (170 / 20 / 9 / 131 / 20 / 28); `pnpm -r typecheck` exit 0; `pnpm -r --no-bail lint` ≤ 251 (none of c/d/Track-A merged ahead) | ≤ 171 (0096d merged) | ≤ 125 (0096c merged) | ≤ 45 (both Track-B waves merged) | subtract 45 if Track A merged; apps source still 0 (Task 0096 invariant); diff scoped to the six files + report; hazard scan empty; webhooks-worker.test.ts byte-identical; PR opened with real PR number written into the report on the final push.
+- Expected outcome: tests/** residual reaches whichever subset of {config-worker 126, identity-worker 80, api-edge 45} hasn't merged yet. If all three Track-B waves plus Track A all merge, class-B no-explicit-any track is fully drained and the lint hygiene track closes.
+- Verifier prompt: sealed at `ai/tasks/task-0096e-verifier.md`.
+
+## Task 0096e — Verifier (sealed resumption prompt)
+
+- Agent: Verifier
+- Prompt: `ai/tasks/task-0096e-verifier.md`
+- Status: scoped + sealed 2026-05-30, runnable the moment the Task 0096e implementer opens a PR on `impl/task-0096e-class-b-warning-cleanup-wave-5`
+- Phase shape: same 7 phases as 0096b/c/d verifier prompts — PR sanity → hazard+boundary scan (six allowed files + report only; webhooks-worker.test.ts byte-identical) → local gates (5 per-workspace lints, 5 per-workspace tests at parity counts, `pnpm -r typecheck`, `pnpm -r --no-bail lint`, apps-source invariant) → behaviour-preservation it() parity vs `main` @ `b565687` (170 / 20 / 9 / 131 / 20 / 28) → PR-CI log inspection (only `plan` + 5 `*-tests · dev · Verify` jobs fire — no deploy-gated jobs because no `apps/**`/`infra/**` changes) → squash merge + main fast-forward + post-merge main-CI watch → PASS/FAIL bookkeeping.
+- Track A + Task 0096c + Task 0096d guardrails: all three surface sets explicitly out of scope.
+- Recommended-next-move on PASS: dynamically pick from (a) Task 0095.1 verifier resumption if PR #143 has rebased, (b) whichever of 0096c / 0096d still has a PR open, (c) Task 0097 (rate limiting, B3 second half) if Track A has merged, (d) wave-6 covering `tests/api-edge` 45 if Track A has merged and only it remains.
