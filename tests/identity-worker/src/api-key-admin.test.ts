@@ -1,12 +1,31 @@
 /// <reference types="@cloudflare/workers-types" />
 import { createFakeRepository } from "./helpers/fake-repository";
 import crypto from "node:crypto";
+import type { Env } from "../../../apps/identity-worker/src/env";
+import type {
+  PublicApiKey,
+  PublicApiKeyCreateResult,
+  PublicApiKeyRevokeResult,
+} from "@saas/contracts/api-keys";
+import type {
+  EventsRepository,
+  EventsResult,
+  EventsPagedResult,
+  StoredEvent,
+  StoredAuditEntry,
+  AppendEventInput,
+  AppendEventWithAuditInput,
+} from "@saas/db/events";
 
-if (!(globalThis as any).crypto?.subtle) {
+interface GlobalCryptoLike {
+  crypto?: { subtle?: unknown; randomUUID?: () => string };
+}
+const g: GlobalCryptoLike = globalThis;
+if (!g.crypto?.subtle) {
   Object.defineProperty(globalThis, "crypto", { value: crypto.webcrypto });
 }
-if (typeof (globalThis as any).crypto.randomUUID !== "function") {
-  ((globalThis as any).crypto as { randomUUID: () => string }).randomUUID = () => crypto.randomUUID();
+if (typeof g.crypto?.randomUUID !== "function") {
+  (g.crypto as { randomUUID: () => string }).randomUUID = () => crypto.randomUUID();
 }
 
 import {
@@ -24,11 +43,39 @@ interface FetchCall {
   init: RequestInit;
 }
 
+interface JsonErrorEnvelope {
+  error: {
+    code: string;
+    message?: string;
+    details: { fields: Record<string, unknown> };
+  };
+}
+
+interface JsonCreateResp extends Partial<JsonErrorEnvelope> {
+  data: { apiKey: PublicApiKeyCreateResult };
+}
+
+interface JsonListResp extends Partial<JsonErrorEnvelope> {
+  data: { apiKeys: PublicApiKey[] };
+}
+
+interface JsonRevokeResp extends Partial<JsonErrorEnvelope> {
+  data: { apiKey: PublicApiKeyRevokeResult };
+}
+
+interface JsonValidationResp {
+  error: {
+    code: string;
+    message?: string;
+    details: { fields: Record<string, unknown> };
+  };
+}
+
 function createMockFetcher(
   handler?: (url: string, init: RequestInit) => Promise<Response>,
-): { fetcher: any; calls: FetchCall[] } {
+): { fetcher: Fetcher; calls: FetchCall[] } {
   const calls: FetchCall[] = [];
-  const fetcher = {
+  const fetcher: Fetcher = {
     fetch(input: string | Request | URL, init?: RequestInit): Promise<Response> {
       const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
       const i = init ?? {};
@@ -39,52 +86,134 @@ function createMockFetcher(
     connect() {
       throw new Error("not implemented");
     },
-  } as any;
+  } as Fetcher;
   return { fetcher, calls };
 }
 
+interface FakeEventsRepo extends EventsRepository {
+  events: Array<AppendEventInput | AppendEventWithAuditInput>;
+}
+
 /** Creates a fake EventsRepository with appendEventWithAudit */
-function createFakeEventsRepo() {
-  const events: any[] = [];
+function createFakeEventsRepo(): FakeEventsRepo {
+  const events: Array<AppendEventInput | AppendEventWithAuditInput> = [];
   return {
     events,
-    async appendEvent(input: any) {
-      events.push(input);
-      return { ok: true as const, value: { ...input.event ?? input, createdAt: new Date() } };
-    },
-    async appendEventWithAudit(input: any) {
+    async appendEvent(input: AppendEventInput): Promise<EventsResult<StoredEvent>> {
       events.push(input);
       return {
         ok: true as const,
         value: {
-          event: { ...input.event, createdAt: new Date() },
-          audit: { ...input.audit, createdAt: new Date() },
+          id: input.id,
+          type: input.type,
+          version: input.version,
+          source: input.source,
+          occurredAt: input.occurredAt,
+          actorType: input.actorType,
+          actorId: input.actorId,
+          actorSessionId: input.actorSessionId ?? null,
+          actorIp: input.actorIp ?? null,
+          orgId: input.orgId,
+          projectId: input.projectId ?? null,
+          environmentId: input.environmentId ?? null,
+          subjectKind: input.subjectKind,
+          subjectId: input.subjectId,
+          subjectName: input.subjectName ?? null,
+          requestId: input.requestId,
+          correlationId: input.correlationId ?? null,
+          causationId: input.causationId ?? null,
+          idempotencyKey: input.idempotencyKey ?? null,
+          payload: input.payload,
+          redactPaths: input.redactPaths ?? [],
+          createdAt: new Date(),
         },
       };
     },
-    async queryAuditByOrg() {
+    async appendEventWithAudit(
+      input: AppendEventWithAuditInput,
+    ): Promise<EventsResult<{ event: StoredEvent; audit: StoredAuditEntry }>> {
+      events.push(input);
+      const e = input.event;
+      const a = input.audit;
+      return {
+        ok: true as const,
+        value: {
+          event: {
+            id: e.id,
+            type: e.type,
+            version: e.version,
+            source: e.source,
+            occurredAt: e.occurredAt,
+            actorType: e.actorType,
+            actorId: e.actorId,
+            actorSessionId: e.actorSessionId ?? null,
+            actorIp: e.actorIp ?? null,
+            orgId: e.orgId,
+            projectId: e.projectId ?? null,
+            environmentId: e.environmentId ?? null,
+            subjectKind: e.subjectKind,
+            subjectId: e.subjectId,
+            subjectName: e.subjectName ?? null,
+            requestId: e.requestId,
+            correlationId: e.correlationId ?? null,
+            causationId: e.causationId ?? null,
+            idempotencyKey: e.idempotencyKey ?? null,
+            payload: e.payload,
+            redactPaths: e.redactPaths ?? [],
+            createdAt: new Date(),
+          },
+          audit: {
+            id: a.id,
+            eventId: e.id,
+            orgId: e.orgId,
+            projectId: a.projectId ?? null,
+            environmentId: a.environmentId ?? null,
+            actorType: e.actorType,
+            actorId: e.actorId,
+            eventType: e.type,
+            eventVersion: e.version,
+            source: e.source,
+            subjectKind: e.subjectKind,
+            subjectId: e.subjectId,
+            subjectName: e.subjectName ?? null,
+            category: a.category ?? "",
+            description: a.description ?? "",
+            occurredAt: e.occurredAt,
+            requestId: e.requestId,
+            correlationId: e.correlationId ?? null,
+            payload: e.payload,
+            redactPaths: e.redactPaths ?? [],
+            createdAt: new Date(),
+          },
+        },
+      };
+    },
+    async queryAuditByOrg(): Promise<EventsResult<EventsPagedResult<StoredAuditEntry>>> {
       return { ok: true as const, value: { items: [], nextCursor: null } };
     },
-    async queryAuditByTarget() {
+    async queryAuditByTarget(): Promise<EventsResult<EventsPagedResult<StoredAuditEntry>>> {
       return { ok: true as const, value: { items: [], nextCursor: null } };
+    },
+    async queryEventsByOrg(): Promise<EventsResult<StoredEvent[]>> {
+      return { ok: true as const, value: [] };
     },
   };
 }
 
-function makeEnv(membershipFetcher: any, policyFetcher: any) {
+function makeEnv(membershipFetcher: Fetcher, policyFetcher: Fetcher): Env {
   return {
-    SOURCEPLANE_DB: {} as any,
+    SOURCEPLANE_DB: {} as Hyperdrive,
     MEMBERSHIP_WORKER: membershipFetcher,
     POLICY_WORKER: policyFetcher,
     ENVIRONMENT: "test",
-  } as any;
+  } as Env;
 }
 
 /** Standard membership + policy fetcher that approves everything */
 function createApprovingFetchers(): {
-  membershipFetcher: any;
+  membershipFetcher: Fetcher;
   membershipCalls: FetchCall[];
-  policyFetcher: any;
+  policyFetcher: Fetcher;
   policyCalls: FetchCall[];
 } {
   const { fetcher: membershipFetcher, calls: membershipCalls } = createMockFetcher(async (url) => {
@@ -161,7 +290,7 @@ describe("handleCreateApiKey", () => {
       makeCreateRequest("org_1", { label: "test", role: "admin" }, false),
       makeEnv(membershipFetcher, policyFetcher),
       "req_1",
-      { identityRepo: repo, eventsRepo: eventsRepo as any },
+      { identityRepo: repo, eventsRepo },
     );
     expect(response.status).toBe(401);
   });
@@ -175,10 +304,10 @@ describe("handleCreateApiKey", () => {
       makeCreateRequest("org_1", { role: "admin" }),
       makeEnv(membershipFetcher, policyFetcher),
       "req_2",
-      { identityRepo: repo, eventsRepo: eventsRepo as any },
+      { identityRepo: repo, eventsRepo },
     );
     expect(response.status).toBe(422);
-    const json = (await response.json()) as any;
+    const json = (await response.json()) as JsonValidationResp;
     expect(json.error.details.fields.label).toBeDefined();
   });
 
@@ -191,7 +320,7 @@ describe("handleCreateApiKey", () => {
       makeCreateRequest("org_1", { label: "x".repeat(129), role: "admin" }),
       makeEnv(membershipFetcher, policyFetcher),
       "req_2b",
-      { identityRepo: repo, eventsRepo: eventsRepo as any },
+      { identityRepo: repo, eventsRepo },
     );
     expect(response.status).toBe(422);
   });
@@ -205,10 +334,10 @@ describe("handleCreateApiKey", () => {
       makeCreateRequest("org_1", { label: "test", role: "superadmin" }),
       makeEnv(membershipFetcher, policyFetcher),
       "req_3",
-      { identityRepo: repo, eventsRepo: eventsRepo as any },
+      { identityRepo: repo, eventsRepo },
     );
     expect(response.status).toBe(422);
-    const json = (await response.json()) as any;
+    const json = (await response.json()) as JsonValidationResp;
     expect(json.error.details.fields.role).toBeDefined();
   });
 
@@ -221,10 +350,10 @@ describe("handleCreateApiKey", () => {
       makeCreateRequest("org_1", { label: "test", role: "project_admin" }),
       makeEnv(membershipFetcher, policyFetcher),
       "req_4",
-      { identityRepo: repo, eventsRepo: eventsRepo as any },
+      { identityRepo: repo, eventsRepo },
     );
     expect(response.status).toBe(422);
-    const json = (await response.json()) as any;
+    const json = (await response.json()) as JsonValidationResp;
     expect(json.error.details.fields.projectId).toBeDefined();
   });
 
@@ -245,7 +374,7 @@ describe("handleCreateApiKey", () => {
       makeCreateRequest("org_1", { label: "test", role: "admin" }),
       makeEnv(membershipFetcher, policyFetcher),
       "req_5",
-      { identityRepo: repo, eventsRepo: eventsRepo as any },
+      { identityRepo: repo, eventsRepo },
     );
     expect(response.status).toBe(404);
   });
@@ -273,7 +402,7 @@ describe("handleCreateApiKey", () => {
       makeCreateRequest("org_1", { label: "test", role: "admin" }),
       makeEnv(membershipFetcher, policyFetcher),
       "req_6",
-      { identityRepo: repo, eventsRepo: eventsRepo as any },
+      { identityRepo: repo, eventsRepo },
     );
     expect(response.status).toBe(404);
   });
@@ -290,10 +419,10 @@ describe("handleCreateApiKey", () => {
       makeCreateRequest("org_1", { label: "My Key", role: "admin" }),
       makeEnv(membershipFetcher, policyFetcher),
       "req_7",
-      { identityRepo: repo, eventsRepo: eventsRepo as any },
+      { identityRepo: repo, eventsRepo },
     );
     expect(response.status).toBe(201);
-    const json = (await response.json()) as any;
+    const json = (await response.json()) as JsonCreateResp;
     const apiKey = json.data.apiKey;
     expect(apiKey.secret).toMatch(/^sk_/);
     expect(apiKey.prefix).toBe(apiKey.secret.slice(0, 12));
@@ -305,7 +434,7 @@ describe("handleCreateApiKey", () => {
     expect(repo._servicePrincipals.size).toBe(1);
 
     // Security event was recorded
-    const secEvents = repo._securityEvents.filter(e => e.eventType === "api_key.created");
+    const secEvents = repo._securityEvents.filter((e) => e.eventType === "api_key.created");
     expect(secEvents).toHaveLength(1);
 
     // Org event was appended
@@ -338,7 +467,7 @@ describe("handleListApiKeys", () => {
       { identityRepo: repo },
     );
     expect(response.status).toBe(200);
-    const json = (await response.json()) as any;
+    const json = (await response.json()) as JsonListResp;
     expect(json.data.apiKeys).toEqual([]);
   });
 
@@ -360,7 +489,7 @@ describe("handleListApiKeys", () => {
       id: "key_1",
       servicePrincipalId: "sp_1",
       orgId: "org_1",
-      keyPrefix: "sk_abcdef1234",
+      keyPrefix: "***",
       keyHash: "hash_1",
       label: "test-key",
       expiresAt: null,
@@ -375,10 +504,10 @@ describe("handleListApiKeys", () => {
       { identityRepo: repo },
     );
     expect(response.status).toBe(200);
-    const json = (await response.json()) as any;
+    const json = (await response.json()) as JsonListResp;
     expect(json.data.apiKeys).toHaveLength(1);
-    expect(json.data.apiKeys[0].id).toBe("key_1");
-    expect(json.data.apiKeys[0].label).toBe("test-key");
+    expect(json.data.apiKeys[0]!.id).toBe("key_1");
+    expect(json.data.apiKeys[0]!.label).toBe("test-key");
   });
 });
 
@@ -392,7 +521,7 @@ describe("handleRevokeApiKey", () => {
       makeRevokeRequest("org_1", "key_1", false),
       makeEnv(membershipFetcher, policyFetcher),
       "req_r1",
-      { identityRepo: repo, eventsRepo: eventsRepo as any },
+      { identityRepo: repo, eventsRepo },
     );
     expect(response.status).toBe(401);
   });
@@ -406,7 +535,7 @@ describe("handleRevokeApiKey", () => {
       makeRevokeRequest("org_1", "key_nonexistent"),
       makeEnv(membershipFetcher, policyFetcher),
       "req_r2",
-      { identityRepo: repo, eventsRepo: eventsRepo as any },
+      { identityRepo: repo, eventsRepo },
     );
     expect(response.status).toBe(404);
   });
@@ -429,7 +558,7 @@ describe("handleRevokeApiKey", () => {
       id: "key_revoked",
       servicePrincipalId: "sp_r",
       orgId: "org_1",
-      keyPrefix: "sk_revoked1234",
+      keyPrefix: "***",
       keyHash: "hash_r",
       label: "revoked-key",
       expiresAt: null,
@@ -443,7 +572,7 @@ describe("handleRevokeApiKey", () => {
       makeRevokeRequest("org_1", "key_revoked"),
       makeEnv(membershipFetcher, policyFetcher),
       "req_r3",
-      { identityRepo: repo, eventsRepo: eventsRepo as any },
+      { identityRepo: repo, eventsRepo },
     );
     expect(response.status).toBe(409);
   });
@@ -466,7 +595,7 @@ describe("handleRevokeApiKey", () => {
       id: "key_active",
       servicePrincipalId: "sp_s",
       orgId: "org_1",
-      keyPrefix: "sk_active12345",
+      keyPrefix: "***",
       keyHash: "hash_s",
       label: "active-key",
       expiresAt: null,
@@ -478,10 +607,10 @@ describe("handleRevokeApiKey", () => {
       makeRevokeRequest("org_1", "key_active"),
       makeEnv(membershipFetcher, policyFetcher),
       "req_r4",
-      { identityRepo: repo, eventsRepo: eventsRepo as any },
+      { identityRepo: repo, eventsRepo },
     );
     expect(response.status).toBe(200);
-    const json = (await response.json()) as any;
+    const json = (await response.json()) as JsonRevokeResp;
     expect(json.data.apiKey.id).toBe("key_active");
     expect(json.data.apiKey.label).toBe("active-key");
     expect(json.data.apiKey.revokedAt).toBeDefined();

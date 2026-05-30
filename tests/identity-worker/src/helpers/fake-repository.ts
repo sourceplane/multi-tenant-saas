@@ -16,6 +16,10 @@ import type {
   UpdateUserProfileInput,
   ApiKey,
   ServicePrincipal,
+  CreateServicePrincipalInput,
+  CreateApiKeyInput,
+  ApiKeyPageQueryParams,
+  ApiKeyPagedResult,
 } from "@saas/db/identity";
 
 interface StoredChallenge extends LoginChallenge {
@@ -236,7 +240,7 @@ export function createFakeRepository(): IdentityRepository & {
       return { ok: true, value: { items: page, nextCursor } };
     },
 
-    async createServicePrincipal(input: any): Promise<IdentityResult<ServicePrincipal>> {
+    async createServicePrincipal(input: CreateServicePrincipalInput): Promise<IdentityResult<ServicePrincipal>> {
       const sp: ServicePrincipal = {
         id: input.id,
         orgId: input.orgId,
@@ -263,7 +267,7 @@ export function createFakeRepository(): IdentityRepository & {
       return { ok: true, value: result };
     },
 
-    async createApiKey(input: any): Promise<IdentityResult<ApiKey>> {
+    async createApiKey(input: CreateApiKeyInput): Promise<IdentityResult<ApiKey>> {
       const key: ApiKey & { keyHash: string } = {
         id: input.id,
         servicePrincipalId: input.servicePrincipalId,
@@ -291,7 +295,7 @@ export function createFakeRepository(): IdentityRepository & {
       return { ok: false, error: { kind: "not_found" } };
     },
 
-    async listApiKeysByOrg(params: any): Promise<IdentityResult<any>> {
+    async listApiKeysByOrg(params: ApiKeyPageQueryParams): Promise<IdentityResult<ApiKeyPagedResult>> {
       const orgKeys = [...apiKeys.values()].filter(k => k.orgId === params.orgId);
       return { ok: true, value: { items: orgKeys, nextCursor: null } };
     },

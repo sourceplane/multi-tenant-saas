@@ -1,5 +1,9 @@
+/// <reference types="@cloudflare/workers-types" />
 import { createFakeRepository } from "./helpers/fake-repository";
 import crypto from "node:crypto";
+import type { Env } from "../../../apps/identity-worker/src/env";
+import type { ProfileResponse } from "@saas/contracts/auth";
+import type { SecurityEvent } from "@saas/db/identity";
 
 if (!globalThis.crypto?.subtle) {
   Object.defineProperty(globalThis, "crypto", { value: crypto.webcrypto });
@@ -10,6 +14,16 @@ if (typeof globalThis.crypto.randomUUID !== "function") {
 
 import { handleProfile } from "../../../apps/identity-worker/src/handlers/profile";
 import { createAuthService } from "../../../apps/identity-worker/src/services/auth";
+
+interface JsonResp {
+  data: { user: ProfileResponse["user"] };
+  error: {
+    code: string;
+    message?: string;
+    details: { fields: Record<string, unknown> };
+  };
+  meta: { requestId: string };
+}
 
 async function setupAuthenticatedUser(repo: ReturnType<typeof createFakeRepository>) {
   const recentPast = new Date(Date.now() - 60_000);
@@ -23,8 +37,8 @@ async function setupAuthenticatedUser(repo: ReturnType<typeof createFakeReposito
   return { token: completeResult.token, userId: completeResult.user.id };
 }
 
-function makeEnv(db = {} as unknown) {
-  return { SOURCEPLANE_DB: db, ENVIRONMENT: "test" } as any;
+function makeEnv(db: Hyperdrive = {} as Hyperdrive): Env {
+  return { SOURCEPLANE_DB: db, ENVIRONMENT: "test" } as Env;
 }
 
 function makeGetRequest(token?: string) {
@@ -51,7 +65,7 @@ describe("GET /v1/auth/profile", () => {
     const repo = createFakeRepository();
     const response = await handleProfile(makeGetRequest(), makeEnv(), "req_p1", { repo });
     expect(response.status).toBe(401);
-    const json = (await response.json()) as any;
+    const json = (await response.json()) as JsonResp;
     expect(json.error.code).toBe("unauthenticated");
   });
 
@@ -67,7 +81,7 @@ describe("GET /v1/auth/profile", () => {
 
     const response = await handleProfile(makeGetRequest(token), makeEnv(), "req_p3", { repo });
     expect(response.status).toBe(200);
-    const json = (await response.json()) as any;
+    const json = (await response.json()) as JsonResp;
     expect(json.data.user).toBeDefined();
     expect(json.data.user.email).toBe("test@example.com");
     expect(json.data.user.id).toBeDefined();
@@ -98,7 +112,7 @@ describe("PATCH /v1/auth/profile", () => {
       { repo },
     );
     expect(response.status).toBe(200);
-    const json = (await response.json()) as any;
+    const json = (await response.json()) as JsonResp;
     expect(json.data.user.displayName).toBe("Alice");
   });
 
@@ -117,7 +131,7 @@ describe("PATCH /v1/auth/profile", () => {
       { repo },
     );
     expect(response.status).toBe(200);
-    const json = (await response.json()) as any;
+    const json = (await response.json()) as JsonResp;
     expect(json.data.user.displayName).toBeNull();
   });
 
@@ -132,7 +146,7 @@ describe("PATCH /v1/auth/profile", () => {
       { repo },
     );
     expect(response.status).toBe(200);
-    const json = (await response.json()) as any;
+    const json = (await response.json()) as JsonResp;
     expect(json.data.user.displayName).toBeNull();
   });
 
@@ -147,7 +161,7 @@ describe("PATCH /v1/auth/profile", () => {
       { repo },
     );
     expect(response.status).toBe(200);
-    const json = (await response.json()) as any;
+    const json = (await response.json()) as JsonResp;
     expect(json.data.user.displayName).toBeNull();
   });
 
@@ -163,7 +177,7 @@ describe("PATCH /v1/auth/profile", () => {
       { repo },
     );
     expect(response.status).toBe(422);
-    const json = (await response.json()) as any;
+    const json = (await response.json()) as JsonResp;
     expect(json.error.code).toBe("validation_failed");
     expect(json.error.details.fields.displayName).toBeDefined();
   });
@@ -180,7 +194,7 @@ describe("PATCH /v1/auth/profile", () => {
       { repo },
     );
     expect(response.status).toBe(200);
-    const json = (await response.json()) as any;
+    const json = (await response.json()) as JsonResp;
     expect(json.data.user.displayName).toBe(exactName);
   });
 
@@ -195,7 +209,7 @@ describe("PATCH /v1/auth/profile", () => {
       { repo },
     );
     expect(response.status).toBe(422);
-    const json = (await response.json()) as any;
+    const json = (await response.json()) as JsonResp;
     expect(json.error.code).toBe("validation_failed");
   });
 
@@ -210,7 +224,7 @@ describe("PATCH /v1/auth/profile", () => {
       { repo },
     );
     expect(response.status).toBe(422);
-    const json = (await response.json()) as any;
+    const json = (await response.json()) as JsonResp;
     expect(json.error.code).toBe("validation_failed");
     expect(json.error.details.fields.email).toBeDefined();
   });
@@ -240,7 +254,7 @@ describe("PATCH /v1/auth/profile", () => {
     );
 
     const events = repo._securityEvents;
-    const profileEvent = events.find((e: any) => e.eventType === "user.profile.updated");
+    const profileEvent = events.find((e: SecurityEvent) => e.eventType === "user.profile.updated");
     expect(profileEvent).toBeDefined();
     expect(profileEvent!.outcome).toBe("success");
   });
@@ -256,7 +270,7 @@ describe("PATCH /v1/auth/profile", () => {
       { repo },
     );
     expect(response.status).toBe(200);
-    const json = (await response.json()) as any;
+    const json = (await response.json()) as JsonResp;
     expect(json.data).toBeDefined();
     expect(json.data.user).toBeDefined();
     expect(json.meta).toBeDefined();
