@@ -171,6 +171,23 @@ delta-scans the 0095.1 commits against `e47248e` (the prior verifier
 head); verifier report goes to `ai/reports/task-0095.1-verifier.md`
 (separate from the existing 0095 FAIL report).
 
+## Sealed verifier prompt — Task 0096c
+
+`ai/tasks/task-0096c-verifier.md` is now scoped and runnable the
+moment the Task 0096c implementer opens a PR on
+`impl/task-0096c-tests-config-worker-class-b`. Same shape as
+`task-0096b-verifier.md`: 7 phases (PR sanity → hazard+boundary scan →
+local gates → behaviour-preservation `it()`/`test()` count parity vs
+`main` @ `1c6fcba` (39/39/29 on the three modified test files;
+byte-identical on `config-worker.test.ts` and `deployment-config.test.ts`)
+→ PR-CI log inspection → squash merge + post-merge main-CI watch →
+state bookkeeping). Track A territory (`apps/api-edge/**`,
+`infra/terraform/cloudflare-kv/**`, `tests/api-edge/**`) is explicitly
+out of scope. On PASS, Recommended-Next-Move points the orchestrator
+at `tests/identity-worker` (80 warnings) for Task 0096d —
+`tests/api-edge` (45, second-largest by raw count) is gated behind
+Track A's merge.
+
 ## Next-task candidates after Task 0096b PASS + merge
 
 1. **If Track A (Task 0095.1) has shipped by then** — run
