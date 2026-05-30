@@ -80,9 +80,15 @@ Last updated: 2026-05-26
   selector. Human direction now requires two separate console deployments with
   different URLs, one stage-bound and one prod-bound. Task 0041 is scoped to
   split the Pages deployments and make CORS environment-aware.
-- Durable idempotency for invitation creation is not implemented. `idempotency-key`
-  is forwarded by api-edge but not stored; duplicate POST requests may produce
-  multiple pending invitations to the same email.
+- Durable idempotency for invitation creation is not implemented. As of Task 0094
+  the api-edge layer validates a present `Idempotency-Key` header (Stripe-style:
+  ASCII printable, ≤255 chars, non-empty after trim) and rejects malformed
+  values with HTTP 400 `validation_failed` before forwarding to a worker — but
+  there is still no replay store, so a duplicate POST with a *valid* key still
+  produces multiple pending invitations. Durable replay (likely Cloudflare KV
+  keyed on `(orgId, idempotencyKey, route)`) is scoped as Task 0095 and will
+  import `parseIdempotencyKey` from `@saas/contracts/idempotency`. Required-key
+  enforcement on specific routes is deferred to the B4 SDK rollout.
 - Duplicate pending invitations to the same email are allowed by the current
   schema (no uniqueness constraint on email_lower + org_id + status). Consider
   adding uniqueness enforcement in a future task if this causes user confusion.

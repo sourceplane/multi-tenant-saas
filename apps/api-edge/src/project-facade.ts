@@ -1,5 +1,6 @@
 import type { Env } from "./env.js";
 import { errorResponse } from "./http.js";
+import { validateIdempotencyKey } from "./idempotency.js";
 import { resolveActor } from "./resolve-actor.js";
 
 const ORG_PROJECTS_RE = /^\/v1\/organizations\/[^/]+\/projects$/;
@@ -44,6 +45,9 @@ export async function handleProjectRoute(
   if (ORG_PROJECT_ENVIRONMENT_ID_RE.test(pathname) && request.method !== "GET" && request.method !== "DELETE") {
     return errorResponse("unsupported", "Method not allowed", 405, requestId);
   }
+
+  const idempotencyError = validateIdempotencyKey(request, requestId);
+  if (idempotencyError) return idempotencyError;
 
   if (!env.IDENTITY_WORKER) {
     return errorResponse("internal_error", "Authentication service unavailable", 503, requestId);
