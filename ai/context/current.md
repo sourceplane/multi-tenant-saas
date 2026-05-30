@@ -60,14 +60,45 @@ on both stage and prod (hit, miss-then-store, GET passthrough, 4xx cached,
 identity-agnostic key, header allowlist; stage/prod KV isolation
 confirmed). Verifier report: `ai/reports/task-0095.1-verifier.md`.
 
-## Next focus
+## Current task
 
-With Track A closed, two non-deferred candidates are next:
+**Task 0097 — Edge per-org + per-identity rate limiting (B3 second half).**
+Implementer prompt at `ai/tasks/task-0097.md`. Branch
+`impl/task-0097-edge-rate-limiting`. Agent: Implementer.
 
-1. **Task 0096f** — drain `tests/api-edge` 45→0 `@typescript-eslint/no-explicit-any`
-   (closes Track B globally; was gated behind Track A landing).
-2. **Task 0097** — rate-limiting (B3 second half). Reuses the
-   `cloudflare-kv` Terraform slice landed in PR #147.
+Single chokepoint extension: a new `enforceRateLimit(...)` in
+`apps/api-edge/src/rate-limit.ts`, called from inside the existing
+`replayOrExecute(...)` in `idempotency.ts` BEFORE the KV cache lookup.
+Each facade passes a `routeFamily` literal so the limiter doesn't have
+to parse URLs. Two independent buckets: `org` (when org-scoped actor
+resolved) and `identity` (actor or anon `CF-Connecting-IP` fallback).
+429 with `rate_limited` envelope (code already in
+`specs/contracts/api-guidelines.md`) + `Retry-After` + full
+`X-RateLimit-*` headers on every response.
+
+Backend default: token-bucket on a new sibling KV namespace
+`api_edge_rate_limit_{stage,prod}` added to the existing
+`infra/terraform/cloudflare-kv/` component as
+`cloudflare_workers_kv_namespace.api_edge_rate_limit` — no new TF
+slice. Cloudflare provider pin in `cloudflare-kv` stays at `~> 4.30`
+(do NOT touch the `cloudflare-domain` `~> 4.52` pin behind deferred
+0085b). New wrangler binding `RATE_LIMIT_KV` under `env.stage` and
+`env.prod`; `verify-bindings.mjs` extended with an `EXPECTED_KV` entry
+for it using the same regex + sentinel pattern as `IDEMPOTENCY_KV`.
+Fail-open posture identical to the replay store.
+
+Parallel-safe with Task 0096f (`tests/api-edge` 45→0 closes Track B
+globally) — that PR touches only `tests/**`, zero overlap with
+`apps/api-edge/**` source.
+
+## Next focus (after 0097)
+
+1. **Task 0096f** — drain `tests/api-edge` 45→0
+   `@typescript-eslint/no-explicit-any` (closes Track B globally; was
+   gated behind Track A landing).
+2. Beyond 0097 / 0096f: the road forks per `specs/roadmap.md` —
+   B4 SDK rollout (required-key enforcement on POST routes lives there)
+   or B5 per-tenant rate-limit overrides.
 
 Deferred candidates unchanged: `0085b`, `notifications-provider-swap`,
 `notifications-worker-dev-reframe` (see `ai/deferred.md`).

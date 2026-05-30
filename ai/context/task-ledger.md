@@ -2075,3 +2075,19 @@ PR #143 squash `d9116aa` (`--admin`, branch was BEHIND base; CI green). 20 files
 
 ## Track A CLOSED (2026-05-30)
 With Task 0095 / 0095.1 merged, Track A is closed. Remaining 45 `@typescript-eslint/no-explicit-any` warnings in `tests/api-edge` are now eligible for a final mop-up wave (Task 0096f or successor). Apps source class-B: 0 (Task 0096 invariant holds). Recommended next moves: (1) Task 0096f to drain `tests/api-edge` 45→0; (2) Task 0097 rate-limiting (B3 second half, reuses the cloudflare-kv slice landed in PR #147).
+
+## Task 0097 — Edge per-org + per-identity rate limiting (B3 second half)
+
+- Agent: Implementer
+- Prompt: `ai/tasks/task-0097.md`
+- Status: scoped 2026-05-30
+- Branch: `impl/task-0097-edge-rate-limiting`
+- Shape: NEW `apps/api-edge/src/rate-limit.ts` exporting `enforceRateLimit(request, requestId, env, ctx)`; integrated inside the existing `replayOrExecute(...)` chokepoint in `apps/api-edge/src/idempotency.ts` BEFORE the KV cache lookup so all seven facades pick it up automatically. Each facade passes a `routeFamily` literal. Two independent buckets per request: `org` (when an org-scoped actor is resolved) and `identity` (resolved actor, or anon `CF-Connecting-IP` fallback for pre-actor routes like `/v1/auth/login/start`). 429 with `rate_limited` envelope (code already declared in `specs/contracts/api-guidelines.md`) + `Retry-After` + `X-RateLimit-{Limit,Remaining,Reset}-<scope>` headers on EVERY response (allowed and rejected).
+- Backend default: token-bucket on a new sibling KV namespace `api_edge_rate_limit_{stage,prod}` added to the existing `infra/terraform/cloudflare-kv/` component as `cloudflare_workers_kv_namespace.api_edge_rate_limit` (no new TF slice — same component gets a sibling resource + outputs). cloudflare provider pin in `cloudflare-kv` stays at `~> 4.30`. Implementer has documented latitude to choose Durable Object or native Cloudflare RateLimit binding instead with a one-paragraph rationale.
+- Wrangler: new binding `RATE_LIMIT_KV` under `env.stage` and `env.prod` (env.dev skipped — verify-only profile). `apps/api-edge/scripts/verify-bindings.mjs` extended with an `EXPECTED_KV` entry for it using the same `^[0-9a-f]{32}$` regex + sentinel rejection pattern as `IDEMPOTENCY_KV`.
+- Fail-open: backend down → admit + log via existing observability hook (matches replay-store posture).
+- Suggested per-route-family caps (deviate with rationale): auth 10/min identity, 60/min org; org/project/config/webhooks/metering/billing 60/min identity, 300/min org.
+- Hard rules: no IDEMPOTENCY_KV reuse without prefix-collision proof, no facade-local rate-limit branches, no new `eslint-disable*` / `@ts-ignore` / `@ts-expect-error` / `as unknown as`, no touching `infra/terraform/cloudflare-domain/**` or the `cloudflare ~> 4.52` pin (Task 0085b deferred), no IDEMPOTENCY_KV ID changes.
+- Out of scope: per-tenant configurable limits (B5 work), public rate-limit reporting API, web-console dashboard, *-dev workers (notifications-worker-dev-reframe deferred), `tests/api-edge/**` lint cleanup (Task 0096f territory), required-key enforcement on POST routes (B4 SDK rollout).
+- Verifier acceptance (sealed in the prompt): live overflow + under-limit on stage (identity bucket, org bucket, anon-IP bucket), under-limit + headers smoke on prod, regression check that Task 0095.1 Phase 8 case (a) STILL replays on both stage and prod post-merge. PR-CI must show `orun plan` + new cloudflare-kv apply jobs (if a new namespace is added).
+- Parallel-safe with Task 0096f (`tests/api-edge` 45→0): zero overlap — 0096f touches only `tests/**`, 0097 touches `apps/api-edge/src/**`, `apps/api-edge/wrangler.jsonc`, `apps/api-edge/scripts/verify-bindings.mjs`, and `infra/terraform/cloudflare-kv/terraform/main.tf` (sibling resource only; existing `api_edge_idempotency` resource untouched).
