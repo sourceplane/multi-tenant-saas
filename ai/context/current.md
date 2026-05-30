@@ -1,33 +1,109 @@
 # Current Context
 
-Last updated: 2026-05-30 (Task 0096b CLOSED — verifier PASS, PR #145
-squash-merged at `6b738c0`, post-merge main-CI `26677189951` 2/2
-SUCCESS, 350 `@typescript-eslint/no-explicit-any` in
-`tests/membership-worker` → 0, global residual lint 627 → 277 (all in
-other `tests/**` workspaces, apps-source still 0 — Task 0096 invariant
-holds), 5 suites / 244 tests unchanged vs `d2187f1`, hazard scan empty.
-Track A (Task 0095.1 / PR #143) STILL waiting on implementer fix-up
-commits — head still `db00843`, mergeStateStatus DIRTY/CONFLICTING vs
-main. Repo health: green; PR #143 is the single open PR; main @
-`6b738c0`.)
+Last updated: 2026-05-30 (Task 0096c SCOPED — orchestrator emitted
+implementer prompt at `ai/tasks/task-0096c.md`. Track B wave 3:
+`tests/config-worker` 126 `@typescript-eslint/no-explicit-any` → 0
+across 3 files. Track A / PR #143 still blocked on its implementer
+fix-up — head `db00843`, mergeStateStatus DIRTY/CONFLICTING vs main.
+main @ `1c6fcba` (post Task 0096b verifier bookkeeping commit on top of
+the squash `6b738c0`). Repo health: green. PR #143 is the single open
+PR.)
 
-## Active task — orchestrator scoping (Task 0096c candidate)
+## Active task — Task 0096c (Class-B warning cleanup wave 3, tests/config-worker)
 
-The orchestrator's next loop iteration should scope Task 0096c — the
-class-B warning cleanup wave 3, targeting `tests/config-worker` (126
-warnings, the largest remaining single workspace). Same PR shape as
-0096b: single workspace, `@typescript-eslint/no-explicit-any` only,
-real types from `@saas/contracts` / `@saas/db/config` /
-`apps/config-worker/src/**` exports, no eslint-disable / @ts-ignore /
-@ts-expect-error / as-unknown-as introductions, behaviour-preserving,
-suite + test count parity vs `main` @ `6b738c0`. Will not collide with
-PR #143 (apps/api-edge / cloudflare-kv / tests/api-edge).
+Agent: Implementer.
+Prompt: `ai/tasks/task-0096c.md`.
+Branch: `impl/task-0096c-tests-config-worker-class-b`.
 
-After 0096c, the residual lint surface should be ~151 warnings, all
-in `tests/{identity-worker, api-edge, projects-worker, events-worker,
-policy-engine, policy-worker, webhooks-worker}`. Track A's verifier
-prompt at `ai/tasks/task-0095.1-verifier.md` is sealed and runnable
-the moment its implementer fix-up lands.
+### Scope (one PR, one workspace)
+
+- Replace every `@typescript-eslint/no-explicit-any` warning in
+  `tests/config-worker/src/**/*.ts` with the narrowest accurate type —
+  preferring real exports from `@saas/contracts/config`,
+  `@saas/db/config`, and `apps/config-worker/src/**`. Same discipline
+  as Tasks 0096 / 0096b.
+- Three files carry the warnings: `mutation-handlers.test.ts` (47),
+  `secret-mutation-handlers.test.ts` (43),
+  `encrypted-secret-storage.test.ts` (36). `config-worker.test.ts`
+  (0) and `deployment-config.test.ts` (0) are already clean and stay
+  untouched.
+- New `ai/reports/task-0096c-implementer.md` with type-sources +
+  hazard-scan sections matching 0096b's report shape.
+
+### Hard non-goals
+
+- No `apps/**`, `packages/**`, `infra/**`, `tooling/**`, `.github/**`,
+  `specs/**`, or any other `tests/**` workspace.
+- No new `eslint-disable*` / `@ts-ignore` / `@ts-expect-error` /
+  `as unknown as` introductions in the diff.
+- No assertion / fixture / suite-ordering / `it()`-title changes.
+- **No touching of PR #143's surface** (`apps/api-edge/**`,
+  `infra/terraform/cloudflare-kv/**`, `tests/api-edge/**`) — must
+  stay collision-free with the Track A rebase.
+
+### Acceptance (must all hold on the PR head)
+
+- `pnpm --filter @saas/config-worker-tests lint` → exit 0,
+  **0 warnings** (was 126).
+- `pnpm --filter @saas/config-worker-tests test` → exit 0, **5
+  suites / 174 tests** with per-file `it()` count parity vs `main` @
+  `1c6fcba` (39 / 39 / 29 / 54 / 8).
+- `pnpm -r typecheck` exit 0 (Task 0091 baseline).
+- `pnpm -r --no-bail lint` exit 0 with **151 residual warnings**, all
+  in `tests/**` other workspaces (was 277). Apps-source still 0
+  (Task 0096 invariant).
+- `git diff origin/main --stat` shows files only under
+  `tests/config-worker/src/**` plus the report.
+- Hazard scan empty:
+  `git diff origin/main -- 'tests/config-worker/**' | grep -E '^\+.*(eslint-disable|@ts-(ignore|expect-error)|as unknown as)'`
+  → no output.
+- PR opened, real PR number substituted in the report before the final
+  push.
+
+### Why this task now (rationale)
+
+- `tests/config-worker` is the largest remaining single concentration
+  (126 / 277 = 45% of residual lint surface), so this PR retires the
+  highest-leverage chunk in one reviewable unit.
+- It is independent of Track A (no file overlap with PR #143), so it
+  ships in parallel without touching the Edge idempotency replay
+  store rebase.
+- Same template as Task 0096b (which the verifier passed cleanly), so
+  the diff shape, review checklist, and CI behaviour are well-known —
+  this is a known-safe pattern, not a new risk.
+- After this lands, the remaining seven `tests/**` workspaces drop to
+  <100 warnings each (largest = `tests/identity-worker` 80), making
+  the next wave (Task 0096d) the second-to-last big batch.
+
+## Track A — Task 0095.1 (verifier resumption staged on PR #143)
+
+Unchanged. PR #143 head still `db00843`, mergeStateStatus
+DIRTY/CONFLICTING vs main. Implementer needs to rebase onto current
+`main` (`1c6fcba`), apply the Phase-5 fix-up (real 32-char hex KV IDs in
+`apps/api-edge/wrangler.jsonc` for stage + prod, `EXPECTED_KV` block in
+`apps/api-edge/scripts/verify-bindings.mjs`,
+`ai/context/open-risks.md` lines 83–91 closure), and push. The verifier
+prompt at `ai/tasks/task-0095.1-verifier.md` is sealed (Phases 1–4 PASS)
+and runs Phase 5-delta → 2-delta → 3-delta → 6 squash → 7 post-merge
+main-CI watch + `wrangler kv namespace list` provider verification → 8
+live cases (a)–(g) on stage and (a)/(isolation)/(g) on prod → 9
+open-risks closure → 10 alarm window.
+
+Sealed (must not change in 0095.1):
+`apps/api-edge/src/idempotency.ts`, `apps/api-edge/src/env.ts`, and
+the seven facade call sites — verifier Phase-4 explicitly PASSED these.
+
+## Verifier prompt for Task 0096c
+
+Will be scoped immediately after the implementer reports PR open and
+PR-CI green. Verifier task file will be `ai/tasks/task-0096c-verifier.md`
+(scoped post-PR), modelled on `ai/tasks/task-0093-verifier.md` and the
+0096b verifier discipline: scope check (only
+`tests/config-worker/src/**` + report), re-run of the four `pnpm`
+commands at PR head, hazard-scan re-run, 10–15 site spot-check against
+real types, PR-CI rollup, squash-merge on PASS, post-merge main-CI watch
+(plan-only run expected — tests-only diff doesn't trigger deploy-gated
+jobs).
 
 ## Recently completed — Task 0096b (Class-B warning cleanup wave 2, tests/membership-worker, PASS)
 

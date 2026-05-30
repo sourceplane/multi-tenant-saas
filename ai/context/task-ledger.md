@@ -1980,3 +1980,16 @@ Last updated: 2026-05-30 (Task 0096b Verifier PASS + MERGED — PR #145 squash `
 - Phases: 1 (PR sanity) → 5 (PR-CI log inspection) all PASS, 6 (squash merge `6b738c0` + main fast-forward + post-merge main-CI run `26677189951` 2/2 SUCCESS), 7 (state + ledger bookkeeping).
 - Issues: none. No verifier fixes were required.
 - Recommended next move: `tests/config-worker` (126 warnings) is the next-largest single workspace and the natural Task 0096c target — same PR shape as 0096b, no apps/api-edge or cloudflare-kv collision with PR #143.
+
+## Task 0096c
+
+- Agent: Implementer
+- Prompt: `ai/tasks/task-0096c.md`
+- Status: scoped and ready to begin (2026-05-30)
+- Branch: `impl/task-0096c-tests-config-worker-class-b`
+- Objective: drive `pnpm --filter @saas/config-worker-tests lint` warning count from 126 → 0 by replacing every `@typescript-eslint/no-explicit-any` site in `tests/config-worker/src` with the narrowest accurate type — preferring real exports from `@saas/contracts/config`, `@saas/db/config`, and `apps/config-worker/src/**` — without changing test behaviour, without introducing new `eslint-disable` / `@ts-ignore` / `@ts-expect-error` / `as unknown as` escapes, and without modifying any production source.
+- Scope boundary (in): edits inside `tests/config-worker/src/**/*.ts` (3 files carry the warnings: `mutation-handlers.test.ts` 47, `secret-mutation-handlers.test.ts` 43, `encrypted-secret-storage.test.ts` 36; `config-worker.test.ts` and `deployment-config.test.ts` are at 0 anys and stay untouched), an optional in-workspace `_types.ts` if it materially deduplicates, plus the new `ai/reports/task-0096c-implementer.md`.
+- Scope boundary (out): no `apps/**`, `packages/**`, `infra/**`, `tooling/**`, `.github/**`, `specs/**`, or any other `tests/**` workspace; no Track A surface (`apps/api-edge/**`, `infra/terraform/cloudflare-kv/**`, `tests/api-edge/**`); no rule-severity flip; no production refactors; no assertion / suite-order / `it()`-title changes.
+- Acceptance: per-workspace lint exit 0 with 0 warnings (was 126); `pnpm --filter @saas/config-worker-tests test` 5 suites / 174 tests with per-file `it()` parity vs `main` @ `1c6fcba` (39/39/29/54/8); `pnpm -r typecheck` exit 0 (Task 0091 baseline); `pnpm -r --no-bail lint` exit 0 with **151 residual warnings**, all in `tests/**` other workspaces (apps source still 0, Task 0096 invariant); `git diff origin/main --stat` only `tests/config-worker/src/**` + report; hazard scan `git diff origin/main -- 'tests/config-worker/**' | grep -E '^\+.*(eslint-disable|@ts-(ignore|expect-error)|as unknown as)'` empty; PR opened with real PR number written into the report on the final push.
+- Expected outcome: `tests/config-worker` joins `tests/membership-worker` at 0 class-B warnings, dropping global residual lint surface from 277 → 151 across 7 remaining `tests/**` workspaces. Established `JsonResp`-style envelope pattern from Task 0096b plus real `@saas/db/config` / `@saas/contracts/config` types are the expected fix shapes.
+- Verifier prompt: scoped post-PR at `ai/tasks/task-0096c-verifier.md` (same shape as `task-0096b-verifier.md`).
