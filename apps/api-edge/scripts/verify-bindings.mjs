@@ -19,6 +19,21 @@ const EXPECTED_HYPERDRIVE = {
   },
 };
 
+const EXPECTED_KV = {
+  stage: {
+    binding: "IDEMPOTENCY_KV",
+  },
+  prod: {
+    binding: "IDEMPOTENCY_KV",
+  },
+};
+
+const KV_ID_PATTERN = /^[0-9a-f]{32}$/;
+const KV_ID_SENTINELS = new Set([
+  "0000000000000000000000000000000a",
+  "0000000000000000000000000000000b",
+]);
+
 const EXPECTED_SERVICES = {
   stage: [
     {
@@ -91,6 +106,42 @@ for (const [envName, expected] of Object.entries(EXPECTED_HYPERDRIVE)) {
   }
 
   console.log(`OK: [${envName}] SOURCEPLANE_DB → ${hd.id}`);
+}
+
+for (const [envName, expected] of Object.entries(EXPECTED_KV)) {
+  const envBlock = config.env?.[envName];
+  if (!envBlock) {
+    console.error(`FAIL: environment "${envName}" not found in wrangler.jsonc`);
+    failures++;
+    continue;
+  }
+
+  const kv = envBlock.kv_namespaces?.find((k) => k.binding === expected.binding);
+  if (!kv) {
+    console.error(
+      `FAIL: [${envName}] missing kv_namespaces binding "${expected.binding}"`
+    );
+    failures++;
+    continue;
+  }
+
+  if (typeof kv.id !== "string" || !KV_ID_PATTERN.test(kv.id)) {
+    console.error(
+      `FAIL: [${envName}] kv binding "${expected.binding}" id "${kv.id}" does not match /^[0-9a-f]{32}$/`
+    );
+    failures++;
+    continue;
+  }
+
+  if (KV_ID_SENTINELS.has(kv.id)) {
+    console.error(
+      `FAIL: [${envName}] kv binding "${expected.binding}" still uses sentinel id "${kv.id}" — replace with the real Cloudflare KV namespace id`
+    );
+    failures++;
+    continue;
+  }
+
+  console.log(`OK: [${envName}] ${expected.binding} → ${kv.id}`);
 }
 
 for (const [envName, expectedList] of Object.entries(EXPECTED_SERVICES)) {

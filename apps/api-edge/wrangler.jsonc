@@ -29,7 +29,7 @@
       "kv_namespaces": [
         {
           "binding": "IDEMPOTENCY_KV",
-          "id": "0000000000000000000000000000000a"
+          "id": "2f5a03d0a14e4ead8f2b6658f6bfd722"
         }
       ],
       "services": [
@@ -81,7 +81,7 @@
       "kv_namespaces": [
         {
           "binding": "IDEMPOTENCY_KV",
-          "id": "0000000000000000000000000000000b"
+          "id": "fac1d319c8894466b4860bff9c6cb99d"
         }
       ],
       "services": [
