@@ -1914,9 +1914,9 @@ Last updated: 2026-05-30 (Task 0091 Verifier PASS — PR #139 merged at `9081cff
 
 ## Task 0096 — Class-B Warning Cleanup Wave 1 (apps source)
 
-- Agent: Implementer
-- Prompt: `ai/tasks/task-0096.md`
-- Status: scoped 2026-05-30, awaiting implementer pickup
+- Agent: Implementer + Verifier
+- Prompts: `ai/tasks/task-0096.md`, `ai/tasks/task-0096-verifier.md`
+- Status: implementer phase complete 2026-05-30 (PR #144 OPEN at `78720ef`, MERGEABLE/CLEAN, PR-CI 7/7 SUCCESS); verifier scoped and ready to run
 - Branch: `impl/task-0096-class-b-warning-cleanup-wave-1` (to be created from main @ `d94bf92`)
 - Objective: drive `pnpm -r --no-bail lint` warning count for production source under `apps/*/src/**` (excluding the in-flight `apps/api-edge`) from 5 → 0 by mechanically replacing two `as any` casts with the canonical repo input types and three `console.log` summary lines with `console.warn`.
 - Surface: `apps/config-worker/src/handlers/update-feature-flag.ts:139,213` (`@typescript-eslint/no-explicit-any`); `apps/metering-worker/src/rollups.ts:147` (`no-console`); `apps/webhooks-worker/src/index.ts:30,36` (`no-console`).
@@ -1926,3 +1926,15 @@ Last updated: 2026-05-30 (Task 0091 Verifier PASS — PR #139 merged at `9081cff
 - Out of scope: `tests/**` (639 warnings reserved for future Task 0096b wave), `apps/api-edge/**` (sealed by PR #143), `packages/**`, shared rule baseline (`tooling/eslint/index.js`), severity changes, behavioural changes, new dependencies / loggers.
 - Blocker protocol: if a repo-method input type for the feature-flag casts cannot be located, stop + write a `## Blocker` section in the report + push wip-prefixed branch + open draft PR + exit. No `as unknown as` laundering.
 - Recommended next move on PASS + merge: Task 0096b (tests/** cleanup, 639 sites across 9 workspaces — `tests/membership-worker` 351, `tests/config-worker` 127, `tests/identity-worker` 81, `tests/api-edge` 46, others) OR Task 0097 rate-limiting (B3 second half — reuses cloudflare-kv slice from Task 0095).
+
+## Task 0096 — Verifier
+
+- Agent: Verifier
+- Prompt: `ai/tasks/task-0096-verifier.md`
+- Status: scoped 2026-05-30, ready to run against PR #144 head `78720ef`
+- PR: #144 (`impl/task-0096-class-b-warning-cleanup-wave-1`), MERGEABLE/CLEAN, PR-CI 7/7 SUCCESS at scope time
+- Objective: verify Task 0096 PR #144 against its 4-file PR boundary and behavioural-change review (description:null→undefined narrowing); on PASS, squash-merge and confirm post-merge main-CI greens 9 deploy-gated jobs across {config,metering,webhooks}-worker × {dev,stage,prod}.
+- Phases (10): boundary scan; hazard scan (no `+eslint-disable*` / `+@ts-ignore` / `+as unknown as`); code-path inspection (UpdateFeatureFlagInput from `@saas/db/config`, no surviving `as any`, console.warn on the three sites); local validation gates (per-workspace lint 0 warnings, pnpm -r typecheck 0, touched test suites green); description:null behavioural review (no fixture in `tests/config-worker/src` exercises `description:null` update-feature-flag path; sibling-handler precedent holds); PR/CI audit; squash-merge + post-merge main-CI watch per `references/post-merge-deploy-profile-gap.md`; console smoke unchanged on stage+prod (307→/orgs); state-file closure (state.json + current.md + task-ledger.md committed to main); 5-min alarm window.
+- Acceptance: PR diff = exactly 4 files (3 source + 1 implementer report); zero hazard-scan hits; per-workspace lint exit 0 with 0 warnings; pnpm -r typecheck exit 0; touched test suites (174+32+66) green; description:null narrowing safe; PR squash-merged; post-merge main-CI all green including 9 deploy-gated jobs; console smoke unchanged; state files updated and committed.
+- Verifier report: `ai/reports/task-0096-verifier.md`.
+- Recommended next move on PASS: if Track A (Task 0095.1) implementer fix-up has landed by then, run `ai/tasks/task-0095.1-verifier.md`; otherwise Task 0096b (tests/** cleanup, 627 sites across 9 workspaces) OR Task 0097 rate-limiting (reuses cloudflare-kv slice from Task 0095 once that closes).

@@ -1,12 +1,16 @@
 # Current Context
 
-Last updated: 2026-05-30 (Two concurrent tracks. Track A = Task 0095.1
-verifier resumption, staged at `ai/tasks/task-0095.1-verifier.md`,
-waiting on implementer fix-up commits to PR #143. Track B = Task 0096
-class-B warning cleanup wave 1 on apps source, scoped at
-`ai/tasks/task-0096.md`, awaiting implementer pickup on a fresh branch
-from main. The two tracks are file-disjoint and merge independently.
-Repo health: green; PR #143 is the only open PR; main @ d94bf92.)
+Last updated: 2026-05-30 (Track B advanced to verification. Track A
+(Task 0095.1) verifier resumption staged at
+`ai/tasks/task-0095.1-verifier.md`, still waiting on implementer fix-up
+commits to PR #143 (head `db00843`, mergeStateStatus DIRTY/CONFLICTING
+vs main — rebase is implementer's job before fix-ups land). Track B
+(Task 0096) implementer phase complete: PR #144 OPEN at `78720ef`,
+MERGEABLE/CLEAN, PR-CI 7/7 SUCCESS, implementer report
+`ai/reports/task-0096-implementer.md` committed; verifier prompt staged
+at `ai/tasks/task-0096-verifier.md`. The two tracks remain file-disjoint
+and merge independently. Repo health: green; PR #143 + PR #144 are the
+only open PRs; main @ `d94bf92`.)
 
 ## Active task — Track A: Task 0095.1 (verifier resumption staged on PR #143)
 
