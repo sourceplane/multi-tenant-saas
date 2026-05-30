@@ -35,12 +35,21 @@ For every cycle:
     the task can be reported complete. A prompt may define a blocker protocol,
     but it must not allow "implemented locally" as a successful end state.
     13a. Update `/ai/state.json` — set `task_agent` to the path of the file just written (task or verify `.md`); do this after every file produced, keeping it current
-14. If a candidate task would require human input, **do not pause the loop**.
-    Follow the Deferred Decision Protocol: park that candidate in
-    `/ai/deferred.md`, leave `waiting_for_input` set to `"false"`, and pick the
-    next highest-leverage task that can proceed without human input. The loop
-    only stops when there is genuinely no human-independent task left to scope
-    (then and only then set `waiting_for_input` to `"true"`).
+14. If a candidate task would require human input, **do not pause the loop and
+    do not flip `waiting_for_input`**. Follow the Deferred Decision Protocol:
+    park that candidate in `/ai/deferred.md` with an "unblock signal" line,
+    leave `waiting_for_input` set to `"false"`, and pick the next
+    highest-leverage task that can proceed without human input. Deferred is
+    not blocked: a deferred candidate is a scheduled-for-later candidate, and
+    the loop must continue with the next safe task in the same selection pass.
+    The loop only stops when there is genuinely no human-independent task left
+    to scope (then and only then set `waiting_for_input` to `"true"`).
+    14a. **Human-availability rule.** Treat the human as asynchronous and
+    possibly unavailable. Never schedule a task whose forward progress
+    requires a synchronous human answer; instead defer it (rule 14) and
+    schedule the next human-independent candidate. The loop must keep
+    producing PR-sized work whenever any human-independent candidate exists,
+    even if multiple candidates are deferred awaiting input.
 15. Wait for worker result
 16. Update state and the compact context files (also update `task_agent` if a verify report was the last file written)
 17. Repeat
@@ -115,6 +124,12 @@ clarification, or an external decision before it can safely ship.
 
 **Default behavior: keep the loop moving.** A blocked candidate must not stop
 the orchestrator. Defer it, then scope the next safe task instead.
+**Deferred is not blocked.** A deferred entry is a scheduled-for-later
+candidate that the orchestrator will revisit once its unblock signal fires;
+it does not flip `waiting_for_input`, it does not pause scheduling, and it
+does not prevent the orchestrator from emitting the next task in the same
+selection pass. If the human is unavailable when a candidate needs input,
+defer that candidate and continue with the next human-independent task.
 
 Required actions when a candidate is blocked on human input:
 

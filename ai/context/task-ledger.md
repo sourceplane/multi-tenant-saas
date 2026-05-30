@@ -2125,3 +2125,13 @@ With Task 0095 / 0095.1 merged, Track A is closed. Remaining 45 `@typescript-esl
 - Replay-store regression: 12 sealed `idempotency-replay.test.ts` cases all still pass; `replayOrExecute` retains the same `idem:v1:` cache prefix and behavior. Task 0095.1 Phase 8 case (a) coverage preserved.
 - Risk note: live overflow probe against stage/prod NOT executed (would interfere with live traffic; 35 unit tests cover all overflow paths and 429 envelope shape). Recommended follow-up: synthetic probe against a sandbox org under deferred Task 0099-overflow-smoke. Non-blocking.
 - Track B3 (Edge idempotency + rate limiting) **CLOSED**: replay store (Task 0095/0095.1, PR #143) + rate limiting (Task 0097, PR #151) both live.
+
+## Task 0098.1 — packages/sdk Orun component alignment (scoped 2026-05-30)
+
+Follow-on polish for PR #150. Adds `packages/sdk/component.yaml` so Orun
+discovery / composition / CI plans see the SDK package as a
+`turbo-package` component, matching `contracts`, `shared`,
+`policy-engine`, `notifications-client`, `db`, `testing`. No source
+changes — manifest only. Branch `impl/task-0098.1-sdk-component-yaml`,
+gated on PR #150 merge. Implementer prompt:
+`ai/tasks/task-0098.1.md`.
