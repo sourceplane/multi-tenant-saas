@@ -14,20 +14,83 @@ pnpm --filter @saas/cli build
 node packages/cli/dist/cli.js --help
 ```
 
-## Pilot commands (Task 0100)
+## Commands
+
+Auth (Task 0100):
 
 ```
 sourceplane login    [--api-url=URL] [--token=BEARER]
 sourceplane logout
 sourceplane whoami
+```
+
+Reads (Task 0100):
+
+```
 sourceplane org list
 sourceplane org use <org-id>
 sourceplane org members
 sourceplane project list
 ```
 
+Writes (Task 0101):
+
+```
+sourceplane org invite <email> [--role=ROLE] [--idempotency-key=KEY] [--org=ORG_ID]
+sourceplane project create <name> [--idempotency-key=KEY]
+sourceplane env create <project-id> <name> [--idempotency-key=KEY]
+sourceplane api-key create <name> [--scope=SCOPE] [--idempotency-key=KEY]
+sourceplane webhook create <url> [--event=EVENT[,EVENT2,...]] [--idempotency-key=KEY]
+```
+
+Cross-resource reads (Task 0101):
+
+```
+sourceplane usage summary    [--metric=METRIC] [--from=ISO] [--to=ISO]
+sourceplane billing summary
+sourceplane audit list       [--limit=N] [--cursor=CURSOR] [--category=CAT] [--all]
+```
+
 All commands accept `--output=human|json`. JSON mode emits one document
 per invocation; on error, `{ "error": { "code", "message", "requestId? } }`.
+
+### Exit codes (`src/errors.ts`)
+
+| Code | Meaning |
+|------|---------|
+| 0    | Success |
+| 1    | Generic / unexpected error |
+| 2    | Usage error (missing/invalid args or flags) |
+| 3    | Not authenticated (no stored credential) |
+| 4    | API error (4xx/5xx surfaced from the SDK) |
+| 5    | No active organization context |
+| 6    | Idempotency replay rejected by api-edge |
+
+### Idempotency
+
+`--idempotency-key=KEY` is forwarded **verbatim** to the API on every
+write — Stripe parity. The CLI never auto-generates a key. When you omit
+the flag, no `Idempotency-Key` header is sent and the api-edge worker
+falls through without replay protection (still safe for read-after-write
+flows; required for retry-safe writes).
+
+For `webhook create --event=A,B`, each child subscription gets a
+deterministic suffixed key (`KEY:sub:0`, `KEY:sub:1`, …) so the whole
+command remains retry-safe under partial failure.
+
+### Active organization
+
+Most write/cross-read commands resolve the org from the persisted
+context (`sourceplane org use <org-id>`). Only `org invite` accepts an
+explicit `--org=ORG_ID` override; the others throw "no active
+organization" (exit 5) when context is unset.
+
+### Audit pagination
+
+`audit list` without flags returns the first page; `--all` walks every
+page until the server returns `cursor: null`. In `--all --output=json`
+mode the CLI emits one JSON document per page (JSON Lines) so a
+downstream pipeline can stream without buffering.
 
 ## Auth
 
@@ -61,8 +124,8 @@ emission path and is fully covered by tests.
   ts-expect-error, and force-cast escape hatches via `as` chains.
 - The package index (`src/index.ts`) is loadable in non-Node hosts; the
   keychain adapter dynamic-imports `keytar` only when needed.
-- Idempotency-Key is **caller-owned**. This PR ships no write commands;
-  Task 0101 wires `--idempotency-key` through to the SDK.
+- Idempotency-Key is **caller-owned**. Task 0101 wires `--idempotency-key`
+  through to the SDK; the CLI never auto-mints a key.
 
 ## Testing
 
