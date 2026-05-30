@@ -1,6 +1,6 @@
 {
   "goal": "Supabase/Postgres-backed multi-organization Orun SaaS control plane",
-  "current_task": "0097",
+  "current_task": "0099",
   "completed": [
     "0001",
     "0001.1",
@@ -124,7 +124,7 @@
   "next_focus": "Task 0098 (packages/sdk scaffold + base client + orgs/projects pilot, B4 first half) VERIFIED PASS + MERGED 2026-05-30 via PR #150 squash 3a52f9b. @saas/sdk workspace live on main. Parallel-safe sibling Task 0096f (tests/api-edge class-B drain, closes Track B globally) on impl/task-0096f-tests-api-edge-class-b remains in flight. Follow-on Task 0098.1 (sdk component.yaml polish) scoped on impl/task-0098.1-sdk-component-yaml. Next fan-out: Task 0099 (remaining 8 resource clients off orgs/projects contract). Deferred unchanged: 0085b, notifications-provider-swap, notifications-worker-dev-reframe.",
   "last_verified": "2026-05-31T00:30:00Z",
   "waiting_for_input": "false",
-  "task_agent": "ai/reports/task-0098.1-verifier.md",
+  "task_agent": "ai/tasks/task-0099.md",
   "notes": [
     "Task 0098.1 verified PASS and merged via PR #152 (squash 6e161fd). packages/sdk now first-class Orun component (turbo-package, domain=starter-sdk). 3 new Verify lanes (dev/stage/prod) live in CI. Post-merge main CI run 26691977982 = SUCCESS.",
     "Task 0098 (packages/sdk scaffold + base client + orgs/projects pilot, B4 first half) VERIFIED PASS + MERGED 2026-05-30 via PR #150 squash 3a52f9b. Verifier subagent (post-implementer). 13 files / +2369 / -0, all net-new under packages/sdk/** plus implementer report and pnpm-lock.yaml. New workspace @saas/sdk: base Transport (configurable baseUrl, auth bearer|session, defaultHeaders, per-request idempotencyKey/signal/requestId, request-id auto-generated via globalThis.crypto.randomUUID with getRandomValues fallback - no node:* imports), typed SourceplaneError hierarchy keyed 1:1 on all 10 ERROR_CODES values (BadRequest/Unauthenticated/Forbidden/NotFound/Conflict/Validation/PreconditionFailed/Unsupported/Internal/RateLimit) with unknown-code fall-through to base class, RateLimitError decodes Task 0097 headers (Retry-After + X-RateLimit-{Limit,Remaining,Reset}-{org,identity}) defensively. Two pilot resource clients: organizations.{list,get,create}, projects.{list,get,create,archive}. Stripe parity: idempotencyKey is caller-owned, sdk does NOT auto-generate. Hazard scan packages/sdk/**: 0 hits (no new eslint-disable / @ts-ignore / @ts-expect-error / as unknown as / as any). Runtime audit: no node:* / no apps/** / no worker imports. Local validation: pnpm --filter @saas/sdk typecheck exit 0; lint exit 0 with 0 warnings; test 1 file / 31 tests pass; pnpm -r typecheck exit 0; pnpm -r --no-bail lint exit 0 with exactly 45 residual warnings (all tests/api-edge, Task 0096f territory, baseline unchanged). PR-CI plan SUCCESS. Squash-merged via --admin (branch was 1 commit behind main, no semantic conflict). Post-merge main-CI plan job green (packages-only PR, no apply jobs). Reports: ai/reports/task-0098-{implementer,verifier}.md. Unlocks: Task 0099 (resource client fan-out), Task 0098.1 (component.yaml polish). No spec proposals. No risk regressions.",
