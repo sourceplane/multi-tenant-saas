@@ -2054,3 +2054,15 @@ Last updated: 2026-05-30 (Task 0096b Verifier PASS + MERGED — PR #145 squash `
 - Prompt: `ai/tasks/task-0095.1.md`
 - Status: closed-out 2026-05-30 — branch `impl/task-0095-edge-idempotency-replay-store` rebased on `origin/main` past PR #147 (`40974e5`); duplicate `infra/terraform/cloudflare-kv/**` slice dropped (now owned by main); real Cloudflare Workers KV namespace IDs wired into `apps/api-edge/wrangler.jsonc` (stage `2f5a03d0a14e4ead8f2b6658f6bfd722`, prod `fac1d319c8894466b4860bff9c6cb99d`); `apps/api-edge/scripts/verify-bindings.mjs` extended with `EXPECTED_KV` block enforcing `^[0-9a-f]{32}$` and rejecting the previous sentinels `…000a`/`…000b`.
 - Outcome: closes the single Phase-5 verifier blocker on PR #143; verifier resumed from Phase 5.
+
+## Task 0096c — tests/config-worker class-B drain (2026-05-30)
+PR #149 squash `ea99924`. tests/config-worker 126→0 no-explicit-any across 3 files (mutation-handlers 47, secret-mutation-handlers 43, encrypted-secret-storage 36). Hazard scan empty. Post-merge main-CI run 26684817843 SUCCESS. Report: ai/reports/task-0096c-implementer.md.
+
+## Task 0096d — tests/identity-worker class-B drain (2026-05-30)
+PR #148 squash `10e213a`. tests/identity-worker 80→0 no-explicit-any across 5 files (api-key-admin 33, security-events 22, profile 13, login-start-notifications 8, helpers/fake-repository 4). Hazard scan empty. Post-merge main-CI run 26684814662 SUCCESS. Report: ai/reports/task-0096d-implementer.md.
+
+## Task 0096e — class-B mop-up wave 5 (2026-05-30)
+PR #146 squash `5b33a13`. 26→0 no-explicit-any across 5 workspaces / 6 files (projects-worker 10, events-worker 7, policy-engine 7, policy-worker 1, webhooks-worker delivery 1). Hazard scan empty. Post-merge main-CI run 26684799758 SUCCESS. Report: ai/reports/task-0096e-implementer.md.
+
+## Track B drain CLOSED (2026-05-30)
+All `tests/**` workspaces NOT gated behind Track A drained to 0 class-B `@typescript-eslint/no-explicit-any` warnings. Final scan: `pnpm -r typecheck` exit 0; `pnpm -r --no-bail lint` exit 0 with 45 residual warnings, all in `tests/api-edge` (gated behind PR #143 / Task 0095.1). Apps source class-B: 0 (Task 0096 invariant holds).
