@@ -1,6 +1,6 @@
 import type { Env } from "../env.js";
 import type { ActorContext } from "../router.js";
-import type { ConfigRepository, Scope } from "@saas/db/config";
+import type { ConfigRepository, Scope, UpdateFeatureFlagInput } from "@saas/db/config";
 import type { EventsRepository } from "@saas/db/events";
 import { createConfigRepository } from "@saas/db/config";
 import { createEventsRepository } from "@saas/db/events";
@@ -132,11 +132,11 @@ export async function handleUpdateFeatureFlag(
           return { result: { ok: false as const, error: { kind: "not_found" as const } } };
         }
 
-        const updateInput: Record<string, unknown> = {};
+        const updateInput: UpdateFeatureFlagInput = {};
         if (enabled !== undefined) updateInput.enabled = enabled as boolean;
         if (value !== undefined) updateInput.value = value;
-        if (description !== undefined) updateInput.description = description as string | null;
-        const result = await txRepo.updateFeatureFlag(orgId, flagId, updateInput as any);
+        if (description !== undefined && description !== null) updateInput.description = description as string;
+        const result = await txRepo.updateFeatureFlag(orgId, flagId, updateInput);
 
         if (!result.ok) {
           return { result };
@@ -206,11 +206,11 @@ export async function handleUpdateFeatureFlag(
         return errorResponse("not_found", "Feature flag not found", 404, requestId);
       }
 
-      const updateInput2: Record<string, unknown> = {};
+      const updateInput2: UpdateFeatureFlagInput = {};
       if (enabled !== undefined) updateInput2.enabled = enabled as boolean;
       if (value !== undefined) updateInput2.value = value;
-      if (description !== undefined) updateInput2.description = description as string | null;
-      const result = await deps.repo.updateFeatureFlag(orgId, flagId, updateInput2 as any);
+      if (description !== undefined && description !== null) updateInput2.description = description as string;
+      const result = await deps.repo.updateFeatureFlag(orgId, flagId, updateInput2);
 
       if (!result.ok) {
         const err = result.error;
