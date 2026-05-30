@@ -3,7 +3,7 @@
 **Task**: Class-B warning cleanup wave 1 (apps source — no-explicit-any + no-console)
 **Branch**: `impl/task-0096-class-b-warning-cleanup-wave-1`
 **Head SHA**: `38f07e7e587234a1eea224c0a5dbdf074cffaf7a`
-**PR**: _(filled in after `gh pr create`)_
+**PR**: https://github.com/sourceplane/multi-tenant-saas/pull/144
 
 ## Summary
 
