@@ -1,6 +1,6 @@
 {
   "goal": "Supabase/Postgres-backed multi-organization Orun SaaS control plane",
-  "current_task": "awaiting next selection",
+  "current_task": "0093",
   "completed": [
     "0001", "0001.1", "0002", "0003", "0003.1", "0004", "0005",
     "0006", "0006.1", "0007", "0007.1", "0008", "0009", "0009.1",
@@ -18,17 +18,18 @@
   ],
   "deferred": ["0085b", "notifications-provider-swap", "notifications-worker-dev-reframe"],
   "repo_health": "green",
-  "next_focus": "Orchestrator picks next task on the next loop turn. Leading candidate: Task 0093 — Class-B lint cleanup wave 1 (mechanical no-unused-vars / @typescript-eslint/no-unused-vars in 9 lint-residual workspaces: tests/{db,identity-worker,membership-worker,policy-worker,projects-worker,webhooks-worker}, apps/{config,metering,projects}-worker). Alternative: B3 edge idempotency (specs/roadmap.md:54) for U-cluster progression. Deferred items (provider swap, 0085b, notifications-worker-dev-reframe) stay blocked.",
+  "next_focus": "Task 0093 — Class-B lint cleanup wave 1: drive `pnpm -r --no-bail lint` to zero errors by mechanically resolving 39 @typescript-eslint/no-unused-vars errors across 9 workspaces (apps/{config,metering,projects}-worker; tests/{db,identity-worker,membership-worker,projects-worker,webhooks-worker,policy-worker}). Implementer-only edits to src/** in those 9 workspaces; no shared-rule, packages/**, lockfile, infra, or eslint.config.js edits. After merge, B3 edge idempotency or deferred-queue review is the natural next pivot.",
   "last_verified": "2026-05-30T00:42:00Z",
   "waiting_for_input": "false",
-  "task_agent": "awaiting next orchestrator scope",
+  "task_agent": "/ai/tasks/task-0093.md",
   "notes": [
     "Orchestrator policy: human-input-blocked candidates DEFERRED to /ai/deferred.md, loop continues. waiting_for_input only flips true if every candidate is blocked.",
     "Deferred (orchestrator skips): (a) notifications-provider-swap — needs Resend/Postmark/SES choice; (b) Task 0085b cloudflare-domain v4->v5 — explicit user defer (do not touch infra/terraform/cloudflare-domain/** or cloudflare ~> 4.52 pin); (c) notifications-worker-dev-reframe — needs a 'introduce dev-deploy lane' design pass before the dev-binding work has anywhere to land.",
-    "Task 0091 (tests typecheck baseline cleanup) VERIFIED + MERGED (PR #139, 9081cff at 2026-05-30T00:16:16Z). Post-merge main-CI 26668839091 = 3/3 SUCCESS.",
-    "Task 0092 (ESLint v9 flat-config scaffold) VERIFIED + MERGED (PR #140, fde9723 at 2026-05-30). Post-merge main-CI 26669593757 = 31/31 SUCCESS. Diff: 16 new <workspace>/eslint.config.js files (canonical 2-line re-export of tooling/eslint/index.js), zero production-source / devDep / pnpm-lock / tooling-eslint / infra / wrangler / component.yaml / orun touches. Class-A 'couldn't find an eslint.config' errors fully eliminated (grep -c == 0). pnpm -r typecheck still exit 0 (Task 0091 baseline holds). kiox/orun triple ✓ (plan id 06f7adbe00f9, 30 jobs selected). Frozen lockfile honoured.",
-    "Task 0092 residual lint surface (9 workspaces with class-B rule violations): pre-existing — tests/db, tests/identity-worker, tests/membership-worker; newly surfaced by the scaffold — apps/{config,metering,projects}-worker, tests/{policy,projects,webhooks}-worker. These are the explicit Task 0093 feed (mechanical no-unused-vars / @typescript-eslint cleanup, no production source changes, no shared rule baseline edits).",
-    "Next-task candidates 2026-05-30 post-0092: (1) Task 0093 — class-B lint cleanup wave 1 (smallest, lowest-risk hygiene win, keeps pnpm -r lint reaching toward zero); (2) B3 edge idempotency (specs/roadmap.md:54 — generalize idempotency-key at api-edge for all unsafe POSTs, building on Task 0090's caller-side hardening); (3) revisit deferred provider swap or dev-deploy lane design when those unblock.",
-    "Live on main @ fde9723: notifications-worker V1 stays internal-only (workers_dev:false, public DNS for notifications-worker-{stage,prod}.sourceplane.ai unresolvable - good); console live on https://{stage,prod}.sourceplane.ai (307 -> /orgs); cloudflare ~> 4.52 pin still in force (Task 0085b sealed); Stripe-quality V1 idempotency hardening from Task 0090 stays live; pnpm -r typecheck baseline (Task 0091) holds; ESLint v9 baseline (Task 0092) reaches every lint-bearing workspace."
+    "Task 0092 (ESLint v9 flat-config scaffold) VERIFIED + MERGED (PR #140, fde9723). Post-merge main-CI 26669593757 = 31/31 SUCCESS. Class-A 'couldn't find an eslint.config' fully eliminated.",
+    "Task 0093 SCOPED 2026-05-30 (this orchestrator turn). Class-B lint cleanup wave 1: 39 no-unused-vars errors across 9 workspaces. Implementer prompt at /ai/tasks/task-0093.md. Branch: impl/task-0093-lint-cleanup-wave-1. Boundary explicit: src/** edits only in those 9 workspaces; no eslint.config.js, packages/**, lockfile, infra, intent.yaml, component.yaml, wrangler, kiox.lock churn. Authorized fix vocabulary: delete unused symbol OR _-prefix rename. eslint-disable comments forbidden.",
+    "Pre-Task-0093 lint surface (verifier baseline): apps/config-worker 1 error, apps/metering-worker 2, apps/projects-worker 1, tests/db 10, tests/identity-worker 2, tests/membership-worker 7, tests/projects-worker 7, tests/webhooks-worker 8, tests/policy-worker 1 = 39 errors total. Task 0093 must drive that to 0 (warnings unchanged).",
+    "Repo state at scope time: main @ 3cdde80 (post-Task-0092 verifier squash), zero open PRs, working tree clean, pnpm -r typecheck still exits 0 (Task 0091 baseline holds).",
+    "Live on main @ 3cdde80: notifications-worker V1 stays internal-only (workers_dev:false); console live on https://{stage,prod}.sourceplane.ai (307 -> /orgs); cloudflare ~> 4.52 pin still in force (Task 0085b sealed); Stripe-quality V1 idempotency hardening from Task 0090 stays live; pnpm -r typecheck baseline (Task 0091) holds; ESLint v9 baseline (Task 0092) reaches every lint-bearing workspace.",
+    "Next-task candidates after 0093 (PASS): (1) B3 edge idempotency — generalize idempotency-key at api-edge for unsafe POSTs, building on Task 0090's caller-side hardening; (2) revisit deferred provider swap or dev-deploy lane design when those unblock; (3) optional class-B warning cleanup wave (no-explicit-any) if user wants the deeper hygiene push."
   ]
 }
