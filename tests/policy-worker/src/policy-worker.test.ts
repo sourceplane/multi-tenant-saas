@@ -15,8 +15,30 @@ function makeRequest(method: string, url: string, body?: unknown, headers?: Reco
   return new Request(url, init);
 }
 
-async function json(response: Response): Promise<any> {
-  return response.json();
+type JsonResp = {
+  service: string;
+  environment: string;
+  policyVersion: number;
+  status: string;
+  timestamp: string;
+  data: {
+    allow: boolean;
+    reason: string;
+    policyVersion: number;
+    permissions: string[];
+    valid: boolean;
+  };
+  error: {
+    code: string;
+    message: string;
+    requestId: string;
+    details: { fields: Record<string, unknown> };
+  };
+  meta: { requestId: string };
+};
+
+async function json(response: Response): Promise<JsonResp> {
+  return (await response.json()) as JsonResp;
 }
 
 describe("policy-worker routes", () => {

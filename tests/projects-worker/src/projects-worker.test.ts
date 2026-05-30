@@ -19,6 +19,17 @@ const TEST_ENVIRONMENT_UUID = "33333333-3333-3333-3333-333333333333";
 const TEST_ENVIRONMENT_PUBLIC = "env_33333333333333333333333333333333";
 const TEST_USER_ID = "usr_aabbccdd";
 
+type JsonResp = {
+  data: {
+    project: { id: string; orgId: string; name?: string };
+    projects: Array<{ id: string; orgId: string; name?: string }>;
+    environment: { id: string; orgId: string; projectId: string; name?: string };
+    environments: Array<{ id: string; orgId: string; projectId: string; name?: string }>;
+  };
+  meta: { cursor: string | null };
+  error: { code: string; message?: string };
+};
+
 function createMockFetcher(responseBody: unknown, status = 200): Fetcher & { fetchCalls: Array<{ url: string; init: RequestInit }> } {
   const fetchCalls: Array<{ url: string; init: RequestInit }> = [];
   return {
@@ -804,10 +815,10 @@ describe("handleListProjects", () => {
     const response = await handleListProjects(request, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, { projectsRepo });
 
     expect(response.status).toBe(200);
-    const json = await response.json() as any;
+    const json = await response.json() as JsonResp;
     expect(json.data.projects).toHaveLength(1);
-    expect(json.data.projects[0].id).toBe(TEST_PROJECT_PUBLIC);
-    expect(json.data.projects[0].orgId).toBe(TEST_ORG_PUBLIC);
+    expect(json.data.projects[0]!.id).toBe(TEST_PROJECT_PUBLIC);
+    expect(json.data.projects[0]!.orgId).toBe(TEST_ORG_PUBLIC);
     expect(json.meta.cursor).toBeNull();
   });
 
@@ -852,7 +863,7 @@ describe("handleListProjects", () => {
     const request = listRequest(TEST_ORG_PUBLIC, "?limit=10");
     await handleListProjects(request, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, { projectsRepo });
 
-    expect((listCalls[0]![1] as any).limit).toBe(10);
+    expect((listCalls[0]![1] as { limit: number }).limit).toBe(10);
   });
 
   it("returns validation_failed for limit > 100", async () => {
@@ -863,7 +874,7 @@ describe("handleListProjects", () => {
     const response = await handleListProjects(request, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, { projectsRepo });
 
     expect(response.status).toBe(422);
-    const json = await response.json() as any;
+    const json = await response.json() as JsonResp;
     expect(json.error.code).toBe("validation_failed");
   });
 
@@ -875,7 +886,7 @@ describe("handleListProjects", () => {
     const response = await handleListProjects(request, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, { projectsRepo });
 
     expect(response.status).toBe(422);
-    const json = await response.json() as any;
+    const json = await response.json() as JsonResp;
     expect(json.error.code).toBe("validation_failed");
   });
 
@@ -895,7 +906,7 @@ describe("handleListProjects", () => {
     const response = await handleListProjects(request, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, { projectsRepo });
 
     expect(response.status).toBe(200);
-    const json = await response.json() as any;
+    const json = await response.json() as JsonResp;
     expect(json.meta.cursor).not.toBeNull();
     expect(typeof json.meta.cursor).toBe("string");
   });
@@ -1706,11 +1717,11 @@ describe("handleListEnvironments", () => {
     const response = await handleListEnvironments(request, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID, { projectsRepo });
 
     expect(response.status).toBe(200);
-    const json = await response.json() as any;
+    const json = await response.json() as JsonResp;
     expect(json.data.environments).toHaveLength(1);
-    expect(json.data.environments[0].id).toBe(TEST_ENVIRONMENT_PUBLIC);
-    expect(json.data.environments[0].orgId).toBe(TEST_ORG_PUBLIC);
-    expect(json.data.environments[0].projectId).toBe(TEST_PROJECT_PUBLIC);
+    expect(json.data.environments[0]!.id).toBe(TEST_ENVIRONMENT_PUBLIC);
+    expect(json.data.environments[0]!.orgId).toBe(TEST_ORG_PUBLIC);
+    expect(json.data.environments[0]!.projectId).toBe(TEST_PROJECT_PUBLIC);
     expect(json.meta.cursor).toBeNull();
   });
 
@@ -1767,7 +1778,7 @@ describe("handleListEnvironments", () => {
     const request = listRequest(TEST_ORG_PUBLIC, TEST_PROJECT_PUBLIC, "?limit=10");
     await handleListEnvironments(request, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID, { projectsRepo });
 
-    expect((listCalls[0]![2] as any).limit).toBe(10);
+    expect((listCalls[0]![2] as { limit: number }).limit).toBe(10);
   });
 
   it("returns validation_failed for limit > 100", async () => {
@@ -1778,7 +1789,7 @@ describe("handleListEnvironments", () => {
     const response = await handleListEnvironments(request, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID, { projectsRepo });
 
     expect(response.status).toBe(422);
-    const json = await response.json() as any;
+    const json = await response.json() as JsonResp;
     expect(json.error.code).toBe("validation_failed");
   });
 
@@ -1790,7 +1801,7 @@ describe("handleListEnvironments", () => {
     const response = await handleListEnvironments(request, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID, { projectsRepo });
 
     expect(response.status).toBe(422);
-    const json = await response.json() as any;
+    const json = await response.json() as JsonResp;
     expect(json.error.code).toBe("validation_failed");
   });
 
@@ -1810,7 +1821,7 @@ describe("handleListEnvironments", () => {
     const response = await handleListEnvironments(request, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID, { projectsRepo });
 
     expect(response.status).toBe(200);
-    const json = await response.json() as any;
+    const json = await response.json() as JsonResp;
     expect(json.meta.cursor).not.toBeNull();
     expect(typeof json.meta.cursor).toBe("string");
   });

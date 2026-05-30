@@ -19,7 +19,7 @@ import type {
   CreateDeliveryAttemptInput,
   UpdateDeliveryAttemptInput,
 } from "@saas/db/webhooks";
-import type { EventsRepository, StoredEvent, EventsResult, AppendEventInput, AppendEventWithAuditInput } from "@saas/db/events";
+import type { EventsRepository, StoredEvent, StoredAuditEntry, EventsResult, AppendEventInput, AppendEventWithAuditInput } from "@saas/db/events";
 
 // ── Test constants ──────────────────────────────────────────
 
@@ -247,7 +247,7 @@ function createMockEventsRepo(events: StoredEvent[] = []): MockEventsRepo {
     },
     async appendEventWithAudit(input: AppendEventWithAuditInput) {
       appendedEventsWithAudit.push(input);
-      return { ok: true, value: { event: { ...input.event, createdAt: new Date(), redactPaths: [], actorSessionId: null, actorIp: null, projectId: null, environmentId: null, subjectName: null, correlationId: null, causationId: null, idempotencyKey: null }, audit: { id: input.audit.id, eventId: input.event.id, orgId: input.event.orgId, actorType: input.event.actorType, actorId: input.event.actorId, eventType: input.event.type, eventVersion: input.event.version, source: input.event.source, subjectKind: input.event.subjectKind, subjectId: input.event.subjectId, subjectName: null, projectId: null, environmentId: null, category: input.audit.category ?? "webhooks", description: input.audit.description ?? "", occurredAt: input.event.occurredAt, requestId: input.event.requestId, correlationId: null, payload: input.event.payload, redactPaths: [], createdAt: new Date() } } } as any;
+      return { ok: true, value: { event: { ...input.event, createdAt: new Date(), redactPaths: [], actorSessionId: null, actorIp: null, projectId: null, environmentId: null, subjectName: null, correlationId: null, causationId: null, idempotencyKey: null }, audit: { id: input.audit.id, eventId: input.event.id, orgId: input.event.orgId, actorType: input.event.actorType, actorId: input.event.actorId, eventType: input.event.type, eventVersion: input.event.version, source: input.event.source, subjectKind: input.event.subjectKind, subjectId: input.event.subjectId, subjectName: null, projectId: null, environmentId: null, category: input.audit.category ?? "webhooks", description: input.audit.description ?? "", occurredAt: input.event.occurredAt, requestId: input.event.requestId, correlationId: null, payload: input.event.payload, redactPaths: [], createdAt: new Date() } } } as EventsResult<{ event: StoredEvent; audit: StoredAuditEntry }>;
     },
     async queryAuditByOrg() { throw new Error("not called"); },
     async queryAuditByTarget() { throw new Error("not called"); },

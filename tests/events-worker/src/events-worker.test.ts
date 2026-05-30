@@ -1,5 +1,6 @@
 import { route } from "@events-worker/router";
 import type { Env } from "@events-worker/env";
+import type { EventsRepository } from "@saas/db/events";
 
 const TEST_ORG_UUID = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
 const TEST_ORG_PUBLIC_ID = "org_a1b2c3d4e5f67890abcdef1234567890";
@@ -185,7 +186,7 @@ describe("events-worker list-audit handler", () => {
       createdAt: new Date("2026-05-26T10:00:00.000Z"),
     };
 
-    const mockRepo = {
+    const mockRepo: EventsRepository = {
       appendEvent: async () => ({ ok: false as const, error: { kind: "internal" as const, message: "" } }),
       appendEventWithAudit: async () => ({ ok: false as const, error: { kind: "internal" as const, message: "" } }),
       queryAuditByOrg: async () => ({
@@ -193,12 +194,13 @@ describe("events-worker list-audit handler", () => {
         value: { items: [mockEntry], nextCursor: null },
       }),
       queryAuditByTarget: async () => ({ ok: true as const, value: { items: [], nextCursor: null } }),
+      queryEventsByOrg: async () => ({ ok: false as const, error: { kind: "internal" as const, message: "" } }),
     };
 
     const env = createEnv();
     const req = makeRequest(`/v1/organizations/${TEST_ORG_PUBLIC_ID}/audit`);
 
-    const res = await handleListAudit(req, env, TEST_REQUEST_ID, { subjectId: TEST_ACTOR_ID, subjectType: "user" }, TEST_ORG_UUID, { eventsRepo: mockRepo as any });
+    const res = await handleListAudit(req, env, TEST_REQUEST_ID, { subjectId: TEST_ACTOR_ID, subjectType: "user" }, TEST_ORG_UUID, { eventsRepo: mockRepo });
 
     expect(res.status).toBe(200);
     const body = await res.json() as { data: { auditEntries: Array<Record<string, unknown>> }; meta: Record<string, unknown> };
@@ -218,7 +220,7 @@ describe("events-worker list-audit handler", () => {
     const { handleListAudit } = await import("@events-worker/handlers/list-audit");
 
     let capturedCategory: string | undefined;
-    const mockRepo = {
+    const mockRepo: EventsRepository = {
       appendEvent: async () => ({ ok: false as const, error: { kind: "internal" as const, message: "" } }),
       appendEventWithAudit: async () => ({ ok: false as const, error: { kind: "internal" as const, message: "" } }),
       queryAuditByOrg: async (_orgId: string, _params: unknown, category?: string) => {
@@ -226,12 +228,13 @@ describe("events-worker list-audit handler", () => {
         return { ok: true as const, value: { items: [], nextCursor: null } };
       },
       queryAuditByTarget: async () => ({ ok: true as const, value: { items: [], nextCursor: null } }),
+      queryEventsByOrg: async () => ({ ok: false as const, error: { kind: "internal" as const, message: "" } }),
     };
 
     const env = createEnv();
     const req = makeRequest(`/v1/organizations/${TEST_ORG_PUBLIC_ID}/audit?category=membership`);
 
-    await handleListAudit(req, env, TEST_REQUEST_ID, { subjectId: TEST_ACTOR_ID, subjectType: "user" }, TEST_ORG_UUID, { eventsRepo: mockRepo as any });
+    await handleListAudit(req, env, TEST_REQUEST_ID, { subjectId: TEST_ACTOR_ID, subjectType: "user" }, TEST_ORG_UUID, { eventsRepo: mockRepo });
 
     expect(capturedCategory).toBe("membership");
   });
@@ -239,7 +242,7 @@ describe("events-worker list-audit handler", () => {
   it("returns 503 when repository fails", async () => {
     const { handleListAudit } = await import("@events-worker/handlers/list-audit");
 
-    const mockRepo = {
+    const mockRepo: EventsRepository = {
       appendEvent: async () => ({ ok: false as const, error: { kind: "internal" as const, message: "" } }),
       appendEventWithAudit: async () => ({ ok: false as const, error: { kind: "internal" as const, message: "" } }),
       queryAuditByOrg: async () => ({
@@ -247,19 +250,20 @@ describe("events-worker list-audit handler", () => {
         error: { kind: "internal" as const, message: "db error" },
       }),
       queryAuditByTarget: async () => ({ ok: true as const, value: { items: [], nextCursor: null } }),
+      queryEventsByOrg: async () => ({ ok: false as const, error: { kind: "internal" as const, message: "" } }),
     };
 
     const env = createEnv();
     const req = makeRequest(`/v1/organizations/${TEST_ORG_PUBLIC_ID}/audit`);
 
-    const res = await handleListAudit(req, env, TEST_REQUEST_ID, { subjectId: TEST_ACTOR_ID, subjectType: "user" }, TEST_ORG_UUID, { eventsRepo: mockRepo as any });
+    const res = await handleListAudit(req, env, TEST_REQUEST_ID, { subjectId: TEST_ACTOR_ID, subjectType: "user" }, TEST_ORG_UUID, { eventsRepo: mockRepo });
     expect(res.status).toBe(503);
   });
 
   it("encodes pagination cursor when more results exist", async () => {
     const { handleListAudit } = await import("@events-worker/handlers/list-audit");
 
-    const mockRepo = {
+    const mockRepo: EventsRepository = {
       appendEvent: async () => ({ ok: false as const, error: { kind: "internal" as const, message: "" } }),
       appendEventWithAudit: async () => ({ ok: false as const, error: { kind: "internal" as const, message: "" } }),
       queryAuditByOrg: async () => ({
@@ -270,12 +274,13 @@ describe("events-worker list-audit handler", () => {
         },
       }),
       queryAuditByTarget: async () => ({ ok: true as const, value: { items: [], nextCursor: null } }),
+      queryEventsByOrg: async () => ({ ok: false as const, error: { kind: "internal" as const, message: "" } }),
     };
 
     const env = createEnv();
     const req = makeRequest(`/v1/organizations/${TEST_ORG_PUBLIC_ID}/audit`);
 
-    const res = await handleListAudit(req, env, TEST_REQUEST_ID, { subjectId: TEST_ACTOR_ID, subjectType: "user" }, TEST_ORG_UUID, { eventsRepo: mockRepo as any });
+    const res = await handleListAudit(req, env, TEST_REQUEST_ID, { subjectId: TEST_ACTOR_ID, subjectType: "user" }, TEST_ORG_UUID, { eventsRepo: mockRepo });
 
     expect(res.status).toBe(200);
     const body = await res.json() as { meta: { cursor: string | null } };
@@ -311,7 +316,7 @@ describe("events-worker list-audit handler", () => {
       createdAt: new Date("2026-05-26T12:00:00.000Z"),
     };
 
-    const mockRepo = {
+    const mockRepo: EventsRepository = {
       appendEvent: async () => ({ ok: false as const, error: { kind: "internal" as const, message: "" } }),
       appendEventWithAudit: async () => ({ ok: false as const, error: { kind: "internal" as const, message: "" } }),
       queryAuditByOrg: async () => ({
@@ -319,12 +324,13 @@ describe("events-worker list-audit handler", () => {
         value: { items: [mockEntry], nextCursor: null },
       }),
       queryAuditByTarget: async () => ({ ok: true as const, value: { items: [], nextCursor: null } }),
+      queryEventsByOrg: async () => ({ ok: false as const, error: { kind: "internal" as const, message: "" } }),
     };
 
     const env = createEnv();
     const req = makeRequest(`/v1/organizations/${TEST_ORG_PUBLIC_ID}/audit`);
 
-    const res = await handleListAudit(req, env, TEST_REQUEST_ID, { subjectId: TEST_ACTOR_ID, subjectType: "user" }, TEST_ORG_UUID, { eventsRepo: mockRepo as any });
+    const res = await handleListAudit(req, env, TEST_REQUEST_ID, { subjectId: TEST_ACTOR_ID, subjectType: "user" }, TEST_ORG_UUID, { eventsRepo: mockRepo });
 
     expect(res.status).toBe(200);
     const body = await res.json() as { data: { auditEntries: Array<Record<string, unknown>> } };
@@ -370,7 +376,7 @@ describe("events-worker list-audit handler", () => {
       createdAt: new Date("2026-05-26T12:00:01.000Z"),
     };
 
-    const mockRepo = {
+    const mockRepo: EventsRepository = {
       appendEvent: async () => ({ ok: false as const, error: { kind: "internal" as const, message: "" } }),
       appendEventWithAudit: async () => ({ ok: false as const, error: { kind: "internal" as const, message: "" } }),
       queryAuditByOrg: async () => ({
@@ -378,12 +384,13 @@ describe("events-worker list-audit handler", () => {
         value: { items: [mockEntry], nextCursor: null },
       }),
       queryAuditByTarget: async () => ({ ok: true as const, value: { items: [], nextCursor: null } }),
+      queryEventsByOrg: async () => ({ ok: false as const, error: { kind: "internal" as const, message: "" } }),
     };
 
     const env = createEnv();
     const req = makeRequest(`/v1/organizations/${TEST_ORG_PUBLIC_ID}/audit`);
 
-    const res = await handleListAudit(req, env, TEST_REQUEST_ID, { subjectId: TEST_ACTOR_ID, subjectType: "user" }, TEST_ORG_UUID, { eventsRepo: mockRepo as any });
+    const res = await handleListAudit(req, env, TEST_REQUEST_ID, { subjectId: TEST_ACTOR_ID, subjectType: "user" }, TEST_ORG_UUID, { eventsRepo: mockRepo });
 
     expect(res.status).toBe(200);
     const body = await res.json() as { data: { auditEntries: Array<Record<string, unknown>> } };
@@ -428,7 +435,7 @@ describe("events-worker list-audit handler", () => {
       createdAt: new Date("2026-05-26T14:00:00.000Z"),
     };
 
-    const mockRepo = {
+    const mockRepo: EventsRepository = {
       appendEvent: async () => ({ ok: false as const, error: { kind: "internal" as const, message: "" } }),
       appendEventWithAudit: async () => ({ ok: false as const, error: { kind: "internal" as const, message: "" } }),
       queryAuditByOrg: async () => ({
@@ -436,12 +443,13 @@ describe("events-worker list-audit handler", () => {
         value: { items: [mockEntry], nextCursor: null },
       }),
       queryAuditByTarget: async () => ({ ok: true as const, value: { items: [], nextCursor: null } }),
+      queryEventsByOrg: async () => ({ ok: false as const, error: { kind: "internal" as const, message: "" } }),
     };
 
     const env = createEnv();
     const req = makeRequest(`/v1/organizations/${TEST_ORG_PUBLIC_ID}/audit`);
 
-    const res = await handleListAudit(req, env, TEST_REQUEST_ID, { subjectId: TEST_ACTOR_ID, subjectType: "user" }, orgUuid, { eventsRepo: mockRepo as any });
+    const res = await handleListAudit(req, env, TEST_REQUEST_ID, { subjectId: TEST_ACTOR_ID, subjectType: "user" }, orgUuid, { eventsRepo: mockRepo });
 
     expect(res.status).toBe(200);
     const body = await res.json() as { data: { auditEntries: Array<Record<string, unknown>> } };

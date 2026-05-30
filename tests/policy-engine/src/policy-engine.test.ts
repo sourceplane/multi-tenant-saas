@@ -7,17 +7,18 @@ import type {
   PolicySubject,
   PolicyResource,
 } from "@saas/contracts/policy";
+import type { TenancyRole, RoleScopeKind } from "@saas/contracts/tenancy";
 
 const subject: PolicySubject = { type: "user", id: "usr_abc123" };
 
 function orgFact(role: string, orgId: string): MembershipFact {
-  return { kind: "role_assignment", role: role as any, scope: { kind: "organization", orgId } };
+  return { kind: "role_assignment", role: role as TenancyRole, scope: { kind: "organization", orgId } };
 }
 
 function projectFact(role: string, orgId: string, projectId: string): MembershipFact {
   return {
     kind: "role_assignment",
-    role: role as any,
+    role: role as TenancyRole,
     scope: { kind: "project", orgId, projectId },
   };
 }
@@ -636,17 +637,18 @@ describe("authorize", () => {
 
     it("ignores facts with unknown roles but does not widen access", () => {
       const facts: MembershipFact[] = [
-        { kind: "role_assignment", role: "super_admin" as any, scope: { kind: "organization", orgId: "org_1" } },
+        { kind: "role_assignment", role: "super_admin" as TenancyRole, scope: { kind: "organization", orgId: "org_1" } },
       ];
       const result = authorize(authReq("organization.read", "org_1", facts));
       expect(result.allow).toBe(false);
     });
 
     it("ignores malformed future fact objects without authorizing or throwing", () => {
+      const malformedNull: unknown = null;
       const facts: PolicyMembershipFact[] = [
         { kind: "quota", limit: 100 },
         { kind: "role_assignment", role: "owner", scope: "org_1" },
-        null as any,
+        malformedNull as PolicyMembershipFact,
       ];
       const result = authorize(authReq("organization.read", "org_1", facts));
       expect(result.allow).toBe(false);
@@ -830,7 +832,7 @@ describe("validateRoleAssignment", () => {
     it("rejects unknown scope kind", () => {
       const result = validateRoleAssignment({
         role: "owner",
-        scope: { kind: "environment" as any, orgId: "org_1" },
+        scope: { kind: "environment" as RoleScopeKind, orgId: "org_1" },
       });
       expect(result.valid).toBe(false);
       expect(result.reason).toBe("unknown_scope_kind");
