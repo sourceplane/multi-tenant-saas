@@ -1,11 +1,14 @@
 # Current Context
 
-Last updated: 2026-05-30 (Task 0095 VERIFIER FAIL — PR #143 stays OPEN
-with one Phase-5 blocker. Task 0095.1 fix-up SCOPED at
-`ai/tasks/task-0095.1.md` for the same branch / same PR. Repo health:
-green; no other open PRs; main untouched.)
+Last updated: 2026-05-30 (Two concurrent tracks. Track A = Task 0095.1
+verifier resumption, staged at `ai/tasks/task-0095.1-verifier.md`,
+waiting on implementer fix-up commits to PR #143. Track B = Task 0096
+class-B warning cleanup wave 1 on apps source, scoped at
+`ai/tasks/task-0096.md`, awaiting implementer pickup on a fresh branch
+from main. The two tracks are file-disjoint and merge independently.
+Repo health: green; PR #143 is the only open PR; main @ d94bf92.)
 
-## Active task: Task 0095.1 — Implementer (verifier-requested fix on PR #143)
+## Active task — Track A: Task 0095.1 (verifier resumption staged on PR #143)
 
 The verifier ran on PR #143 today and returned **FAIL** with a single,
 specific Phase-5 blocker. Phases 1–4 PASSED (code path correct, 282/282
@@ -120,12 +123,62 @@ audit).
 
 ## Next-task candidates after Task 0095 finally PASS
 
-1. **Task 0096 — rate limiting (B3 second half).** Reuses the same
+1. **Task 0097 — rate limiting (B3 second half).** Reuses the same
    `cloudflare-kv` slice for storage; the slice was deliberately
-   structured as a single component for this reason.
-2. Class-B warning cleanup wave (`no-explicit-any` / `no-console`
-   hygiene) — always-available filler.
+   structured as a single component for this reason. (Renumbered from
+   0096 since 0096 is now allocated to the class-B warning cleanup
+   wave below.)
+2. **Task 0096b — class-B warning cleanup wave 2 (tests/**).** 639
+   warnings across 9 test workspaces (`tests/membership-worker` 351,
+   `tests/config-worker` 127, `tests/identity-worker` 81,
+   `tests/api-edge` 46, others). Scope after 0096 lands.
 3. Revisit deferred candidates if any unblock (none have).
+
+## Active task — Track B: Task 0096 (class-B warning cleanup wave 1, apps source)
+
+Strictly disjoint from PR #143. Touches three production-source files
+in three workspaces only:
+
+- `apps/config-worker/src/handlers/update-feature-flag.ts:139,213` —
+  two `as any` casts on the `updateFeatureFlag` / `createFeatureFlag`
+  repo input. Fix by using the canonical repo input type from
+  `packages/data/**` (or wherever the repo lives).
+- `apps/metering-worker/src/rollups.ts:147` — `console.log` summary
+  line on a scheduled-rollup completion. Fix by replacing with
+  `console.warn`.
+- `apps/webhooks-worker/src/index.ts:30,36` — `console.log` summary
+  lines after scheduled dispatch and retry. Fix by replacing with
+  `console.warn`.
+
+Branch: `impl/task-0096-class-b-warning-cleanup-wave-1` from
+`origin/main` @ `d94bf92` (NOT from PR #143's branch). PR boundary:
+exactly 4 files (3 source + 1 implementer report). Acceptance:
+`pnpm -r --no-bail lint` global warning count drops from 644 → 639;
+`pnpm -r typecheck` exit 0; touched-workspace tests green; no
+`+eslint-disable*` / `+@ts-ignore` / `+as unknown as` introductions.
+
+Out of scope: `tests/**` (reserved for Task 0096b), `apps/api-edge/**`
+(sealed by PR #143), `packages/**`, `tooling/eslint/**`, severity
+changes, behavioural changes, new dependencies. Blocker protocol
+covers "cannot locate repo-method input type" — wip-PR + report,
+no `as unknown as` laundering.
+
+Prompt: `ai/tasks/task-0096.md`.
+
+## Concurrency model
+
+Tracks A (Task 0095.1 verifier resumption on PR #143) and B (Task 0096
+implementer on a fresh main-rooted branch) run in parallel. PR #143's
+file set (`apps/api-edge/wrangler.jsonc`,
+`apps/api-edge/scripts/verify-bindings.mjs`,
+`infra/terraform/cloudflare-kv/**`, reports, state files) and Task
+0096's file set (`apps/{config,metering,webhooks}-worker/src/**`,
+`ai/reports/task-0096-implementer.md`) have **zero overlap**. They
+merge independently. When PR #143 merges first, Task 0096 rebases to
+the new main without conflict; when Task 0096 merges first, PR #143
+likewise. Track A is currently waiting on the implementer's 0095.1
+fix-up commits to PR #143 (head still `db00843` at scope time) — this
+does not block Track B.
 
 ## Recently completed — Task 0094 (Edge idempotency-key contract + gate, PASS)
 

@@ -1911,3 +1911,18 @@ Last updated: 2026-05-30 (Task 0091 Verifier PASS — PR #139 merged at `9081cff
 - Phase 9 closure: `ai/context/open-risks.md` lines 83–91 moved under "Resolved Risks" with PR #143 reference; `ai/state.json` adds `"0095"` and `"0095.1"` to completed, advances `current_task` to next candidate (Task 0096 rate-limiting OR class-B warning cleanup); `ai/context/current.md` rewritten with closure summary; this ledger gets `## Task 0095` and `## Task 0095.1` outcome entries.
 - Verifier report: `ai/reports/task-0095.1-verifier.md` (separate from the existing 0095 FAIL report — cleaner for cron/log audit).
 - Recommended next move on PASS: Task 0096 rate-limiting (B3 second half — reuses `cloudflare-kv` slice for storage primitive) OR class-B warning cleanup wave (no-explicit-any / no-console hygiene). Task 0096 was deliberately deferred until 0095 closes so replay + rate-limit share the storage primitive.
+
+## Task 0096 — Class-B Warning Cleanup Wave 1 (apps source)
+
+- Agent: Implementer
+- Prompt: `ai/tasks/task-0096.md`
+- Status: scoped 2026-05-30, awaiting implementer pickup
+- Branch: `impl/task-0096-class-b-warning-cleanup-wave-1` (to be created from main @ `d94bf92`)
+- Objective: drive `pnpm -r --no-bail lint` warning count for production source under `apps/*/src/**` (excluding the in-flight `apps/api-edge`) from 5 → 0 by mechanically replacing two `as any` casts with the canonical repo input types and three `console.log` summary lines with `console.warn`.
+- Surface: `apps/config-worker/src/handlers/update-feature-flag.ts:139,213` (`@typescript-eslint/no-explicit-any`); `apps/metering-worker/src/rollups.ts:147` (`no-console`); `apps/webhooks-worker/src/index.ts:30,36` (`no-console`).
+- PR boundary: exactly 4 files (3 source + 1 implementer report). No tests, no api-edge, no packages, no infra, no tooling/eslint, no `*.json`/`*.yaml`/`*.lock`. No `+eslint-disable*` / `+@ts-ignore` / `+@ts-expect-error` / `+as unknown as` introductions.
+- Concurrency: file-disjoint from in-flight PR #143 (Task 0095/0095.1). Two tracks proceed in parallel and merge independently. PR #143 head as of scope time still `db00843` (verifier-FAIL scoping commit, awaiting 0095.1 fix-up commits).
+- Acceptance: branch pushed + PR opened with the 5 sites listed before/after; `pnpm --filter "./apps/{config,metering,webhooks}-worker" lint` each exits 0 with 0 warnings; `pnpm -r --no-bail lint` global warning count drops from 644 → 639; `pnpm -r typecheck` exit 0 (Task 0091 baseline holds); touched-workspace test suites green; implementer report at `ai/reports/task-0096-implementer.md`.
+- Out of scope: `tests/**` (639 warnings reserved for future Task 0096b wave), `apps/api-edge/**` (sealed by PR #143), `packages/**`, shared rule baseline (`tooling/eslint/index.js`), severity changes, behavioural changes, new dependencies / loggers.
+- Blocker protocol: if a repo-method input type for the feature-flag casts cannot be located, stop + write a `## Blocker` section in the report + push wip-prefixed branch + open draft PR + exit. No `as unknown as` laundering.
+- Recommended next move on PASS + merge: Task 0096b (tests/** cleanup, 639 sites across 9 workspaces — `tests/membership-worker` 351, `tests/config-worker` 127, `tests/identity-worker` 81, `tests/api-edge` 46, others) OR Task 0097 rate-limiting (B3 second half — reuses cloudflare-kv slice from Task 0095).
