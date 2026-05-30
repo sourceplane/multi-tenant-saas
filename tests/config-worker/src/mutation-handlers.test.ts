@@ -5,7 +5,18 @@ import { handleUpdateFeatureFlag } from "@config-worker/handlers/update-feature-
 import { parseSettingPublicId, parseFeatureFlagPublicId } from "@config-worker/ids";
 import type { Env } from "@config-worker/env";
 import type { ActorContext } from "@config-worker/router";
-import type { Scope, Setting, FeatureFlag } from "@saas/db/config";
+import type {
+  Scope,
+  Setting,
+  FeatureFlag,
+  ConfigResult,
+} from "@saas/db/config";
+import type {
+  AppendEventWithAuditInput,
+  EventsResult,
+  StoredEvent,
+  StoredAuditEntry,
+} from "@saas/db/events";
 
 // ── Constants ──────────────────────────────────────────────
 const TEST_ORG_UUID = "11111111-1111-1111-1111-111111111111";
@@ -20,6 +31,89 @@ const ORG_SCOPE: Scope = { kind: "organization", orgId: TEST_ORG_UUID };
 const PRJ_SCOPE: Scope = { kind: "project", orgId: TEST_ORG_UUID, projectId: TEST_PROJECT_UUID };
 
 const FAKE_ENV = {} as Env;
+
+// ── Local types ────────────────────────────────────────────
+type SettingView = {
+  id: string;
+  key: string;
+  value: unknown;
+};
+type FeatureFlagView = {
+  id: string;
+  flagKey: string;
+  enabled: boolean;
+  value?: unknown;
+};
+type ErrorEnvelope = {
+  code: string;
+  message?: string;
+  details?: { fields?: Record<string, unknown> };
+};
+type JsonResp = {
+  data: {
+    setting?: SettingView;
+    featureFlag?: FeatureFlagView;
+  };
+  error: ErrorEnvelope;
+};
+
+// ── Reusable typed stubs ───────────────────────────────────
+/** A `ConfigResult` failure used to satisfy mock repo slots that should
+ * never actually be invoked under the test's branching. */
+const unusedConfigFailure = <T>(): Promise<ConfigResult<T>> =>
+  Promise.resolve({
+    ok: false,
+    error: { kind: "internal", message: "unused stub" },
+  });
+
+const PLACEHOLDER_EVENT: StoredEvent = {
+  id: "evt_placeholder",
+  type: "test.placeholder",
+  version: 1,
+  source: "config-worker-tests",
+  occurredAt: FIXED_NOW,
+  actorType: "user",
+  actorId: TEST_USER_ID,
+  actorSessionId: null,
+  actorIp: null,
+  orgId: TEST_ORG_UUID,
+  projectId: null,
+  environmentId: null,
+  subjectKind: "test",
+  subjectId: "placeholder",
+  subjectName: null,
+  requestId: "req_placeholder",
+  correlationId: null,
+  causationId: null,
+  idempotencyKey: null,
+  payload: {},
+  redactPaths: [],
+  createdAt: FIXED_NOW,
+};
+
+const PLACEHOLDER_AUDIT: StoredAuditEntry = {
+  id: "aud_placeholder",
+  eventId: "evt_placeholder",
+  orgId: TEST_ORG_UUID,
+  projectId: null,
+  environmentId: null,
+  actorType: "user",
+  actorId: TEST_USER_ID,
+  eventType: "test.placeholder",
+  eventVersion: 1,
+  source: "config-worker-tests",
+  subjectKind: "test",
+  subjectId: "placeholder",
+  subjectName: null,
+  category: "test",
+  description: "placeholder",
+  occurredAt: FIXED_NOW,
+  requestId: "req_placeholder",
+  correlationId: null,
+  payload: {},
+  redactPaths: [],
+  createdAt: FIXED_NOW,
+};
 
 function makeJsonRequest(body: unknown): Request {
   return new Request("https://config-worker/test", {
@@ -72,13 +166,23 @@ function fakeFlag(overrides?: Partial<FeatureFlag>): FeatureFlag {
 }
 
 // ── Fake repos ─────────────────────────────────────────────
-function fakeEventsRepo() {
-  const calls: unknown[] = [];
+type FakeEventsRepo = {
+  calls: AppendEventWithAuditInput[];
+  appendEventWithAudit: (
+    input: AppendEventWithAuditInput,
+  ) => Promise<EventsResult<{ event: StoredEvent; audit: StoredAuditEntry }>>;
+};
+
+function fakeEventsRepo(): FakeEventsRepo {
+  const calls: AppendEventWithAuditInput[] = [];
   return {
     calls,
-    appendEventWithAudit(input: unknown) {
+    appendEventWithAudit(input) {
       calls.push(input);
-      return Promise.resolve({ ok: true as const, value: { event: {}, audit: {} } as any });
+      return Promise.resolve({
+        ok: true as const,
+        value: { event: PLACEHOLDER_EVENT, audit: PLACEHOLDER_AUDIT },
+      });
     },
   };
 }
@@ -87,23 +191,23 @@ function fakeEventsRepo() {
 describe("handleCreateSetting", () => {
   it("returns 400 for invalid JSON", async () => {
     const res = await handleCreateSetting(makeBadRequest(), FAKE_ENV, "req1", ACTOR, ORG_SCOPE, {
-      repo: { createSetting: (() => {}) as any },
+      repo: { createSetting: () => unusedConfigFailure<Setting>() },
     });
     expect(res.status).toBe(400);
   });
 
   it("returns validation error for missing key", async () => {
     const res = await handleCreateSetting(makeJsonRequest({ value: 42 }), FAKE_ENV, "req1", ACTOR, ORG_SCOPE, {
-      repo: { createSetting: (() => {}) as any },
+      repo: { createSetting: () => unusedConfigFailure<Setting>() },
     });
     expect(res.status).toBe(422);
-    const body = await res.json() as any;
-    expect(body.error.details.fields.key).toBeDefined();
+    const body = (await res.json()) as JsonResp;
+    expect(body.error.details?.fields?.key).toBeDefined();
   });
 
   it("returns validation error for invalid key pattern", async () => {
     const res = await handleCreateSetting(makeJsonRequest({ key: "123bad" }), FAKE_ENV, "req1", ACTOR, ORG_SCOPE, {
-      repo: { createSetting: (() => {}) as any },
+      repo: { createSetting: () => unusedConfigFailure<Setting>() },
     });
     expect(res.status).toBe(422);
   });
@@ -116,7 +220,7 @@ describe("handleCreateSetting", () => {
       FAKE_ENV, "req1", ACTOR, ORG_SCOPE,
       {
         repo: {
-          createSetting: (() => Promise.resolve({ ok: true, value: setting })) as any,
+          createSetting: () => Promise.resolve({ ok: true as const, value: setting }),
         },
         eventsRepo,
         generateId: () => FIXED_ID,
@@ -124,9 +228,9 @@ describe("handleCreateSetting", () => {
       },
     );
     expect(res.status).toBe(201);
-    const body = await res.json() as { data: { setting: { key: string; id: string } } };
-    expect(body.data.setting.key).toBe("max.users");
-    expect(body.data.setting.id).toMatch(/^stg_/);
+    const body = (await res.json()) as JsonResp;
+    expect(body.data.setting!.key).toBe("max.users");
+    expect(body.data.setting!.id).toMatch(/^stg_/);
     expect(eventsRepo.calls).toHaveLength(1);
   });
 
@@ -136,7 +240,7 @@ describe("handleCreateSetting", () => {
       FAKE_ENV, "req1", ACTOR, ORG_SCOPE,
       {
         repo: {
-          createSetting: (() => Promise.resolve({ ok: false, error: { kind: "conflict" } })) as any,
+          createSetting: () => Promise.resolve({ ok: false as const, error: { kind: "conflict" as const, entity: "setting" } }),
         },
         generateId: () => FIXED_ID,
         now: () => FIXED_NOW,
@@ -152,14 +256,20 @@ describe("handleUpdateSetting", () => {
 
   it("returns 400 for invalid JSON", async () => {
     const res = await handleUpdateSetting(makeBadRequest(), FAKE_ENV, "req1", ACTOR, ORG_SCOPE, SETTING_UUID, {
-      repo: { getSetting: (() => {}) as any, updateSetting: (() => {}) as any },
+      repo: {
+        getSetting: () => unusedConfigFailure<Setting>(),
+        updateSetting: () => unusedConfigFailure<Setting>(),
+      },
     });
     expect(res.status).toBe(400);
   });
 
   it("returns validation error when no fields provided", async () => {
     const res = await handleUpdateSetting(makeJsonRequest({}), FAKE_ENV, "req1", ACTOR, ORG_SCOPE, SETTING_UUID, {
-      repo: { getSetting: (() => {}) as any, updateSetting: (() => {}) as any },
+      repo: {
+        getSetting: () => unusedConfigFailure<Setting>(),
+        updateSetting: () => unusedConfigFailure<Setting>(),
+      },
     });
     expect(res.status).toBe(422);
   });
@@ -172,8 +282,8 @@ describe("handleUpdateSetting", () => {
       FAKE_ENV, "req1", ACTOR, ORG_SCOPE, SETTING_UUID,
       {
         repo: {
-          getSetting: (() => Promise.resolve({ ok: true, value: fakeSetting() })) as any,
-          updateSetting: (() => Promise.resolve({ ok: true, value: updated })) as any,
+          getSetting: () => Promise.resolve({ ok: true as const, value: fakeSetting() }),
+          updateSetting: () => Promise.resolve({ ok: true as const, value: updated }),
         },
         eventsRepo,
         generateId: () => FIXED_ID,
@@ -181,8 +291,8 @@ describe("handleUpdateSetting", () => {
       },
     );
     expect(res.status).toBe(200);
-    const body = await res.json() as { data: { setting: { value: number } } };
-    expect(body.data.setting.value).toBe(200);
+    const body = (await res.json()) as JsonResp;
+    expect(body.data.setting!.value).toBe(200);
     expect(eventsRepo.calls).toHaveLength(1);
   });
 
@@ -192,8 +302,8 @@ describe("handleUpdateSetting", () => {
       FAKE_ENV, "req1", ACTOR, ORG_SCOPE, SETTING_UUID,
       {
         repo: {
-          getSetting: (() => Promise.resolve({ ok: false, error: { kind: "not_found" } })) as any,
-          updateSetting: (() => Promise.resolve({ ok: false, error: { kind: "not_found" } })) as any,
+          getSetting: () => Promise.resolve({ ok: false as const, error: { kind: "not_found" as const } }),
+          updateSetting: () => Promise.resolve({ ok: false as const, error: { kind: "not_found" as const } }),
         },
         generateId: () => FIXED_ID,
         now: () => FIXED_NOW,
@@ -209,8 +319,8 @@ describe("handleUpdateSetting", () => {
       FAKE_ENV, "req1", ACTOR, ORG_SCOPE, SETTING_UUID,
       {
         repo: {
-          getSetting: (() => Promise.resolve({ ok: true, value: projectSetting })) as any,
-          updateSetting: (() => Promise.resolve({ ok: true, value: projectSetting })) as any,
+          getSetting: () => Promise.resolve({ ok: true as const, value: projectSetting }),
+          updateSetting: () => Promise.resolve({ ok: true as const, value: projectSetting }),
         },
         generateId: () => FIXED_ID,
         now: () => FIXED_NOW,
@@ -226,8 +336,8 @@ describe("handleUpdateSetting", () => {
       FAKE_ENV, "req1", ACTOR, PRJ_SCOPE, SETTING_UUID,
       {
         repo: {
-          getSetting: (() => Promise.resolve({ ok: true, value: orgSetting })) as any,
-          updateSetting: (() => Promise.resolve({ ok: true, value: orgSetting })) as any,
+          getSetting: () => Promise.resolve({ ok: true as const, value: orgSetting }),
+          updateSetting: () => Promise.resolve({ ok: true as const, value: orgSetting }),
         },
         generateId: () => FIXED_ID,
         now: () => FIXED_NOW,
@@ -244,8 +354,8 @@ describe("handleUpdateSetting", () => {
       FAKE_ENV, "req1", ACTOR, PRJ_SCOPE, SETTING_UUID,
       {
         repo: {
-          getSetting: (() => Promise.resolve({ ok: true, value: projectSetting })) as any,
-          updateSetting: (() => Promise.resolve({ ok: true, value: projectSetting })) as any,
+          getSetting: () => Promise.resolve({ ok: true as const, value: projectSetting }),
+          updateSetting: () => Promise.resolve({ ok: true as const, value: projectSetting }),
         },
         generateId: () => FIXED_ID,
         now: () => FIXED_NOW,
@@ -262,8 +372,8 @@ describe("handleUpdateSetting", () => {
       FAKE_ENV, "req1", ACTOR, PRJ_SCOPE, SETTING_UUID,
       {
         repo: {
-          getSetting: (() => Promise.resolve({ ok: true, value: projectSetting })) as any,
-          updateSetting: (() => Promise.resolve({ ok: true, value: { ...projectSetting, value: 200 } })) as any,
+          getSetting: () => Promise.resolve({ ok: true as const, value: projectSetting }),
+          updateSetting: () => Promise.resolve({ ok: true as const, value: { ...projectSetting, value: 200 } }),
         },
         eventsRepo,
         generateId: () => FIXED_ID,
@@ -281,8 +391,8 @@ describe("handleUpdateSetting", () => {
       FAKE_ENV, "req1", ACTOR, ENV_SCOPE, SETTING_UUID,
       {
         repo: {
-          getSetting: (() => Promise.resolve({ ok: true, value: projectSetting })) as any,
-          updateSetting: (() => Promise.resolve({ ok: true, value: projectSetting })) as any,
+          getSetting: () => Promise.resolve({ ok: true as const, value: projectSetting }),
+          updateSetting: () => Promise.resolve({ ok: true as const, value: projectSetting }),
         },
         generateId: () => FIXED_ID,
         now: () => FIXED_NOW,
@@ -296,23 +406,23 @@ describe("handleUpdateSetting", () => {
 describe("handleCreateFeatureFlag", () => {
   it("returns 400 for invalid JSON", async () => {
     const res = await handleCreateFeatureFlag(makeBadRequest(), FAKE_ENV, "req1", ACTOR, ORG_SCOPE, {
-      repo: { createFeatureFlag: (() => {}) as any },
+      repo: { createFeatureFlag: () => unusedConfigFailure<FeatureFlag>() },
     });
     expect(res.status).toBe(400);
   });
 
   it("returns validation error for missing flagKey", async () => {
     const res = await handleCreateFeatureFlag(makeJsonRequest({ enabled: true }), FAKE_ENV, "req1", ACTOR, ORG_SCOPE, {
-      repo: { createFeatureFlag: (() => {}) as any },
+      repo: { createFeatureFlag: () => unusedConfigFailure<FeatureFlag>() },
     });
     expect(res.status).toBe(422);
-    const body = await res.json() as any;
-    expect(body.error.details.fields.flagKey).toBeDefined();
+    const body = (await res.json()) as JsonResp;
+    expect(body.error.details?.fields?.flagKey).toBeDefined();
   });
 
   it("returns validation error for non-boolean enabled", async () => {
     const res = await handleCreateFeatureFlag(makeJsonRequest({ flagKey: "feat.x", enabled: "yes" }), FAKE_ENV, "req1", ACTOR, ORG_SCOPE, {
-      repo: { createFeatureFlag: (() => {}) as any },
+      repo: { createFeatureFlag: () => unusedConfigFailure<FeatureFlag>() },
     });
     expect(res.status).toBe(422);
   });
@@ -325,7 +435,7 @@ describe("handleCreateFeatureFlag", () => {
       FAKE_ENV, "req1", ACTOR, ORG_SCOPE,
       {
         repo: {
-          createFeatureFlag: (() => Promise.resolve({ ok: true, value: flag })) as any,
+          createFeatureFlag: () => Promise.resolve({ ok: true as const, value: flag }),
         },
         eventsRepo,
         generateId: () => FIXED_ID,
@@ -333,9 +443,9 @@ describe("handleCreateFeatureFlag", () => {
       },
     );
     expect(res.status).toBe(201);
-    const body = await res.json() as { data: { featureFlag: { flagKey: string; id: string } } };
-    expect(body.data.featureFlag.flagKey).toBe("dark_mode");
-    expect(body.data.featureFlag.id).toMatch(/^flg_/);
+    const body = (await res.json()) as JsonResp;
+    expect(body.data.featureFlag!.flagKey).toBe("dark_mode");
+    expect(body.data.featureFlag!.id).toMatch(/^flg_/);
     expect(eventsRepo.calls).toHaveLength(1);
   });
 
@@ -345,7 +455,7 @@ describe("handleCreateFeatureFlag", () => {
       FAKE_ENV, "req1", ACTOR, ORG_SCOPE,
       {
         repo: {
-          createFeatureFlag: (() => Promise.resolve({ ok: false, error: { kind: "conflict" } })) as any,
+          createFeatureFlag: () => Promise.resolve({ ok: false as const, error: { kind: "conflict" as const, entity: "feature_flag" } }),
         },
         generateId: () => FIXED_ID,
         now: () => FIXED_NOW,
@@ -361,21 +471,30 @@ describe("handleUpdateFeatureFlag", () => {
 
   it("returns 400 for invalid JSON", async () => {
     const res = await handleUpdateFeatureFlag(makeBadRequest(), FAKE_ENV, "req1", ACTOR, ORG_SCOPE, FLAG_UUID, {
-      repo: { getFeatureFlag: (() => {}) as any, updateFeatureFlag: (() => {}) as any },
+      repo: {
+        getFeatureFlag: () => unusedConfigFailure<FeatureFlag>(),
+        updateFeatureFlag: () => unusedConfigFailure<FeatureFlag>(),
+      },
     });
     expect(res.status).toBe(400);
   });
 
   it("returns validation error when no fields provided", async () => {
     const res = await handleUpdateFeatureFlag(makeJsonRequest({}), FAKE_ENV, "req1", ACTOR, ORG_SCOPE, FLAG_UUID, {
-      repo: { getFeatureFlag: (() => {}) as any, updateFeatureFlag: (() => {}) as any },
+      repo: {
+        getFeatureFlag: () => unusedConfigFailure<FeatureFlag>(),
+        updateFeatureFlag: () => unusedConfigFailure<FeatureFlag>(),
+      },
     });
     expect(res.status).toBe(422);
   });
 
   it("returns validation error for non-boolean enabled", async () => {
     const res = await handleUpdateFeatureFlag(makeJsonRequest({ enabled: "nope" }), FAKE_ENV, "req1", ACTOR, ORG_SCOPE, FLAG_UUID, {
-      repo: { getFeatureFlag: (() => {}) as any, updateFeatureFlag: (() => {}) as any },
+      repo: {
+        getFeatureFlag: () => unusedConfigFailure<FeatureFlag>(),
+        updateFeatureFlag: () => unusedConfigFailure<FeatureFlag>(),
+      },
     });
     expect(res.status).toBe(422);
   });
@@ -388,8 +507,8 @@ describe("handleUpdateFeatureFlag", () => {
       FAKE_ENV, "req1", ACTOR, ORG_SCOPE, FLAG_UUID,
       {
         repo: {
-          getFeatureFlag: (() => Promise.resolve({ ok: true, value: fakeFlag() })) as any,
-          updateFeatureFlag: (() => Promise.resolve({ ok: true, value: updated })) as any,
+          getFeatureFlag: () => Promise.resolve({ ok: true as const, value: fakeFlag() }),
+          updateFeatureFlag: () => Promise.resolve({ ok: true as const, value: updated }),
         },
         eventsRepo,
         generateId: () => FIXED_ID,
@@ -397,8 +516,8 @@ describe("handleUpdateFeatureFlag", () => {
       },
     );
     expect(res.status).toBe(200);
-    const body = await res.json() as { data: { featureFlag: { enabled: boolean } } };
-    expect(body.data.featureFlag.enabled).toBe(true);
+    const body = (await res.json()) as JsonResp;
+    expect(body.data.featureFlag!.enabled).toBe(true);
     expect(eventsRepo.calls).toHaveLength(1);
   });
 
@@ -408,8 +527,8 @@ describe("handleUpdateFeatureFlag", () => {
       FAKE_ENV, "req1", ACTOR, ORG_SCOPE, FLAG_UUID,
       {
         repo: {
-          getFeatureFlag: (() => Promise.resolve({ ok: false, error: { kind: "not_found" } })) as any,
-          updateFeatureFlag: (() => Promise.resolve({ ok: false, error: { kind: "not_found" } })) as any,
+          getFeatureFlag: () => Promise.resolve({ ok: false as const, error: { kind: "not_found" as const } }),
+          updateFeatureFlag: () => Promise.resolve({ ok: false as const, error: { kind: "not_found" as const } }),
         },
         generateId: () => FIXED_ID,
         now: () => FIXED_NOW,
@@ -425,8 +544,8 @@ describe("handleUpdateFeatureFlag", () => {
       FAKE_ENV, "req1", ACTOR, ORG_SCOPE, FLAG_UUID,
       {
         repo: {
-          getFeatureFlag: (() => Promise.resolve({ ok: true, value: projectFlag })) as any,
-          updateFeatureFlag: (() => Promise.resolve({ ok: true, value: projectFlag })) as any,
+          getFeatureFlag: () => Promise.resolve({ ok: true as const, value: projectFlag }),
+          updateFeatureFlag: () => Promise.resolve({ ok: true as const, value: projectFlag }),
         },
         generateId: () => FIXED_ID,
         now: () => FIXED_NOW,
@@ -443,8 +562,8 @@ describe("handleUpdateFeatureFlag", () => {
       FAKE_ENV, "req1", ACTOR, PRJ_SCOPE, FLAG_UUID,
       {
         repo: {
-          getFeatureFlag: (() => Promise.resolve({ ok: true, value: projectFlag })) as any,
-          updateFeatureFlag: (() => Promise.resolve({ ok: true, value: projectFlag })) as any,
+          getFeatureFlag: () => Promise.resolve({ ok: true as const, value: projectFlag }),
+          updateFeatureFlag: () => Promise.resolve({ ok: true as const, value: projectFlag }),
         },
         generateId: () => FIXED_ID,
         now: () => FIXED_NOW,
@@ -461,8 +580,8 @@ describe("handleUpdateFeatureFlag", () => {
       FAKE_ENV, "req1", ACTOR, ENV_SCOPE, FLAG_UUID,
       {
         repo: {
-          getFeatureFlag: (() => Promise.resolve({ ok: true, value: orgFlag })) as any,
-          updateFeatureFlag: (() => Promise.resolve({ ok: true, value: orgFlag })) as any,
+          getFeatureFlag: () => Promise.resolve({ ok: true as const, value: orgFlag }),
+          updateFeatureFlag: () => Promise.resolve({ ok: true as const, value: orgFlag }),
         },
         generateId: () => FIXED_ID,
         now: () => FIXED_NOW,

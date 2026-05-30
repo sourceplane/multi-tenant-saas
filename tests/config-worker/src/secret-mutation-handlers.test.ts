@@ -5,7 +5,97 @@ import { parseSecretMetadataPublicId, secretMetadataPublicId } from "@config-wor
 import { route } from "@config-worker/router";
 import type { Env } from "@config-worker/env";
 import type { ActorContext } from "@config-worker/router";
-import type { Scope, SecretMetadata } from "@saas/db/config";
+import type { Scope, SecretMetadata, ConfigResult } from "@saas/db/config";
+import type {
+  AppendEventWithAuditInput,
+  EventsResult,
+  StoredEvent,
+  StoredAuditEntry,
+} from "@saas/db/events";
+
+// ── Local types ────────────────────────────────────────────
+type SecretView = {
+  id: string;
+  secretKey: string;
+  status: string;
+  version: number;
+  value?: unknown;
+  plaintext?: unknown;
+  ciphertext?: unknown;
+  ciphertextEnvelope?: unknown;
+  hash?: unknown;
+};
+type ErrorEnvelope = {
+  code: string;
+  message?: string;
+  details?: { fields?: Record<string, unknown> };
+};
+type JsonResp = {
+  data: { secret: SecretView };
+  error: ErrorEnvelope;
+};
+
+type EventPayload = {
+  operation?: string;
+  key?: string;
+  value?: unknown;
+  plaintext?: unknown;
+  ciphertext?: unknown;
+  hash?: unknown;
+  [k: string]: unknown;
+};
+
+const unusedConfigFailure = <T>(): Promise<ConfigResult<T>> =>
+  Promise.resolve({ ok: false, error: { kind: "internal", message: "unused stub" } });
+
+const PLACEHOLDER_EVENT: StoredEvent = {
+  id: "evt_placeholder",
+  type: "test.placeholder",
+  version: 1,
+  source: "config-worker-tests",
+  occurredAt: new Date("2026-05-01T00:00:00Z"),
+  actorType: "user",
+  actorId: "usr_aabbccdd",
+  actorSessionId: null,
+  actorIp: null,
+  orgId: "11111111-1111-1111-1111-111111111111",
+  projectId: null,
+  environmentId: null,
+  subjectKind: "test",
+  subjectId: "placeholder",
+  subjectName: null,
+  requestId: "req_placeholder",
+  correlationId: null,
+  causationId: null,
+  idempotencyKey: null,
+  payload: {},
+  redactPaths: [],
+  createdAt: new Date("2026-05-01T00:00:00Z"),
+};
+
+const PLACEHOLDER_AUDIT: StoredAuditEntry = {
+  id: "aud_placeholder",
+  eventId: "evt_placeholder",
+  orgId: "11111111-1111-1111-1111-111111111111",
+  projectId: null,
+  environmentId: null,
+  actorType: "user",
+  actorId: "usr_aabbccdd",
+  eventType: "test.placeholder",
+  eventVersion: 1,
+  source: "config-worker-tests",
+  subjectKind: "test",
+  subjectId: "placeholder",
+  subjectName: null,
+  category: "test",
+  description: "placeholder",
+  occurredAt: new Date("2026-05-01T00:00:00Z"),
+  requestId: "req_placeholder",
+  correlationId: null,
+  payload: {},
+  redactPaths: [],
+  createdAt: new Date("2026-05-01T00:00:00Z"),
+};
 
 // ── Constants ──────────────────────────────────────────────
 const TEST_ORG_UUID = "11111111-1111-1111-1111-111111111111";
@@ -74,21 +164,32 @@ function fakeSecret(overrides?: Partial<SecretMetadata>): SecretMetadata {
 }
 
 // ── Fake repos ─────────────────────────────────────────────
-function fakeEventsRepo() {
-  const calls: unknown[] = [];
+type FakeEventsRepo = {
+  calls: AppendEventWithAuditInput[];
+  appendEventWithAudit: (
+    input: AppendEventWithAuditInput,
+  ) => Promise<EventsResult<{ event: StoredEvent; audit: StoredAuditEntry }>>;
+};
+
+function fakeEventsRepo(): FakeEventsRepo {
+  const calls: AppendEventWithAuditInput[] = [];
   return {
     calls,
-    appendEventWithAudit(input: unknown) {
+    appendEventWithAudit(input) {
       calls.push(input);
-      return Promise.resolve({ ok: true as const, value: { event: {}, audit: {} } as any });
+      return Promise.resolve({
+        ok: true as const,
+        value: { event: PLACEHOLDER_EVENT, audit: PLACEHOLDER_AUDIT },
+      });
     },
   };
 }
 
-function failingEventsRepo() {
+function failingEventsRepo(): FakeEventsRepo {
+  const calls: AppendEventWithAuditInput[] = [];
   return {
-    calls: [] as unknown[],
-    appendEventWithAudit(_input: unknown) {
+    calls,
+    appendEventWithAudit(_input) {
       return Promise.resolve({ ok: false as const, error: { kind: "internal" as const, message: "event store down" } });
     },
   };
@@ -100,23 +201,23 @@ function failingEventsRepo() {
 describe("handleCreateSecret", () => {
   it("returns 400 for invalid JSON", async () => {
     const res = await handleCreateSecret(makeBadRequest(), FAKE_ENV, "req1", ACTOR, ORG_SCOPE, {
-      repo: { createSecretMetadata: (() => {}) as any },
+      repo: { createSecretMetadata: () => unusedConfigFailure<SecretMetadata>() },
     });
     expect(res.status).toBe(400);
   });
 
   it("returns 422 for missing secretKey", async () => {
     const res = await handleCreateSecret(makeJsonRequest({ displayName: "test" }), FAKE_ENV, "req1", ACTOR, ORG_SCOPE, {
-      repo: { createSecretMetadata: (() => {}) as any },
+      repo: { createSecretMetadata: () => unusedConfigFailure<SecretMetadata>() },
     });
     expect(res.status).toBe(422);
-    const body = await res.json() as any;
-    expect(body.error.details.fields.secretKey).toBeDefined();
+    const body = (await res.json()) as JsonResp;
+    expect(body.error.details?.fields?.secretKey).toBeDefined();
   });
 
   it("returns 422 for invalid secretKey pattern", async () => {
     const res = await handleCreateSecret(makeJsonRequest({ secretKey: "123bad" }), FAKE_ENV, "req1", ACTOR, ORG_SCOPE, {
-      repo: { createSecretMetadata: (() => {}) as any },
+      repo: { createSecretMetadata: () => unusedConfigFailure<SecretMetadata>() },
     });
     expect(res.status).toBe(422);
   });
@@ -127,11 +228,11 @@ describe("handleCreateSecret", () => {
     for (const field of forbiddenFields) {
       const body = { secretKey: "API_KEY", [field]: "should_be_rejected" };
       const res = await handleCreateSecret(makeJsonRequest(body), FAKE_ENV, "req1", ACTOR, ORG_SCOPE, {
-        repo: { createSecretMetadata: (() => {}) as any },
+        repo: { createSecretMetadata: () => unusedConfigFailure<SecretMetadata>() },
       });
       expect(res.status).toBe(422);
-      const respBody = await res.json() as any;
-      expect(respBody.error.details.fields[field]).toBeDefined();
+      const respBody = (await res.json()) as JsonResp;
+      expect(respBody.error.details?.fields?.[field]).toBeDefined();
     }
   });
 
@@ -143,7 +244,7 @@ describe("handleCreateSecret", () => {
       FAKE_ENV, "req1", ACTOR, ORG_SCOPE,
       {
         repo: {
-          createSecretMetadata: (() => Promise.resolve({ ok: true, value: secret })) as any,
+          createSecretMetadata: () => Promise.resolve({ ok: true as const, value: secret }),
         },
         eventsRepo,
         generateId: () => FIXED_ID,
@@ -164,7 +265,7 @@ describe("handleCreateSecret", () => {
       FAKE_ENV, "req1", ACTOR, ORG_SCOPE,
       {
         repo: {
-          createSecretMetadata: (() => Promise.resolve({ ok: false, error: { kind: "conflict" } })) as any,
+          createSecretMetadata: () => Promise.resolve({ ok: false as const, error: { kind: "conflict" as const, entity: "secret_metadata" } }),
         },
         generateId: () => FIXED_ID,
         now: () => FIXED_NOW,
@@ -181,15 +282,15 @@ describe("handleCreateSecret", () => {
       FAKE_ENV, "req1", ACTOR, ORG_SCOPE,
       {
         repo: {
-          createSecretMetadata: (() => Promise.resolve({ ok: true, value: secret })) as any,
+          createSecretMetadata: () => Promise.resolve({ ok: true as const, value: secret }),
         },
         eventsRepo,
         generateId: () => FIXED_ID,
         now: () => FIXED_NOW,
       },
     );
-    const eventCall = eventsRepo.calls[0] as any;
-    const payload = eventCall.event.payload;
+    const eventCall = eventsRepo.calls[0]!;
+    const payload = eventCall.event.payload as EventPayload;
     expect(payload.operation).toBe("create");
     expect(payload.key).toBe("DB_PASSWORD");
     // Ensure no secret material in event
@@ -211,7 +312,7 @@ describe("handleCreateSecret", () => {
       FAKE_ENV, "req1", ACTOR, ORG_SCOPE,
       {
         repo: {
-          createSecretMetadata: (() => Promise.resolve({ ok: true, value: secret })) as any,
+          createSecretMetadata: () => Promise.resolve({ ok: true as const, value: secret }),
         },
         eventsRepo,
         generateId: () => FIXED_ID,
@@ -228,13 +329,13 @@ describe("handleCreateSecret", () => {
       FAKE_ENV, "req1", ACTOR, ORG_SCOPE,
       {
         repo: {
-          createSecretMetadata: (() => Promise.resolve({ ok: true, value: secret })) as any,
+          createSecretMetadata: () => Promise.resolve({ ok: true as const, value: secret }),
         },
         generateId: () => FIXED_ID,
         now: () => FIXED_NOW,
       },
     );
-    const body = await res.json() as any;
+    const body = (await res.json()) as JsonResp;
     const s = body.data.secret;
     expect(s.value).toBeUndefined();
     expect(s.plaintext).toBeUndefined();
@@ -256,8 +357,8 @@ describe("handleRotateSecret", () => {
       makeEmptyRequest(), FAKE_ENV, "req1", ACTOR, ORG_SCOPE, SECRET_UUID,
       {
         repo: {
-          getSecretMetadata: (() => Promise.resolve({ ok: true, value: existing })) as any,
-          rotateSecretMetadata: (() => Promise.resolve({ ok: true, value: rotated })) as any,
+          getSecretMetadata: () => Promise.resolve({ ok: true as const, value: existing }),
+          rotateSecretMetadata: () => Promise.resolve({ ok: true as const, value: rotated }),
         },
         eventsRepo,
         generateId: () => FIXED_ID,
@@ -268,8 +369,8 @@ describe("handleRotateSecret", () => {
     const body = await res.json() as { data: { secret: { version: number } } };
     expect(body.data.secret.version).toBe(2);
     expect(eventsRepo.calls).toHaveLength(1);
-    const eventCall = eventsRepo.calls[0] as any;
-    expect(eventCall.event.payload.operation).toBe("rotate");
+    const eventCall = eventsRepo.calls[0]!;
+    expect((eventCall.event.payload as EventPayload).operation).toBe("rotate");
   });
 
   it("returns 404 when secret not found", async () => {
@@ -277,8 +378,8 @@ describe("handleRotateSecret", () => {
       makeEmptyRequest(), FAKE_ENV, "req1", ACTOR, ORG_SCOPE, SECRET_UUID,
       {
         repo: {
-          getSecretMetadata: (() => Promise.resolve({ ok: false, error: { kind: "not_found" } })) as any,
-          rotateSecretMetadata: (() => {}) as any,
+          getSecretMetadata: () => Promise.resolve({ ok: false as const, error: { kind: "not_found" as const } }),
+          rotateSecretMetadata: () => unusedConfigFailure<SecretMetadata>(),
         },
       },
     );
@@ -291,8 +392,8 @@ describe("handleRotateSecret", () => {
       makeEmptyRequest(), FAKE_ENV, "req1", ACTOR, ORG_SCOPE, SECRET_UUID,
       {
         repo: {
-          getSecretMetadata: (() => Promise.resolve({ ok: true, value: projectSecret })) as any,
-          rotateSecretMetadata: (() => {}) as any,
+          getSecretMetadata: () => Promise.resolve({ ok: true as const, value: projectSecret }),
+          rotateSecretMetadata: () => unusedConfigFailure<SecretMetadata>(),
         },
       },
     );
@@ -305,8 +406,8 @@ describe("handleRotateSecret", () => {
       makeEmptyRequest(), FAKE_ENV, "req1", ACTOR, PRJ_SCOPE, SECRET_UUID,
       {
         repo: {
-          getSecretMetadata: (() => Promise.resolve({ ok: true, value: orgSecret })) as any,
-          rotateSecretMetadata: (() => {}) as any,
+          getSecretMetadata: () => Promise.resolve({ ok: true as const, value: orgSecret }),
+          rotateSecretMetadata: () => unusedConfigFailure<SecretMetadata>(),
         },
       },
     );
@@ -320,8 +421,8 @@ describe("handleRotateSecret", () => {
       makeEmptyRequest(), FAKE_ENV, "req1", ACTOR, PRJ_SCOPE, SECRET_UUID,
       {
         repo: {
-          getSecretMetadata: (() => Promise.resolve({ ok: true, value: projectSecret })) as any,
-          rotateSecretMetadata: (() => {}) as any,
+          getSecretMetadata: () => Promise.resolve({ ok: true as const, value: projectSecret }),
+          rotateSecretMetadata: () => unusedConfigFailure<SecretMetadata>(),
         },
       },
     );
@@ -334,8 +435,8 @@ describe("handleRotateSecret", () => {
       makeEmptyRequest(), FAKE_ENV, "req1", ACTOR, ENV_SCOPE, SECRET_UUID,
       {
         repo: {
-          getSecretMetadata: (() => Promise.resolve({ ok: true, value: projectSecret })) as any,
-          rotateSecretMetadata: (() => {}) as any,
+          getSecretMetadata: () => Promise.resolve({ ok: true as const, value: projectSecret }),
+          rotateSecretMetadata: () => unusedConfigFailure<SecretMetadata>(),
         },
       },
     );
@@ -349,8 +450,8 @@ describe("handleRotateSecret", () => {
       makeJsonRequest({ plaintext: "new_secret_value" }), FAKE_ENV, "req1", ACTOR, ORG_SCOPE, SECRET_UUID,
       {
         repo: {
-          getSecretMetadata: (() => {}) as any,
-          rotateSecretMetadata: (() => {}) as any,
+          getSecretMetadata: () => unusedConfigFailure<SecretMetadata>(),
+          rotateSecretMetadata: () => unusedConfigFailure<SecretMetadata>(),
         },
       },
     );
@@ -365,8 +466,8 @@ describe("handleRotateSecret", () => {
       makeEmptyRequest(), FAKE_ENV, "req1", ACTOR, PRJ_SCOPE, SECRET_UUID,
       {
         repo: {
-          getSecretMetadata: (() => Promise.resolve({ ok: true, value: projectSecret })) as any,
-          rotateSecretMetadata: (() => Promise.resolve({ ok: true, value: rotated })) as any,
+          getSecretMetadata: () => Promise.resolve({ ok: true as const, value: projectSecret }),
+          rotateSecretMetadata: () => Promise.resolve({ ok: true as const, value: rotated }),
         },
         eventsRepo,
         generateId: () => FIXED_ID,
@@ -389,8 +490,8 @@ describe("handleRevokeSecret", () => {
       makeDeleteRequest(), FAKE_ENV, "req1", ACTOR, ORG_SCOPE, SECRET_UUID,
       {
         repo: {
-          getSecretMetadata: (() => Promise.resolve({ ok: true, value: existing })) as any,
-          revokeSecretMetadata: (() => Promise.resolve({ ok: true, value: revoked })) as any,
+          getSecretMetadata: () => Promise.resolve({ ok: true as const, value: existing }),
+          revokeSecretMetadata: () => Promise.resolve({ ok: true as const, value: revoked }),
         },
         eventsRepo,
         generateId: () => FIXED_ID,
@@ -401,7 +502,7 @@ describe("handleRevokeSecret", () => {
     const body = await res.json() as { data: { secret: { status: string } } };
     expect(body.data.secret.status).toBe("revoked");
     expect(eventsRepo.calls).toHaveLength(1);
-    const eventCall = eventsRepo.calls[0] as any;
+    const eventCall = eventsRepo.calls[0]!;
     expect(eventCall.event.payload.operation).toBe("revoke");
   });
 
@@ -410,8 +511,8 @@ describe("handleRevokeSecret", () => {
       makeDeleteRequest(), FAKE_ENV, "req1", ACTOR, ORG_SCOPE, SECRET_UUID,
       {
         repo: {
-          getSecretMetadata: (() => Promise.resolve({ ok: false, error: { kind: "not_found" } })) as any,
-          revokeSecretMetadata: (() => {}) as any,
+          getSecretMetadata: () => Promise.resolve({ ok: false as const, error: { kind: "not_found" as const } }),
+          revokeSecretMetadata: () => unusedConfigFailure<SecretMetadata>(),
         },
       },
     );
@@ -424,8 +525,8 @@ describe("handleRevokeSecret", () => {
       makeDeleteRequest(), FAKE_ENV, "req1", ACTOR, ORG_SCOPE, SECRET_UUID,
       {
         repo: {
-          getSecretMetadata: (() => Promise.resolve({ ok: true, value: projectSecret })) as any,
-          revokeSecretMetadata: (() => {}) as any,
+          getSecretMetadata: () => Promise.resolve({ ok: true as const, value: projectSecret }),
+          revokeSecretMetadata: () => unusedConfigFailure<SecretMetadata>(),
         },
       },
     );
@@ -439,8 +540,8 @@ describe("handleRevokeSecret", () => {
       makeDeleteRequest(), FAKE_ENV, "req1", ACTOR, PRJ_SCOPE, SECRET_UUID,
       {
         repo: {
-          getSecretMetadata: (() => Promise.resolve({ ok: true, value: projectSecret })) as any,
-          revokeSecretMetadata: (() => {}) as any,
+          getSecretMetadata: () => Promise.resolve({ ok: true as const, value: projectSecret }),
+          revokeSecretMetadata: () => unusedConfigFailure<SecretMetadata>(),
         },
       },
     );
@@ -455,15 +556,15 @@ describe("handleRevokeSecret", () => {
       makeDeleteRequest(), FAKE_ENV, "req1", ACTOR, ORG_SCOPE, SECRET_UUID,
       {
         repo: {
-          getSecretMetadata: (() => Promise.resolve({ ok: true, value: existing })) as any,
-          revokeSecretMetadata: (() => Promise.resolve({ ok: true, value: revoked })) as any,
+          getSecretMetadata: () => Promise.resolve({ ok: true as const, value: existing }),
+          revokeSecretMetadata: () => Promise.resolve({ ok: true as const, value: revoked }),
         },
         eventsRepo,
         generateId: () => FIXED_ID,
         now: () => FIXED_NOW,
       },
     );
-    const eventCall = eventsRepo.calls[0] as any;
+    const eventCall = eventsRepo.calls[0]!;
     expect(eventCall.event.payload.operation).toBe("revoke");
     expect(eventCall.event.payload.key).toBe("API_KEY");
     expect(eventCall.event.payload.value).toBeUndefined();
