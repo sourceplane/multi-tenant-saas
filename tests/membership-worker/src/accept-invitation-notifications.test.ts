@@ -7,11 +7,21 @@
  * NOT 5xx the user response, and `templateData` contains no raw token.
  */
 import { handleAcceptInvitation } from "@membership-worker/handlers/accept-invitation";
+import type { Env } from "@membership-worker/env";
+import type { AcceptInvitationInput } from "@saas/db/membership";
+import type { EnqueueNotificationRequest } from "@saas/contracts/notifications";
+
+type NotificationsClientContext = {
+  internalActor: string;
+  actorSubjectType: string;
+  actorSubjectId: string;
+  requestId: string;
+};
 
 type EnqueueArgs = {
   env: unknown;
-  ctx: unknown;
-  request: any;
+  ctx: NotificationsClientContext;
+  request: EnqueueNotificationRequest;
 };
 
 const orgUuid = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
@@ -42,7 +52,7 @@ function makeRequest(body: unknown): Request {
 
 function makeRepo(opts: { sequence?: string[] } = {}) {
   return {
-    acceptInvitation: async (_input: any) => {
+    acceptInvitation: async (_input: AcceptInvitationInput) => {
       opts.sequence?.push("acceptInvitation");
       return {
         ok: true as const,
@@ -88,7 +98,7 @@ function makeRepo(opts: { sequence?: string[] } = {}) {
 
 function makeRecorder(sequence?: string[]) {
   const calls: EnqueueArgs[] = [];
-  const fn = async (env: unknown, ctx: unknown, request: any) => {
+  const fn = async (env: unknown, ctx: NotificationsClientContext, request: EnqueueNotificationRequest) => {
     sequence?.push("enqueueNotification");
     calls.push({ env, ctx, request });
     return { ok: true as const, notificationId: "ntf_acc_123" };
@@ -99,7 +109,7 @@ function makeRecorder(sequence?: string[]) {
 describe("accept-invitation → notifications-worker wire (Task 0089)", () => {
   it("enqueues invitation.accepted with category invitation and lower-cased recipient", async () => {
     const recorder = makeRecorder();
-    const env = {
+    const env: Env = {
       SOURCEPLANE_DB: {} as Hyperdrive,
       ENVIRONMENT: "test",
       NOTIFICATIONS_WORKER: {} as Fetcher,
@@ -107,7 +117,7 @@ describe("accept-invitation → notifications-worker wire (Task 0089)", () => {
 
     const response = await handleAcceptInvitation(
       makeRequest({ token: RAW_TOKEN }),
-      env as any,
+      env,
       "req_test",
       acceptActor,
       orgPublicIdStr,
@@ -130,7 +140,7 @@ describe("accept-invitation → notifications-worker wire (Task 0089)", () => {
     expect(call.request.orgId).toBe(orgUuid);
     expect(call.request.correlationId).toBe("req_test");
 
-    const ctx = call.ctx as any;
+    const ctx = call.ctx;
     expect(ctx.internalActor).toBe("membership-worker");
     expect(ctx.actorSubjectType).toBe("user");
     expect(ctx.actorSubjectId).toBe("usr_acceptor");
@@ -140,7 +150,7 @@ describe("accept-invitation → notifications-worker wire (Task 0089)", () => {
   it("enqueue is sequenced AFTER repo.acceptInvitation resolves (post-commit semantics)", async () => {
     const sequence: string[] = [];
     const recorder = makeRecorder(sequence);
-    const env = {
+    const env: Env = {
       SOURCEPLANE_DB: {} as Hyperdrive,
       ENVIRONMENT: "test",
       NOTIFICATIONS_WORKER: {} as Fetcher,
@@ -148,7 +158,7 @@ describe("accept-invitation → notifications-worker wire (Task 0089)", () => {
 
     await handleAcceptInvitation(
       makeRequest({ token: RAW_TOKEN }),
-      env as any,
+      env,
       "req_test",
       acceptActor,
       orgPublicIdStr,
@@ -169,7 +179,7 @@ describe("accept-invitation → notifications-worker wire (Task 0089)", () => {
 
   it("never includes the raw invitation token in the enqueue payload", async () => {
     const recorder = makeRecorder();
-    const env = {
+    const env: Env = {
       SOURCEPLANE_DB: {} as Hyperdrive,
       ENVIRONMENT: "test",
       NOTIFICATIONS_WORKER: {} as Fetcher,
@@ -177,7 +187,7 @@ describe("accept-invitation → notifications-worker wire (Task 0089)", () => {
 
     await handleAcceptInvitation(
       makeRequest({ token: RAW_TOKEN }),
-      env as any,
+      env,
       "req_test",
       acceptActor,
       orgPublicIdStr,
@@ -197,7 +207,7 @@ describe("accept-invitation → notifications-worker wire (Task 0089)", () => {
 
   it("templateData contains expected redaction-safe keys only", async () => {
     const recorder = makeRecorder();
-    const env = {
+    const env: Env = {
       SOURCEPLANE_DB: {} as Hyperdrive,
       ENVIRONMENT: "test",
       NOTIFICATIONS_WORKER: {} as Fetcher,
@@ -205,7 +215,7 @@ describe("accept-invitation → notifications-worker wire (Task 0089)", () => {
 
     await handleAcceptInvitation(
       makeRequest({ token: RAW_TOKEN }),
-      env as any,
+      env,
       "req_test",
       acceptActor,
       orgPublicIdStr,
@@ -234,7 +244,7 @@ describe("accept-invitation → notifications-worker wire (Task 0089)", () => {
   });
 
   it("returns 200 unchanged when enqueue fails (non_2xx) — best-effort contract", async () => {
-    const env = {
+    const env: Env = {
       SOURCEPLANE_DB: {} as Hyperdrive,
       ENVIRONMENT: "test",
       NOTIFICATIONS_WORKER: {} as Fetcher,
@@ -242,7 +252,7 @@ describe("accept-invitation → notifications-worker wire (Task 0089)", () => {
 
     const response = await handleAcceptInvitation(
       makeRequest({ token: RAW_TOKEN }),
-      env as any,
+      env,
       "req_test",
       acceptActor,
       orgPublicIdStr,
@@ -255,7 +265,7 @@ describe("accept-invitation → notifications-worker wire (Task 0089)", () => {
     );
 
     expect(response.status).toBe(200);
-    const json = (await response.json()) as any;
+    const json = (await response.json()) as { data: { invitation: { role: string }; membership: { status: string } } };
     expect(json.data.invitation.role).toBe("builder");
     expect(json.data.membership.status).toBe("active");
   });
@@ -266,7 +276,7 @@ describe("accept-invitation → notifications-worker wire (Task 0089)", () => {
     // try/catch turns any unhandled throw into a 500, so this asserts
     // that intentionally — the regression we're guarding against is a
     // future change that adds a non-best-effort enqueue call.
-    const env = {
+    const env: Env = {
       SOURCEPLANE_DB: {} as Hyperdrive,
       ENVIRONMENT: "test",
       NOTIFICATIONS_WORKER: {} as Fetcher,
@@ -279,7 +289,7 @@ describe("accept-invitation → notifications-worker wire (Task 0089)", () => {
     // intent) is exercised by this test rather than slipping through.
     const response = await handleAcceptInvitation(
       makeRequest({ token: RAW_TOKEN }),
-      env as any,
+      env,
       "req_test",
       acceptActor,
       orgPublicIdStr,
@@ -295,13 +305,13 @@ describe("accept-invitation → notifications-worker wire (Task 0089)", () => {
   });
 
   it("returns 200 unchanged when NOTIFICATIONS_WORKER binding absent (no_binding short-circuit)", async () => {
-    const env = {
+    const env: Env = {
       SOURCEPLANE_DB: {} as Hyperdrive,
       ENVIRONMENT: "test",
       // NOTIFICATIONS_WORKER intentionally absent.
     };
 
-    const fn = async (envArg: any) => {
+    const fn = async (envArg: { NOTIFICATIONS_WORKER?: Fetcher }) => {
       if (!envArg?.NOTIFICATIONS_WORKER) {
         return { ok: false as const, reason: "no_binding" as const };
       }
@@ -310,7 +320,7 @@ describe("accept-invitation → notifications-worker wire (Task 0089)", () => {
 
     const response = await handleAcceptInvitation(
       makeRequest({ token: RAW_TOKEN }),
-      env as any,
+      env,
       "req_test",
       acceptActor,
       orgPublicIdStr,
@@ -327,7 +337,7 @@ describe("accept-invitation → notifications-worker wire (Task 0089)", () => {
 
   it("does NOT enqueue on validation failure (invalid token)", async () => {
     const recorder = makeRecorder();
-    const env = {
+    const env: Env = {
       SOURCEPLANE_DB: {} as Hyperdrive,
       ENVIRONMENT: "test",
       NOTIFICATIONS_WORKER: {} as Fetcher,
@@ -335,7 +345,7 @@ describe("accept-invitation → notifications-worker wire (Task 0089)", () => {
 
     const response = await handleAcceptInvitation(
       makeRequest({ token: "not-a-valid-token" }),
-      env as any,
+      env,
       "req_test",
       acceptActor,
       orgPublicIdStr,
@@ -353,7 +363,7 @@ describe("accept-invitation → notifications-worker wire (Task 0089)", () => {
 
   it("does NOT enqueue on repo failure (e.g. expired/not_found)", async () => {
     const recorder = makeRecorder();
-    const env = {
+    const env: Env = {
       SOURCEPLANE_DB: {} as Hyperdrive,
       ENVIRONMENT: "test",
       NOTIFICATIONS_WORKER: {} as Fetcher,
@@ -368,7 +378,7 @@ describe("accept-invitation → notifications-worker wire (Task 0089)", () => {
 
     const response = await handleAcceptInvitation(
       makeRequest({ token: RAW_TOKEN }),
-      env as any,
+      env,
       "req_test",
       acceptActor,
       orgPublicIdStr,
@@ -393,7 +403,7 @@ describe("accept-invitation → notifications-worker wire (Task 0089)", () => {
           SOURCEPLANE_DB: {} as Hyperdrive,
           ENVIRONMENT: "test",
           NOTIFICATIONS_WORKER: {} as Fetcher,
-        } as any,
+        } satisfies Env,
         "req_test",
         acceptActor,
         orgPublicIdStr,
@@ -415,8 +425,8 @@ describe("accept-invitation → notifications-worker wire (Task 0089)", () => {
       await callOnce(recorder);
 
       expect(recorder.calls).toHaveLength(2);
-      const k1 = recorder.calls[0]!.request.idempotencyKey;
-      const k2 = recorder.calls[1]!.request.idempotencyKey;
+      const k1 = recorder.calls[0]!.request.idempotencyKey!;
+      const k2 = recorder.calls[1]!.request.idempotencyKey!;
       expect(typeof k1).toBe("string");
       expect(k1).toBe(k2);
       expect(k1.startsWith("invitation.accepted:inv_")).toBe(true);

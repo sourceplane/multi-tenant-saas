@@ -3,9 +3,12 @@ import {
   handleListServicePrincipalBindings,
   handleRevokeServicePrincipalBinding,
 } from "@membership-worker/handlers/service-principal-bindings";
-import type { MembershipRepository, RoleAssignment } from "@saas/db/membership";
+import type { CreateRoleAssignmentInput, MembershipRepository, MembershipResult, RoleAssignment } from "@saas/db/membership";
 import type { Env } from "@membership-worker/env";
 import { isServicePrincipalSubjectId, servicePrincipalSubjectId, parseServicePrincipalSubjectId } from "@saas/contracts/service-principal";
+
+type BindingDTO = { id: string; orgId: string; subjectId: string; subjectType: string; role: string; scopeKind: string; scopeRef: string | null; createdAt: string; revokedAt: string | null };
+type SuccessEnvelope<T> = { data: T; meta: { requestId: string; cursor: string | null } };
 
 const ORG_ID = "00000000-0000-0000-0000-000000000001";
 const SP_UUID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
@@ -36,15 +39,15 @@ function makeRoleAssignment(overrides: Partial<RoleAssignment> = {}): RoleAssign
 
 function createFakeRepo(opts: {
   roleAssignments?: RoleAssignment[];
-  createResult?: any;
-  revokeResult?: any;
+  createResult?: MembershipResult<RoleAssignment>;
+  revokeResult?: MembershipResult<RoleAssignment>;
 } = {}): MembershipRepository {
   const roleAssignments = opts.roleAssignments ?? [];
   return {
     async listRoleAssignments() {
       return { ok: true as const, value: roleAssignments };
     },
-    async createRoleAssignment(input: any) {
+    async createRoleAssignment(input: CreateRoleAssignmentInput) {
       if (opts.createResult) return opts.createResult;
       return {
         ok: true as const,
@@ -55,7 +58,7 @@ function createFakeRepo(opts: {
           subjectType: input.subjectType,
           role: input.role,
           scopeKind: input.scopeKind,
-          scopeRef: input.scopeRef,
+          scopeRef: input.scopeRef ?? null,
           createdAt: input.createdAt,
           revokedAt: null,
         },
@@ -148,7 +151,7 @@ describe("handleCreateServicePrincipalBinding", () => {
     const res = await handleCreateServicePrincipalBinding(req, env, "req-1", { repo });
     expect(res.status).toBe(201);
 
-    const json = await res.json() as any;
+    const json = await res.json() as SuccessEnvelope<BindingDTO>;
     expect(json.data.subjectId).toBe(SP_SUBJECT_ID);
     expect(json.data.subjectType).toBe("service_principal");
     expect(json.data.role).toBe("builder");
@@ -168,7 +171,7 @@ describe("handleCreateServicePrincipalBinding", () => {
     const res = await handleCreateServicePrincipalBinding(req, env, "req-2", { repo });
     expect(res.status).toBe(201);
 
-    const json = await res.json() as any;
+    const json = await res.json() as SuccessEnvelope<BindingDTO>;
     expect(json.data.scopeKind).toBe("project");
     expect(json.data.scopeRef).toBe("prj-uuid-1");
   });
@@ -276,9 +279,9 @@ describe("handleListServicePrincipalBindings", () => {
     const res = await handleListServicePrincipalBindings(env, "req-10", url, { repo });
     expect(res.status).toBe(200);
 
-    const json = await res.json() as any;
+    const json = await res.json() as SuccessEnvelope<BindingDTO[]>;
     expect(json.data).toHaveLength(1);
-    expect(json.data[0].subjectId).toBe(SP_SUBJECT_ID);
+    expect(json.data[0]!.subjectId).toBe(SP_SUBJECT_ID);
   });
 
   it("filters out revoked bindings", async () => {
@@ -290,9 +293,9 @@ describe("handleListServicePrincipalBindings", () => {
     const res = await handleListServicePrincipalBindings(env, "req-11", url, { repo });
     expect(res.status).toBe(200);
 
-    const json = await res.json() as any;
+    const json = await res.json() as SuccessEnvelope<BindingDTO[]>;
     expect(json.data).toHaveLength(1);
-    expect(json.data[0].id).toBe("ra-1");
+    expect(json.data[0]!.id).toBe("ra-1");
   });
 
   it("filters out non-service_principal bindings", async () => {
@@ -302,9 +305,9 @@ describe("handleListServicePrincipalBindings", () => {
     const url = new URL(`http://membership-worker/v1/internal/membership/service-principal-bindings?orgId=${ORG_ID}&subjectId=${SP_SUBJECT_ID}`);
 
     const res = await handleListServicePrincipalBindings(env, "req-12", url, { repo });
-    const json = await res.json() as any;
+    const json = await res.json() as SuccessEnvelope<BindingDTO[]>;
     expect(json.data).toHaveLength(1);
-    expect(json.data[0].subjectType).toBe("service_principal");
+    expect(json.data[0]!.subjectType).toBe("service_principal");
   });
 
   it("rejects missing orgId", async () => {
@@ -343,7 +346,7 @@ describe("handleRevokeServicePrincipalBinding", () => {
     const res = await handleRevokeServicePrincipalBinding(env, "req-20", "ra-1", url, { repo });
     expect(res.status).toBe(200);
 
-    const json = await res.json() as any;
+    const json = await res.json() as SuccessEnvelope<BindingDTO>;
     expect(json.data.id).toBe("ra-1");
     expect(json.data.revokedAt).toBeTruthy();
   });
