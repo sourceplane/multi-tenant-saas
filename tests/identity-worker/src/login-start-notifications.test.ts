@@ -9,51 +9,54 @@
  */
 import { createFakeRepository } from "./helpers/fake-repository";
 import crypto from "node:crypto";
+import type { Env } from "../../../apps/identity-worker/src/env";
+import type { LoginStartResponse } from "@saas/contracts/auth";
+import type {
+  NotificationsClientContext,
+  NotificationsEnvBinding,
+  EnqueueNotificationResult,
+} from "@saas/notifications-client";
+import type { EnqueueNotificationRequest } from "@saas/contracts/notifications";
 
-if (!(globalThis as any).crypto?.subtle) {
+interface GlobalCryptoLike {
+  crypto?: { subtle?: unknown; randomUUID?: () => string };
+}
+const g: GlobalCryptoLike = globalThis;
+if (!g.crypto?.subtle) {
   Object.defineProperty(globalThis, "crypto", { value: crypto.webcrypto });
 }
-if (typeof (globalThis as any).crypto.randomUUID !== "function") {
-  ((globalThis as any).crypto as { randomUUID: () => string }).randomUUID = () => crypto.randomUUID();
+if (typeof g.crypto?.randomUUID !== "function") {
+  (g.crypto as { randomUUID: () => string }).randomUUID = () => crypto.randomUUID();
 }
 
 import { handleLoginStart } from "../../../apps/identity-worker/src/handlers/login-start";
 
 type EnqueueArgs = {
-  env: unknown;
-  ctx: {
-    internalActor: string;
-    actorSubjectType: string;
-    actorSubjectId: string;
-    requestId: string;
-  };
-  request: {
-    orgId: string;
-    category: string;
-    templateKey: string;
-    templateData: Record<string, unknown>;
-    recipient: { channel: string; address: string };
-    idempotencyKey?: string;
-    correlationId?: string;
-  };
+  env: NotificationsEnvBinding;
+  ctx: NotificationsClientContext;
+  request: EnqueueNotificationRequest;
 };
 
 function makeRecorder() {
   const calls: EnqueueArgs[] = [];
-  const fn = async (env: any, ctx: any, request: any) => {
+  const fn = async (
+    env: NotificationsEnvBinding,
+    ctx: NotificationsClientContext,
+    request: EnqueueNotificationRequest,
+  ): Promise<EnqueueNotificationResult> => {
     calls.push({ env, ctx, request });
     return { ok: true as const, notificationId: `notif_${calls.length}` };
   };
   return { calls, fn };
 }
 
-function makeEnv(extras: Record<string, unknown> = {}) {
+function makeEnv(extras: Partial<Env> = {}): Env {
   return {
-    SOURCEPLANE_DB: {} as unknown,
+    SOURCEPLANE_DB: {} as Hyperdrive,
     ENVIRONMENT: "test",
-    NOTIFICATIONS_WORKER: {} as unknown,
+    NOTIFICATIONS_WORKER: {} as Fetcher,
     ...extras,
-  } as any;
+  } as Env;
 }
 
 function makeRequest(email: string) {
@@ -76,7 +79,7 @@ describe("handleLoginStart — idempotencyKey (Task 0090)", () => {
       { repo, enqueueNotification: recorder.fn },
     );
     expect(response.status).toBe(200);
-    const json = (await response.json()) as any;
+    const json = (await response.json()) as { data: LoginStartResponse };
     const challengeId: string = json.data.challengeId;
     expect(challengeId).toMatch(/^chl_[0-9a-f]+$/);
 
@@ -102,7 +105,7 @@ describe("handleLoginStart — idempotencyKey (Task 0090)", () => {
     );
 
     const { request } = recorder.calls[0]!;
-    const rawCode = request.templateData.code as string;
+    const rawCode = request.templateData!.code as string;
     expect(rawCode).toMatch(/^\d{6}$/);
 
     // The key MUST NOT contain the raw code itself.

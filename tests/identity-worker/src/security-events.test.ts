@@ -1,5 +1,8 @@
+/// <reference types="@cloudflare/workers-types" />
 import { createFakeRepository } from "./helpers/fake-repository";
 import crypto from "node:crypto";
+import type { Env } from "../../../apps/identity-worker/src/env";
+import type { PublicSecurityEvent } from "@saas/contracts/security-events";
 
 if (!globalThis.crypto?.subtle) {
   Object.defineProperty(globalThis, "crypto", { value: crypto.webcrypto });
@@ -10,6 +13,16 @@ if (typeof globalThis.crypto.randomUUID !== "function") {
 
 import { handleSecurityEvents } from "../../../apps/identity-worker/src/handlers/security-events";
 import { createAuthService } from "../../../apps/identity-worker/src/services/auth";
+
+interface JsonResp {
+  data: { securityEvents: PublicSecurityEvent[] };
+  error: {
+    code: string;
+    message?: string;
+    details: { fields: Record<string, unknown> };
+  };
+  meta: { requestId: string; cursor: string | null };
+}
 
 // Helpers to create an authenticated session and get a bearer token
 async function setupAuthenticatedUser(repo: ReturnType<typeof createFakeRepository>) {
@@ -25,8 +38,8 @@ async function setupAuthenticatedUser(repo: ReturnType<typeof createFakeReposito
   return { token: completeResult.token, userId: completeResult.user.id };
 }
 
-function makeEnv(db = {} as unknown) {
-  return { SOURCEPLANE_DB: db, ENVIRONMENT: "test" } as any;
+function makeEnv(db: Hyperdrive = {} as Hyperdrive): Env {
+  return { SOURCEPLANE_DB: db, ENVIRONMENT: "test" } as Env;
 }
 
 function makeRequest(token?: string, query = "") {
@@ -49,7 +62,7 @@ describe("GET /v1/auth/security-events", () => {
         { repo },
       );
       expect(response.status).toBe(401);
-      const json = (await response.json()) as any;
+      const json = (await response.json()) as JsonResp;
       expect(json.error.code).toBe("unauthenticated");
     });
 
@@ -77,7 +90,7 @@ describe("GET /v1/auth/security-events", () => {
         { repo },
       );
       expect(response.status).toBe(200);
-      const json = (await response.json()) as any;
+      const json = (await response.json()) as JsonResp;
       expect(json.data.securityEvents).toEqual([]);
       expect(json.meta.requestId).toBe("req_test3");
       expect(json.meta.cursor).toBeNull();
@@ -108,9 +121,9 @@ describe("GET /v1/auth/security-events", () => {
         { repo },
       );
       expect(response.status).toBe(200);
-      const json = (await response.json()) as any;
+      const json = (await response.json()) as JsonResp;
       expect(json.data.securityEvents).toHaveLength(1);
-      const event = json.data.securityEvents[0];
+      const event = json.data.securityEvents[0]!;
       expect(event.eventType).toBe("login.challenge.created");
       expect(event.outcome).toBe("success");
       expect(event.occurredAt).toBe("2026-01-15T10:05:00.000Z");
@@ -142,7 +155,7 @@ describe("GET /v1/auth/security-events", () => {
         { repo },
       );
       expect(response.status).toBe(200);
-      const json = (await response.json()) as any;
+      const json = (await response.json()) as JsonResp;
       // The events from setupAuthenticatedUser's login flow are recorded via auth service,
       // but the "other-user-id" event should NOT appear
       for (const event of json.data.securityEvents) {
@@ -176,7 +189,7 @@ describe("GET /v1/auth/security-events", () => {
         { repo },
       );
       expect(response.status).toBe(200);
-      const json = (await response.json()) as any;
+      const json = (await response.json()) as JsonResp;
       expect(json.data.securityEvents.length).toBeGreaterThanOrEqual(3);
       expect(json.meta.cursor).toBeNull(); // no next page
     });
@@ -205,7 +218,7 @@ describe("GET /v1/auth/security-events", () => {
         { repo },
       );
       expect(response.status).toBe(200);
-      const json = (await response.json()) as any;
+      const json = (await response.json()) as JsonResp;
       expect(json.data.securityEvents).toHaveLength(2);
       expect(json.meta.cursor).not.toBeNull(); // has next page
     });
@@ -234,7 +247,7 @@ describe("GET /v1/auth/security-events", () => {
         "req_page3a",
         { repo },
       );
-      const j1 = (await r1.json()) as any;
+      const j1 = (await r1.json()) as JsonResp;
       expect(j1.meta.cursor).not.toBeNull();
 
       // Second page
@@ -245,12 +258,12 @@ describe("GET /v1/auth/security-events", () => {
         { repo },
       );
       expect(r2.status).toBe(200);
-      const j2 = (await r2.json()) as any;
+      const j2 = (await r2.json()) as JsonResp;
       expect(j2.data.securityEvents.length).toBeGreaterThanOrEqual(1);
 
       // No overlap
-      const ids1 = j1.data.securityEvents.map((e: any) => e.id);
-      const ids2 = j2.data.securityEvents.map((e: any) => e.id);
+      const ids1 = j1.data.securityEvents.map((e: PublicSecurityEvent) => e.id);
+      const ids2 = j2.data.securityEvents.map((e: PublicSecurityEvent) => e.id);
       for (const id of ids2) {
         expect(ids1).not.toContain(id);
       }
@@ -269,7 +282,7 @@ describe("GET /v1/auth/security-events", () => {
         { repo },
       );
       expect(response.status).toBe(422);
-      const json = (await response.json()) as any;
+      const json = (await response.json()) as JsonResp;
       expect(json.error.code).toBe("validation_failed");
       expect(json.error.details.fields.limit).toBeDefined();
     });
@@ -285,7 +298,7 @@ describe("GET /v1/auth/security-events", () => {
         { repo },
       );
       expect(response.status).toBe(422);
-      const json = (await response.json()) as any;
+      const json = (await response.json()) as JsonResp;
       expect(json.error.code).toBe("validation_failed");
     });
 
@@ -300,7 +313,7 @@ describe("GET /v1/auth/security-events", () => {
         { repo },
       );
       expect(response.status).toBe(422);
-      const json = (await response.json()) as any;
+      const json = (await response.json()) as JsonResp;
       expect(json.error.code).toBe("validation_failed");
     });
 
@@ -315,7 +328,7 @@ describe("GET /v1/auth/security-events", () => {
         { repo },
       );
       expect(response.status).toBe(422);
-      const json = (await response.json()) as any;
+      const json = (await response.json()) as JsonResp;
       expect(json.error.code).toBe("validation_failed");
       expect(json.error.details.fields.cursor).toBeDefined();
     });
@@ -343,13 +356,13 @@ describe("GET /v1/auth/security-events", () => {
         { repo },
       );
       expect(response.status).toBe(200);
-      const json = (await response.json()) as any;
+      const json = (await response.json()) as JsonResp;
       const event = json.data.securityEvents.find(
-        (e: any) => e.eventType === "login.challenge.created" && e.metadata.method === "email_code",
+        (e: PublicSecurityEvent) => e.eventType === "login.challenge.created" && e.metadata.method === "email_code",
       );
       expect(event).toBeDefined();
-      expect(event.metadata.codeHash).toBe("[REDACTED]");
-      expect(event.metadata.method).toBe("email_code");
+      expect(event!.metadata.codeHash).toBe("[REDACTED]");
+      expect(event!.metadata.method).toBe("email_code");
     });
 
     it("strips known sensitive keys even without explicit redactPaths", async () => {
@@ -373,12 +386,12 @@ describe("GET /v1/auth/security-events", () => {
         { repo },
       );
       expect(response.status).toBe(200);
-      const json = (await response.json()) as any;
-      const event = json.data.securityEvents.find((e: any) => e.eventType === "test.event");
+      const json = (await response.json()) as JsonResp;
+      const event = json.data.securityEvents.find((e: PublicSecurityEvent) => e.eventType === "test.event");
       expect(event).toBeDefined();
-      expect(event.metadata.code).toBe("[REDACTED]");
-      expect(event.metadata.tokenHash).toBe("[REDACTED]");
-      expect(event.metadata.safe).toBe("visible");
+      expect(event!.metadata.code).toBe("[REDACTED]");
+      expect(event!.metadata.tokenHash).toBe("[REDACTED]");
+      expect(event!.metadata.safe).toBe("visible");
     });
 
     it("does not expose sessionId, challengeId, or userId fields in public shape", async () => {
@@ -404,15 +417,16 @@ describe("GET /v1/auth/security-events", () => {
         { repo },
       );
       expect(response.status).toBe(200);
-      const json = (await response.json()) as any;
+      const json = (await response.json()) as JsonResp;
       const event = json.data.securityEvents.find(
-        (e: any) => e.eventType === "session.created" && e.occurredAt === "2026-01-15T15:00:00.000Z",
+        (e: PublicSecurityEvent) => e.eventType === "session.created" && e.occurredAt === "2026-01-15T15:00:00.000Z",
       );
       expect(event).toBeDefined();
       // Public shape should NOT include sessionId, challengeId, userId
-      expect(event.sessionId).toBeUndefined();
-      expect(event.challengeId).toBeUndefined();
-      expect(event.userId).toBeUndefined();
+      const eventRecord: Record<string, unknown> = { ...(event as PublicSecurityEvent) };
+      expect(eventRecord.sessionId).toBeUndefined();
+      expect(eventRecord.challengeId).toBeUndefined();
+      expect(eventRecord.userId).toBeUndefined();
     });
 
     it("response body never contains raw token/secret patterns", async () => {
@@ -460,7 +474,7 @@ describe("GET /v1/auth/security-events", () => {
         { repo },
       );
       expect(response.status).toBe(200);
-      const json = (await response.json()) as any;
+      const json = (await response.json()) as JsonResp;
       expect(json.data).toBeDefined();
       expect(json.data.securityEvents).toBeDefined();
       expect(json.meta).toBeDefined();
