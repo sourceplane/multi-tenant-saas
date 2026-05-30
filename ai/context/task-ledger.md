@@ -2175,3 +2175,38 @@ turbo-package component (domain=starter-sdk, surface=sdk, profile
 quick-check across dev/stage/prod). Changed-plan detection
 automatically includes sdk when packages/sdk/** changes — proven by
 the 3 new Verify lanes that ran on PR #152 itself.
+
+## Task 0099 — @saas/sdk resource client fan-out (B4 first-half closure) (closed 2026-05-31)
+
+Agent: Implementer + Verifier (single-pass closure).
+Prompt: ai/tasks/task-0099.md
+Implementer report: ai/reports/task-0099-implementer.md
+Verifier report: ai/reports/task-0099-verifier.md
+Status: verified PASS.
+Implementation: PR #153, branch impl/task-0099-sdk-resource-fanout,
+merged 2026-05-31 squash 93ebe0e.
+PR CI: 4/4 PASS (plan + sdk·{dev,stage,prod}·Verify).
+Post-merge main CI: run 26693266415 = SUCCESS (4/4).
+
+Objective: extend the @saas/sdk pilot (orgs+projects) with typed
+resource clients for the remaining 9 api-edge surfaces, closing the
+first half of Track B4.
+
+Scope: 9 new files under packages/sdk/src/ (apiKeys, billing, config,
+events, memberships, metering, notifications, securityEvents,
+webhooks); index.ts wired with all 11 clients on Sourceplane; 39 new
+tests in __tests__/resources.test.ts. No edits to contracts, transport,
+errors, organizations.ts, projects.ts, or anything outside
+packages/sdk/**.
+
+Durable outcome: @saas/sdk is feature-complete against the api-edge
+facade surface. All paths use encodeURIComponent; POSTs accept caller-
+owned Idempotency-Key (Stripe parity, SDK never auto-generates).
+ConfigClient uses a discriminated ConfigScope (org/project/environment);
+EventsClient.listAuditEntries takes a discriminated ListAuditEntriesQuery
+(by:org | by:target). SDK test count 31 → 70 pass. Hazard scan clean.
+Repo-wide lint baseline preserved (0 errors, 45 warnings — all in
+tests/api-edge, Task 0096f territory).
+
+Unlocks: Task 0100 (packages/cli per spec 13, B4 second half) — CLI can
+now consume the complete SDK surface as its sole transport.
