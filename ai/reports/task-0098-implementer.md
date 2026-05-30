@@ -2,7 +2,7 @@
 
 **Task:** `ai/tasks/task-0098.md` — `packages/sdk` scaffold + base client + orgs/projects pilot (B4 first half).
 **Branch:** `impl/task-0098-packages-sdk-scaffold`
-**PR Number:** #[PR]
+**PR Number:** #150
 
 ## Summary
 
@@ -138,4 +138,4 @@ Task 0099 (resource-client fan-out) needs to know:
 
 ## PR Number
 
-#[PR]
+#150
