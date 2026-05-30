@@ -2213,11 +2213,115 @@ now consume the complete SDK surface as its sole transport.
 
 ## Task 0100
 
-- Agent: Implementer
+- Agent: Implementer + Verifier (single-pass closure)
 - Prompt: `ai/tasks/task-0100.md`
+- Implementer report: `ai/reports/task-0100-implementer.md`
+- Verifier report: `ai/reports/task-0100-verifier.md`
+- Status: VERIFIED PASS + MERGED 2026-05-31.
+- Implementation: PR #154, branch `impl/task-0100-packages-cli-scaffold`,
+  squash-merged via `--admin` (1 commit behind main, no semantic
+  conflict) to commit `5cf36d9`.
+- PR-CI: 4/4 PASS pre-merge (run 26697244962, then 26697380024 after
+  verifier-report commit) on plan + cli·{dev,stage,prod}·Verify.
+- Post-merge main-CI: run `26697417691` = 4/4 SUCCESS.
+
+Objective: scaffold `packages/cli` per `specs/components/13-cli-and-sdk.md`
+on top of `@saas/sdk` (Track B4 first-half output). Ship the CLI binary,
+command framework, auth flow with keychain-or-file token storage,
+org-context persistence, JSON/human output, and a small pilot of read-only
+commands wired end-to-end through the SDK. Open Track B4 second half.
+
+Scope: 37 files / +3074 / -47 — all net-new under `packages/cli/**` plus
+implementer + verifier reports + `pnpm-lock.yaml`. New workspace
+`@saas/cli` (private, ESM, `bin: { sourceplane: ./dist/cli.js }`),
+hand-rolled command router (`src/router.ts`), token-paste auth flow
+(device-flow swap is a one-line dispatch in `auth/login.ts` when the
+endpoint lands), `KeychainTokenStore` (lazy `keytar`, optionalDependency)
++ `FileTokenStore` (`~/.config/sourceplane/credentials.json` mode 0600,
+parent dir 0700, Windows graceful fallback), context store
+(`~/.config/sourceplane/config.json` for `activeOrgId` + `lastApiUrl`),
+deterministic `formatOutput` (`--output=human|json`),
+`formatCliError` translating `SourceplaneError` subclasses to actionable
+CLI messages with request IDs and non-zero exit codes. Build: `tsc` emits
+`.d.ts`/maps; `esbuild` `scripts/bundle.mjs` produces the runnable
+`dist/cli.js` (required because `@saas/sdk`'s `exports."."` points at
+raw `.ts`). `packages/cli/component.yaml` mirrors
+`packages/sdk/component.yaml`: turbo-package / quick-check on
+`{dev,stage,prod}` / domain `starter-cli` / surface `cli`.
+
+Pilot read-only commands: `login`, `logout`, `whoami`, `org list`,
+`org use <id>`, `org members`, `project list` — all dispatched through
+`@saas/sdk`. Tests: 51 it()s across 6 files (cli=6, output=12,
+token-store=10, auth=7, context=6, commands=10). Hazard scan
+`packages/cli/**`: 0 hits. Repo-wide lint 0 errors / 45 warnings (all
+`tests/api-edge`, Task 0096f territory unchanged, CLI contributes 0).
+Orun validate/plan/run dry-run all green; CI runs `cli·{dev,stage,prod}`
+Verify lanes execute real verify-package-structure steps.
+
+Durable outcome: `@saas/cli` workspace and component live, CLI binary
+auths + reads orgs/projects through the SDK end-to-end. Track B4
+second-half FOUNDATION CLOSED.
+
+Unlocks: Task 0101 (CLI write-command + cross-resource read fan-out,
+B4 second-half closure) — same cadence as Task 0099 followed Task 0098
+on the SDK side.
+
+## Task 0101
+
+- Agent: Implementer
+- Prompt: `ai/tasks/task-0101.md`
 - Status: scoped and ready to begin (2026-05-31)
-- Branch: `impl/task-0100-packages-cli-scaffold`
-- Objective: Scaffold `packages/cli` per `specs/components/13-cli-and-sdk.md`
+- Branch: `impl/task-0101-cli-command-fanout`
+- Objective: Fan out the remaining `packages/cli` commands per
+  `specs/components/13-cli-and-sdk.md` to close Track B4. Ship the
+  spec-13 write commands (`org invite`, `project create`, `env create`,
+  `api-key create`, `webhook create` — all with caller-supplied
+  `--idempotency-key` forwarded verbatim) plus the cross-resource read
+  commands (`usage summary`, `billing summary`, `audit list` with
+  `--all` pagination), all wired through `@saas/sdk` end-to-end. Same
+  cadence as Task 0099 → Task 0098 on the SDK side.
+- Scope boundary: in — `packages/cli/src/commands/**`,
+  `packages/cli/src/__tests__/**` (extend or split commands.test.ts),
+  `packages/cli/README.md` command-table touch-up; out — any change to
+  `@saas/sdk`, `packages/contracts/**`, `apps/**`, `infra/**`,
+  `tests/api-edge/**`, optional spec-13 commands (`component list`,
+  `resource create`, `resource get`, `deployment get` → Task 0102 if
+  user asks), console U10 refactor, publishing config, shell
+  completions, `--profile` multi-account UX, device-flow swap.
+- Hard rules: public-API only (no `apps/**` or `packages/db/**` or
+  worker imports); hazard ban (zero new `eslint-disable` /
+  `@ts-ignore` / `@ts-expect-error` / `as unknown as` / `as any` under
+  `packages/cli/**`); CLI never auto-generates `Idempotency-Key`
+  (Stripe parity preserved end-to-end); JSON output deterministic (no
+  CLI-injected timestamps or request-IDs); POSIX 0600 credentials file
+  invariant unchanged; `--output=human|json` honored on every new
+  command.
+- Acceptance: `pnpm --filter @saas/cli` typecheck/lint/test/build all
+  exit 0; `pnpm -r typecheck` exit 0; `pnpm -r --no-bail lint` ≤ 45
+  residual warnings (all in `tests/api-edge`, Task 0096f territory
+  unchanged, CLI contributes 0); `kiox -- orun validate/component/plan/run
+  --dry-run` exit 0; PR-CI green on `cli × {dev,stage,prod} · Verify`
+  lanes; it() count under `packages/cli/src/__tests__/**` ≥ 81 (Task
+  0100 baseline 51 + ≥ 30 new).
+- Latitude (one-line rationale per choice in implementer report): split
+  `commands.test.ts` vs new `commands.write.test.ts` file; pick correct
+  SDK method for `usage summary` / `billing summary`; `audit list --all`
+  pagination shape (NDJSON in JSON mode, flat table in human mode —
+  implementer to confirm).
+- Parallel-safe with Task 0096f — zero file overlap (0096f owns
+  `tests/api-edge/**`, 0101 owns `packages/cli/**`).
+- Expected outcome: spec-13 CLI command surface complete; Track B4
+  CLOSED; unblocks Task 0102 candidates (optional spec-13 commands;
+  console U10 refactor to consume the SDK; publishing config; shell
+  completions; `--profile` multi-account UX; device-flow swap).
+
+## Task 0100 stub (superseded — see entry above)
+
+- Original objective stub kept for historical context; the canonical
+  closed entry lives at "## Task 0100" earlier in this file. The
+  scoping bullets that previously sat here described the foundation
+  PR before merge:
+- Original objective: Scaffold `packages/cli` per `specs/components/13-cli-and-sdk.md`
   on top of `@saas/sdk` (now feature-complete after Task 0099). Ship the
   CLI binary, command framework, auth flow with keychain-or-file token
   storage, org-context persistence, JSON/human output, and a small pilot
