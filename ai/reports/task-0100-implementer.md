@@ -2,7 +2,7 @@
 
 Branch: `impl/task-0100-packages-cli-scaffold`
 Status: complete
-PR Number: TBD (filled in after `gh pr create`)
+PR Number: #154
 
 ## Summary
 
@@ -175,4 +175,4 @@ no surface deviation. Write commands (`org invite`, `project create`,
 
 ## PR Number
 
-TBD — filled in after `gh pr create` in the next step.
+#154 — https://github.com/sourceplane/multi-tenant-saas/pull/154
