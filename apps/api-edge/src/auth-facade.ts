@@ -1,6 +1,6 @@
 import type { Env } from "./env";
 import { errorResponse } from "./http";
-import { validateIdempotencyKey } from "./idempotency";
+import { replayOrExecute } from "./idempotency";
 
 const AUTH_ROUTES: Record<string, string> = {
   "/v1/auth/login/start": "POST",
@@ -48,50 +48,49 @@ export async function handleAuthRoute(
     return errorResponse("unsupported", "Method not allowed", 405, requestId);
   }
 
-  const idempotencyError = validateIdempotencyKey(request, requestId);
-  if (idempotencyError) return idempotencyError;
+  return replayOrExecute(request, requestId, env, async () => {
+    if (!env.IDENTITY_WORKER) {
+      return errorResponse(
+        "internal_error",
+        "Authentication service unavailable",
+        503,
+        requestId,
+      );
+    }
 
-  if (!env.IDENTITY_WORKER) {
-    return errorResponse(
-      "internal_error",
-      "Authentication service unavailable",
-      503,
-      requestId,
-    );
-  }
+    const headers = new Headers();
+    headers.set("x-request-id", requestId);
+    for (const name of FORWARDED_HEADERS) {
+      if (name === "x-request-id") continue;
+      const value = request.headers.get(name);
+      if (value) headers.set(name, value);
+    }
 
-  const headers = new Headers();
-  headers.set("x-request-id", requestId);
-  for (const name of FORWARDED_HEADERS) {
-    if (name === "x-request-id") continue;
-    const value = request.headers.get(name);
-    if (value) headers.set(name, value);
-  }
+    const url = new URL(request.url);
+    const target = new URL(pathname + url.search, "https://identity.internal");
 
-  const url = new URL(request.url);
-  const target = new URL(pathname + url.search, "https://identity.internal");
+    const init: RequestInit = {
+      method: request.method,
+      headers,
+    };
 
-  const init: RequestInit = {
-    method: request.method,
-    headers,
-  };
+    if (request.method === "POST" || request.method === "PATCH") {
+      init.body = request.body;
+    }
 
-  if (request.method === "POST" || request.method === "PATCH") {
-    init.body = request.body;
-  }
-
-  try {
-    const downstream = await env.IDENTITY_WORKER.fetch(target.toString(), init);
-    return new Response(downstream.body, {
-      status: downstream.status,
-      headers: downstream.headers,
-    });
-  } catch {
-    return errorResponse(
-      "internal_error",
-      "Authentication service unavailable",
-      503,
-      requestId,
-    );
-  }
+    try {
+      const downstream = await env.IDENTITY_WORKER.fetch(target.toString(), init);
+      return new Response(downstream.body, {
+        status: downstream.status,
+        headers: downstream.headers,
+      });
+    } catch {
+      return errorResponse(
+        "internal_error",
+        "Authentication service unavailable",
+        503,
+        requestId,
+      );
+    }
+  });
 }

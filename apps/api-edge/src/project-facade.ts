@@ -1,6 +1,6 @@
 import type { Env } from "./env.js";
 import { errorResponse } from "./http.js";
-import { validateIdempotencyKey } from "./idempotency.js";
+import { replayOrExecute } from "./idempotency.js";
 import { resolveActor } from "./resolve-actor.js";
 
 const ORG_PROJECTS_RE = /^\/v1\/organizations\/[^/]+\/projects$/;
@@ -46,55 +46,55 @@ export async function handleProjectRoute(
     return errorResponse("unsupported", "Method not allowed", 405, requestId);
   }
 
-  const idempotencyError = validateIdempotencyKey(request, requestId);
-  if (idempotencyError) return idempotencyError;
+  return replayOrExecute(request, requestId, env, async () => {
 
-  if (!env.IDENTITY_WORKER) {
-    return errorResponse("internal_error", "Authentication service unavailable", 503, requestId);
-  }
+    if (!env.IDENTITY_WORKER) {
+      return errorResponse("internal_error", "Authentication service unavailable", 503, requestId);
+    }
 
-  if (!env.PROJECTS_WORKER) {
-    return errorResponse("internal_error", "Projects service unavailable", 503, requestId);
-  }
+    if (!env.PROJECTS_WORKER) {
+      return errorResponse("internal_error", "Projects service unavailable", 503, requestId);
+    }
 
-  const sessionResult = await resolveActor(request, env, requestId);
-  if ("error" in sessionResult) {
-    return sessionResult.error;
-  }
+    const sessionResult = await resolveActor(request, env, requestId);
+    if ("error" in sessionResult) {
+      return sessionResult.error;
+    }
 
-  const headers = new Headers();
-  headers.set("x-request-id", requestId);
-  headers.set("x-actor-subject-id", sessionResult.subjectId);
-  headers.set("x-actor-subject-type", sessionResult.subjectType);
-  headers.set("x-actor-email", sessionResult.email);
-  if (sessionResult.orgId) {
-    headers.set("x-actor-org-id", sessionResult.orgId);
-  }
-  for (const name of FORWARDED_HEADERS) {
-    if (name === "x-request-id") continue;
-    const value = request.headers.get(name);
-    if (value) headers.set(name, value);
-  }
+    const headers = new Headers();
+    headers.set("x-request-id", requestId);
+    headers.set("x-actor-subject-id", sessionResult.subjectId);
+    headers.set("x-actor-subject-type", sessionResult.subjectType);
+    headers.set("x-actor-email", sessionResult.email);
+    if (sessionResult.orgId) {
+      headers.set("x-actor-org-id", sessionResult.orgId);
+    }
+    for (const name of FORWARDED_HEADERS) {
+      if (name === "x-request-id") continue;
+      const value = request.headers.get(name);
+      if (value) headers.set(name, value);
+    }
 
-  const url = new URL(request.url);
-  const target = new URL(pathname + url.search, "https://projects.internal");
+    const url = new URL(request.url);
+    const target = new URL(pathname + url.search, "https://projects.internal");
 
-  const init: RequestInit = {
-    method: request.method,
-    headers,
-  };
+    const init: RequestInit = {
+      method: request.method,
+      headers,
+    };
 
-  if (request.method === "POST") {
-    init.body = request.body;
-  }
+    if (request.method === "POST") {
+      init.body = request.body;
+    }
 
-  try {
-    const downstream = await env.PROJECTS_WORKER.fetch(target.toString(), init);
-    return new Response(downstream.body, {
-      status: downstream.status,
-      headers: downstream.headers,
-    });
-  } catch {
-    return errorResponse("internal_error", "Projects service unavailable", 503, requestId);
-  }
+    try {
+      const downstream = await env.PROJECTS_WORKER.fetch(target.toString(), init);
+      return new Response(downstream.body, {
+        status: downstream.status,
+        headers: downstream.headers,
+      });
+    } catch {
+      return errorResponse("internal_error", "Projects service unavailable", 503, requestId);
+    }
+  });
 }

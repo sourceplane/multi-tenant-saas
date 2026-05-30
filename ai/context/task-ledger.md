@@ -2047,3 +2047,10 @@ Last updated: 2026-05-30 (Task 0096b Verifier PASS + MERGED — PR #145 squash `
 - Phase shape: same 7 phases as 0096b/c/d verifier prompts — PR sanity → hazard+boundary scan (six allowed files + report only; webhooks-worker.test.ts byte-identical) → local gates (5 per-workspace lints, 5 per-workspace tests at parity counts, `pnpm -r typecheck`, `pnpm -r --no-bail lint`, apps-source invariant) → behaviour-preservation it() parity vs `main` @ `b565687` (170 / 20 / 9 / 131 / 20 / 28) → PR-CI log inspection (only `plan` + 5 `*-tests · dev · Verify` jobs fire — no deploy-gated jobs because no `apps/**`/`infra/**` changes) → squash merge + main fast-forward + post-merge main-CI watch → PASS/FAIL bookkeeping.
 - Track A + Task 0096c + Task 0096d guardrails: all three surface sets explicitly out of scope.
 - Recommended-next-move on PASS: dynamically pick from (a) Task 0095.1 verifier resumption if PR #143 has rebased, (b) whichever of 0096c / 0096d still has a PR open, (c) Task 0097 (rate limiting, B3 second half) if Track A has merged, (d) wave-6 covering `tests/api-edge` 45 if Track A has merged and only it remains.
+
+## Task 0095.1
+
+- Agent: Implementer (verifier-requested fix on PR #143)
+- Prompt: `ai/tasks/task-0095.1.md`
+- Status: closed-out 2026-05-30 — branch `impl/task-0095-edge-idempotency-replay-store` rebased on `origin/main` past PR #147 (`40974e5`); duplicate `infra/terraform/cloudflare-kv/**` slice dropped (now owned by main); real Cloudflare Workers KV namespace IDs wired into `apps/api-edge/wrangler.jsonc` (stage `2f5a03d0a14e4ead8f2b6658f6bfd722`, prod `fac1d319c8894466b4860bff9c6cb99d`); `apps/api-edge/scripts/verify-bindings.mjs` extended with `EXPECTED_KV` block enforcing `^[0-9a-f]{32}$` and rejecting the previous sentinels `…000a`/`…000b`.
+- Outcome: closes the single Phase-5 verifier blocker on PR #143; verifier resumed from Phase 5.

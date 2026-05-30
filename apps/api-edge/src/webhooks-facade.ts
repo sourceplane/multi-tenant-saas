@@ -1,6 +1,6 @@
 import type { Env } from "./env.js";
 import { errorResponse } from "./http.js";
-import { validateIdempotencyKey } from "./idempotency.js";
+import { replayOrExecute } from "./idempotency.js";
 import { resolveActor } from "./resolve-actor.js";
 
 // Organization-scoped webhook routes
@@ -31,53 +31,53 @@ export async function handleWebhooksRoute(
     return errorResponse("unsupported", "Method not allowed", 405, requestId);
   }
 
-  const idempotencyError = validateIdempotencyKey(request, requestId);
-  if (idempotencyError) return idempotencyError;
+  return replayOrExecute(request, requestId, env, async () => {
 
-  if (!env.IDENTITY_WORKER) {
-    return errorResponse("internal_error", "Authentication service unavailable", 503, requestId);
-  }
-
-  if (!env.WEBHOOKS_WORKER) {
-    return errorResponse("internal_error", "Webhooks service unavailable", 503, requestId);
-  }
-
-  const sessionResult = await resolveActor(request, env, requestId);
-  if ("error" in sessionResult) {
-    return sessionResult.error;
-  }
-
-  const headers = new Headers();
-  headers.set("x-request-id", requestId);
-  headers.set("x-actor-subject-id", sessionResult.subjectId);
-  headers.set("x-actor-subject-type", sessionResult.subjectType);
-  headers.set("x-actor-email", sessionResult.email);
-  if (sessionResult.orgId) {
-    headers.set("x-actor-org-id", sessionResult.orgId);
-  }
-  for (const name of FORWARDED_HEADERS) {
-    if (name === "x-request-id") continue;
-    const value = request.headers.get(name);
-    if (value) headers.set(name, value);
-  }
-
-  const url = new URL(request.url);
-  const target = new URL(pathname + url.search, "https://webhooks.internal");
-
-  try {
-    const fetchInit: RequestInit = {
-      method: request.method,
-      headers,
-    };
-    if (request.method === "POST" || request.method === "PATCH") {
-      fetchInit.body = request.body;
+    if (!env.IDENTITY_WORKER) {
+      return errorResponse("internal_error", "Authentication service unavailable", 503, requestId);
     }
-    const downstream = await env.WEBHOOKS_WORKER.fetch(target.toString(), fetchInit);
-    return new Response(downstream.body, {
-      status: downstream.status,
-      headers: downstream.headers,
-    });
-  } catch {
-    return errorResponse("internal_error", "Webhooks service unavailable", 503, requestId);
-  }
+
+    if (!env.WEBHOOKS_WORKER) {
+      return errorResponse("internal_error", "Webhooks service unavailable", 503, requestId);
+    }
+
+    const sessionResult = await resolveActor(request, env, requestId);
+    if ("error" in sessionResult) {
+      return sessionResult.error;
+    }
+
+    const headers = new Headers();
+    headers.set("x-request-id", requestId);
+    headers.set("x-actor-subject-id", sessionResult.subjectId);
+    headers.set("x-actor-subject-type", sessionResult.subjectType);
+    headers.set("x-actor-email", sessionResult.email);
+    if (sessionResult.orgId) {
+      headers.set("x-actor-org-id", sessionResult.orgId);
+    }
+    for (const name of FORWARDED_HEADERS) {
+      if (name === "x-request-id") continue;
+      const value = request.headers.get(name);
+      if (value) headers.set(name, value);
+    }
+
+    const url = new URL(request.url);
+    const target = new URL(pathname + url.search, "https://webhooks.internal");
+
+    try {
+      const fetchInit: RequestInit = {
+        method: request.method,
+        headers,
+      };
+      if (request.method === "POST" || request.method === "PATCH") {
+        fetchInit.body = request.body;
+      }
+      const downstream = await env.WEBHOOKS_WORKER.fetch(target.toString(), fetchInit);
+      return new Response(downstream.body, {
+        status: downstream.status,
+        headers: downstream.headers,
+      });
+    } catch {
+      return errorResponse("internal_error", "Webhooks service unavailable", 503, requestId);
+    }
+  });
 }
