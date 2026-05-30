@@ -2152,3 +2152,26 @@ discovery / composition / CI plans see the SDK package as a
 changes — manifest only. Branch `impl/task-0098.1-sdk-component-yaml`,
 gated on PR #150 merge. Implementer prompt:
 `ai/tasks/task-0098.1.md`.
+
+## Task 0098.1 — packages/sdk Orun component alignment (closed 2026-05-31)
+
+Agent: Implementer + Verifier (single-pass closure).
+Prompt: ai/tasks/task-0098.1.md
+Implementer report: ai/reports/task-0098.1-implementer.md
+Verifier report: ai/reports/task-0098.1-verifier.md
+Status: verified PASS.
+Implementation: PR #152, branch impl/task-0098.1-sdk-component-yaml,
+merged 2026-05-31 squash 6e161fd.
+PR CI: run 26691936481 — 4/4 PASS (plan + sdk·{dev,stage,prod}·Verify).
+Post-merge main CI: run 26691977982 = SUCCESS.
+
+Objective: add packages/sdk/component.yaml so Orun discovery /
+composition / CI plans see the SDK alongside other workspace packages.
+
+Scope boundary: manifest-only; touches only packages/sdk/component.yaml.
+
+Durable outcome: @saas/sdk is now a first-class Orun
+turbo-package component (domain=starter-sdk, surface=sdk, profile
+quick-check across dev/stage/prod). Changed-plan detection
+automatically includes sdk when packages/sdk/** changes — proven by
+the 3 new Verify lanes that ran on PR #152 itself.

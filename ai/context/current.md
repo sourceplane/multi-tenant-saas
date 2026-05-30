@@ -171,19 +171,16 @@ The road forks per `specs/roadmap.md`:
 Deferred candidates unchanged: `0085b`, `notifications-provider-swap`,
 `notifications-worker-dev-reframe` (see `ai/deferred.md`).
 
-## Follow-on: Task 0098.1 (scoped 2026-05-30)
+## Closed: Task 0098.1 (2026-05-31)
 
-**Task 0098.1 — `packages/sdk` Orun component alignment.** Implementer
-prompt at `ai/tasks/task-0098.1.md`. Branch
-`impl/task-0098.1-sdk-component-yaml`. Agent: Implementer.
+**Task 0098.1 — `packages/sdk` Orun component alignment.** PR #152
+merged squash `6e161fd`. Implementer + Verifier single-pass closure.
+PR CI 4/4 PASS (`plan` + `sdk · {dev,stage,prod} · Verify`); post-merge
+main CI run `26691977982` = SUCCESS. Reports at
+`ai/reports/task-0098.1-{implementer,verifier}.md`.
 
-Adds `packages/sdk/component.yaml` (`type: turbo-package`,
-`domain: starter-sdk`, mirrors `packages/contracts` / `packages/shared`
-shape). PR #150 shipped the SDK source/tests/README/eslint config but
-omitted the component manifest — without it, Orun discovery and CI
-component-scoped plans don't see `packages/sdk/**`. This is bootstrap
-polish, not new feature work. Gated on PR #150 merge.
-
-**Parallel-safety**: zero file overlap with Tasks 0097, 0096f, 0098,
-or any deferred candidate. Touches only `packages/sdk/component.yaml`
-(new) and at most a script alias in `packages/sdk/package.json`.
+Durable outcome: `@saas/sdk` is now a first-class Orun turbo-package
+component (`domain=starter-sdk`, `surface=sdk`, profile `quick-check`
+across dev/stage/prod). Changed-plan detection automatically includes
+the SDK when `packages/sdk/**` changes — proven by the 3 new Verify
+lanes that ran on PR #152 itself.
