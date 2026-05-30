@@ -1,54 +1,36 @@
 # Current Context
 
-Last updated: 2026-05-30 (Task 0091 VERIFIED + MERGED at `9081cff`,
-post-merge main-CI `26668839091` 3/3 SUCCESS; Task 0092 SCOPED —
-orchestrator's next pick after the typecheck-baseline cleanup.)
+Last updated: 2026-05-30 (Task 0092 VERIFIED + MERGED at `fde9723`,
+post-merge main-CI `26669593757` 31/31 SUCCESS; orchestrator awaiting
+next-task selection. Leading candidate: Task 0093 — class-B lint
+cleanup wave 1.)
 
-## Active task: 0092 — ESLint v9 flat-config scaffold (16 workspaces)
+## Active task: awaiting next orchestrator scope
 
-Prompt: `ai/tasks/task-0092.md`. Implementer agent.
+No task currently in flight. The orchestrator selects the next task
+on the next loop turn from the candidates listed below.
 
-Add a canonical 2-line `eslint.config.js` re-export to each of the 16
-workspaces currently missing one, so every `lint`-bearing workspace
-runs ESLint v9 successfully (no more `couldn't find an eslint.config.*
-file` errors). Zero production-source edits. Pre-existing rule
-violations in scaffolded workspaces stay surfaced for a follow-up
-task.
+### Leading candidate: Task 0093 — class-B lint cleanup, wave 1
 
-Target workspaces (all have `lint: eslint src` in `package.json` but
-no `eslint.config.js`):
+Goal: drive `pnpm -r --no-bail lint` to a clean exit by fixing
+mechanical rule violations (`no-unused-vars` /
+`@typescript-eslint/no-unused-vars`) in the 9 workspaces that exit
+non-zero today. Task 0092 turned these from "config missing" into
+"actual rule errors visible," making this the natural follow-up.
 
-- Apps (7): `apps/{billing,config,events,metering,policy,projects,
-  webhooks}-worker`
-- Packages (1): `packages/policy-engine`
-- Tests (8): `tests/{billing,config,events,metering,policy-engine,
-  policy,projects,webhooks}-worker` (note: `policy-engine`-tests is
-  the package's test workspace, not `policy-worker-tests`)
+Workspaces with residual class-B errors:
+- Pre-existing: `tests/db`, `tests/identity-worker`,
+  `tests/membership-worker`.
+- Newly surfaced by 0092 scaffold: `apps/config-worker`,
+  `apps/metering-worker`, `apps/projects-worker`,
+  `tests/policy-worker`, `tests/projects-worker`,
+  `tests/webhooks-worker`.
 
-Canonical file shape (already used by the 17 currently-passing
-workspaces, e.g. `apps/api-edge/eslint.config.js`):
-
-```js
-import config from "../../tooling/eslint/index.js";
-export default config;
-```
-
-PR Boundary: 16 new `eslint.config.js` files; (only if absolutely
-required) per-workspace `package.json` devDeps for
-`@typescript-eslint/eslint-plugin` and/or `parser`; `pnpm-lock.yaml`
-if devDeps were added; `ai/tasks/task-0092.md` and reports/state
-files. Zero edits to `tooling/eslint/index.js`, the existing 17
-working configs, any production source under `apps/**/src/**`,
-`packages/**/src/**`, `tests/**/src/**`, any `wrangler.jsonc` /
-`component.yaml` / orun intent / Terraform, or the deferred
-boundaries (`infra/terraform/cloudflare-domain/**`, `cloudflare ~>
-4.52` pin).
-
-Acceptance highlights: each of the 16 workspaces' lint command runs
-without the missing-config error; `pnpm -r --no-bail lint` records a
-clean class-A → class-B shift; `pnpm -r typecheck` still exits 0
-(Task 0091's baseline holds); kiox/orun triple green; PR opened with
-a real PR number.
+Architect intent if scoped: smallest-diff `_unused` prefixing or
+local removal — no shared rule baseline edits, no production-source
+behaviour changes, no test-source semantic changes (purely lexical
+rename for unused identifiers). Almost certainly fits in a single PR
+or two waves.
 
 ### Deferred (orchestrator skips, loop keeps moving)
 
@@ -62,7 +44,7 @@ a real PR number.
    as `notifications-worker-dev-reframe`)** — needs a "dev-deploy lane"
    design pass before the dev-binding work has anywhere to land.
 
-### Next-task candidates after 0092
+### Next-task candidates after 0092 (PASS)
 
 1. ESLint v9 rule-violation cleanup (the natural follow-up — fix the
    class-B errors that 0092 surfaces, e.g. tests/identity-worker
@@ -88,14 +70,15 @@ the original Cloudflare Workers custom-domain attachments (stage id
 `052eaece5e989d5a7280b6c206e562c42950e3a6`, prod id
 `31e5f2ed1b1e4a5700e8ae0678846a0d753840e1`). Provider pin holds at
 `cloudflare ~> 4.52` (Task 0085b deferred). `kiox.lock` pinned at orun
-v2.9.0. `main` tip on `origin/main` is `9081cff` (post Task 0091
+v2.9.0. `main` tip on `origin/main` is `fde9723` (post Task 0092
 squash merge).
 
 Workspace-wide `pnpm -r typecheck` exits 0 cleanly on a clean
-checkout — first time in repo history (Task 0091 outcome). The next
-layer of repo-health hygiene is `pnpm -r lint`, where the dominant
-failure today is config-bootstrap, not rule violations. Task 0092
-clears that bootstrap class.
+checkout (Task 0091 outcome — holds through 0092). Workspace-wide
+`pnpm -r --no-bail lint` now reaches every lint-bearing workspace
+(33/33 — Task 0092 outcome); residual non-zero exits are 9 class-B
+rule-violation workspaces (Task 0093 candidate), no longer the
+config-bootstrap (class-A) class.
 
 Notifications-worker V1 stays deployed on stage + prod (private,
 `workers_dev: false`, `NOTIFICATIONS_PROVIDER=local-debug`). All
@@ -111,6 +94,34 @@ three V1 callers populate `idempotencyKey` on enqueue (Task 0090):
 A retry of the same logical event collapses to one notification row
 + one provider attempt. Real provider swap is unblocked from a safety
 standpoint.
+
+## Recently completed — Task 0092 (ESLint v9 flat-config scaffold, PASS)
+
+- **PR #140** (`impl/task-0092-eslint-config-scaffold`), squash
+  `fde9723` at 2026-05-30. Files: 16 new `<workspace>/eslint.config.js`
+  (canonical 2-line re-export of `tooling/eslint/index.js`) at
+  `apps/{billing,config,events,metering,policy,projects,webhooks}-worker`,
+  `packages/policy-engine`, and
+  `tests/{billing,config,events,metering,policy-engine,policy,projects,
+  webhooks}-worker`, plus implementer + verifier reports.
+- PR-CI rollup: 31/31 SUCCESS at merge time (`mergeable: MERGEABLE`,
+  `mergeStateStatus: CLEAN`).
+- Post-merge main-CI run: `26669593757` = 31/31 SUCCESS on SHA
+  `fde9723d`.
+- Verifier-validated: `pnpm install --frozen-lockfile` exit 0;
+  `grep -c "couldn't find an eslint.config" /tmp/lint-0092-verify.log`
+  = 0 (class-A fully eliminated); `pnpm -r typecheck` exit 0;
+  kiox/orun triple ✓ (plan id `06f7adbe00f9`, 30 jobs); zero diff on
+  `tooling/eslint/index.js`; zero diff on `pnpm-lock.yaml`; zero
+  secrets in any added file.
+- Durable outcome: `pnpm -r --no-bail lint` now reaches every
+  lint-bearing workspace. Residual class-B (rule-violation) surface
+  on 9 workspaces is the explicit Task 0093 feed: 3 pre-existing
+  (`tests/{db,identity-worker,membership-worker}`) + 6 newly surfaced
+  (`apps/{config,metering,projects}-worker`,
+  `tests/{policy,projects,webhooks}-worker`).
+- Reports: `ai/reports/task-0092-implementer.md`,
+  `ai/reports/task-0092-verifier.md`.
 
 ## Recently completed — Task 0091 (tests typecheck baseline, PASS)
 
@@ -185,7 +196,7 @@ genuinely blocked on a human decision. Currently deferred:
 
 ## Repo Reality
 
-- Tasks 0001–0091 verified and merged (95 entries on the completed
+- Tasks 0001–0092 verified and merged (96 entries on the completed
   list).
 - Task 0085 split into 0085a (Phase 1, DONE) + 0085b (Phase 2,
   EXPLICITLY DEFERRED by user).
@@ -199,6 +210,7 @@ genuinely blocked on a human decision. Currently deferred:
   idempotencyKey) are all live callers (local-debug provider).
 - All three callers consume `@saas/notifications-client` workspace
   package; per-worker `notifications-client.ts` copies are deleted.
-- 17/33 lint-bearing workspaces ship a working `eslint.config.js`
-  today; the other 16 have a `lint: eslint src` script but no config
-  file (Task 0092 fixes this).
+- 33/33 lint-bearing workspaces ship a working `eslint.config.js`
+  (Task 0092 closed the 16-workspace gap). Workspace-wide
+  `pnpm -r --no-bail lint` reaches every workspace; residual non-zero
+  exits are 9 class-B rule-violation workspaces (Task 0093 feed).
