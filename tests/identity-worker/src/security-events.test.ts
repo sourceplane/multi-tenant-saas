@@ -10,7 +10,6 @@ if (typeof globalThis.crypto.randomUUID !== "function") {
 
 import { handleSecurityEvents } from "../../../apps/identity-worker/src/handlers/security-events";
 import { createAuthService } from "../../../apps/identity-worker/src/services/auth";
-import { encodeCursor } from "../../../apps/identity-worker/src/pagination";
 
 // Helpers to create an authenticated session and get a bearer token
 async function setupAuthenticatedUser(repo: ReturnType<typeof createFakeRepository>) {

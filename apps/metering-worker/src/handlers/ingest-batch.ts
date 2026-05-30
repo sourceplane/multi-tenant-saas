@@ -1,6 +1,6 @@
 import type { Env } from "../env.js";
 import type { ActorContext } from "../router.js";
-import type { IngestUsageBatchRequest, IngestUsageBatchResponse, RecordUsageRequest } from "@saas/contracts/metering";
+import type { IngestUsageBatchRequest, IngestUsageBatchResponse } from "@saas/contracts/metering";
 import type { PolicyResource } from "@saas/contracts/policy";
 import type { RecordUsageInput } from "@saas/db/metering";
 import { createSqlExecutor } from "@saas/db/hyperdrive";

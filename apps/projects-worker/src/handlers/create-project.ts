@@ -1,6 +1,6 @@
 import type { Env } from "../env.js";
 import type { ActorContext } from "../router.js";
-import type { CreateProjectRequest, PublicProject } from "@saas/contracts/projects";
+import type { PublicProject } from "@saas/contracts/projects";
 import type { ProjectsRepository, Project, ProjectsResult } from "@saas/db/projects";
 import type { EventsRepository } from "@saas/db/events";
 import { createProjectsRepository } from "@saas/db/projects";

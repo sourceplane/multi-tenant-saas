@@ -1,5 +1,5 @@
 import type { Env } from "../env.js";
-import { successResponse, errorResponse } from "../http.js";
+import { successResponse } from "../http.js";
 
 export function handleHealth(env: Env, requestId: string): Response {
   const dbConfigured = !!env.SOURCEPLANE_DB;

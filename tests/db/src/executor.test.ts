@@ -1,7 +1,6 @@
 import {
   createSqlExecutor,
   type SqlRow,
-  type TransactionalSqlExecutor,
 } from "@saas/db/hyperdrive";
 
 describe("SqlExecutor", () => {

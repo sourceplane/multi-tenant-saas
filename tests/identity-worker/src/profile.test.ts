@@ -230,7 +230,7 @@ describe("PATCH /v1/auth/profile", () => {
 
   it("records user.profile.updated security event", async () => {
     const repo = createFakeRepository();
-    const { token, userId } = await setupAuthenticatedUser(repo);
+    const { token } = await setupAuthenticatedUser(repo);
 
     await handleProfile(
       makePatchRequest(token, { displayName: "EventTest" }),

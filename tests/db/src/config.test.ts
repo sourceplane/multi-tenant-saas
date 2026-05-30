@@ -2,10 +2,7 @@ import {
   createConfigRepository,
 } from "@saas/db/config";
 import type {
-  ConfigRepository,
   Scope,
-  Setting,
-  FeatureFlag,
   SecretMetadata,
 } from "@saas/db/config";
 import type { SqlExecutor, SqlExecutorResult, SqlRow } from "@saas/db/hyperdrive";
