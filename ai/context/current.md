@@ -1,34 +1,55 @@
 # Current Context
 
-Last updated: 2026-05-30 (Task 0093 SCOPED — class-B lint cleanup
-wave 1, 39 `no-unused-vars` errors across 9 workspaces, prompt at
-`ai/tasks/task-0093.md`. `main` tip is `3cdde80` post-Task-0092
-verifier squash. Repo health: green.)
+Last updated: 2026-05-30 (Task 0093 VERIFIED + MERGED — class-B lint
+cleanup wave 1, no-unused-vars 39→0 across 9 workspaces. PR #141
+squash-merged at `de0bca1`. Post-merge main-CI 26670675280 = 15/15
+SUCCESS including all nine deploy-gated jobs. `main` tip is `de0bca1`.
+Repo health: green.)
 
-## Active task: 0093 (Verifier) — verify PR #141 (class-B lint cleanup wave 1)
+## Active task: orchestrator turn — pick next task
 
-Implementer (Task 0093) opened PR #141 on
-`impl/task-0093-lint-cleanup-wave-1`. 17 files changed; 15/15 required
-PR CI checks SUCCESS; `mergeable: MERGEABLE`. Implementer report claims
-39 → 0 `@typescript-eslint/no-unused-vars` (deletion-only fix; no
-`_`-prefix renames; no `eslint-disable` introduced). `pnpm -r --no-bail
-lint` exit 0, `pnpm -r typecheck` exit 0 (Task 0091 baseline holds),
-`pnpm install --frozen-lockfile` exit 0.
+Task 0093 closed cleanly. Workspace-wide `pnpm -r --no-bail lint` now
+exits 0 across all 33 lint-bearing workspaces (zero errors; warnings
+preserved by design). Two natural next candidates:
 
-Verifier prompt: `ai/tasks/task-0093-verifier.md`. Verifier must:
-diff-boundary audit (only `src/**` in 9 named workspaces +
-`ai/reports/task-0093-implementer.md`), reject any new
-`+eslint-disable*`, re-run `pnpm install --frozen-lockfile` /
-`pnpm -r --no-bail lint` / `pnpm -r typecheck` locally on the PR
-branch, gate merge on `mergeStateStatus: CLEAN` + 15/15 SUCCESS,
-squash-merge per PRs #137-#140 convention, fast-forward `main`, then
-**wait for the post-merge main CI run to complete** and confirm
-overall + per-job `success` for `{config,metering,projects}-worker ×
-{dev,stage,prod}` deploy-gated profiles (post-merge-deploy-profile-gap
-rule applies because three deploy-gated apps had src changes), then
-`curl -sSI` stage + prod consoles to confirm `/` → 307 `/orgs`
-unchanged. Commit `ai/reports/task-0093-verifier.md` and state-file
-updates to `main`.
+1. **B3 — Edge idempotency and rate limiting** (specs/roadmap.md:54).
+   Generalize idempotency at `api-edge` for unsafe POSTs;
+   `idempotency-key` is already in `cors.ts`
+   Access-Control-Allow-Headers but not yet in `packages/contracts`
+   as a contract or wired through the edge. Builds directly on Task
+   0090's caller-side idempotency keys for the V1 notifications path.
+2. **Class-B warning cleanup wave** — `no-explicit-any` (and
+   optionally `no-console`) hygiene pass mirroring Task 0093 boundary
+   discipline on warnings instead of errors.
+
+Both fully unblocked. Orchestrator chooses on next loop turn.
+
+## Recently completed — Task 0093 (Class-B lint cleanup wave 1, PASS)
+
+- **PR #141** (`impl/task-0093-lint-cleanup-wave-1`), squash `de0bca1`
+  at 2026-05-30. Diff: 17 files — 16 `src/**` edits in the 9 named
+  workspaces (deletion-only of unused imports/locals; no `_`-prefix
+  renames used; no `eslint-disable` introduced) + implementer report.
+- PR-CI rollup: 15/15 required SUCCESS at merge time
+  (`mergeable: MERGEABLE`, `mergeStateStatus: CLEAN` after a routine
+  `gh pr update-branch` to bring the branch up to main).
+- Post-merge main-CI run: `26670675280` = 15/15 SUCCESS on SHA
+  `de0bca1`. All nine deploy-gated jobs green
+  (`{config,metering,projects}-worker × {dev,stage,prod} · Verify deploy`).
+- Live smoke: stage + prod console `/` → `HTTP/2 307` `location:/orgs`
+  unchanged; `/orgs` returns 200.
+- Verifier-validated: `pnpm install --frozen-lockfile` exit 0
+  (lockfile untouched); `pnpm -r --no-bail lint` exit 0 across 33
+  workspaces; `pnpm -r typecheck` exit 0 (Task 0091 baseline holds);
+  `tooling/eslint/index.js` byte-identical to main; zero `eslint-disable*`
+  source-level introductions; deferred boundaries intact
+  (`infra/terraform/cloudflare-domain/**`, `cloudflare ~> 4.52` pin).
+- Durable outcome: class-B `no-unused-vars` error surface fully
+  eliminated. The 39-error baseline goes to 0 with warnings preserved.
+  `pnpm -r --no-bail lint` is now actionable signal — any future
+  non-zero exit is a real regression.
+- Reports: `ai/reports/task-0093-implementer.md`,
+  `ai/reports/task-0093-verifier.md`.
 
 ### Original Task 0093 implementer goal (kept for context)
 
