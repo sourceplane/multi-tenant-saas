@@ -9,7 +9,6 @@ import {
   parseWebhookSubscriptionPublicId,
   parseWebhookDeliveryAttemptPublicId,
   orgPublicId,
-  projectPublicId,
   webhookEndpointPublicId,
   webhookSubscriptionPublicId,
   webhookDeliveryAttemptPublicId,

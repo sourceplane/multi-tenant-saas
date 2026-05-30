@@ -101,10 +101,6 @@ describe("Identity Migration Verification", () => {
   });
 
   describe("project-scoped invariant still applies only to projects context", () => {
-    const projectMigrations = manifest.migrations.filter(
-      (m) => m.context === "projects",
-    );
-
     it("identity migrations are not subject to project-scoped org_id/project_id check", () => {
       expect(identityMigrations.every((m) => m.context === "identity")).toBe(true);
       expect(identityMigrations.some((m) => m.context === "projects")).toBe(false);

@@ -1,6 +1,6 @@
 import type { Env } from "../env.js";
 import type { ActorContext } from "../router.js";
-import type { ListQuotaViolationsResponse, PublicQuotaViolation } from "@saas/contracts/metering";
+import type { PublicQuotaViolation } from "@saas/contracts/metering";
 import type { PolicyResource } from "@saas/contracts/policy";
 import type { QuotaViolation } from "@saas/db/metering";
 import { createSqlExecutor } from "@saas/db/hyperdrive";

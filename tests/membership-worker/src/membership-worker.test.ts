@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createOrganizationService } from "@membership-worker/services/organization";
 import type { PolicyAuthorizer } from "@membership-worker/services/organization";
-import { orgPublicId, parseOrgPublicId, memberPublicId, parseMemberPublicId, invitationPublicId, parseInvitationPublicId } from "@membership-worker/ids";
+import { orgPublicId, parseOrgPublicId, memberPublicId, invitationPublicId, parseInvitationPublicId } from "@membership-worker/ids";
 import { handleCreateOrganization } from "@membership-worker/handlers/create-organization";
 import { handleUpdateMemberRole } from "@membership-worker/handlers/update-member-role";
 import { handleRemoveMember } from "@membership-worker/handlers/remove-member";
@@ -470,41 +470,8 @@ describe("member-list endpoint", () => {
     return { repo, orgId, memberId1, memberId2 };
   }
 
-  function createEnv(opts: {
-    policyAllow?: boolean;
-    policyFail?: boolean;
-    repo?: ReturnType<typeof createMemberListRepo>["repo"];
-  }) {
-    const { policyAllow = true, policyFail = false, repo } = opts;
-    const policyFetcher = {
-      fetch: async () => {
-        if (policyFail) throw new Error("network error");
-        return Response.json({
-          data: { allow: policyAllow, reason: policyAllow ? "granted" : "denied", policyVersion: 1, derivedScope: {} },
-          meta: { requestId: "req_test", cursor: null },
-        });
-      },
-    } as unknown as Fetcher;
-
-    return {
-      SOURCEPLANE_DB: {} as unknown as Hyperdrive,
-      POLICY_WORKER: policyFetcher,
-      ENVIRONMENT: "test",
-      _repo: repo,
-    };
-  }
-
   it("returns members with expected response shape", async () => {
-    const { repo, orgId } = createMemberListRepo();
-
-    const policyFetcher = {
-      fetch: async () => Response.json({
-        data: { allow: true, reason: "granted", policyVersion: 1, derivedScope: {} },
-        meta: { requestId: "req_test", cursor: null },
-      }),
-    } as unknown as Fetcher;
-
-    const { handleListMembers: handler } = await import("@membership-worker/handlers/list-members");
+    createMemberListRepo();
 
     // We test the service-level logic directly via the handler's internals
     // Since the handler creates its own executor/repo, we test logic patterns here
@@ -1166,22 +1133,6 @@ describe("invitation administration", () => {
      * pass-through for tests that aren't exercising it. Dedicated billing
      * gate tests pass their own checkEntitlement.
      */
-    const allowBillingCheck = async (
-      _binding: Fetcher,
-      orgPublicIdArg: string,
-      entitlementKey: string,
-    ) => ({
-      kind: "decision" as const,
-      decision: {
-        allowed: true as const,
-        orgId: orgPublicIdArg,
-        entitlementKey,
-        valueType: "quantity" as const,
-        limitValue: null,
-        source: "plan" as const,
-        subscriptionId: null,
-      },
-    });
 
     function makeRequest(body: unknown): Request {
       return new Request("https://test.local/v1/organizations/" + orgPublicIdStr + "/invitations", {

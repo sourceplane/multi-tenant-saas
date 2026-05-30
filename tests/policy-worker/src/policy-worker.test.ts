@@ -219,7 +219,7 @@ describe("policy-worker routes", () => {
         "x-request-id": "my-custom-id-123",
       });
       const res = await route(req, env);
-      const body = await json(res);
+      await json(res);
       expect(res.headers.get("x-request-id")).toBe("my-custom-id-123");
     });
 

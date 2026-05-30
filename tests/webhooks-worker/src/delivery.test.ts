@@ -8,21 +8,16 @@ import {
   isWebhookLifecycleEvent,
   buildDeliveryLifecyclePayload,
   AUTO_DISABLE_FAILURE_THRESHOLD,
-  WEBHOOK_LIFECYCLE_EVENT_TYPES,
 } from "@webhooks-worker/delivery";
-import { createEncryptionAdapter, type CiphertextEnvelope } from "@webhooks-worker/encryption";
+import { createEncryptionAdapter } from "@webhooks-worker/encryption";
 import type {
   WebhookRepository,
-  WebhookResult,
   WebhookDeliveryAttempt,
   EndpointForDelivery,
   MatchedSubscription,
   DispatchCursor,
   CreateDeliveryAttemptInput,
   UpdateDeliveryAttemptInput,
-  PagedResult,
-  WebhookEndpoint,
-  WebhookSubscription,
 } from "@saas/db/webhooks";
 import type { EventsRepository, StoredEvent, EventsResult, AppendEventInput, AppendEventWithAuditInput } from "@saas/db/events";
 
@@ -85,7 +80,6 @@ function createMockWebhookRepo(overrides?: {
   const updated: Array<{ orgId: string; attemptId: string; input: UpdateDeliveryAttemptInput }> = [];
   const advanced: Array<{ orgId: string; lastEventId: string; lastOccurredAt: string }> = [];
   const disabled: Array<{ orgId: string; endpointId: string; reason: string }> = [];
-  let attemptCounter = 0;
 
   return {
     _createdAttempts: created,
@@ -146,7 +140,6 @@ function createMockWebhookRepo(overrides?: {
     },
     async createDeliveryAttempt(input: CreateDeliveryAttemptInput) {
       created.push(input);
-      attemptCounter++;
       const attempt: WebhookDeliveryAttempt = {
         id: input.id,
         orgId: input.orgId,

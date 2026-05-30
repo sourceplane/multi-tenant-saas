@@ -1,12 +1,6 @@
 import {
   createWebhookRepository,
 } from "@saas/db/webhooks";
-import type {
-  WebhookRepository,
-  WebhookEndpoint,
-  WebhookSubscription,
-  WebhookDeliveryAttempt,
-} from "@saas/db/webhooks";
 import type { SqlExecutor, SqlExecutorResult, SqlRow } from "@saas/db/hyperdrive";
 
 type QueryRecord = { text: string; params: unknown[] };
