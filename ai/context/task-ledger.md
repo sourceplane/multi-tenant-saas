@@ -2066,3 +2066,12 @@ PR #146 squash `5b33a13`. 26→0 no-explicit-any across 5 workspaces / 6 files (
 
 ## Track B drain CLOSED (2026-05-30)
 All `tests/**` workspaces NOT gated behind Track A drained to 0 class-B `@typescript-eslint/no-explicit-any` warnings. Final scan: `pnpm -r typecheck` exit 0; `pnpm -r --no-bail lint` exit 0 with 45 residual warnings, all in `tests/api-edge` (gated behind PR #143 / Task 0095.1). Apps source class-B: 0 (Task 0096 invariant holds).
+
+## Task 0095.0 — provision api-edge idempotency KV namespaces (2026-05-30)
+PR #147 squash `40974e5`. Carve-out from PR #143 isolating the cloudflare-kv Terraform component. Single commit on `impl/task-0095.0-provision-api-edge-idempotency-kv` adding `infra/terraform/cloudflare-kv/` (component.yaml + terraform/{main,outputs,variables,backend}.tf + .terraform.lock.hcl + README.md). Post-merge main-CI run 26684537981 SUCCESS — terraform apply on stage and prod emitted `api_edge_idempotency_kv_id` outputs (stage `2f5a03d0a14e4ead8f2b6658f6bfd722`, prod `fac1d319c8894466b4860bff9c6cb99d`). No application code touched. Unblocked PR #143 by giving the consumer real KV IDs to reference.
+
+## Task 0095 / 0095.1 — Edge idempotency replay store (B3) CLOSED (2026-05-30)
+PR #143 squash `d9116aa` (`--admin`, branch was BEHIND base; CI green). 20 files / +2460 / −353. Verifier PASS all 10 phases. Post-merge main-CI run 26684916084 SUCCESS on api-edge × {dev,stage,prod} Verify-deploy; wrangler deploy logs confirm real KV IDs bound (`env.IDEMPOTENCY_KV (2f5a03d0…) KV Namespace` stage, `env.IDEMPOTENCY_KV (fac1d319…) KV Namespace` prod). Live evidence captured on stage (cases a,b,c,d,f,g) and prod (a, isolation, g); case (e) 5xx-not-cached marked needs-human (no controlled 500 path on no-auth route — covered by Phase-4 unit tests in `tests/api-edge/src/idempotency-replay.test.ts`). Console smoke unchanged: stage+prod 307 → /orgs. Verifier report: `ai/reports/task-0095.1-verifier.md` (supersedes prior FAIL at `ai/reports/task-0095-verifier.md`). B3 LIVE on stage and prod.
+
+## Track A CLOSED (2026-05-30)
+With Task 0095 / 0095.1 merged, Track A is closed. Remaining 45 `@typescript-eslint/no-explicit-any` warnings in `tests/api-edge` are now eligible for a final mop-up wave (Task 0096f or successor). Apps source class-B: 0 (Task 0096 invariant holds). Recommended next moves: (1) Task 0096f to drain `tests/api-edge` 45→0; (2) Task 0097 rate-limiting (B3 second half, reuses the cloudflare-kv slice landed in PR #147).

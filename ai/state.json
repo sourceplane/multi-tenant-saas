@@ -1,6 +1,6 @@
 {
   "goal": "Supabase/Postgres-backed multi-organization Orun SaaS control plane",
-  "current_task": "track-b-drain-closed",
+  "current_task": "track-a-closed",
   "completed": [
     "0001",
     "0001.1",
@@ -107,7 +107,10 @@
     "0096b",
     "0096c",
     "0096d",
-    "0096e"
+    "0096e",
+    "0095",
+    "0095.0",
+    "0095.1"
   ],
   "deferred": [
     "0085b",
@@ -115,11 +118,12 @@
     "notifications-worker-dev-reframe"
   ],
   "repo_health": "green",
-  "next_focus": "Track A unblock: PR #143 (impl/task-0095-edge-idempotency-replay-store, head db00843) is CONFLICTING vs main, awaiting implementer rebase + Phase-5 fix-up for Task 0095.1 (real 32-char hex KV IDs in wrangler.jsonc + EXPECTED_KV in verify-bindings.mjs). Once Track A lands, the final tests/api-edge wave (Task 0096f or successor) drains the remaining 45 class-B no-explicit-any warnings. Apps source still 0 (Task 0096 invariant). Track B class-B drain CLOSED for every workspace not gated behind Track A.",
-  "last_verified": "2026-05-30T13:20:00Z",
+  "next_focus": "Track A CLOSED. PR #143 (Task 0095/0095.1, B3 edge idempotency replay store) merged d9116aa, post-merge main-CI 26684916084 SUCCESS, live replay traffic verified on stage+prod. Cloudflare KV namespaces live: stage 2f5a03d0a14e4ead8f2b6658f6bfd722, prod fac1d319c8894466b4860bff9c6cb99d. Track A unblock complete; remaining 45 tests/api-edge no-explicit-any warnings now eligible for a final wave (Task 0096f). Top non-deferred candidates: (1) Task 0096f tests/api-edge class-B drain (45\u21920); (2) Task 0097 rate-limiting (B3 second half, reuses cloudflare-kv slice). Deferred candidates unchanged: 0085b, notifications-provider-swap, notifications-worker-dev-reframe.",
+  "last_verified": "2026-05-30T14:30:00Z",
   "waiting_for_input": "false",
   "task_agent": "",
   "notes": [
+    "Task 0095 + 0095.0 + 0095.1 CLOSED 2026-05-30. PR #147 (Task 0095.0, cloudflare-kv carve-out) squash 40974e5, main-CI 26684537981 SUCCESS \u2014 provisioned api_edge_idempotency_kv_id outputs (stage 2f5a03d0a14e4ead8f2b6658f6bfd722, prod fac1d319c8894466b4860bff9c6cb99d). PR #143 (Task 0095/0095.1, B3 edge idempotency replay store) squash d9116aa with --admin (BEHIND base, CI green), post-merge main-CI 26684916084 SUCCESS on api-edge \u00d7 {dev,stage,prod} Verify-deploy. Verifier PASS all 10 phases (case (e) 5xx-not-cached marked needs-human; covered by Phase-4 unit tests). Live evidence captured: hit replay, miss-then-store, GET passthrough, 4xx cached, identity-agnostic key, header allowlist on stage; hit replay, stage/prod isolation, header allowlist on prod. Console smoke unchanged: stage+prod 307 \u2192 /orgs. Track A CLOSED. Verifier report: ai/reports/task-0095.1-verifier.md.",
     "Track B class-B no-explicit-any drain CLOSED 2026-05-30. Tasks 0096c (PR #149, ea99924), 0096d (PR #148, 10e213a), 0096e (PR #146, 5b33a13) all squash-merged with post-merge main-CI SUCCESS on each (runs 26684817843, 26684814662, 26684799758). Per-workspace deltas: tests/config-worker 126\\u21920, tests/identity-worker 80\\u21920, tests/projects-worker 10\\u21920, tests/events-worker 7\\u21920, tests/policy-engine 7\\u21920, tests/policy-worker 1\\u21920, tests/webhooks-worker 1\\u21920. Final scan: pnpm -r typecheck exit 0; pnpm -r --no-bail lint exit 0 with 45 residual warnings, ALL in tests/api-edge (gated behind Track A / PR #143). Apps source class-B: 0 (Task 0096 invariant holds). Hazard scan empty across all three PRs (zero new eslint-disable / @ts-ignore / @ts-expect-error / `as unknown as`).",
     "Task 0096e SCOPED 2026-05-30 (orchestrator). Implementer prompt at ai/tasks/task-0096e.md. Sealed verifier prompt at ai/tasks/task-0096e-verifier.md. One PR draining the five smallest residual tests/** workspaces in a single mop-up wave: tests/projects-worker/projects-worker.test.ts (10 anys, 170 it()), tests/events-worker/events-worker.test.ts (7 anys, 20 it()), tests/policy-engine/api-key-policy.test.ts (2 anys, 9 it()), tests/policy-engine/policy-engine.test.ts (5 anys, 131 it()), tests/policy-worker/policy-worker.test.ts (1 any, 20 it()), tests/webhooks-worker/delivery.test.ts (1 any, 28 it()). tests/webhooks-worker/webhooks-worker.test.ts already 0 anys at baseline \u2014 must stay byte-identical vs main @ b565687. Branch impl/task-0096e-class-b-warning-cleanup-wave-5. Zero overlap with PR #143 (Track A), Task 0096c (tests/config-worker), or Task 0096d (tests/identity-worker) \u2014 all three plus this PR can ship in parallel. Same hazard-scan + `as unknown as` ban as 0096b/c/d. Residual after merge: \u2264 251 (none of c/d/Track-A merged), \u2264 171 (only 0096d ahead), \u2264 125 (only 0096c ahead), \u2264 45 (both Track-B waves merged), \u2212 45 if Track A also merged. Apps source still 0 (Task 0096 invariant).",
     "Task 0096d SCOPED 2026-05-30 (orchestrator). Implementer prompt at ai/tasks/task-0096d.md. Sealed verifier prompt at ai/tasks/task-0096d-verifier.md. Single-workspace PR draining tests/identity-worker 80 no-explicit-any \\u2192 0 across 5 source files (api-key-admin.test.ts 33, security-events.test.ts 22, profile.test.ts 13, login-start-notifications.test.ts 8, helpers/fake-repository.ts 4). Three zero-baseline files must stay byte-identical vs main @ b0bc233: auth-service.test.ts (51 it()), envelope.test.ts (8 it()), resolve-bearer.test.ts (12 it()). Baseline parity targets: 7 suites / 122 tests, per-file it() counts 15/51/8/4/15/12/17. Branch impl/task-0096d-tests-identity-worker-class-b. No overlap with PR #143 surface (Track A) or Task 0096c surface (tests/config-worker). Same hazard-scan + same `as unknown as` ban as 0096b/0096c. Expected residual after merge: \\u2264 197 if Task 0096c not merged (tests/config-worker 126 + tests/api-edge 45 + projects 10 + events 7 + policy-engine 7 + policy 1 + webhooks 1), or \\u2264 71 if Task 0096c merged ahead.",

@@ -47,11 +47,27 @@ tests/** only.
 | tests/webhooks-worker         | 1            | 0 (Task 0096e)  |
 | **tests/api-edge** (gated)    | 45           | 45 (Track A)    |
 
+## Track A status (2026-05-30)
+
+CLOSED. PR #147 (Task 0095.0) merged `40974e5` provisioning the
+Cloudflare Workers KV namespaces (stage `2f5a03d0a14e4ead8f2b6658f6bfd722`,
+prod `fac1d319c8894466b4860bff9c6cb99d`). PR #143 (Task 0095 / 0095.1)
+merged `d9116aa` with the real KV IDs wired into `apps/api-edge/wrangler.jsonc`
+and an `EXPECTED_KV` guard in `apps/api-edge/scripts/verify-bindings.mjs`.
+Post-merge main-CI run `26684916084` SUCCESS on api-edge ×
+{dev, stage, prod} Verify-deploy. Live replay traffic verified end-to-end
+on both stage and prod (hit, miss-then-store, GET passthrough, 4xx cached,
+identity-agnostic key, header allowlist; stage/prod KV isolation
+confirmed). Verifier report: `ai/reports/task-0095.1-verifier.md`.
+
 ## Next focus
 
-Track A unblock — PR #143 (`impl/task-0095-edge-idempotency-replay-store`,
-head `db00843`) is CONFLICTING vs main, awaiting implementer rebase + the
-Phase-5 fix-up scoped in Task 0095.1 (real 32-char hex KV IDs in
-`wrangler.jsonc` + `EXPECTED_KV` in `verify-bindings.mjs`). Once Track A
-lands, the final wave (Task 0096f or successor) drains the remaining 45
-warnings in `tests/api-edge` and Track B closes globally.
+With Track A closed, two non-deferred candidates are next:
+
+1. **Task 0096f** — drain `tests/api-edge` 45→0 `@typescript-eslint/no-explicit-any`
+   (closes Track B globally; was gated behind Track A landing).
+2. **Task 0097** — rate-limiting (B3 second half). Reuses the
+   `cloudflare-kv` Terraform slice landed in PR #147.
+
+Deferred candidates unchanged: `0085b`, `notifications-provider-swap`,
+`notifications-worker-dev-reframe` (see `ai/deferred.md`).
