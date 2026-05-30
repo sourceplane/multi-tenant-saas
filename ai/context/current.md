@@ -1,18 +1,14 @@
 # Current Context
 
-Last updated: 2026-05-30 (Track B advanced to verification. Track A
-(Task 0095.1) verifier resumption staged at
-`ai/tasks/task-0095.1-verifier.md`, still waiting on implementer fix-up
-commits to PR #143 (head `db00843`, mergeStateStatus DIRTY/CONFLICTING
-vs main — rebase is implementer's job before fix-ups land). Track B
-(Task 0096) implementer phase complete: PR #144 OPEN at `78720ef`,
-MERGEABLE/CLEAN, PR-CI 7/7 SUCCESS, implementer report
-`ai/reports/task-0096-implementer.md` committed; verifier prompt staged
-at `ai/tasks/task-0096-verifier.md`. The two tracks remain file-disjoint
-and merge independently. Repo health: green; PR #143 + PR #144 are the
-only open PRs; main @ `d94bf92`.)
+Last updated: 2026-05-30 (Track B (Task 0096) CLOSED — verifier PASS,
+PR #144 squash-merged at `e9e432b`, post-merge main-CI `26675733754`
+10/10 SUCCESS, console smoke unchanged. Track A (Task 0095.1) still
+waiting on implementer fix-up commits to PR #143; head still
+`db00843`, mergeStateStatus DIRTY/CONFLICTING vs main — rebase is
+implementer's job before fix-ups land. Repo health: green; PR #143 is
+the single open PR; main @ `e9e432b`.)
 
-## Active task — Track A: Task 0095.1 (verifier resumption staged on PR #143)
+## Active task — Task 0095.1 (verifier resumption staged on PR #143)
 
 The verifier ran on PR #143 today and returned **FAIL** with a single,
 specific Phase-5 blocker. Phases 1–4 PASSED (code path correct, 282/282
@@ -60,10 +56,8 @@ the task"), Task 0095.1 is **NOT a new PR**. It is an additional commit
 becomes mergeable.
 
 The repo precedent is already in the same `wrangler.jsonc`: real
-Hyperdrive namespace IDs are hardcoded for stage and prod
-(`08f7c6055f544a3890a585d88fd92348` /
-`ab2c21c2db6245a59c91588fcac7107a`) and `verify-bindings.mjs` asserts
-them. Mirror that pattern for KV:
+Hyperdrive namespace IDs are hardcoded for stage and prod and
+`verify-bindings.mjs` asserts them. Mirror that pattern for KV:
 
 1. Apply the new `cloudflare-kv` Terraform slice on stage + prod ONCE
    (via main-CI on a small no-op trigger, or via a manual apply through
@@ -86,11 +80,12 @@ seven facade call sites — verifier Phase-4 explicitly PASSED these.
 Touching them re-opens the entire code path review.
 
 Prompt: `ai/tasks/task-0095.1.md`. Branch:
-`impl/task-0095-edge-idempotency-replay-store` (existing).
+`impl/task-0095-edge-idempotency-replay-store` (existing, head still
+`db00843`, currently CONFLICTING vs main — rebase before fix-ups).
 
 ## Verifier re-run plan after Task 0095.1
 
-The verifier resumption is now **scoped as a dedicated prompt** at
+The verifier resumption is **scoped as a dedicated prompt** at
 `ai/tasks/task-0095.1-verifier.md`. It does NOT redo Phases 1–4 (those
 are sealed: code path PASS, 282/282 tests, hazard scan clean,
 terraform validate green) — only delta-scans the 0095.1 commits
@@ -129,110 +124,76 @@ audit).
 
 1. **Task 0097 — rate limiting (B3 second half).** Reuses the same
    `cloudflare-kv` slice for storage; the slice was deliberately
-   structured as a single component for this reason. (Renumbered from
-   0096 since 0096 is now allocated to the class-B warning cleanup
-   wave below.)
-2. **Task 0096b — class-B warning cleanup wave 2 (tests/**).** 639
-   warnings across 9 test workspaces (`tests/membership-worker` 351,
-   `tests/config-worker` 127, `tests/identity-worker` 81,
-   `tests/api-edge` 46, others). Scope after 0096 lands.
+   structured as a single component for this reason.
+2. **Task 0096b — class-B warning cleanup wave 2 (tests/**).** ~625
+   warnings across 9 test workspaces (`tests/membership-worker` ~351,
+   `tests/config-worker` ~127, `tests/identity-worker` ~81,
+   `tests/api-edge` ~46, others). Scope after Track A closes.
 3. Revisit deferred candidates if any unblock (none have).
 
-## Active task — Track B: Task 0096 (class-B warning cleanup wave 1, apps source)
+## Recently completed — Task 0096 (Class-B warning cleanup wave 1, apps source, PASS)
 
-Strictly disjoint from PR #143. Touches three production-source files
-in three workspaces only:
-
-- `apps/config-worker/src/handlers/update-feature-flag.ts:139,213` —
-  two `as any` casts on the `updateFeatureFlag` / `createFeatureFlag`
-  repo input. Fix by using the canonical repo input type from
-  `packages/data/**` (or wherever the repo lives).
-- `apps/metering-worker/src/rollups.ts:147` — `console.log` summary
-  line on a scheduled-rollup completion. Fix by replacing with
-  `console.warn`.
-- `apps/webhooks-worker/src/index.ts:30,36` — `console.log` summary
-  lines after scheduled dispatch and retry. Fix by replacing with
-  `console.warn`.
-
-Branch: `impl/task-0096-class-b-warning-cleanup-wave-1` from
-`origin/main` @ `d94bf92` (NOT from PR #143's branch). PR boundary:
-exactly 4 files (3 source + 1 implementer report). Acceptance:
-`pnpm -r --no-bail lint` global warning count drops from 644 → 639;
-`pnpm -r typecheck` exit 0; touched-workspace tests green; no
-`+eslint-disable*` / `+@ts-ignore` / `+as unknown as` introductions.
-
-Out of scope: `tests/**` (reserved for Task 0096b), `apps/api-edge/**`
-(sealed by PR #143), `packages/**`, `tooling/eslint/**`, severity
-changes, behavioural changes, new dependencies. Blocker protocol
-covers "cannot locate repo-method input type" — wip-PR + report,
-no `as unknown as` laundering.
-
-Prompt: `ai/tasks/task-0096.md`.
-
-## Concurrency model
-
-Tracks A (Task 0095.1 verifier resumption on PR #143) and B (Task 0096
-implementer on a fresh main-rooted branch) run in parallel. PR #143's
-file set (`apps/api-edge/wrangler.jsonc`,
-`apps/api-edge/scripts/verify-bindings.mjs`,
-`infra/terraform/cloudflare-kv/**`, reports, state files) and Task
-0096's file set (`apps/{config,metering,webhooks}-worker/src/**`,
-`ai/reports/task-0096-implementer.md`) have **zero overlap**. They
-merge independently. When PR #143 merges first, Task 0096 rebases to
-the new main without conflict; when Task 0096 merges first, PR #143
-likewise. Track A is currently waiting on the implementer's 0095.1
-fix-up commits to PR #143 (head still `db00843` at scope time) — this
-does not block Track B.
+- **PR #144** (`impl/task-0096-class-b-warning-cleanup-wave-1`),
+  squash `e9e432b` at 2026-05-30 (admin-merge — branch was BEHIND main
+  due to two orchestrator scope commits `7d2c332` + `4895cd7` pushed
+  direct to main between PR open and merge; source diff itself
+  unchanged on the merge target).
+- Diff: 4 files —
+  `apps/config-worker/src/handlers/update-feature-flag.ts`
+  (`UpdateFeatureFlagInput` from `@saas/db/config` replaces 2× `as any`
+  at L139,213; `description:null` narrowed to skip-the-field matching
+  sibling `update-setting.ts` / `create-feature-flag.ts` precedent),
+  `apps/metering-worker/src/rollups.ts:147` (`console.log` →
+  `console.warn`), `apps/webhooks-worker/src/index.ts:30,36` (2×
+  `console.log` → `console.warn`),
+  `ai/reports/task-0096-implementer.md` (NEW).
+- Zero `+eslint-disable*` / `+@ts-ignore` / `+@ts-expect-error` /
+  `+as unknown as` introductions in source.
+- PR-CI rollup: 7/7 SUCCESS at `78720ef`; post-merge main-CI
+  `26675733754` on `e9e432b` = 10/10 SUCCESS, including the 9
+  deploy-gated jobs (`{config,metering,webhooks}-worker × {dev,stage,prod}
+  · Verify deploy`).
+- Per-workspace lint: exit 0, 0 warnings on each of the three touched
+  apps. `pnpm -r typecheck` exit 0. `pnpm -r --no-bail lint` exit 0
+  with **625 residual warnings, all in `tests/**`** (apps source 0).
+- Touched test suites green: `tests/config-worker` 5 suites / 174
+  tests, `tests/metering-worker` 2 suites / 32 tests,
+  `tests/webhooks-worker` 2 suites / 66 tests.
+- Behavioural review: `description:null → undefined` narrowing is
+  safe — `UpdateFeatureFlagInput.description` is `string | undefined`
+  (`packages/db/src/config/types.ts`), sibling handlers use the
+  identical pattern, no fixture or historical commit invokes the
+  prior semantic.
+- Live: `https://{stage,prod}.sourceplane.ai/` → `HTTP/2 307` to
+  `/orgs` unchanged.
+- Reports: `ai/reports/task-0096-implementer.md`,
+  `ai/reports/task-0096-verifier.md`.
 
 ## Recently completed — Task 0094 (Edge idempotency-key contract + gate, PASS)
 
 - **PR #142** (`impl/task-0094-edge-idempotency-contract`), squash
-  `71cf34f` at 2026-05-30. Diff: 15 files —
-  `packages/contracts/src/idempotency.ts` (NEW), barrel re-export in
-  `packages/contracts/src/index.ts`, `./idempotency` subpath in
-  `packages/contracts/package.json`, `apps/api-edge/src/idempotency.ts`
-  (NEW edge helper), 7 facade call-site insertions, 2 new test files
-  (`tests/contracts/src/idempotency.test.ts` 17 cases,
-  `tests/api-edge/src/idempotency-edge.test.ts` 9 cases),
-  `ai/context/open-risks.md` partial-closure update, implementer
-  report.
-- PR-CI rollup: 9/9 required SUCCESS, `mergeable: MERGEABLE`,
-  `mergeStateStatus: CLEAN` at merge time.
-- Post-merge main-CI: `26671444227` = 9/9 SUCCESS on SHA `71cf34f`.
-  All three `api-edge · {dev,stage,prod} · Verify deploy` jobs green.
-- Live gate evidence on `api-edge-stage.workers.dev`: malformed
-  `Idempotency-Key` on POST → 400 `validation_failed` for `empty` /
-  `too_long` / `illegal_characters`; absent → passthrough; valid →
-  passthrough; GET with empty header → 401 (safe-method short-circuit
-  live). Console `/` → 307 `/orgs` unchanged on stage + prod.
+  `71cf34f` at 2026-05-30. Live gate evidence on
+  `api-edge-stage.workers.dev`: malformed `Idempotency-Key` on POST →
+  400 `validation_failed`; absent → passthrough; valid → passthrough.
+  Console / → 307 /orgs unchanged on stage + prod.
 - Reports: `ai/reports/task-0094-implementer.md`,
   `ai/reports/task-0094-verifier.md`.
 
 ## Repo health: green
 
-`main` tip on `origin/main` is `71cf34f` (post Task 0094 verifier
+`main` tip on `origin/main` is `e9e432b` (post Task 0096 verifier
 squash). PR #143 is the single open PR. `kiox.lock` pinned at orun
 v2.9.0. Provider pin holds at `cloudflare ~> 4.52` (Task 0085b
-deferred). Apex hostnames `stage.sourceplane.ai` and `prod.sourceplane.ai`
-live on the original Cloudflare Workers custom-domain attachments
-(stage id `052eaece5e989d5a7280b6c206e562c42950e3a6`, prod id
-`31e5f2ed1b1e4a5700e8ae0678846a0d753840e1`).
+deferred). Apex hostnames `stage.sourceplane.ai` and
+`prod.sourceplane.ai` live.
 
 Workspace-wide `pnpm -r typecheck` exits 0 cleanly (Task 0091 baseline
-holds through 0094). Workspace-wide `pnpm -r --no-bail lint` exits 0
-across all 33 lint-bearing workspaces (Task 0092 + 0093 outcome).
+holds through 0096). Workspace-wide `pnpm -r --no-bail lint` exits 0
+across all 33 lint-bearing workspaces with 625 residual warnings, all
+in `tests/**` (apps source 0 — Tasks 0093 + 0096 outcome).
 
 Notifications-worker V1 stays deployed on stage + prod (private,
-`workers_dev: false`, `NOTIFICATIONS_PROVIDER=local-debug`). All three
-V1 callers populate `idempotencyKey` on enqueue (Task 0090):
-
-- identity-worker prod fires `auth.magic_link` with
-  `idempotencyKey = auth.magic_link:${challengeId}`.
-- membership-worker prod fires `invitation.created` with
-  `idempotencyKey = invitation.created:${invitationPublicId(inv.id)}`.
-- membership-worker prod fires `invitation.accepted` with
-  `idempotencyKey =
-  invitation.accepted:${invitationPublicId(inv.id)}:${memberPublicId(member.id)}`.
+`workers_dev: false`, `NOTIFICATIONS_PROVIDER=local-debug`).
 
 api-edge `Idempotency-Key` validation gate is live in production for
 all unsafe-method POSTs across the seven facades — malformed keys
@@ -247,9 +208,8 @@ flight on PR #143 and gated by Task 0095.1 above.
    `apps/notifications-worker/src/providers/` is ready and
    safety-unblocked by Task 0090's idempotency-key population.
 2. **Task 0085b — cloudflare-domain v4 → v5 + re-import** — explicit
-   user defer. Boundary
-   `infra/terraform/cloudflare-domain/**` and `cloudflare ~> 4.52` pin
-   stay untouched.
+   user defer. Boundary `infra/terraform/cloudflare-domain/**` and
+   `cloudflare ~> 4.52` pin stay untouched.
 3. **`notifications-worker-dev-reframe`** — needs a "dev-deploy lane"
    design pass before the dev-binding work has anywhere to land.
 
@@ -270,28 +230,25 @@ genuinely blocked on a human decision. Currently `waiting_for_input` is
 - B3 (Edge idempotency + rate limiting) is in flight: Task 0094 landed
   the contract + edge validation gate; Task 0095 is shipping the
   durable replay store (PR #143) and is currently blocked on the Task
-  0095.1 fix-up; Task 0096 (rate limiting) is the explicit successor
+  0095.1 fix-up; Task 0097 (rate limiting) is the explicit successor
   and reuses the `cloudflare-kv` slice from 0095.
 
 ## Repo Reality
 
-- 99 tasks on the completed list (0001–0094 plus the splits and `.1`
-  follow-ups). Task 0095 is **not** completed yet — implementer phase
-  shipped on PR #143, verifier returned FAIL, Task 0095.1 fix-up
-  scoped.
+- 100 tasks on the completed list (0001–0096 plus splits and `.1`
+  follow-ups, with Task 0095 still open). Task 0095 is **not**
+  completed yet — implementer phase shipped on PR #143, verifier
+  returned FAIL, Task 0095.1 fix-up scoped.
 - Task 0085 split into 0085a (Phase 1, DONE) + 0085b (Phase 2,
   EXPLICITLY DEFERRED by user).
 - Active spec pack: reusable SaaS starter under `specs/**`.
 - Console live at `https://{stage,prod}.sourceplane.ai` (307 → `/orgs`).
-- Notifications-worker V1 internal-only on stage/prod;
-  identity-worker prod (`auth.magic_link`), membership-worker prod
-  (`invitation.created`, `invitation.accepted`) all live callers
-  (local-debug provider) with idempotency keys.
-- All three callers consume `@saas/notifications-client` workspace
-  package; per-worker copies deleted (Task 0089 outcome).
+- Notifications-worker V1 internal-only on stage/prod.
 - 33/33 lint-bearing workspaces ship a working `eslint.config.js`
   (Task 0092). `pnpm -r --no-bail lint` exits 0 across all of them
-  (Task 0093). `pnpm -r typecheck` exits 0 (Task 0091).
+  (Task 0093). `pnpm -r typecheck` exits 0 (Task 0091). Apps source
+  class-B warnings eliminated for config/metering/webhooks workers
+  (Task 0096); tests/** cleanup deferred to Task 0096b.
 - api-edge `Idempotency-Key` validation gate live in production
   (Task 0094). Durable replay layer in flight on PR #143 (Task 0095,
   gated by 0095.1).

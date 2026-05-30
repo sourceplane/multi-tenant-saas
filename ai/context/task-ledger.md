@@ -1938,3 +1938,19 @@ Last updated: 2026-05-30 (Task 0091 Verifier PASS — PR #139 merged at `9081cff
 - Acceptance: PR diff = exactly 4 files (3 source + 1 implementer report); zero hazard-scan hits; per-workspace lint exit 0 with 0 warnings; pnpm -r typecheck exit 0; touched test suites (174+32+66) green; description:null narrowing safe; PR squash-merged; post-merge main-CI all green including 9 deploy-gated jobs; console smoke unchanged; state files updated and committed.
 - Verifier report: `ai/reports/task-0096-verifier.md`.
 - Recommended next move on PASS: if Track A (Task 0095.1) implementer fix-up has landed by then, run `ai/tasks/task-0095.1-verifier.md`; otherwise Task 0096b (tests/** cleanup, 627 sites across 9 workspaces) OR Task 0097 rate-limiting (reuses cloudflare-kv slice from Task 0095 once that closes).
+
+## Task 0096 — Closure (Verifier PASS + Merge)
+
+- Agent: Verifier
+- Prompt: `ai/tasks/task-0096-verifier.md`
+- Status: VERIFIED PASS + MERGED 2026-05-30
+- Implementation: PR #144 (`impl/task-0096-class-b-warning-cleanup-wave-1`), squash `e9e432b` (admin-merge — branch BEHIND main due to two orchestrator scope commits `7d2c332` + `4895cd7` pushed direct to main between PR open and merge; source diff itself unchanged on the merge target).
+- PR-CI: rollup at `78720ef` 7/7 SUCCESS (run `26675520763`).
+- Post-merge main-CI: run `26675733754` on SHA `e9e432b` = 10/10 SUCCESS — `plan` + 9 deploy-gated jobs (`{config,metering,webhooks}-worker × {dev,stage,prod} · Verify deploy`).
+- Reports: `ai/reports/task-0096-implementer.md`, `ai/reports/task-0096-verifier.md`.
+- Objective (recap): drive `pnpm -r --no-bail lint` warning count for production source under `apps/*/src/**` (excluding api-edge) from 5 → 0 by replacing two `as any` casts with `UpdateFeatureFlagInput` from `@saas/db/config` and three `console.log` summary lines with `console.warn`.
+- Scope boundary: exactly 4 files merged — `apps/config-worker/src/handlers/update-feature-flag.ts`, `apps/metering-worker/src/rollups.ts`, `apps/webhooks-worker/src/index.ts`, `ai/reports/task-0096-implementer.md` (NEW).
+- Verifier gates green: per-workspace lint exit 0 with 0 warnings on each touched workspace (was 5/2/1/2 across config/metering/webhooks); `pnpm -r typecheck` exit 0; `pnpm -r --no-bail lint` global = 625 warnings, **all in `tests/**`** (apps source 0); touched test suites green (174 + 32 + 66 = 272 tests). Hazard scan empty: zero `+eslint-disable*` / `+@ts-ignore` / `+@ts-expect-error` / `+as unknown as` in source diff.
+- Behavioural review: `description: null → undefined` narrowing on `update-feature-flag.ts` is safe — `UpdateFeatureFlagInput.description` is `string | undefined` (`packages/db/src/config/types.ts`), sibling handlers `update-setting.ts` L59 and `create-feature-flag.ts` L67 use the identical pattern at the request-body edge, no fixture in `tests/config-worker/src` exercises `description: null` against the update-feature-flag path, and no historical commit invokes the prior semantic.
+- Live: `https://stage.sourceplane.ai/` and `https://prod.sourceplane.ai/` → `HTTP/2 307` to `/orgs` unchanged. Workers are private (`workers_dev: false`); post-merge `Verify deploy` greens are the sufficient signal per `references/post-merge-deploy-profile-gap.md`.
+- Durable outcome: apps source class-B warnings (no-explicit-any + no-console) eliminated for `config-worker`, `metering-worker`, `webhooks-worker`. Lint warning surface is now contained to `tests/**` (~625 sites across 9 test workspaces; biggest: `tests/membership-worker` ~351, `tests/config-worker` ~127, `tests/identity-worker` ~81, `tests/api-edge` ~46) — clean handoff target for Task 0096b. The `description: null → undefined` narrowing precedent is now consistent across all three feature-flag/setting handlers in the same directory.
