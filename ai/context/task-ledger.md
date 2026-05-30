@@ -2210,3 +2210,53 @@ tests/api-edge, Task 0096f territory).
 
 Unlocks: Task 0100 (packages/cli per spec 13, B4 second half) — CLI can
 now consume the complete SDK surface as its sole transport.
+
+## Task 0100
+
+- Agent: Implementer
+- Prompt: `ai/tasks/task-0100.md`
+- Status: scoped and ready to begin (2026-05-31)
+- Branch: `impl/task-0100-packages-cli-scaffold`
+- Objective: Scaffold `packages/cli` per `specs/components/13-cli-and-sdk.md`
+  on top of `@saas/sdk` (now feature-complete after Task 0099). Ship the
+  CLI binary, command framework, auth flow with keychain-or-file token
+  storage, org-context persistence, JSON/human output, and a small pilot
+  of read-only commands wired end-to-end through the SDK. Open Track B4
+  second half.
+- Scope boundary: in — `packages/cli/**` workspace scaffold,
+  `cli.ts` + `auth/` + `token-store/` + `context/` + `output/` +
+  `errors.ts`, pilot commands (`login`, `logout`, `whoami`,
+  `org list`, `org use`, `org members`, `project list`),
+  `packages/cli/component.yaml` (turbo-package / `starter-cli` /
+  `quick-check` profile on dev/stage/prod, mirrors
+  `packages/sdk/component.yaml`), tests ≥30 it(); out — all write
+  commands (Task 0101), usage/billing/audit summary commands,
+  optional spec-13 commands, console refactor (U10), publishing
+  config, shell completions, `--profile` multi-account UX, any
+  changes to `@saas/sdk` / `packages/contracts/**` / `apps/**` /
+  `infra/**` / `tests/api-edge/**`.
+- Hard rules: public-API only (no apps/** or packages/db/** or
+  worker imports); hazard ban (zero new eslint-disable / @ts-ignore /
+  @ts-expect-error / as unknown as / as any under packages/cli/**);
+  `keytar` in `optionalDependencies` and lazy-loaded so non-Node test
+  runs do not crash; POSIX credentials file mode 0600 enforced and
+  tested; JSON output deterministic (no CLI-added timestamps);
+  Stripe parity preserved (caller-owned idempotencyKey — CLI must
+  not introduce a transparent generation layer Task 0101 would
+  inherit).
+- Acceptance: `pnpm --filter @saas/cli` typecheck/lint/test/build all
+  exit 0; `pnpm -r typecheck` exit 0; `pnpm -r --no-bail lint` ≤45
+  residual warnings (all in tests/api-edge, Task 0096f territory
+  unchanged); `kiox -- orun validate/component/plan/run --dry-run`
+  exit 0; PR-CI green on `cli × {dev,stage,prod} · Verify` lanes.
+- Latitude (one-line rationale per choice in implementer report):
+  framework (commander vs cac vs clipanion vs hand-rolled); auth
+  shape (device-flow if endpoint exists, else token-paste fallback
+  validated by `client.organizations.list()`).
+- Parallel-safe with Task 0096f — zero file overlap (0096f owns
+  `tests/api-edge/**`, 0100 owns `packages/cli/**` + new
+  `packages/cli/component.yaml`).
+- Expected outcome: `@saas/cli` workspace and component live, CLI
+  binary auths + reads orgs/projects through the SDK, foundation in
+  place for Task 0101 to fan out write commands and close Track B4.
+
