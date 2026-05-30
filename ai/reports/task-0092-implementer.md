@@ -2,7 +2,7 @@
 
 Agent: Implementer
 Branch: `impl/task-0092-eslint-config-scaffold`
-PR: #TBD (updated after gh pr create)
+PR: #140 — https://github.com/sourceplane/multi-tenant-saas/pull/140
 
 ## Summary
 
@@ -159,4 +159,4 @@ pre-existing rule violations newly visible because lint can now run.
 
 ## PR Number
 
-PR: #TBD (will be filled in after `gh pr create`).
+PR: #140 — https://github.com/sourceplane/multi-tenant-saas/pull/140
