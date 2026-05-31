@@ -3716,3 +3716,110 @@ One PR, one reviewer-holdable outcome (rotate UX backend), one rollback (single 
   next orchestrator candidates: Task 0113 re-enable surface (contract
   + SDK + worker + console), console delivery-attempts UX, B7
   audit-log UX, B8 admin-worker scaffold, `cross-reads.ts` fold
+
+## Task 0112 — Verifier pass
+
+- Agent: Verifier
+- Verifier prompt: `ai/tasks/task-0112-verifier.md`
+- Status: VERIFIED PASS + MERGED 2026-05-31T09:05Z
+- Implementation: PR #167 squash-merged as `84093af` on main
+  (mergedAt 2026-05-31T08:55:05Z); branch
+  `impl/task-0112-console-webhook-endpoint-crud` deleted
+- Pre-merge BEHIND-main rebase via `gh pr update-branch 167` produced
+  HEAD `a7f60e4` (recurring 0103-0111 pattern); fresh PR-CI run
+  `26708143076` at `a7f60e4` = 5/5 SUCCESS. Initial PR-CI run
+  `26707949013` at original implementer HEAD `2e9bdb0` also 5/5 SUCCESS
+- Post-merge main-CI: run `26708243701` at `84093af` = 5/5 SUCCESS
+  (plan + web-console-next · {dev,stage,prod} · Verify deploy +
+  web-console-next-tests · dev · Verify); per-component
+  `smokeCommand` (curl `${DEPLOYED_URL}/` + grep `Sourceplane Console`
+  + curl api-edge `/health` + grep ok) passed inside each Verify
+  deploy lane
+- Reports: `ai/reports/task-0112-implementer.md` (on PR branch),
+  `ai/reports/task-0112-verifier.md` (on main, post-merge), spec
+  proposal `ai/proposals/task-0112-spec-update.md` carry-forward
+- Objective: Wire full webhook-endpoint CRUD into the org-scoped
+  Console — create / edit / disable / delete dialogs, typed-URL
+  delete confirm gate, idempotency-key on create only via
+  `crypto.randomUUID` w/ documented `idem-<ts>-<rand>` fallback,
+  disabled-state inline notice card pointing at the re-enable Spec
+  Proposal (no re-enable button — contract gap)
+- Scope boundary: 12 files +1745/-15 EXACTLY per allowlist; zero hits
+  in any of the 8 forbidden-zone scans
+  (contracts/sdk/db/cli/webhook-verifier, api-edge/webhooks-worker,
+  components/ui, components/shell, rotate-secret-dialog/rotate-flow,
+  apps/web-console-next/src/lib/, infra/tooling/stack-tectonic,
+  kiox.lock/pnpm-lock/package.json)
+- Hazard scan: zero new eslint-disable / @ts-ignore /
+  @ts-expect-error / `as any` / `as unknown as` in production webhook
+  console source; zero `fetch(` calls (all I/O via `client.webhooks.*`
+  + `wrap()`); zero signing-secret render leak (`whsec_` /
+  `signingSecret` / `response.secret` / `endpoint.secret` ZERO hits
+  across the 4 dialogs); `Math.random` hits ONLY inside documented
+  `generateIdempotencyKey()` `crypto.randomUUID`-fallback branch in
+  `endpoint-crud.ts:173-187` (Constraint #5 satisfied)
+- Behaviour audit: `create-endpoint-dialog.tsx` propagates
+  `generateIdempotencyKey()` to `client.webhooks.createEndpoint`;
+  `edit-endpoint-dialog.tsx` short-circuits on empty
+  `buildUpdatePatch` with "Nothing to update" toast (no SDK call);
+  `disable-endpoint-dialog.tsx` calls
+  `client.webhooks.disableEndpoint(orgId, endpointId, { reason? })`
+  with optional bounded reason; `delete-endpoint-dialog.tsx` gates
+  submit on `confirmDeleteMatches` typed-URL exact-match then routes
+  back to `/orgs/:orgSlug/webhooks`; all 4 dialogs use `ZodForm` +
+  `<PreconditionInsight />`; `[endpointId]/page.tsx` renders "This
+  endpoint is disabled" notice card pointing at
+  `/ai/proposals/task-0112-spec-update.md` when
+  `status === "disabled"` (no re-enable button); `page.tsx` replaces
+  empty-state placeholder with "New endpoint" button + "Create
+  endpoint" empty-state CTA
+- Quality gates: `pnpm install --frozen-lockfile` clean (40
+  workspaces); `pnpm -w typecheck` 44/44 successful (FULL TURBO
+  cached); `@saas/web-console-next` typecheck/lint 0/0;
+  `@saas/web-console-next-tests` typecheck/lint 0/0;
+  `@saas/web-console-next-tests test` 40 passed across 2 suites
+  (`endpoint-crud.test.ts` 22 + `rotate-flow.test.ts` 18) — well
+  above +6 floor; vitest baseline lifted to **40/40 across 2 suites**
+- Orun gates: `orun validate` green; `orun plan --changed` selected
+  EXACTLY 2 components × envs = 4 jobs (web-console-next +
+  web-console-next-tests, no other component pulled in); `orun run
+  --dry-run` 4/4 simulated success in 0.0s
+- Live probes: `https://stage.sourceplane.ai/orgs` → HTTP/2 200
+  (11475 B, `<title>Sourceplane Console</title>`);
+  `https://stage.sourceplane.ai/orgs/test/webhooks` → HTTP/2 200
+  (12813 B, same title; old "Use the API or CLI to create one"
+  placeholder absent from SSR HTML — auth-gated route serves the SSR
+  console shell, the new dialog UI is client-rendered post-auth
+  matching Tasks 0096/0103-0111 verification pattern); the
+  `smokeCommand` inside each post-merge Verify deploy lane is the
+  authoritative live-rendering signal and was green for all 3 envs
+- Risk-noted-forward: re-enable surface gap accepted as documented
+  Spec Proposal at `/ai/proposals/task-0112-spec-update.md`
+  (`UpdateWebhookEndpointRequest` contract has no status flip and
+  worker exposes no `/enable` route — Console gracefully degrades
+  with inline notice card; recommended Task 0113 follow-on closes
+  contract + SDK + worker route + console wiring); test-harness
+  deviation accepted (jest workspace `tests/web-console-next/`
+  matches `rotate-flow.test.ts` prior-art instead of not-yet-
+  scaffolded vitest under `apps/`)
+- Durable outcome on main: B5 console webhook-endpoint CRUD shipped.
+  Operators can now create / rename / re-target / describe / disable
+  (with optional bounded reason) / delete (with typed-URL confirm
+  gate) webhook endpoints from the org-scoped Console. Idempotency-
+  Key only on create (via `crypto.randomUUID` w/ documented fallback);
+  PATCH / disable / delete propagate no idempotency-key (PATCH
+  inherently idempotent at resource level, disable/delete are
+  resource-state mutations whose retry semantics live in the SDK +
+  worker layer). Pure helper module
+  `apps/web-console-next/src/components/webhooks/endpoint-crud.ts`
+  exports URL validation, bounded-string rules, `buildUpdatePatch`,
+  `confirmDeleteMatches`, `generateIdempotencyKey` for future reuse.
+  B5 console arc continues with re-enable surface (Task 0113
+  recommended) + delivery-attempts UX as forward candidates
+- Recommended next: Task 0113 (webhook endpoint re-enable surface —
+  closes the documented contract gap from 0112; bounded contract +
+  SDK + worker route + console wiring single-PR; matches the
+  natural closer for the B5 endpoint CRUD arc), OR console
+  delivery-attempts UX, OR B7 audit-log UX, OR B8 admin-worker
+  scaffold, OR `cross-reads.ts:resolveOrgId` housekeeping fold-in
+  (Task 0111 verifier-flagged Remaining Gap)

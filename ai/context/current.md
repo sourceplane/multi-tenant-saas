@@ -1,51 +1,70 @@
 # Current Context
 
-Last updated: 2026-05-31 — Task 0112 implementer complete; verifier
-SCOPED (`ai/tasks/task-0112-verifier.md`). PR #167 OPEN, MERGEABLE/CLEAN,
-5/5 PR-CI green at HEAD `2e9bdb0`. Awaiting verifier execution
-(8-phase shape adapted for `cloudflare-pages-turbo` deploy-gated
-component — mandatory Phase 6.5 post-merge main-CI + live-URL curl).
+Last updated: 2026-05-31 — Task 0112 VERIFIED PASS + MERGED. PR #167
+squash-merged as `84093af` on main; post-merge main-CI run `26708243701`
+5/5 SUCCESS at squash SHA; live-URL probes green
+(`https://stage.sourceplane.ai/orgs/test/webhooks` HTTP/2 200 with
+`<title>Sourceplane Console</title>`, old "Use the API or CLI" placeholder
+gone). B5 console webhook-endpoint CRUD shipped. Recommended next:
+Task 0113 (re-enable surface) per Spec Proposal at
+`/ai/proposals/task-0112-spec-update.md`.
 
-## Active Task — 0112 (verifier scoped)
+## Active Task — none
 
-**Branch:** `impl/task-0112-console-webhook-endpoint-crud`
-**HEAD:** `2e9bdb0` (single implementer commit on top of `c683f4f`)
+Awaiting orchestrator scope for the next task. Current candidate slate
+(see Recommended Next Move in `ai/reports/task-0112-verifier.md`):
+
+1. **Task 0113 — webhook endpoint re-enable surface** (closes the
+   documented contract gap from 0112; bounded contract + SDK + worker
+   route + console wiring single-PR).
+2. Console delivery-attempts UX (B5 forward-look — surface webhook
+   delivery history per endpoint).
+3. B7 audit-log UX OR B8 admin-worker scaffold (greenfield).
+4. `cross-reads.ts:resolveOrgId` housekeeping fold (Task 0111
+   verifier-flagged Remaining Gap).
+
+## Just-merged — 0112
+
+**Branch (deleted):** `impl/task-0112-console-webhook-endpoint-crud`
+**Squash merge:** `84093af` (merged 2026-05-31T08:55:05Z)
 **PR:** #167 — https://github.com/sourceplane/multi-tenant-saas/pull/167
-**Verifier prompt:** `ai/tasks/task-0112-verifier.md`
+**PR-CI:** run `26708143076` at post-`update-branch` HEAD `a7f60e4` =
+5/5 SUCCESS (plan + web-console-next · {dev,stage,prod} · Verify deploy
++ web-console-next-tests · dev · Verify). Initial PR-CI `26707949013`
+at `2e9bdb0` also 5/5 SUCCESS.
+**Post-merge main-CI:** run `26708243701` 5/5 SUCCESS at `84093af`;
+per-component `smokeCommand` (curl `${DEPLOYED_URL}/` + `Sourceplane
+Console` marker + api-edge `/health` ok) green inside each Verify
+deploy lane.
+**Live-URL probes:** `https://stage.sourceplane.ai/orgs` → 200 (11475 B,
+`<title>Sourceplane Console</title>`); `/orgs/test/webhooks` → 200
+(12813 B, same title; old "Use the API or CLI to create one"
+placeholder absent from SSR HTML).
 
-**Scope shipped:** Full webhook-endpoint CRUD wired into the
-org-scoped Console:
+**Reports:**
+- Implementer: `ai/reports/task-0112-implementer.md`
+- Verifier: `ai/reports/task-0112-verifier.md`
+- Spec Proposal: `ai/proposals/task-0112-spec-update.md` (re-enable
+  surface — recommended Task 0113).
 
-- New "New endpoint" button on the list page; empty-state placeholder
-  copy ("Use the API or CLI to create one — UI creation is coming in
-  a follow-up.") replaced with a primary "Create endpoint" CTA.
-- `CreateEndpointDialog` (URL/name/description, Idempotency-Key via
-  `crypto.randomUUID` w/ documented `idem-<ts>-<rand>` fallback).
-- `EditEndpointDialog` (rename / re-target / edit description) with
-  diff-only PATCH and "Nothing to update" short-circuit toast.
-- `DisableEndpointDialog` (optional reason, bounded 280 chars).
-- `DeleteEndpointDialog` (typed-URL confirm gate, density mirrors
-  `rotate-secret-dialog.tsx`).
-- Disabled-state inline notice card in place of a re-enable button —
-  re-enable is contract-blocked (see Spec Proposal below).
-- Pure helper module `endpoint-crud.ts` (URL validation,
-  bounded-string rules, `buildUpdatePatch`, `confirmDeleteMatches`,
-  `generateIdempotencyKey`).
-- 22 jest cases in `tests/web-console-next/src/endpoint-crud.test.ts`
-  (well above the +6 floor).
+**Durable outcome on main:** Webhook endpoint **create / edit /
+disable / delete** now ships from the org-scoped Console. New "New
+endpoint" button + "Create endpoint" empty-state CTA replace the prior
+"Use the API or CLI" placeholder. Edit dialog uses diff-only PATCH
+with a "Nothing to update" short-circuit toast. Delete dialog gates
+submit on a typed-URL exact-match confirm (`confirmDeleteMatches`).
+Idempotency-Key on create only via `crypto.randomUUID` with documented
+`idem-<ts>-<rand>` fallback. Disabled-state detail page renders an
+inline notice card pointing at the re-enable Spec Proposal — NO
+re-enable button (contract-blocked). All four dialogs route I/O
+through `client.webhooks.*` + `wrap()` with `<PreconditionInsight />`
+on `precondition_failed`. Pure helper module `endpoint-crud.ts`
+exports URL validation, bounded-string rules, `buildUpdatePatch`,
+`confirmDeleteMatches`, `generateIdempotencyKey`. Vitest baseline
+under `@saas/web-console-next-tests` lifted to **40/40 across 2 suites**
+(18 prior + 22 new in `endpoint-crud.test.ts`).
 
-**Spec Proposal carried forward:**
-`/ai/proposals/task-0112-spec-update.md` — webhook endpoint
-re-enable surface (contract + SDK + worker route + console wiring).
-Recommended Task 0113 follow-on; not a blocker.
-
-**Test-harness deviation (documented assumption):** implementer used
-the existing `tests/web-console-next/` jest workspace (matches
-`rotate-flow.test.ts` prior-art) instead of vitest under `apps/`
-(no vitest harness configured for `@saas/web-console-next` today —
-that's its own future scaffolding task).
-
-## Just-merged — 0111
+## Previously merged — 0111
 
 **Branch (deleted):** `impl/task-0111-cli-helpers-extract`
 **Squash merge:** `da9810f` (merged 2026-05-31)
