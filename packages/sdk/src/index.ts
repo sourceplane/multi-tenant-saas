@@ -13,6 +13,7 @@
 import { ApiKeysClient } from "./apiKeys.js";
 import { BillingClient } from "./billing.js";
 import { ConfigClient } from "./config.js";
+import { EnvironmentsClient } from "./environments.js";
 import { EventsClient } from "./events.js";
 import { MembershipsClient } from "./memberships.js";
 import { MeteringClient } from "./metering.js";
@@ -26,6 +27,7 @@ import { Transport, type ClientOptions } from "./transport.js";
 export class Sourceplane {
   readonly organizations: OrganizationsClient;
   readonly projects: ProjectsClient;
+  readonly environments: EnvironmentsClient;
   readonly memberships: MembershipsClient;
   readonly apiKeys: ApiKeysClient;
   readonly webhooks: WebhooksClient;
@@ -42,6 +44,7 @@ export class Sourceplane {
     this.transport = new Transport(options);
     this.organizations = new OrganizationsClient(this.transport);
     this.projects = new ProjectsClient(this.transport);
+    this.environments = new EnvironmentsClient(this.transport);
     this.memberships = new MembershipsClient(this.transport);
     this.apiKeys = new ApiKeysClient(this.transport);
     this.webhooks = new WebhooksClient(this.transport);
@@ -57,6 +60,7 @@ export class Sourceplane {
 // Resource clients (also reachable via `client.<resource>`).
 export { OrganizationsClient } from "./organizations.js";
 export { ProjectsClient } from "./projects.js";
+export { EnvironmentsClient } from "./environments.js";
 export { MembershipsClient } from "./memberships.js";
 export {
   ApiKeysClient,
@@ -70,6 +74,7 @@ export { MeteringClient } from "./metering.js";
 export { BillingClient } from "./billing.js";
 export {
   EventsClient,
+  AUDIT_ITERATOR_MAX_PAGES,
   type ListAuditEntriesQuery,
   type ListAuditEntriesResult,
 } from "./events.js";
@@ -138,6 +143,11 @@ export type {
   GetProjectResponse,
   ListProjectsResponse,
   ArchiveProjectResponse,
+  CreateEnvironmentRequest,
+  CreateEnvironmentResponse,
+  GetEnvironmentResponse,
+  ListEnvironmentsResponse,
+  ArchiveEnvironmentResponse,
 } from "@saas/contracts/projects";
 
 export type {
