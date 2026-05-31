@@ -25,6 +25,7 @@ import { makeWebhookVerifyCommand, type WebhookVerifyOptions } from "./commands/
 import { makeWebhookSignCommand, type WebhookSignOptions } from "./commands/webhook-sign.js";
 import { webhookSecretsRotateCommand } from "./commands/webhook-secrets-rotate.js";
 import { webhookEnableCommand } from "./commands/webhook-enable.js";
+import { webhookDisableCommand } from "./commands/webhook-disable.js";
 import {
   usageSummaryCommand,
   billingSummaryCommand,
@@ -169,6 +170,7 @@ function buildRouter(opts: RunOptions): Router {
   r.register(["webhook", "sign"], "Sign a webhook payload locally (no network)", webhookSignHandler);
   r.register(["webhook", "secrets", "rotate"], "Rotate the signing secret for a webhook endpoint (reveal-once)", webhookSecretsRotateCommand);
   r.register(["webhook", "enable"], "Re-enable a previously disabled webhook endpoint", webhookEnableCommand);
+  r.register(["webhook", "disable"], "Disable an active webhook endpoint", webhookDisableCommand);
   // Cross-resource reads
   r.register(["usage", "summary"], "Summarize usage rollups for the active organization", usageSummaryCommand);
   r.register(["billing", "summary"], "Show billing customer/plan/entitlements summary", billingSummaryCommand);
@@ -207,6 +209,7 @@ function printHelp(stdout: (line: string) => void): void {
       "  sourceplane webhook sign --secret=S --timestamp=T [--body=PATH]",
       "  sourceplane webhook secrets rotate <endpointId> [--idempotency-key=KEY]",
       "  sourceplane webhook enable <endpointId> [--idempotency-key=KEY] [--output=human|json]",
+      "  sourceplane webhook disable <endpointId> [--reason=TEXT] [--idempotency-key=KEY] [--output=human|json]",
       "",
       "USAGE / BILLING / AUDIT:",
       "  sourceplane usage summary [--metric=METRIC] [--from=ISO] [--to=ISO]",
