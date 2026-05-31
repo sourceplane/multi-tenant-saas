@@ -3882,3 +3882,28 @@ One PR, one reviewer-holdable outcome (rotate UX backend), one rollback (single 
   surface end-to-end (contract → SDK → api-edge → worker → db →
   console); Task 0112 spec proposal RESOLVED on main; B5
   endpoint-CRUD arc closed
+
+## Task 0113 — VERIFIED PASS + MERGED (2026-05-31)
+- PR #168 squash-merged as `f5cda64` on main.
+- Pre-rebase HEAD `98cc3d3`; rebased HEAD `94fdbbae` post `gh pr update-branch 168`.
+- PR-CI: run 26709443279 (98cc3d3) 17/17 ✓; run 26709721467 (rebased) 17/17 ✓.
+- Main-CI: run 26709795225 (f5cda64) 18/18 ✓ — all `Verify deploy` smoke
+  steps green per `gh run view --log` (web-console-next ×3 + webhooks-worker ×3).
+- Live evidence: https://stage.sourceplane.ai/orgs HTTP 200 + title match;
+  /orgs/test/webhooks HTTP 200 + title match + zero carry-forward strings.
+  webhooks-worker `workers_dev: false` (private, service-bound) — deploy +
+  in-CI smoke is the proof, matches Task 0112 verifier precedent.
+- Atomicity inspected: `handleEnableWebhookEndpoint` shares one `txExec`
+  across both repos inside `executor.transaction`, audit description
+  matches `/re-enabled/i`, throw-to-rollback on event-append failure.
+  `enableEndpoint` SQL exact-match to spec, returns `ENDPOINT_SAFE_COLUMNS`
+  (no `secret_ciphertext` leak).
+- Quality gates: 44/44 typecheck, 37/37 lint, +11 net new passing tests.
+- Risk note: `tests/db/src/migrations.test.ts → "each migration declares a
+  valid bounded context"` fails on `aa13ba7` AND `f5cda64` (`VALID_CONTEXTS`
+  missing `notifications`). Pre-existing baseline; not a 0113 regression.
+  Follow-on micro-PR recommended.
+- Verifier report: `ai/reports/task-0113-verifier.md`.
+- Outcome: webhook endpoint re-enable surface live end-to-end on stage;
+  Task 0112 spec proposal RESOLVED on main; B5 endpoint-CRUD arc closed.
+
