@@ -3203,3 +3203,19 @@ Out: `packages/sdk/**`, `packages/webhook-verifier/**` (locked 0105, single-key 
 
 ### Expected outcome
 One PR, one reviewer-holdable outcome (rotate UX backend), one rollback (single revert), one acceptance story. Unlocks Tasks 0109 (console reveal-once modal) and 0110 (CLI `webhook secrets rotate`) as pure SDK-consumer PRs once `RotateWebhookSecretResponse` is on main.
+
+
+## Task 0108 — verifier dispatched
+
+- Agent: Verifier
+- Implementer prompt: `ai/tasks/task-0108.md`
+- Verifier prompt: `ai/tasks/task-0108-verifier.md`
+- Implementer report: `ai/reports/task-0108-implementer.md` (committed on PR branch, `cada19b`)
+- PR: #163 — https://github.com/sourceplane/multi-tenant-saas/pull/163
+- Branch: `impl/task-0108-webhook-secret-rotation-grace` (HEAD `90044b1`)
+- Sealed snapshot: main `aae8d35` (Task 0107 verifier-PASS bookkeeping)
+- Status: implementer complete; verifier dispatched (2026-05-31). PR-CI in flight at hand-off.
+- Objective: B5 webhook secret rotation grace — dual-secret window (default 24h) + reveal-once `whsec_<32hex>` plaintext on rotate + dual-signature delivery via `X-Webhook-Signature-Previous` during grace.
+- Scope boundary: 13 files +736/-26 across `packages/db/**`, `packages/contracts/**`, `apps/webhooks-worker/**`, `tests/{contracts,db,webhooks-worker}/**`. New migration `130_webhook_secret_rotation_grace`. Three structurally forced overshoots beyond the 8-slot prompt budget (manifest registration, env var declaration, test files explicitly listed in acceptance criteria) — verifier judges deviation.
+- Acceptance: PR-CI all required lanes green via `gh run view --log`; atomic single-UPDATE rotate; `ENDPOINT_SAFE_COLUMNS` excludes `previous_secret_ciphertext`; reveal-once `/^whsec_[0-9a-f]{32}$/`; payload sanitisation (no plaintext in audit/event); ≥4 new worker test cases; quality gates green; orun gates green; post-merge main-CI migration apply on stage/prod successful.
+- Expected outcome: PASS → merge with `--squash --delete-branch`, fast-forward main, post-merge main-CI green (incl. db migration apply), bookkeeping commit on main, advance to Task 0109. FAIL → leave PR open with documented blockers.
