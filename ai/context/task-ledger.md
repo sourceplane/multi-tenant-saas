@@ -1400,6 +1400,47 @@ Last updated: 2026-05-31 (Task 0106 Verifier PASS + MERGED — PR #161 squash `a
 ||- Durable outcome: `billing-worker` exposes a strictly-internal entitlement decision endpoint live on main with provider-neutral wire shape, fail-closed semantics (missing entitlement → 200 `{ allowed:false, reason:"not_configured" }`; disabled entitlement → `{ allowed:false, reason:"disabled" }`; enabled → `{ allowed:true, valueType, limitValue, source, subscriptionId }`), and secret-safe error handling (503 `internal_error` on non-`not_found` repo failures with generic message; SQL/stack/provider/row content never propagated — unit-tested against a poisoned `SELECT … billing.entitlements … line 42` error string). Conservative entitlement key validation (`/^[a-z][a-z0-9_]*(\.[a-z0-9_]+)*$/`, 128-char max) and `parseOrgPublicId` for org id, both run before any repository call. Response carries only `{ valueType, limitValue, source, subscriptionId }` from the `Entitlement` row — never `metadata`, internal id, or raw repo rows. Internal route is service-binding-only (does not require `x-actor-*` headers) and matched in `route()` before `matchRoute()` and `resolveActor()`. api-edge `isBillingRoute()` allow-list continues to match only the five Task 0076 public read paths under `/v1/organizations/{orgId}/billing/...` — pinned by new regression tests asserting `/v1/internal/billing/entitlements/check` is rejected AND that the exact public allow-list is the five Task 0076 routes (defense against accidental facade expansion). Verifier checks: contracts/billing-worker/api-edge typecheck PASS; contracts 18/18 (+4), billing-worker 41/41 (+14), api-edge billing-facade 16/16 (+2); `orun validate` PASS; `orun plan --changed` selects 7 components × 3 envs → 15 jobs (plan `943df57fd029`); `orun run --dry-run` simulates all 15 jobs SUCCESS; both CI runs 16/16 SUCCESS with same job matrix that local plan resolved.
 
 
+
+## Task 0110 — Verifier PASS + Merged
+
+- **Agent:** Verifier
+- **Prompt:** `ai/tasks/task-0110-verifier.md`
+- **Status:** verified PASS, squash-merged on main 2026-05-31
+- **PR:** #165 — squash `142d019`
+- **Branch (deleted):** `impl/task-0110-cli-webhook-secrets-rotate`
+- **PR-CI runs:**
+  - Initial HEAD `3d6b324`: run `26705959245` 4/4 SUCCESS
+  - Post-`update-branch` HEAD `927270f`: run `26706197619` 4/4 SUCCESS
+- **Post-merge main-CI:** run `26706238108` at `142d019` 4/4 SUCCESS
+  (plan + `cli · {dev,stage,prod} · Verify`).
+- **Reports:**
+  - Implementer: `ai/reports/task-0110-implementer.md`
+  - Verifier: `ai/reports/task-0110-verifier.md`
+- **Objective:** ship `sourceplane webhook secrets rotate <endpointId>`
+  CLI subcommand — symmetric counterpart to Task 0109's console
+  reveal-once UX. B5 secret-rotation arc closer.
+- **Scope boundary:** 4 files +720/-0 exactly per task brief. Zero
+  forbidden-zone hits.
+- **Durable outcome on main:** B5 arc fully closed: 0108 backend
+  dual-secret grace + 0109 console reveal-once UX + 0110 CLI
+  reveal-once UX. CLI plaintext invariant verified at code-path level
+  — `response.secret` read exactly once (line 129); flows to a single
+  stdout write per output mode (json: `JSON.stringify(response)` line
+  117; human: `${secretPlaintext}` interpolation line 133); never
+  passes to `console.*`/`ctx.stderr`/error constructors/wider object
+  containers. Vitest suite at 136/136 (123 prior + 13 new).
+- **Pattern hits:** BEHIND-main on dispatch (recurring 0103–0110);
+  `gh pr update-branch 165` produced rebased HEAD that auto-fired
+  fresh PR-CI (no Task-0107 force-push fallback needed).
+- **Spec proposal (non-blocking):** verifier prompt asserted
+  `readIdempotencyKey` should be imported from `writes.ts`, but
+  `writes.ts` declares it (and `resolveOrgId`) as module-private —
+  importing is structurally impossible without modifying `writes.ts`
+  (forbidden zone). Implementer chose lowest-risk path: re-implement
+  inline (3-line + 5-line, byte-equivalent). Recommended follow-up
+  housekeeping task: extract a shared `cli-helpers` module ahead of
+  the next CLI write/rotate surface.
+
 ## Historical Notes
 
 - PR #1 split product-specific V2 Git catalog work away from the reusable SaaS

@@ -1,151 +1,99 @@
 # Current Context
 
-Last updated: 2026-05-31 — Task 0110 IMPLEMENTER COMPLETE → VERIFIER
-SCOPED. PR #165 OPEN, 4/4 PR-CI SUCCESS at HEAD `3d6b324`. Verifier
-dispatch ready. B5 secret-rotation arc closer: 0108 (backend) → 0109
-(console) → **0110 (CLI, in verification)**.
+Last updated: 2026-05-31 — Task 0110 VERIFIED PASS + MERGED. B5 webhook
+secret-rotation arc (0108 → 0109 → 0110) is now fully closed on main.
 
-## Just-merged — 0109
+## Just-merged — 0110
 
-**Branch (deleted):** `impl/task-0109-webhook-console-reveal-once`
-**Squash merge:** `84a69c2` (merged 2026-05-31T06:27:59Z)
-**PR:** #164 — https://github.com/sourceplane/multi-tenant-saas/pull/164
-**PR-CI lanes (all SUCCESS, post-update-branch HEAD `5aab758`):** plan +
-`web-console-next-tests · dev · Verify` +
-`web-console-next · {dev,stage,prod} · Verify deploy`.
-**Post-merge main-CI:** run `26705368955` 5/5 SUCCESS.
-**Live Workers:**
-- stage: https://sourceplane-web-console-next-stage.rahulvarghesepullely.workers.dev
-  (version `37a3e7ff-f0b4-4235-b8fe-c2c38836b331`, HTTP/2 307 → /orgs).
-- prod: https://sourceplane-web-console-next-prod.rahulvarghesepullely.workers.dev
-  (version `b209ca74-031a-49ae-992e-1753e702fec8`, HTTP/2 307 → /orgs).
+**Branch (deleted):** `impl/task-0110-cli-webhook-secrets-rotate`
+**Squash merge:** `142d019` (merged 2026-05-31)
+**PR:** #165 — https://github.com/sourceplane/multi-tenant-saas/pull/165
+**PR-CI lanes (all SUCCESS, post-update-branch HEAD `927270f`):** plan +
+`cli · {dev,stage,prod} · Verify`.
+**Initial PR-CI** at HEAD `3d6b324` (run `26705959245`) also 4/4 SUCCESS.
+**Post-merge main-CI:** run `26706238108` 4/4 SUCCESS at `142d019`.
+**Turbo-package shape:** no deploy lane, no live URL surface. PR-time
+`Verify` is the regression gate.
 
 **Reports:**
-- Implementer: `ai/reports/task-0109-implementer.md`
-- Verifier: `ai/reports/task-0109-verifier.md`
+- Implementer: `ai/reports/task-0110-implementer.md`
+- Verifier: `ai/reports/task-0110-verifier.md`
 
-**Durable outcome on main:** reveal-once console rotate UX with type-system-
-enforced discriminated-union state machine; sidebar "Webhooks" entry under
-`Org · {orgSlug}`; new `tests/web-console-next` workspace (18-test Jest
-suite). Full detail in prior `current.md` revision (preserved in
-`task-ledger.md`).
+**Durable outcome on main:** `sourceplane webhook secrets rotate
+<endpointId> [--idempotency-key=KEY] [--output=human|json]` CLI
+subcommand. Pure SDK consumer of the locked `client.webhooks.rotateSecret`
+shape. Reveal-once `whsec_<32hex>` plaintext from
+`RotateWebhookSecretResponse.secret` printed exactly once on stdout
+(human-mode `secret:` line OR json-mode verbatim `JSON.stringify(response)`),
+never persisted/logged/stashed. Subcommand path is the durable plural
+form `["webhook","secrets","rotate"]` (leaves room for future
+`secrets list/reveal/revoke`). Org id resolved through persisted
+active-org context (no `--org` override surface). 13 vitest cases under
+`packages/cli/src/__tests__/webhook-secrets-rotate.test.ts` lift the
+`@saas/cli` suite to 136/136 passing across 10 files.
 
-## Active Task — 0110 (Verifier pass)
+**Verifier non-blocking finding (Spec Proposal §1):** the verifier prompt
+asserted `readIdempotencyKey` should be IMPORTED from `writes.ts`, but
+`writes.ts` declares both `readIdempotencyKey` AND `resolveOrgId` as
+module-private (NOT exported); importing is structurally impossible
+without modifying `writes.ts` (forbidden zone). Implementer chose the
+lowest-risk path: re-implement both inline (3-line `readIdempotencyKey`
++ 5-line `resolveActiveOrgId` no-override branch only) — logic
+byte-equivalent. Verifier accepts. Recommended follow-up housekeeping
+task: extract a shared `cli-helpers` module before the next CLI
+write/rotate surface to eliminate the trio of inline copies.
 
-**Agent:** Verifier
-**Prompt:** `ai/tasks/task-0110-verifier.md`
-**PR:** #165 — https://github.com/sourceplane/multi-tenant-saas/pull/165
-**Branch:** `impl/task-0110-cli-webhook-secrets-rotate`
-**HEAD:** `3d6b32436d228573c4ed3cb18b282a644f9a2eb9`
-**Sealed snapshot main:** `3cfdeb0` (Task 0109 verifier-PASS bookkeeping).
-**PR-CI:** 4/4 SUCCESS at HEAD `3d6b324` (run `26705959245`: plan +
-`cli·{dev,stage,prod}·Verify`).
-**Status:** verifier dispatch ready (2026-05-31). Expect BEHIND-main
-on orchestrator-dispatch commit per recurring 0103–0109 pattern;
-verifier handles via `gh pr update-branch 165` + fresh PR-CI.
+## B5 secret-rotation arc — CLOSED
 
-### Implementer outcome
+| Task | Slice | PR | Squash | Verifier |
+|------|-------|-----|--------|----------|
+| 0108 | Backend dual-secret grace + reveal-once response | #163 | `28b3ca1` | PASS |
+| 0109 | Console reveal-once UX (discriminated-union state machine) | #164 | `84a69c2` | PASS |
+| 0110 | CLI `webhook secrets rotate` reveal-once UX | #165 | `142d019` | PASS |
 
-- 4 files committed exactly per PR boundary (+720/-0):
-  `packages/cli/src/commands/webhook-secrets-rotate.ts` NEW (160 LOC),
-  `packages/cli/src/cli-runner.ts` +3 LOC,
-  `packages/cli/src/__tests__/webhook-secrets-rotate.test.ts` NEW
-  (361 LOC, 13 cases — above ≥ 12 floor),
-  `ai/reports/task-0110-implementer.md` NEW (committed on PR branch —
-  no 0106 missing-report gap).
-- No `pnpm-lock.yaml` delta, no `packages/cli/package.json` delta
-  (SDK workspace edge already shipped from 0106).
-- Zero edits to forbidden zones (sdk, contracts, webhook-verifier,
-  apps, tests, infra, tooling, stack-tectonic) or to existing CLI
-  command files (writes / webhook-verify / webhook-sign / cross-reads
-  / commands/index).
-- `readIdempotencyKey` imported from `writes.ts` (not duplicated);
-  `resolveOrgId` no-override branch inlined (writes.ts is forbidden
-  zone) — verifier Phase 2 confirms byte-equivalence.
-- Reveal-once: `response.secret` read once, written to stdout once via
-  `${secretPlaintext}` interpolation; no `whsec_` literal anywhere in
-  production source. Test 12 asserts
-  `stdout.match(/whsec_/g).length === 1`.
+End-to-end flow now live on main: rotate via console modal OR CLI
+subcommand → backend writes new secret + previous-secret grace columns
+in one atomic UPDATE → reveal-once plaintext returned + dual-signature
+delivery (`X-Webhook-Signature` + `X-Webhook-Signature-Previous`) during
+grace window → grace expires → single-signature delivery resumes.
 
-### Objective
+## Active Task — none (orchestrator dispatch ready)
 
-Add `sourceplane webhook secrets rotate <endpointId>` — symmetric CLI
-counterpart to the 0109 console reveal-once UX. Pure SDK consumer of
-`client.webhooks.rotateSecret`; reveal-once `whsec_<32hex>` plaintext
-printed exactly once on stdout, never persisted/logged/stashed; legacy
-no-encryption-key branch renders amber-toned no-plaintext affordance
-(no fake placeholder), mirroring the 0109 console behaviour.
+**Repo health:** green
+**HEAD on main:** `142d019`
+**Sealed snapshot for next task:** `142d019`
 
-### PR Boundary (≤ 4 paths + report)
+## Next Tasks (orchestrator candidates)
 
-- `packages/cli/src/commands/webhook-secrets-rotate.ts` — NEW.
-- `packages/cli/src/cli-runner.ts` — register
-  `["webhook", "secrets", "rotate"]` route + 1 help line.
-- `packages/cli/src/__tests__/webhook-secrets-rotate.test.ts` — NEW
-  (≥ 12 cases including reveal-once stdout discipline check).
-- `ai/reports/task-0110-implementer.md` — NEW, committed on PR
-  branch.
+Pick one to scope as Task 0111:
 
-Forbidden zones (auto-FAIL): `packages/sdk/**`, `packages/contracts/**`,
-`packages/webhook-verifier/**`, `apps/**`, `tests/**`, `infra/**`,
-`tooling/**`, `stack-tectonic/**`, `kiox.lock`,
-`packages/cli/package.json`, `pnpm-lock.yaml`, the existing
-`webhook-{verify,sign}.ts` / `writes.ts` / `cross-reads.ts` /
-`commands/index.ts`.
+1. **B5 follow-ups** (deferred from 0108–0110 sweep):
+   - Replay UI (console surface to re-fire a delivery attempt).
+   - Failure-budget alerts (notification when endpoint failure rate
+     crosses configurable threshold).
+   - Console webhook subscriptions UX (event-type subscription
+     management).
+   - Console delivery-attempts UX (history + retry visibility).
 
-### Why this is parallel-safe
+2. **B7 audit-log UX** — surface the audit/event stream that B5
+   handlers populate.
 
-File-disjoint from every deferred candidate and there are zero open
-PRs at scope time. Only collision risk is another `packages/cli/**`
-task touching `cli-runner.ts` — none in flight.
+3. **CLI helpers extraction** (housekeeping) — extract shared
+   `resolveOrgId(ctx, allowOverride)` and `readIdempotencyKey(ctx)` from
+   `writes.ts` + `webhook-secrets-rotate.ts` into a single `cli-helpers`
+   module. Eliminates inline duplication ahead of the next CLI
+   write/rotate surface. File-disjoint from any in-flight work.
 
-### Acceptance Snapshot
+4. **B8 admin-worker scaffold** — start the platform-internal admin
+   surface (long-deferred breather task).
 
-- `pnpm -r typecheck=0` (39 workspaces).
-- `pnpm -r --no-bail lint` ≤ 45 warnings, ALL in `tests/api-edge/**`.
-- `@saas/cli build/test` green with ≥ 135 total cases (existing 123 +
-  ≥ 12 new).
-- `kiox -- orun plan --changed --base origin/main` selects ONLY
-  `cli·{dev,stage,prod}·Verify` (1 component × 3 envs = 3 jobs).
-- PR-CI 4/4 SUCCESS via `gh run view --log`.
-- Real PR number recorded in implementer report (TBD = blocked).
+## Recurring patterns to honour
 
-## Pipeline status
-
-- **Active task:** 0110 (Implementer dispatch ready).
-- **Open PRs:** none.
-- **`main` HEAD:** `3cfdeb0` (Task 0109 verifier-PASS bookkeeping on top
-  of the 0109 squash `84a69c2`).
-- **B5 webhook-helper dogfood arc:** CLOSED (0105/0106/0107 merged).
-- **B5 secret-rotation arc:** backend (0108) + console (0109) MERGED;
-  CLI rotate (0110) is the active in-flight slice that closes the arc.
-
-## Next Tasks (post-0110)
-
-- **B5 — replay UI / failure-budget alerts** (console-side; consumer
-  of existing events-worker read APIs once SDK delivery-history is
-  final).
-- **B5 — webhook subscriptions UX / delivery-attempts UX** (console;
-  separate B5 follow-ups deferred from 0109).
-- **B5 (record-only) — Cmd-K palette entry for "Rotate signing
-  secret"**; re-evaluate when other "Rotate {x}" actions land.
-- **B5 (record-only) — console-side endpoint creation UX** (was out
-  of scope per 0109 prompt).
-- **B5 (record-only) — `@saas/webhook-verifier` multi-key extension**
-  to accept an array of secrets and validate against any (out-of-
-  scope per 0108 spec).
-- **B7 — Audit-log UX expansion.**
-- **B8 — admin-worker scaffold** (greenfield single-PR breather).
-
-## Spec Proposals (non-blocking)
-
-- Webhook docs update for the new `X-Webhook-Signature-Previous`
-  header + grace-window operational guidance for subscribers
-  (verify-either-key during the window) — outstanding from 0108.
-
-## Deferred (unchanged)
-
-- `0085b` — see `ai/deferred.md`.
-- `notifications-provider-swap` — see `ai/deferred.md`.
-- `notifications-worker-dev-reframe` — see `ai/deferred.md`.
-- `optional-spec-13-commands` — see `ai/deferred.md`.
+- BEHIND-main on orchestrator-dispatch commit: every PR from 0103–0110
+  has hit it. Verifier handles via `gh pr update-branch <PR#>` +
+  re-watch PR-CI on rebased HEAD before merge. Task 0107-style "merge
+  commit doesn't re-fire CI" did NOT recur on 0108/0109/0110.
+- CI log evidence (not just `statusCheckRollup`) for the required
+  lanes is mandatory per Verifier Standard.
+- Implementer report MUST be committed on PR branch (no 0106
+  missing-report gap recurred on 0107–0110).
