@@ -7,7 +7,7 @@ import { createSqlExecutor } from "@saas/db/hyperdrive";
 import { fetchAuthorizationContext } from "../membership-client.js";
 import { authorizeViaPolicy } from "../policy-client.js";
 import { errorResponse, validationError } from "../http.js";
-import { parsePageParams, encodeCursor } from "../pagination.js";
+import { parsePageParams, parseAuditFilters, encodeCursor } from "../pagination.js";
 import { toPublicId, toPublicScopeId } from "../ids.js";
 
 const CATEGORY_RE = /^[a-z0-9_.\-]{1,64}$/;
@@ -100,6 +100,11 @@ export async function handleListAudit(
     return validationError(requestId, { category: ["Must be lowercase letters, numbers, underscore, hyphen, or dot (max 64 chars)"] });
   }
 
+  const filtersResult = parseAuditFilters(url);
+  if (!filtersResult.ok) {
+    return validationError(requestId, { [filtersResult.field]: [filtersResult.reason] });
+  }
+
   const contextResult = await fetchAuthorizationContext(
     env.MEMBERSHIP_WORKER,
     actor.subjectId,
@@ -134,6 +139,7 @@ export async function handleListAudit(
       orgId,
       { limit, cursor: dbCursor },
       categoryParam ?? undefined,
+      filtersResult.value,
     );
 
     if (!result.ok) {

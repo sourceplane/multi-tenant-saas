@@ -2,6 +2,7 @@ import type { SqlExecutor } from "../hyperdrive/executor.js";
 import type {
   AppendEventInput,
   AppendEventWithAuditInput,
+  AuditOrgFilters,
   EventsCursorPosition,
   EventsPagedResult,
   EventsPageQueryParams,
@@ -292,7 +293,7 @@ export function createEventsRepository(executor: SqlExecutor): EventsRepository 
       }
     },
 
-    async queryAuditByOrg(orgId: string, params: EventsPageQueryParams, category?: string): Promise<EventsResult<EventsPagedResult<StoredAuditEntry>>> {
+    async queryAuditByOrg(orgId: string, params: EventsPageQueryParams, category?: string, filters?: AuditOrgFilters): Promise<EventsResult<EventsPagedResult<StoredAuditEntry>>> {
       try {
         // Support both raw UUID and legacy public org_ ID format.
         // Legacy membership audit rows stored org_id as "org_<hex>" instead of raw UUID.
@@ -307,6 +308,37 @@ export function createEventsRepository(executor: SqlExecutor): EventsRepository 
           paramIndex++;
         }
 
+        // Optional, independently-combinable filter clauses. Each appends a
+        // parameterized `AND` predicate and advances the placeholder index;
+        // none alter the ORDER BY / cursor keyset. `from`/`to` are inclusive.
+        let filterClause = "";
+        if (filters) {
+          const eq: Array<[string, string | undefined]> = [
+            ["actor_id", filters.actorId],
+            ["actor_type", filters.actorType],
+            ["subject_kind", filters.subjectKind],
+            ["subject_id", filters.subjectId],
+            ["event_type", filters.eventType],
+          ];
+          for (const [column, value] of eq) {
+            if (value !== undefined) {
+              filterClause += ` AND ${column} = $${paramIndex}`;
+              baseParams.push(value);
+              paramIndex++;
+            }
+          }
+          if (filters.from !== undefined) {
+            filterClause += ` AND occurred_at >= $${paramIndex}`;
+            baseParams.push(filters.from);
+            paramIndex++;
+          }
+          if (filters.to !== undefined) {
+            filterClause += ` AND occurred_at <= $${paramIndex}`;
+            baseParams.push(filters.to);
+            paramIndex++;
+          }
+        }
+
         baseParams.push(params.limit + 1);
         const limitParam = paramIndex;
         paramIndex++;
@@ -316,7 +348,7 @@ export function createEventsRepository(executor: SqlExecutor): EventsRepository 
 
         const result = await executor.execute<Record<string, unknown>>(
           `SELECT * FROM events.audit_entries
-           WHERE org_id IN ($1, $2)${categoryClause}${clause}
+           WHERE org_id IN ($1, $2)${categoryClause}${filterClause}${clause}
            ORDER BY occurred_at DESC, id DESC
            LIMIT $${limitParam}`,
           allParams,

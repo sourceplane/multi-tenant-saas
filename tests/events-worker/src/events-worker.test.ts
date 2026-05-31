@@ -460,4 +460,97 @@ describe("events-worker list-audit handler", () => {
     // Public org_ and prefixed IDs should be present
     expect(responseStr).toContain("org_f1a2b3c4d5e67890abcdef1234567890");
   });
+
+  it("threads validated filters into the repository call", async () => {
+    const { handleListAudit } = await import("@events-worker/handlers/list-audit");
+
+    let capturedFilters: Record<string, unknown> | undefined;
+    const mockRepo: EventsRepository = {
+      appendEvent: async () => ({ ok: false as const, error: { kind: "internal" as const, message: "" } }),
+      appendEventWithAudit: async () => ({ ok: false as const, error: { kind: "internal" as const, message: "" } }),
+      queryAuditByOrg: async (_orgId: string, _params: unknown, _category?: string, filters?: Record<string, unknown>) => {
+        capturedFilters = filters;
+        return { ok: true as const, value: { items: [], nextCursor: null } };
+      },
+      queryAuditByTarget: async () => ({ ok: true as const, value: { items: [], nextCursor: null } }),
+      queryEventsByOrg: async () => ({ ok: false as const, error: { kind: "internal" as const, message: "" } }),
+    };
+
+    const env = createEnv();
+    const req = makeRequest(
+      `/v1/organizations/${TEST_ORG_PUBLIC_ID}/audit?actorId=usr_abc&actorType=user&subjectKind=project&subjectId=prj_9&eventType=member.role_changed&from=2026-01-01T00:00:00.000Z&to=2026-02-01T00:00:00.000Z`,
+    );
+
+    const res = await handleListAudit(req, env, TEST_REQUEST_ID, { subjectId: TEST_ACTOR_ID, subjectType: "user" }, TEST_ORG_UUID, { eventsRepo: mockRepo });
+
+    expect(res.status).toBe(200);
+    expect(capturedFilters).toEqual({
+      actorId: "usr_abc",
+      actorType: "user",
+      subjectKind: "project",
+      subjectId: "prj_9",
+      eventType: "member.role_changed",
+      from: "2026-01-01T00:00:00.000Z",
+      to: "2026-02-01T00:00:00.000Z",
+    });
+  });
+
+  it("rejects a malformed from timestamp with 422", async () => {
+    const { handleListAudit } = await import("@events-worker/handlers/list-audit");
+
+    const mockRepo: EventsRepository = {
+      appendEvent: async () => ({ ok: false as const, error: { kind: "internal" as const, message: "" } }),
+      appendEventWithAudit: async () => ({ ok: false as const, error: { kind: "internal" as const, message: "" } }),
+      queryAuditByOrg: async () => ({ ok: true as const, value: { items: [], nextCursor: null } }),
+      queryAuditByTarget: async () => ({ ok: true as const, value: { items: [], nextCursor: null } }),
+      queryEventsByOrg: async () => ({ ok: false as const, error: { kind: "internal" as const, message: "" } }),
+    };
+
+    const env = createEnv();
+    const req = makeRequest(`/v1/organizations/${TEST_ORG_PUBLIC_ID}/audit?from=2026-01-01`);
+
+    const res = await handleListAudit(req, env, TEST_REQUEST_ID, { subjectId: TEST_ACTOR_ID, subjectType: "user" }, TEST_ORG_UUID, { eventsRepo: mockRepo });
+    expect(res.status).toBe(422);
+  });
+
+  it("rejects an unknown actorType with 422", async () => {
+    const { handleListAudit } = await import("@events-worker/handlers/list-audit");
+
+    const mockRepo: EventsRepository = {
+      appendEvent: async () => ({ ok: false as const, error: { kind: "internal" as const, message: "" } }),
+      appendEventWithAudit: async () => ({ ok: false as const, error: { kind: "internal" as const, message: "" } }),
+      queryAuditByOrg: async () => ({ ok: true as const, value: { items: [], nextCursor: null } }),
+      queryAuditByTarget: async () => ({ ok: true as const, value: { items: [], nextCursor: null } }),
+      queryEventsByOrg: async () => ({ ok: false as const, error: { kind: "internal" as const, message: "" } }),
+    };
+
+    const env = createEnv();
+    const req = makeRequest(`/v1/organizations/${TEST_ORG_PUBLIC_ID}/audit?actorType=robot`);
+
+    const res = await handleListAudit(req, env, TEST_REQUEST_ID, { subjectId: TEST_ACTOR_ID, subjectType: "user" }, TEST_ORG_UUID, { eventsRepo: mockRepo });
+    expect(res.status).toBe(422);
+  });
+
+  it("ignores empty filter params (no filters passed to repo)", async () => {
+    const { handleListAudit } = await import("@events-worker/handlers/list-audit");
+
+    let capturedFilters: Record<string, unknown> | undefined;
+    const mockRepo: EventsRepository = {
+      appendEvent: async () => ({ ok: false as const, error: { kind: "internal" as const, message: "" } }),
+      appendEventWithAudit: async () => ({ ok: false as const, error: { kind: "internal" as const, message: "" } }),
+      queryAuditByOrg: async (_orgId: string, _params: unknown, _category?: string, filters?: Record<string, unknown>) => {
+        capturedFilters = filters;
+        return { ok: true as const, value: { items: [], nextCursor: null } };
+      },
+      queryAuditByTarget: async () => ({ ok: true as const, value: { items: [], nextCursor: null } }),
+      queryEventsByOrg: async () => ({ ok: false as const, error: { kind: "internal" as const, message: "" } }),
+    };
+
+    const env = createEnv();
+    const req = makeRequest(`/v1/organizations/${TEST_ORG_PUBLIC_ID}/audit?actorId=&from=`);
+
+    const res = await handleListAudit(req, env, TEST_REQUEST_ID, { subjectId: TEST_ACTOR_ID, subjectType: "user" }, TEST_ORG_UUID, { eventsRepo: mockRepo });
+    expect(res.status).toBe(200);
+    expect(capturedFilters).toEqual({});
+  });
 });

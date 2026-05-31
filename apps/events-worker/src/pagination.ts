@@ -68,3 +68,90 @@ export function decodeCursor(raw: string): DecodedCursor | null {
     return null;
   }
 }
+
+// ---------------------------------------------------------------------------
+// Audit filters (Task 0121 — actor / resource / action / time-range)
+// ---------------------------------------------------------------------------
+
+/** Conservative identifier charset, mirroring CATEGORY_RE bounds. */
+const FILTER_VALUE_RE = /^[A-Za-z0-9_.:\-]{1,128}$/;
+
+/** Closed actor-type set (EventActorType in @saas/contracts/events). */
+const ACTOR_TYPES = new Set(["user", "service_principal", "workflow", "system"]);
+
+export interface AuditFilterParams {
+  actorId?: string;
+  actorType?: string;
+  subjectKind?: string;
+  subjectId?: string;
+  eventType?: string;
+  from?: string;
+  to?: string;
+}
+
+export type ParseAuditFiltersResult =
+  | { ok: true; value: AuditFilterParams }
+  | { ok: false; field: string; reason: string };
+
+/**
+ * Parse + validate the optional org-audit filter query params.
+ *
+ * Rules:
+ *  - empty / missing params are ignored (not errors),
+ *  - `from`/`to` MUST match the ISO ms Z shape (same as the cursor timestamp),
+ *  - `actorType` MUST be a known EventActorType,
+ *  - `actorId`/`subjectKind`/`subjectId`/`eventType` MUST match a bounded,
+ *    safe identifier charset.
+ *
+ * Validation only — no SQL is constructed here; the repository builds the
+ * parameterized clauses from the returned, already-validated values.
+ */
+export function parseAuditFilters(url: URL): ParseAuditFiltersResult {
+  const value: AuditFilterParams = {};
+
+  const ident: Array<[keyof AuditFilterParams, string]> = [
+    ["actorId", "actorId"],
+    ["subjectKind", "subjectKind"],
+    ["subjectId", "subjectId"],
+    ["eventType", "eventType"],
+  ];
+  for (const [key, param] of ident) {
+    const raw = url.searchParams.get(param);
+    if (raw === null || raw === "") continue;
+    if (!FILTER_VALUE_RE.test(raw)) {
+      return {
+        ok: false,
+        field: param,
+        reason: "Must be 1-128 chars of letters, numbers, underscore, dot, colon, or hyphen",
+      };
+    }
+    value[key] = raw;
+  }
+
+  const actorType = url.searchParams.get("actorType");
+  if (actorType !== null && actorType !== "") {
+    if (!ACTOR_TYPES.has(actorType)) {
+      return {
+        ok: false,
+        field: "actorType",
+        reason: "Must be one of: user, service_principal, workflow, system",
+      };
+    }
+    value.actorType = actorType;
+  }
+
+  for (const param of ["from", "to"] as const) {
+    const raw = url.searchParams.get(param);
+    if (raw === null || raw === "") continue;
+    if (!ISO_TS_RE.test(raw)) {
+      return {
+        ok: false,
+        field: param,
+        reason: "Must be an ISO-8601 timestamp with milliseconds (e.g. 2026-01-01T00:00:00.000Z)",
+      };
+    }
+    value[param] = raw;
+  }
+
+  return { ok: true, value };
+}

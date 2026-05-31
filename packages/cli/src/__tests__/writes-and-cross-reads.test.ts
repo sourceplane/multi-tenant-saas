@@ -955,4 +955,96 @@ describe("commands — audit list", () => {
       { responder: () => jsonResponse(AUDIT_PAGE_1), activeOrgId: "org_1" },
     );
   });
+
+  it("forwards all filter flags as query params", async () => {
+    await withHarness(
+      async ({ cap, runArgv }) => {
+        const r = await runArgv([
+          "audit",
+          "list",
+          "--actor=usr_a",
+          "--actor-type=user",
+          "--subject-kind=project",
+          "--subject-id=prj_1",
+          "--event-type=member.role_changed",
+          "--from=2026-01-01T00:00:00.000Z",
+          "--to=2026-02-01T00:00:00.000Z",
+        ]);
+        expect(r.exitCode).toBe(0);
+        const url = cap.fetchCalls[0]!.url;
+        expect(url).toContain("actorId=usr_a");
+        expect(url).toContain("actorType=user");
+        expect(url).toContain("subjectKind=project");
+        expect(url).toContain("subjectId=prj_1");
+        expect(url).toContain("eventType=member.role_changed");
+        expect(url).toContain("from=2026-01-01T00%3A00%3A00.000Z");
+        expect(url).toContain("to=2026-02-01T00%3A00%3A00.000Z");
+      },
+      { responder: () => jsonResponse(AUDIT_PAGE_1), activeOrgId: "org_1" },
+    );
+  });
+
+  it("--format=ndjson streams one JSON document per entry across all pages", async () => {
+    let n = 0;
+    await withHarness(
+      async ({ cap, runArgv }) => {
+        const r = await runArgv(["audit", "list", "--format=ndjson"]);
+        expect(r.exitCode).toBe(0);
+        // Both pages walked.
+        expect(cap.fetchCalls).toHaveLength(2);
+        expect(cap.fetchCalls[1]!.url).toContain("cursor=cur_2");
+        // One stdout line per entry (AUDIT_PAGE_1 + AUDIT_PAGE_2 entries).
+        expect(cap.stdout).toHaveLength(2);
+        for (const line of cap.stdout) {
+          const parsed = JSON.parse(line);
+          expect(typeof parsed.id).toBe("string");
+        }
+        expect(JSON.parse(cap.stdout[0] ?? "").id).toBe("ae_1");
+      },
+      {
+        responder: () => {
+          n += 1;
+          return jsonResponse(n === 1 ? AUDIT_PAGE_1 : AUDIT_PAGE_2);
+        },
+        activeOrgId: "org_1",
+      },
+    );
+  });
+
+  it("--format=ndjson forwards filters into the export stream", async () => {
+    await withHarness(
+      async ({ cap, runArgv }) => {
+        const r = await runArgv([
+          "audit",
+          "list",
+          "--format=ndjson",
+          "--actor-type=service_principal",
+        ]);
+        expect(r.exitCode).toBe(0);
+        expect(cap.fetchCalls[0]!.url).toContain("actorType=service_principal");
+      },
+      { responder: () => jsonResponse(AUDIT_PAGE_2), activeOrgId: "org_1" },
+    );
+  });
+
+  it("--format=ndjson + --cursor is a usage error (exit 2)", async () => {
+    await withHarness(
+      async ({ cap, runArgv }) => {
+        const r = await runArgv(["audit", "list", "--format=ndjson", "--cursor=foo"]);
+        expect(r.exitCode).toBe(2);
+        expect(cap.stderr.join("\n")).toMatch(/mutually exclusive/);
+      },
+      { responder: () => jsonResponse(AUDIT_PAGE_1), activeOrgId: "org_1" },
+    );
+  });
+
+  it("--format with an unsupported value is a usage error (exit 2)", async () => {
+    await withHarness(
+      async ({ runArgv }) => {
+        const r = await runArgv(["audit", "list", "--format=csv"]);
+        expect(r.exitCode).toBe(2);
+      },
+      { responder: () => jsonResponse(AUDIT_PAGE_1), activeOrgId: "org_1" },
+    );
+  });
 });

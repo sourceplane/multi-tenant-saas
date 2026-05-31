@@ -110,6 +110,20 @@ export interface AuditEntry {
 export interface AuditQueryByOrg {
   orgId: string;
   category?: string;
+  /** Filter by actor identity (the raw actor id recorded on the event). */
+  actorId?: string;
+  /** Filter by actor type (validated against the EventActorType set). */
+  actorType?: EventActorType;
+  /** Filter by subject/resource kind (e.g. "project", "member"). */
+  subjectKind?: string;
+  /** Filter by subject/resource id. */
+  subjectId?: string;
+  /** Filter by audit action / event type (e.g. "member.role_changed"). */
+  eventType?: string;
+  /** Inclusive lower bound on occurredAt (ISO-8601 ms Z). */
+  from?: string;
+  /** Inclusive upper bound on occurredAt (ISO-8601 ms Z). */
+  to?: string;
   limit: number;
   cursor?: string | null;
 }
