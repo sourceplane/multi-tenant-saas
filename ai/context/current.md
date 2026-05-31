@@ -1,7 +1,38 @@
 # Current Context
 
-Last updated: 2026-05-31 — Task 0110 VERIFIED PASS + MERGED. B5 webhook
-secret-rotation arc (0108 → 0109 → 0110) is now fully closed on main.
+Last updated: 2026-05-31 — Task 0111 SCOPED. CLI helpers extraction
+recommended by Task 0110 verifier. Implementer prompt at
+`ai/tasks/task-0111.md`.
+
+## Active Task — 0111 (Implementer)
+
+**Objective:** Extract `resolveOrgId(ctx, allowOverride)` and
+`readIdempotencyKey(ctx)` from `packages/cli/src/commands/writes.ts` and
+`webhook-secrets-rotate.ts` into a new shared module
+`packages/cli/src/commands/helpers.ts`. Pure behaviour-preserving
+refactor — zero observable CLI behaviour change, zero new commands.
+
+**PR boundary (5 files exactly):**
+- `packages/cli/src/commands/helpers.ts` (NEW, ~50–80 LOC)
+- `packages/cli/src/commands/writes.ts` (deletions + 1 import)
+- `packages/cli/src/commands/webhook-secrets-rotate.ts` (deletions
+  + 1 import + 1 comment-block edit + 1 call-site swap)
+- `packages/cli/src/__tests__/helpers.test.ts` (NEW, ≥6 vitest cases)
+- `ai/reports/task-0111-implementer.md` (NEW)
+
+**Branch:** `impl/task-0111-cli-helpers-extract`
+**Sealed snapshot main:** `142d019`
+**Vitest baseline:** 136/136 across 10 files → ≥142 across 11 files
+on PASS.
+**Component shape:** `turbo-package`, verify-only on dev/stage/prod, no
+deploy lane, no live URL surface. Orun changed-plan must select ONLY
+`cli · {dev,stage,prod} · Verify` (3 jobs).
+
+**Forbidden zones:** `packages/(sdk|contracts|webhook-verifier)/`,
+`apps/`, `tests/`, `infra/`, `tooling/`, `stack-tectonic/`, `kiox.lock`,
+`packages/cli/package.json`, `pnpm-lock.yaml`, all OTHER
+`packages/cli/src/commands/*.ts` files (cross-reads, webhook-sign,
+webhook-verify, index, cli-runner).
 
 ## Just-merged — 0110
 
@@ -12,8 +43,6 @@ secret-rotation arc (0108 → 0109 → 0110) is now fully closed on main.
 `cli · {dev,stage,prod} · Verify`.
 **Initial PR-CI** at HEAD `3d6b324` (run `26705959245`) also 4/4 SUCCESS.
 **Post-merge main-CI:** run `26706238108` 4/4 SUCCESS at `142d019`.
-**Turbo-package shape:** no deploy lane, no live URL surface. PR-time
-`Verify` is the regression gate.
 
 **Reports:**
 - Implementer: `ai/reports/task-0110-implementer.md`
@@ -21,27 +50,10 @@ secret-rotation arc (0108 → 0109 → 0110) is now fully closed on main.
 
 **Durable outcome on main:** `sourceplane webhook secrets rotate
 <endpointId> [--idempotency-key=KEY] [--output=human|json]` CLI
-subcommand. Pure SDK consumer of the locked `client.webhooks.rotateSecret`
-shape. Reveal-once `whsec_<32hex>` plaintext from
-`RotateWebhookSecretResponse.secret` printed exactly once on stdout
-(human-mode `secret:` line OR json-mode verbatim `JSON.stringify(response)`),
-never persisted/logged/stashed. Subcommand path is the durable plural
-form `["webhook","secrets","rotate"]` (leaves room for future
-`secrets list/reveal/revoke`). Org id resolved through persisted
-active-org context (no `--org` override surface). 13 vitest cases under
+subcommand. Pure SDK consumer of the locked
+`client.webhooks.rotateSecret` shape. 13 vitest cases under
 `packages/cli/src/__tests__/webhook-secrets-rotate.test.ts` lift the
 `@saas/cli` suite to 136/136 passing across 10 files.
-
-**Verifier non-blocking finding (Spec Proposal §1):** the verifier prompt
-asserted `readIdempotencyKey` should be IMPORTED from `writes.ts`, but
-`writes.ts` declares both `readIdempotencyKey` AND `resolveOrgId` as
-module-private (NOT exported); importing is structurally impossible
-without modifying `writes.ts` (forbidden zone). Implementer chose the
-lowest-risk path: re-implement both inline (3-line `readIdempotencyKey`
-+ 5-line `resolveActiveOrgId` no-override branch only) — logic
-byte-equivalent. Verifier accepts. Recommended follow-up housekeeping
-task: extract a shared `cli-helpers` module before the next CLI
-write/rotate surface to eliminate the trio of inline copies.
 
 ## B5 secret-rotation arc — CLOSED
 
@@ -51,49 +63,63 @@ write/rotate surface to eliminate the trio of inline copies.
 | 0109 | Console reveal-once UX (discriminated-union state machine) | #164 | `84a69c2` | PASS |
 | 0110 | CLI `webhook secrets rotate` reveal-once UX | #165 | `142d019` | PASS |
 
-End-to-end flow now live on main: rotate via console modal OR CLI
-subcommand → backend writes new secret + previous-secret grace columns
-in one atomic UPDATE → reveal-once plaintext returned + dual-signature
-delivery (`X-Webhook-Signature` + `X-Webhook-Signature-Previous`) during
-grace window → grace expires → single-signature delivery resumes.
-
-## Active Task — none (orchestrator dispatch ready)
+## Repo health
 
 **Repo health:** green
 **HEAD on main:** `142d019`
-**Sealed snapshot for next task:** `142d019`
+**Sealed snapshot for Task 0111:** `142d019`
+**Open PRs:** none at scope time
 
-## Next Tasks (orchestrator candidates)
+## Selection rationale (Task 0111)
 
-Pick one to scope as Task 0111:
+Picked CLI helpers extraction over the other current.md candidates:
 
-1. **B5 follow-ups** (deferred from 0108–0110 sweep):
-   - Replay UI (console surface to re-fire a delivery attempt).
-   - Failure-budget alerts (notification when endpoint failure rate
-     crosses configurable threshold).
-   - Console webhook subscriptions UX (event-type subscription
-     management).
-   - Console delivery-attempts UX (history + retry visibility).
+1. **Verifier-endorsed:** Task 0110 verifier explicitly recommends this
+   extraction "before the next CLI write/rotate surface" lands.
+2. **Leaf in dependency graph:** pure refactor, no spec/contract/SDK
+   coupling. Strong rollback story (revert is mechanical).
+3. **File-disjoint** from every deferred candidate
+   (`apps/notifications-worker/**`, `infra/terraform/cloudflare-domain/**`)
+   and from every in-flight area.
+4. **Removes a known duplication hazard** before it propagates into the
+   next CLI write surface (e.g. `webhook secrets list/reveal/revoke`,
+   future writes against new resources).
 
-2. **B7 audit-log UX** — surface the audit/event stream that B5
-   handlers populate.
+Other candidates evaluated and not picked:
 
-3. **CLI helpers extraction** (housekeeping) — extract shared
-   `resolveOrgId(ctx, allowOverride)` and `readIdempotencyKey(ctx)` from
-   `writes.ts` + `webhook-secrets-rotate.ts` into a single `cli-helpers`
-   module. Eliminates inline duplication ahead of the next CLI
-   write/rotate surface. File-disjoint from any in-flight work.
+- **B5 replay UI** — backend `/v1/.../replay` endpoint not yet exposed
+  in webhooks-facade routes (audit at scoping confirmed only
+  `replayOrExecute`-style idempotency uses; no delivery-attempt replay
+  surface). Would need a backend P2 slice first; deferred shape mirrors
+  the deferred spec-13 commands case.
+- **B5 failure-budget alerts** — depends on the notifications provider
+  swap (deferred) for live alert delivery; can scope a stage-only
+  scaffold but not a complete PR yet.
+- **Console webhook subscriptions UX / delivery-attempts UX** — viable
+  next candidates after 0111; will pick one for Task 0112+.
+- **B7 audit-log UX** — larger greenfield surface; better landed after
+  the cleaner CLI seam.
+- **B8 admin-worker scaffold** — long-deferred breather; legitimate
+  candidate for Task 0112+.
 
-4. **B8 admin-worker scaffold** — start the platform-internal admin
-   surface (long-deferred breather task).
+## Next Tasks (orchestrator candidates after 0111)
+
+1. Console webhook subscriptions UX (event-type subscription management).
+2. Console delivery-attempts UX (history + retry visibility).
+3. B7 audit-log UX — surface the audit/event stream that B5 handlers
+   populate.
+4. B8 admin-worker scaffold — platform-internal admin surface.
 
 ## Recurring patterns to honour
 
 - BEHIND-main on orchestrator-dispatch commit: every PR from 0103–0110
   has hit it. Verifier handles via `gh pr update-branch <PR#>` +
-  re-watch PR-CI on rebased HEAD before merge. Task 0107-style "merge
-  commit doesn't re-fire CI" did NOT recur on 0108/0109/0110.
+  re-watch PR-CI on rebased HEAD before merge. Implementer is NOT
+  responsible for the rebase.
 - CI log evidence (not just `statusCheckRollup`) for the required
   lanes is mandatory per Verifier Standard.
 - Implementer report MUST be committed on PR branch (no 0106
   missing-report gap recurred on 0107–0110).
+- Behaviour-preserving refactors must run a residual-duplicate `rg`
+  audit before reporting (catch any `resolveActiveOrgId` /
+  duplicate-definition leftovers).

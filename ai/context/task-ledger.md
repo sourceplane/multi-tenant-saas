@@ -3545,3 +3545,46 @@ One PR, one reviewer-holdable outcome (rotate UX backend), one rollback (single 
   candidates: B5 follow-ups (replay UI, failure-budget alerts,
   console webhook subscriptions UX, console delivery-attempts UX),
   B7 audit-log UX expansion, or B8 admin-worker scaffold breather.
+
+## Task 0111
+
+- Agent: Implementer
+- Prompt: `ai/tasks/task-0111.md`
+- Status: scoped and ready to begin (2026-05-31)
+- Objective: Pure behaviour-preserving CLI helpers extraction recommended
+  by Task 0110 verifier. Create `packages/cli/src/commands/helpers.ts`
+  exporting `resolveOrgId(ctx, allowOverride)` and
+  `readIdempotencyKey(ctx)`; delete the inline duplicates from
+  `writes.ts` and `webhook-secrets-rotate.ts` and import from the new
+  module. Replace the lone `resolveActiveOrgId(ctx)` call site in
+  `webhook-secrets-rotate.ts` with `resolveOrgId(ctx, /* allowOverride */ false)`.
+- Scope boundary: 5 files exactly — `helpers.ts` (NEW), `writes.ts`
+  (deletions + 1 import), `webhook-secrets-rotate.ts` (deletions + 1
+  import + 1 comment-block edit + 1 call-site swap), `helpers.test.ts`
+  (NEW, ≥6 vitest cases), `task-0111-implementer.md` (NEW). Forbidden
+  zones: `packages/(sdk|contracts|webhook-verifier)/`, `apps/`, `tests/`,
+  `infra/`, `tooling/`, `stack-tectonic/`, `kiox.lock`, `pnpm-lock.yaml`,
+  `packages/cli/package.json`, every other `packages/cli/src/commands/*.ts`
+  file, `cli-runner.ts`. No new commands, no new flags, no
+  SDK/contract/api-edge/console/Terraform changes.
+- Acceptance: `pnpm install --frozen-lockfile` clean; `pnpm exec turbo
+  run typecheck|lint|build|test --filter=@saas/cli` all green; vitest
+  ≥142/142 across 11 files (136 baseline + ≥6 new); `kiox -- orun
+  validate|plan --changed|run --dry-run` green selecting ONLY
+  `cli·{dev,stage,prod}·Verify` (3 jobs); `git diff --stat
+  origin/main...HEAD` shows exactly the 5-file inventory; PR opened
+  with implementer report committed on the branch and the real PR
+  number filled in.
+- Branch: `impl/task-0111-cli-helpers-extract`. Sealed snapshot main:
+  `142d019`. Component shape: `turbo-package`, no deploy lane.
+- Selection rationale: explicit verifier endorsement (Task 0110
+  Spec Proposal §1/§2) + leaf in dependency graph + file-disjoint from
+  every deferred and in-flight item + removes a known duplication
+  hazard before next CLI write/rotate surface lands. B5 replay UI /
+  failure-budget alerts deferred (backend gap or notifications-provider
+  gap); console subscriptions/delivery-attempts UX viable next
+  candidates after 0111.
+- Expected outcome: shared `cli-helpers` module on main, `writes.ts`
+  and `webhook-secrets-rotate.ts` consume it via import, vitest floor
+  raised to ≥142, zero observable CLI behaviour change. Closes the
+  Task 0110 verifier housekeeping recommendation.
