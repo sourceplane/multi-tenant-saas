@@ -70,6 +70,22 @@ export interface DisableWebhookEndpointResponse {
   endpoint: PublicWebhookEndpoint;
 }
 
+/**
+ * Re-enable a previously disabled webhook endpoint. Body is intentionally
+ * empty — re-enable is additive and carries no operator-supplied metadata.
+ * Idempotency: a 404 is returned if the endpoint is already active or
+ * missing (the worker maps the repository `not_found` envelope through
+ * unchanged).
+ */
+export interface EnableWebhookEndpointRequest {
+  // No fields. Reserved for future expansion (e.g. opt-in re-arm of
+  // delivery retries) under a fresh spec proposal.
+}
+
+export interface EnableWebhookEndpointResponse {
+  endpoint: PublicWebhookEndpoint;
+}
+
 export interface DeleteWebhookEndpointResponse {
   deleted: true;
 }

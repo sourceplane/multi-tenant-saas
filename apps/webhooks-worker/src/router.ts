@@ -6,6 +6,7 @@ import {
   handleListWebhookEndpoints,
   handleUpdateWebhookEndpoint,
   handleDisableWebhookEndpoint,
+  handleEnableWebhookEndpoint,
   handleDeleteWebhookEndpoint,
   handleRotateWebhookSecret,
 } from "./handlers/webhook-endpoints.js";
@@ -59,6 +60,7 @@ const PRJ_ENDPOINTS_RE = /^\/v1\/organizations\/([^/]+)\/projects\/([^/]+)\/webh
 // Item routes
 const ORG_ENDPOINT_ITEM_RE = /^\/v1\/organizations\/([^/]+)\/webhooks\/endpoints\/([^/]+)$/;
 const ORG_ENDPOINT_DISABLE_RE = /^\/v1\/organizations\/([^/]+)\/webhooks\/endpoints\/([^/]+)\/disable$/;
+const ORG_ENDPOINT_ENABLE_RE = /^\/v1\/organizations\/([^/]+)\/webhooks\/endpoints\/([^/]+)\/enable$/;
 const ORG_ENDPOINT_ROTATE_RE = /^\/v1\/organizations\/([^/]+)\/webhooks\/endpoints\/([^/]+)\/rotate-secret$/;
 
 // Subscriptions
@@ -107,6 +109,16 @@ export async function route(request: Request, env: Env): Promise<Response> {
     const endpointId = parseWebhookEndpointPublicId(m[2]!);
     if (!orgId || !endpointId) return notFound(requestId, pathname);
     return handleDisableWebhookEndpoint(request, env, requestId, actor, orgId, endpointId);
+  }
+
+  // POST /v1/organizations/:orgId/webhooks/endpoints/:id/enable
+  m = pathname.match(ORG_ENDPOINT_ENABLE_RE);
+  if (m) {
+    if (request.method !== "POST") return methodNotAllowed(requestId);
+    const orgId = parseOrgPublicId(m[1]!);
+    const endpointId = parseWebhookEndpointPublicId(m[2]!);
+    if (!orgId || !endpointId) return notFound(requestId, pathname);
+    return handleEnableWebhookEndpoint(request, env, requestId, actor, orgId, endpointId);
   }
 
   // POST /v1/organizations/:orgId/webhooks/endpoints/:id/rotate-secret

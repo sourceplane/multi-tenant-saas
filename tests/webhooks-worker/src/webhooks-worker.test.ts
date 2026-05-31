@@ -19,6 +19,7 @@ import {
   toPublicDeliveryAttempt,
 } from "@webhooks-worker/mappers";
 import type { WebhookEndpoint, WebhookSubscription, WebhookDeliveryAttempt } from "@saas/db/webhooks";
+import type { AppendEventWithAuditInput, EventsResult, StoredEvent, StoredAuditEntry } from "@saas/db/events";
 
 // ── Test constants ──────────────────────────────────────────
 const TEST_ORG_UUID = "11111111-1111-1111-1111-111111111111";
@@ -475,5 +476,152 @@ describe("router", () => {
     expect(body.meta.requestId).toBeDefined();
     expect(typeof body.meta.requestId).toBe("string");
     expect(body.meta.requestId).toMatch(/^req_/);
+  });
+
+  // ── Re-enable endpoint route plumbing ──────────────────────
+  it("returns 405 for GET on enable endpoint", async () => {
+    const env = createFakeEnv();
+    const req = makeRequest("GET", `/v1/organizations/${TEST_ORG_PUBLIC}/webhooks/endpoints/${TEST_ENDPOINT_PUBLIC}/enable`);
+    const res = await route(req, env);
+    expect(res.status).toBe(405);
+  });
+});
+
+// ── handleEnableWebhookEndpoint atomicity (Task 0024 pattern) ──
+// The non-tx fallback path is the test seam: it exercises the same
+// repo / events-repo wiring the transaction callback uses, and lets us
+// assert the three required atomicity invariants without a live PG.
+
+describe("handleEnableWebhookEndpoint — atomicity", () => {
+  const orgId = TEST_ORG_UUID;
+  const endpointId = TEST_ENDPOINT_UUID;
+  const actor = { subjectId: TEST_USER_ID, subjectType: "user" };
+  const requestId = "req_atomicity";
+  const fixedNow = new Date("2026-01-15T12:00:00.000Z");
+
+  const disabledEndpoint: WebhookEndpoint = {
+    id: endpointId,
+    orgId,
+    projectId: null,
+    url: "https://example.com/hook",
+    name: "Hook",
+    description: null,
+    status: "disabled",
+    disabledReason: "ops paused",
+    disabledAt: fixedNow,
+    secretVersion: 1,
+    secretLastRotatedAt: null,
+    createdAt: fixedNow,
+    updatedAt: fixedNow,
+  };
+
+  const activeEndpoint: WebhookEndpoint = { ...disabledEndpoint, status: "active", disabledReason: null, disabledAt: null };
+
+  function makeFakeRepo(opts: {
+    enableResult?: { ok: true; value: WebhookEndpoint } | { ok: false; error: { kind: "not_found" } | { kind: "internal"; message: string } };
+    enableSpy?: { called: boolean };
+  } = {}) {
+    return {
+      async getEndpoint() {
+        return { ok: true as const, value: disabledEndpoint };
+      },
+      async enableEndpoint() {
+        if (opts.enableSpy) opts.enableSpy.called = true;
+        return opts.enableResult ?? ({ ok: true as const, value: activeEndpoint });
+      },
+    };
+  }
+
+  it("mutation success → emits webhook_endpoint.enabled event + audit row", async () => {
+    const { handleEnableWebhookEndpoint } = await import("@webhooks-worker/handlers/webhook-endpoints");
+    const repo = makeFakeRepo();
+    const appended: Array<{ type: string; description: string | null }> = [];
+    const eventsRepo: { appendEventWithAudit: (input: AppendEventWithAuditInput) => Promise<EventsResult<{ event: StoredEvent; audit: StoredAuditEntry }>> } = {
+      async appendEventWithAudit(input) {
+        appended.push({ type: input.event.type, description: input.audit.description ?? null });
+        return { ok: true as const, value: { event: {} as StoredEvent, audit: {} as StoredAuditEntry } };
+      },
+    };
+
+    const env = createFakeEnv();
+    const req = makeRequest("POST", `/v1/organizations/${TEST_ORG_PUBLIC}/webhooks/endpoints/${TEST_ENDPOINT_PUBLIC}/enable`);
+    const res = await handleEnableWebhookEndpoint(req, env, requestId, actor, orgId, endpointId, {
+      repo, eventsRepo, now: () => fixedNow, generateId: () => "gen_id",
+    });
+
+    expect(res.status).toBe(200);
+    expect(appended).toHaveLength(1);
+    expect(appended[0]!.type).toBe("webhook_endpoint.enabled");
+    expect(appended[0]!.description).toMatch(/re-enabled/i);
+  });
+
+  it("mutation failure → no event/audit append", async () => {
+    const { handleEnableWebhookEndpoint } = await import("@webhooks-worker/handlers/webhook-endpoints");
+    const repo = makeFakeRepo({
+      enableResult: { ok: false, error: { kind: "not_found" } },
+    });
+    let appended = false;
+    const eventsRepo: { appendEventWithAudit: (input: AppendEventWithAuditInput) => Promise<EventsResult<{ event: StoredEvent; audit: StoredAuditEntry }>> } = {
+      async appendEventWithAudit() {
+        appended = true;
+        return { ok: true as const, value: { event: {} as StoredEvent, audit: {} as StoredAuditEntry } };
+      },
+    };
+
+    const env = createFakeEnv();
+    const req = makeRequest("POST", `/v1/organizations/${TEST_ORG_PUBLIC}/webhooks/endpoints/${TEST_ENDPOINT_PUBLIC}/enable`);
+    const res = await handleEnableWebhookEndpoint(req, env, requestId, actor, orgId, endpointId, {
+      repo, eventsRepo, now: () => fixedNow, generateId: () => "gen_id",
+    });
+
+    expect(res.status).toBe(404);
+    expect(appended).toBe(false);
+  });
+
+  it("event-append failure surfaces a safe error envelope (rollback signal)", async () => {
+    // In the live tx path, an event-append failure throws and the
+    // transaction rolls back. The non-tx seam mirrors the post-condition:
+    // a safe 503 envelope to the caller. This locks in the contract.
+    const { handleEnableWebhookEndpoint } = await import("@webhooks-worker/handlers/webhook-endpoints");
+    const repo = makeFakeRepo();
+    const eventsRepo: { appendEventWithAudit: (input: AppendEventWithAuditInput) => Promise<EventsResult<{ event: StoredEvent; audit: StoredAuditEntry }>> } = {
+      async appendEventWithAudit() {
+        return { ok: false as const, error: { kind: "internal" as const, message: "db down" } };
+      },
+    };
+
+    const env = createFakeEnv();
+    const req = makeRequest("POST", `/v1/organizations/${TEST_ORG_PUBLIC}/webhooks/endpoints/${TEST_ENDPOINT_PUBLIC}/enable`);
+    const res = await handleEnableWebhookEndpoint(req, env, requestId, actor, orgId, endpointId, {
+      repo, eventsRepo, now: () => fixedNow, generateId: () => "gen_id",
+    });
+
+    expect(res.status).toBe(503);
+  });
+
+  it("transactional path source-asserts: same txExec wires both repos and event failure throws", async () => {
+    // Static-source guard mirroring the rotate-secret reveal-once pattern.
+    // The transactional branch must (a) construct both repos from the
+    // SAME txExec, and (b) throw on event-append failure to roll back.
+    const fs = await import("node:fs/promises");
+    const path = await import("node:path");
+    const handlerPath = path.resolve(
+      process.cwd(),
+      "../../apps/webhooks-worker/src/handlers/webhook-endpoints.ts",
+    );
+    const src = await fs.readFile(handlerPath, "utf8");
+    const enableStart = src.indexOf("export async function handleEnableWebhookEndpoint");
+    expect(enableStart).toBeGreaterThan(-1);
+    const enableBlock = src.slice(enableStart);
+    expect(enableBlock).toMatch(/createWebhookRepository\(txExec\)/);
+    expect(enableBlock).toMatch(/createEventsRepository\(txExec\)/);
+    expect(enableBlock).toMatch(/throw new Error\("event_append_failed"\)/);
+    // Re-enable SQL clears disabled_reason / disabled_at and guards on status.
+    const repoSrc = await fs.readFile(
+      path.resolve(process.cwd(), "../../packages/db/src/webhooks/repository.ts"),
+      "utf8",
+    );
+    expect(repoSrc).toMatch(/SET status = 'active', disabled_reason = NULL, disabled_at = NULL/);
+    expect(repoSrc).toMatch(/AND status = 'disabled'/);
   });
 });

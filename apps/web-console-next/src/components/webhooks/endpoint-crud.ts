@@ -17,11 +17,10 @@
  *   - `confirmDeleteMatches`       — typed-confirm exact-match gate
  *   - `generateIdempotencyKey`     — UUID-or-fallback per submission
  *
- * Re-enable notes (carry-forward gap, see /ai/proposals/task-0112-spec-update.md):
- * The current `UpdateWebhookEndpointRequest` contract only accepts
- * `{ url?, name?, description? }`. There is no status flip, so re-enabling
- * a disabled endpoint from the console is NOT achievable through the
- * existing SDK surface. The implementer report carries a Spec Proposal.
+ * Re-enable: the dialog component lives in `enable-endpoint-dialog.tsx`
+ * and calls `client.webhooks.enableEndpoint(...)` directly (no PATCH-body
+ * shaping needed — the request has no fields). Spec carry-forward:
+ * /ai/proposals/task-0112-spec-update.md.
  */
 
 // ---------------------------------------------------------------------------

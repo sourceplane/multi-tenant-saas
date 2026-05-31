@@ -214,6 +214,14 @@ export interface WebhookRepository {
   listEndpoints(orgId: string, params: PageQueryParams, projectId?: string | null): Promise<WebhookResult<PagedResult<WebhookEndpoint>>>;
   updateEndpoint(orgId: string, endpointId: string, input: UpdateWebhookEndpointInput): Promise<WebhookResult<WebhookEndpoint>>;
   disableEndpoint(orgId: string, endpointId: string, input: DisableWebhookEndpointInput): Promise<WebhookResult<WebhookEndpoint>>;
+  /**
+   * Re-enable a previously disabled endpoint. Sets `status = 'active'`,
+   * clears `disabled_reason` and `disabled_at`. Guarded by `WHERE status =
+   * 'disabled'` — a 0-row response (`not_found`) covers both "endpoint
+   * missing" and "already active". `pending` endpoints are intentionally
+   * not re-enabled here (would require a spec proposal).
+   */
+  enableEndpoint(orgId: string, endpointId: string): Promise<WebhookResult<WebhookEndpoint>>;
   deleteEndpoint(orgId: string, endpointId: string): Promise<WebhookResult<{ deleted: true }>>;
   rotateEndpointSecret(orgId: string, endpointId: string, input?: RotateEndpointSecretInput): Promise<WebhookResult<RotateEndpointSecretResult>>;
 

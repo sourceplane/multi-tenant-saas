@@ -269,6 +269,28 @@ export function createWebhookRepository(executor: SqlExecutor): WebhookRepositor
       }
     },
 
+    async enableEndpoint(orgId: string, endpointId: string): Promise<WebhookResult<WebhookEndpoint>> {
+      try {
+        // Symmetric to disableEndpoint: WHERE guard ensures idempotent
+        // semantics — re-running on an already-active endpoint returns
+        // not_found (mirrors disable's "missing or already disabled" model).
+        // `pending` endpoints are intentionally excluded.
+        const result = await executor.execute<Record<string, unknown>>(
+          `UPDATE webhooks.webhook_endpoints
+           SET status = 'active', disabled_reason = NULL, disabled_at = NULL, updated_at = now()
+           WHERE org_id = $1 AND id = $2 AND status = 'disabled'
+           RETURNING ${ENDPOINT_SAFE_COLUMNS}`,
+          [orgId, endpointId],
+        );
+        if (result.rowCount === 0) {
+          return { ok: false, error: { kind: "not_found" } };
+        }
+        return { ok: true, value: mapEndpoint(result.rows[0]!) };
+      } catch {
+        return safeError("Failed to enable webhook endpoint");
+      }
+    },
+
     async deleteEndpoint(orgId: string, endpointId: string): Promise<WebhookResult<{ deleted: true }>> {
       try {
         const result = await executor.execute<Record<string, unknown>>(

@@ -241,6 +241,51 @@ describe("WebhookRepository — Endpoints", () => {
     expect(queries[0]!.text).toContain("status = 'active'"); // WHERE guard
   });
 
+  it("enables a disabled endpoint and clears disabled_reason / disabled_at", async () => {
+    const activeRow = {
+      ...SAMPLE_ENDPOINT_ROW,
+      status: "active",
+      disabled_reason: null,
+      disabled_at: null,
+    };
+    const { executor, queries } = createFakeExecutor({ rows: [activeRow] });
+    const repo = createWebhookRepository(executor);
+    const result = await repo.enableEndpoint("org-001", "ep-001");
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.status).toBe("active");
+      expect(result.value.disabledReason).toBeNull();
+      expect(result.value.disabledAt).toBeNull();
+    }
+    const sql = queries[0]!.text;
+    expect(sql).toContain("status = 'active'");
+    expect(sql).toContain("disabled_reason = NULL");
+    expect(sql).toContain("disabled_at = NULL");
+    // WHERE guard must scope to disabled rows only (idempotent semantics
+    // and explicit pending-exclusion).
+    expect(sql).toContain("AND status = 'disabled'");
+    // Must not expose secret_ciphertext on the public-read surface.
+    expect(sql).not.toMatch(/RETURNING[\s\S]*?\bsecret_ciphertext\b/);
+    // Params: only orgId + endpointId (no body fields).
+    expect(queries[0]!.params).toEqual(["org-001", "ep-001"]);
+  });
+
+  it("returns not_found when enabling a missing or already-active endpoint", async () => {
+    const { executor } = createFakeExecutor({ rows: [], rowCount: 0 });
+    const repo = createWebhookRepository(executor);
+    const result = await repo.enableEndpoint("org-001", "ep-missing");
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.kind).toBe("not_found");
+  });
+
+  it("enableEndpoint surfaces internal errors as a safe envelope", async () => {
+    const { executor } = createFakeExecutor({ error: new Error("PG down") });
+    const repo = createWebhookRepository(executor);
+    const result = await repo.enableEndpoint("org-001", "ep-001");
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.kind).toBe("internal");
+  });
+
   it("deletes an endpoint scoped by orgId", async () => {
     const { executor, queries } = createFakeExecutor({ rows: [{}], rowCount: 1 });
     const repo = createWebhookRepository(executor);
