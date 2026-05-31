@@ -1,6 +1,6 @@
 # Task Ledger
 
-Last updated: 2026-05-31 (Task 0102 Verifier PASS + MERGED — PR #157 squash `bced5fa`, post-merge main-CI `26699284529` 7/7 SUCCESS, Track B4 FULLY CLOSED, every CLI command dispatches through `@saas/sdk`)
+Last updated: 2026-05-31 (Task 0103 Verifier PASS + MERGED — PR #158 squash `0909186`, post-merge main-CI `26699966952` 4/4 SUCCESS, SDK clients 12 → 13 with `auth` added, last SDK gap before U10 closed)
 
 ## Task 0001
 
@@ -2513,47 +2513,59 @@ on the SDK side.
 
 ## Task 0103
 
-- Agent: Implementer (complete) + Verifier (sealed, active)
-- Implementer prompt: `ai/tasks/task-0103.md`
-- Implementer report: `ai/reports/task-0103-implementer.md`
+- Agent: Implementer + Verifier
+- Prompt: `ai/tasks/task-0103.md`
 - Verifier prompt: `ai/tasks/task-0103-verifier.md`
-- Status: implementer phase complete 2026-05-31; PR #158 OPEN,
-  MERGEABLE/CLEAN, PR-CI run `26699737104` 4/4 SUCCESS (plan +
-  sdk·{dev,stage,prod} Verify). Verifier prompt sealed and awaiting
-  execution. SDK tests 89 → 106 (+17 it() blocks; target was ≥10).
-  Hazard scan clean, no spec proposals, `packages/sdk/component.yaml`
-  byte-identical vs main. Verifier prompt is 7-phase, mirrors the
-  Task 0098 SDK-only shape (no stacked-PR rebase phase needed). On
-  PASS: squash-merge, post-merge main-CI watch, bookkeeping commit
-  on main, recommended-next is Task 0104 (Console U10 SDK refactor —
-  pure consumer-side swap of `apps/web-console-next/src/lib/api.ts`
-  for `Sourceplane` from `@saas/sdk`, now unblocked).
-- Original scoping (preserved for context):
-- Objective: Add a 13th `@saas/sdk` resource client `AuthClient`
+- Reports: `ai/reports/task-0103-implementer.md`,
+  `ai/reports/task-0103-verifier.md`
+- Status: verified PASS and merged 2026-05-31. PR #158 squash-merged
+  at `0909186` via `gh pr merge 158 --squash --delete-branch --admin`
+  (PR was BEHIND main due to merge-time drift on the orchestrator
+  scoping commit; admin merge is the documented Phase 6 fallback).
+  Post-merge main-CI run `26699966952` 4/4 SUCCESS (plan + sdk ×
+  {dev,stage,prod} Verify; no deploy step — sdk is a turbo-package).
+- Implementation: branch `impl/task-0103-sdk-auth-client`, 4 files
+  (`packages/sdk/src/auth.ts` new 115 lines,
+  `packages/sdk/src/index.ts` modified +16 lines,
+  `packages/sdk/src/__tests__/auth.test.ts` new 301 lines, implementer
+  report new 105 lines), additions=537, deletions=0. SDK tests
+  89 → 106 (+17 it() blocks; target was ≥10).
+- PR CI: run `26699737104` 4/4 SUCCESS at sealing.
+- Post-merge: run `26699966952` 4/4 SUCCESS.
+- Objective: add a 13th `@saas/sdk` resource client `AuthClient`
   wrapping the identity-worker public auth surface (`loginStart`,
   `loginComplete`, `getSession`, `logout`, `getProfile`,
   `updateProfile`). Closes the last SDK gap before Task 0104 (Console
   U10 SDK refactor) becomes a pure consumer-side swap. Mirrors
-  `EnvironmentsClient` cadence from Task 0102.
+  `EnvironmentsClient` cadence from Task 0102 (caller-owned
+  `Idempotency-Key`, `transport.request<T>` only — no `fetchImpl`
+  reach-around).
 - Scope boundary: `packages/sdk/src/auth.ts` (new),
-  `packages/sdk/src/index.ts` (wire `client.auth`),
-  `packages/sdk/src/__tests__/auth.test.ts` (new, ≥10 `it()` blocks).
-  Out of scope: `packages/contracts/**` (proposal-then-defer if
-  `UpdateProfileRequest` / `ProfileResponse` missing),
-  `packages/cli/**`, `apps/**`, `packages/sdk/src/transport.ts` public
-  API, other resource clients, `/v1/auth/resolve` (internal),
-  `securityEvents` (already in `SecurityEventsClient`).
-- Acceptance: SDK ≥99 tests (89 + 10); per-workspace
-  typecheck/lint/test/build exit 0; repo-wide `pnpm -r typecheck` exit
-  0; `pnpm -r --no-bail lint` ≤45 residual warnings, all in
-  `tests/api-edge` (Task 0096f territory unchanged); `kiox -- orun
-  validate / plan / run --dry-run` all exit 0;
-  `packages/sdk/component.yaml` byte-identical vs main; PR-CI 4/4
-  green on `plan + sdk × {dev,stage,prod} Verify` (no deploy step);
-  hazard scan clean (zero new `eslint-disable` / `@ts-ignore` /
-  `@ts-expect-error` / `as unknown as` / `as any` under
-  `packages/sdk/**`); no `node:*` imports.
-- Expected outcome: SDK clients 12 → 13 (`auth` added). Unblocks Task
-  0104 (Console U10 SDK refactor) which becomes a pure consumer-side
-  swap of `apps/web-console-next/src/lib/api.ts` (297 LOC, 8 call
-  sites) for `Sourceplane` from `@saas/sdk`.
+  `packages/sdk/src/index.ts` (wire `client.auth` + 9 type re-exports
+  from `@saas/contracts/auth`), `packages/sdk/src/__tests__/auth.test.ts`
+  (new). Zero edits to `packages/contracts/**`, `packages/cli/**`,
+  `apps/**`, `packages/sdk/src/transport.ts`, `packages/sdk/component.yaml`,
+  or other resource clients. `/v1/auth/resolve` (internal service-binding)
+  and `/v1/auth/security-events` (already on `SecurityEventsClient`)
+  intentionally excluded.
+- Durable outcome: SDK clients on main 12 → 13 (`auth` added —
+  organizations, projects, memberships, apiKeys, webhooks, metering,
+  billing, events, securityEvents, config, notifications, environments,
+  **auth**). Stripe parity locked both directions: caller-owned
+  `Idempotency-Key` forwarded verbatim on all 3 POSTs (`loginStart`,
+  `loginComplete`, `logout`); SDK never auto-generates one when the
+  caller omits it. All 4 typed errors covered
+  (`UnauthenticatedError` 401, `ValidationError` 422, `RateLimitError`
+  429, `InternalError` 500). Public-API preservation verified:
+  `Transport.request<T>` byte-identical, all 12 prior resource
+  clients untouched. Hazard scan clean (zero new `eslint-disable` /
+  `@ts-ignore` / `@ts-expect-error` / `as unknown as` / `as any` /
+  `node:` under `packages/sdk/**`). Lint baseline preserved (45
+  warnings, all `tests/api-edge`). No spec proposals — all 6 method
+  signatures map cleanly to existing `@saas/contracts/auth` types.
+- Unlocks: Task 0104 — Console U10 SDK refactor. Drop
+  `apps/web-console-next/src/lib/api.ts` (297 LOC, 8 consumer call
+  sites) including the auth flow in
+  `apps/web-console-next/src/app/login/page.tsx`, replace with
+  `Sourceplane` from `@saas/sdk` end-to-end. Pure consumer-side swap;
+  estimated single PR.
