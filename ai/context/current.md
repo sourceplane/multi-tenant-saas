@@ -1,14 +1,49 @@
 # Current Context
 
-Last updated: 2026-05-31 — Task 0111 VERIFIED PASS + MERGED. PR #166
-squash-merged as `da9810f` on main. Post-merge main-CI run
-`26706881757` 4/4 SUCCESS (plan + cli·{dev,stage,prod}·Verify).
-B5 secret-rotation arc + housekeeping closer FULLY CLOSED on main.
+Last updated: 2026-05-31 — Task 0112 implementer complete; verifier
+SCOPED (`ai/tasks/task-0112-verifier.md`). PR #167 OPEN, MERGEABLE/CLEAN,
+5/5 PR-CI green at HEAD `2e9bdb0`. Awaiting verifier execution
+(8-phase shape adapted for `cloudflare-pages-turbo` deploy-gated
+component — mandatory Phase 6.5 post-merge main-CI + live-URL curl).
 
-## Active Task — none
+## Active Task — 0112 (verifier scoped)
 
-No task currently in-flight. Next orchestrator cycle should pick the
-next candidate from the slate below.
+**Branch:** `impl/task-0112-console-webhook-endpoint-crud`
+**HEAD:** `2e9bdb0` (single implementer commit on top of `c683f4f`)
+**PR:** #167 — https://github.com/sourceplane/multi-tenant-saas/pull/167
+**Verifier prompt:** `ai/tasks/task-0112-verifier.md`
+
+**Scope shipped:** Full webhook-endpoint CRUD wired into the
+org-scoped Console:
+
+- New "New endpoint" button on the list page; empty-state placeholder
+  copy ("Use the API or CLI to create one — UI creation is coming in
+  a follow-up.") replaced with a primary "Create endpoint" CTA.
+- `CreateEndpointDialog` (URL/name/description, Idempotency-Key via
+  `crypto.randomUUID` w/ documented `idem-<ts>-<rand>` fallback).
+- `EditEndpointDialog` (rename / re-target / edit description) with
+  diff-only PATCH and "Nothing to update" short-circuit toast.
+- `DisableEndpointDialog` (optional reason, bounded 280 chars).
+- `DeleteEndpointDialog` (typed-URL confirm gate, density mirrors
+  `rotate-secret-dialog.tsx`).
+- Disabled-state inline notice card in place of a re-enable button —
+  re-enable is contract-blocked (see Spec Proposal below).
+- Pure helper module `endpoint-crud.ts` (URL validation,
+  bounded-string rules, `buildUpdatePatch`, `confirmDeleteMatches`,
+  `generateIdempotencyKey`).
+- 22 jest cases in `tests/web-console-next/src/endpoint-crud.test.ts`
+  (well above the +6 floor).
+
+**Spec Proposal carried forward:**
+`/ai/proposals/task-0112-spec-update.md` — webhook endpoint
+re-enable surface (contract + SDK + worker route + console wiring).
+Recommended Task 0113 follow-on; not a blocker.
+
+**Test-harness deviation (documented assumption):** implementer used
+the existing `tests/web-console-next/` jest workspace (matches
+`rotate-flow.test.ts` prior-art) instead of vitest under `apps/`
+(no vitest harness configured for `@saas/web-console-next` today —
+that's its own future scaffolding task).
 
 ## Just-merged — 0111
 
