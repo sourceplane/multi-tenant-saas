@@ -3014,3 +3014,47 @@ on the SDK side.
   pain point), B5 replay UI / failure-budget alerts, B7 audit-log
   UX expansion (multi-PR), or B8 admin-worker scaffold
   (greenfield) — orchestrator picks at next pass.
+
+## Task 0107
+
+- Agent: Implementer
+- Prompt: `ai/tasks/task-0107.md`
+- Status: SCOPED 2026-05-31 (orchestrator) — awaiting Implementer dispatch
+- Branch: `impl/task-0107-cli-webhook-sign`
+- Sealed snapshot main: `4387f50` (Task 0106 verifier-PASS bookkeeping)
+- Roadmap leg: B5 — Webhooks polish (CLI sign, symmetric counterpart
+  to Task 0106 `webhook verify`)
+- Surface: `sourceplane webhook sign --secret=... --timestamp=...
+  [--body=PATH] [--output=human|json]`. Output human:
+  `signature: sha256=<hex>\ntimestamp: <ts>`. Output json:
+  `{"signature":"sha256=...","timestamp":"..."}`. Exit 0 success,
+  exit 2 UsageError.
+- PR boundary (≤ 5 paths): `packages/cli/src/commands/webhook-sign.ts`
+  NEW; `packages/cli/src/cli-runner.ts` (register + help line);
+  `packages/cli/src/__tests__/webhook-sign.test.ts` NEW with ≥ 12
+  cases including round-trip integration with helper's
+  `verifyWebhookSignature`; `pnpm-lock.yaml` (likely no delta —
+  `@saas/webhook-verifier` dep already on `packages/cli` from
+  0106); `ai/reports/task-0107-implementer.md` (committed on PR
+  branch — must NOT repeat 0106 missing-report gap).
+- Hard rules: zero edits anywhere outside `packages/cli/**`;
+  `packages/webhook-verifier/**` locked from 0105; no
+  `node:crypto`/`node:buffer`/Node-only crypto (sign through helper
+  only); body bytes verbatim (no `.trim`/`JSON.parse`/decode-
+  re-encode); no new `eslint-disable`/`@ts-ignore`/`@ts-expect-error`
+  /`as any`; the `as unknown as StdinLike` boundary cast pattern
+  from `webhook-verify.ts:179` is acceptable.
+- Acceptance gates: `pnpm -r typecheck=0` (39 workspaces),
+  `pnpm -r --no-bail lint` ≤ 45 warnings all in `tests/api-edge/**`,
+  `@saas/cli` build/test green with ≥ 123 total cases (existing
+  111 + ≥ 12 new), mandatory local e2e smoke 3 transcripts via
+  `child_process.spawn` (sign+verify roundtrip green; sign+verify
+  tampered → exit 4 `signature_mismatch`), `kiox -- orun
+  validate/plan/run --dry-run` selecting only
+  `cli·{dev,stage,prod}·Verify` lanes, PR-CI 4/4 via
+  `gh run view --log`.
+- Parallel-safe with anything not touching `packages/cli/**`.
+- Recommended-next on PASS: B5 rotate UX (multi-PR shape — backend
+  reveal-once changes required since `webhooks-worker` rotate
+  currently returns no plaintext), B5 replay UI / failure-budget
+  alerts, B7 audit-log UX expansion, or B8 admin-worker scaffold.
