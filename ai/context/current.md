@@ -1,6 +1,45 @@
 # Current Context
 
-Last updated: 2026-05-31 — Task 0120 VERIFIED PASS + MERGED. PR #175 squash-merged as `99877e0` on main (mergedAt 2026-05-31T13:29:02Z). Post-merge main-CI run `26713941496` SUCCESS (12/12 jobs incl. all three web-console-next deploy lanes); prod Worker live (`/` → 307 → `/orgs` → 200). B5-webhook-delivery-history milestone CLOSED end to end. main HEAD `99877e0`. 0 open PRs. Next focus: B7 audit-log.
+Last updated: 2026-05-31 — Task 0121 EMITTED (implementer pickup pending). B7
+audit-log filtering + export milestone scoped end to end (`ai/tasks/task-0121.md`).
+main code HEAD `99877e0` (Task 0120 / PR #175, B5 webhook delivery history,
+VERIFIED PASS + MERGED). Bookkeeping HEAD advancing past `c393dc3`. 0 open PRs,
+working tree clean.
+
+## Active: Task 0121 — B7 audit-log filtering + export (IMPLEMENTER, emitted)
+
+Take the org-scoped audit read API (`GET /v1/organizations/:orgId/audit`) from
+category-only to buyer-credible: add **actor** (actorId/actorType), **resource**
+(subjectKind/subjectId), **action** (eventType), and **time-range** (occurredAt
+`from`/`to`) filters + an **NDJSON export**, across DB → worker → contracts →
+SDK → CLI → Console. Backend today supports ONLY a `category` filter + cursor
+pagination (verified by inspection this cycle, NOT to be rebuilt).
+
+Gap map (real code, this cycle):
+- **api-edge needs NO change** — `audit-facade.ts` forwards `pathname +
+  url.search` verbatim, so new query params flow through automatically.
+- **DB** `repository.ts` `queryAuditByOrg` (~L295) — add optional actor/subject/
+  eventType/time-range WHERE clauses; preserve legacy `org_id IN ($1,$2)` +
+  `ORDER BY occurred_at DESC, id DESC` keyset cursor. `queryAuditByTarget`
+  already shows subject-filter + cursor style to mirror.
+- **Worker** `pagination.ts` (parses ONLY limit/cursor today; cursor v1 = base64
+  `{v,t,i}`, ISO_TS_RE / UUID_RE validation) + `handlers/list-audit.ts`
+  (CATEGORY_RE only) — parse + validate new params, 400 on malformed from/to.
+- **Contracts** `events.ts` — extend `AuditQueryByOrg` (category-only today);
+  do NOT widen `PublicAuditEntry`/envelope; org_id-always rule intact.
+- **SDK** `events.ts` — extend `ListAuditEntriesQuery` `by:"org"` arm +
+  `buildAuditRequest` + iterator per-page query reconstruction (filters must
+  survive pagination); add NDJSON export helper over `iterAuditEntries`.
+- **CLI** `cross-reads.ts` `auditListCommand` + `cli-runner.ts:179` — add
+  `--actor/--actor-type/--subject-kind/--subject-id/--event-type/--from/--to`
+  flags + NDJSON export mode; update usage.
+- **Console** `audit/page.tsx` — filter UI + Load-more cursor pagination + export
+  button, SDK-only via `wrap()`, U4/U8 designed empty + loading states.
+- Tests on every surface; Console leg DEPLOY-GATED (verifier PASS gate =
+  post-merge main-CI + live prod-Worker probe).
+
+May land as 1 PR or a SDK-before-consumers sequence. Implementer MUST branch +
+commit + push + open ≥1 PR and write `ai/reports/task-0121-implementer.md`.
 
 ## Just landed: Task 0120 — B5 webhook delivery history (VERIFIER PASS)
 
@@ -26,33 +65,26 @@ surfaces over the already-shipped cursor-paginated delivery-attempts backend:
 11/11 → squash-merge `99877e0`. **Phase 7 (PASS gate):** post-merge main-CI run
 `26713941496` SUCCESS (12/12); web-console-next dev/stage/prod deploy lanes each
 8/8 steps incl. `07 deploy` (wrangler 4.90.0 ✨ upload) + `08 smoke`; live-URL
-probe prod Worker `/` → 307 → `/orgs` → HTTP 200. Node 20 banner lists ONLY
-out-of-scope `actions/cache@v4`. Reports:
+probe prod Worker `/` → 307 → `/orgs` → HTTP 200. Reports:
 `ai/reports/task-0120-{implementer,verifier}.md`.
 
 LOAD-BEARING FACT confirmed live: the worker emits the continuation cursor as an
 OPAQUE base64 token in `meta.cursor` (envelope), NOT body `nextCursor`
 (vestigial); every consumer reads `meta.cursor ?? null` and forwards verbatim.
 
-## Previously landed: Task 0119 (PR #174, merged `ba274f3`)
+## Next focus after 0121
 
-Bumped the four deprecated Node-20-runtime GitHub Actions in
-`.github/workflows/ci.yml` to Node-24 majors (`checkout@v4`→`@v6` ×2,
-`upload-artifact@v4`→`@v7`, `download-artifact@v4`→`@v8`,
-`docker/login-action@v3`→`@v4`). Only the transitive `actions/cache@v4`
-(pulled in by `sourceplane/orun-action`) still triggers the deprecation
-warning — out of scope for this repo. main FULLY GREEN.
-
-## Next focus after 0120
-
-1. **B7 audit-log** — larger multi-PR surface; next-up once B5 closes.
-2. **`VALID_CONTEXTS` drift-proofing (hygiene)** — derive the test array from
-   the `BoundedContext` union via `as const` so the Task 0117 duplication
-   cannot re-break. Low priority.
-3. **B8 admin-worker** — greenfield; later.
+1. **Task 0121 verifier** — emit once the implementer report lands (Console leg
+   is deploy-gated: PASS gate = post-merge main-CI + live prod-Worker probe).
+2. **B7 follow-on / security-events surface** — `querySecurityEvents` consumer
+   exposure is a separate leg (explicitly out of scope for 0121).
+3. **`VALID_CONTEXTS` drift-proofing (hygiene)** — derive the test array from
+   the `BoundedContext` union via `as const`. Low priority.
+4. **B8 admin-worker** — greenfield; later.
 
 Deferred (Deferred Decision Protocol, human input required, NOT picked):
 `0085b` (cloudflare-domain v4→v5), `notifications-provider-swap`,
 `notifications-worker-dev-reframe`, `optional-spec-13-commands`.
 
-Repo health: green. main HEAD `99877e0`. 0 open PRs.
+Repo health: green. main code HEAD `99877e0`. 0 open PRs. Task 0121 awaiting
+implementer pickup.

@@ -4330,3 +4330,71 @@ One PR, one reviewer-holdable outcome (rotate UX backend), one rollback (single 
   input. Chosen over VALID_CONTEXTS drift-proofing (low priority), B7 audit-log
   (larger multi-PR scope), and B8 admin-worker (greenfield).
 
+## Task 0121
+
+- Agent: Implementer
+- Prompt: `ai/tasks/task-0121.md`
+- Status: EMITTED 2026-05-31 (implementer pickup pending). main code HEAD
+  `99877e0`, 0 open PRs, working tree clean.
+- Milestone: `B7-audit-log-filtering-export`. Take the org-scoped audit read API
+  (`GET /v1/organizations/:orgId/audit`) from category-only to buyer-credible by
+  adding actor (actorId/actorType), resource (subjectKind/subjectId), action
+  (eventType), and time-range (occurredAt from/to) filters + an NDJSON export,
+  end to end across DB → worker → contracts → SDK → CLI → Console, each w/ tests.
+- Spec basis: `specs/roadmap.md` §B7 +
+  `specs/components/09-events-audit-observability.md` ("Audit history is
+  queryable by organization and target resource"; org_id always required — do
+  NOT add an org-less or cross-org query path).
+- Backend already shipped but FILTER-POOR (verified by inspection this cycle,
+  NOT to be rebuilt): the org audit read API supports ONLY a `category` filter
+  + cursor pagination. Confirmed surfaces:
+  - contracts `AuditQueryByOrg { orgId; category?; limit; cursor? }`
+    (`events.ts:110`) — category only; `AuditQueryByTarget` already has
+    subjectKind/subjectId (`events.ts:117`); `PublicAuditEntry` (`:129`) +
+    `ListAuditEntriesResponse` envelope cursor in `meta` not body.
+  - events-worker `ORG_AUDIT_RE` GET route (`router.ts`), `list-audit.ts`
+    parses ONLY `category` (`CATEGORY_RE=/^[a-z0-9_.\-]{1,64}$/`),
+    `pagination.ts` `parsePageParams` reads ONLY limit/cursor (DEFAULT_LIMIT=50,
+    MAX_LIMIT=100; cursor v1 = base64 `{v:1,t:occurredAt,i:id}`; ISO_TS_RE /
+    UUID_RE) — the from/to extension point.
+  - DB `repository.ts` `queryAuditByOrg` (~L295): `org_id IN ($1,$2)` legacy
+    dual-format + optional `category` + `ORDER BY occurred_at DESC, id DESC`
+    keyset cursor; `queryAuditByTarget` shows the subject-filter clause style.
+  - api-edge `audit-facade.ts` forwards `pathname + url.search` VERBATIM —
+    **NO change needed**; new params flow through automatically.
+  - SDK `events.ts` `ListAuditEntriesQuery` (`:21`) org arm category-only;
+    `buildAuditRequest` (`:127`); `iterAuditEntries` reconstructs per-page query
+    (~L177) — filters MUST be carried in or they drop after page 1.
+  - CLI `cross-reads.ts` `auditListCommand` + `cli-runner.ts:179`
+    (`audit list [--limit][--cursor][--category][--all][--json]`).
+  - Console `audit/page.tsx` — category-only filter, single fetch, NO Load-more,
+    NO export.
+- The milestone (consumer-credible filters + export over the category-only
+  backend): (1) DB optional WHERE clauses preserving cursor ordering; (2) worker
+  param parse + validation (400 on malformed from/to / bad actorType, ignore
+  unknown); (3) contracts `AuditQueryByOrg` filter fields (keep PublicAuditEntry
+  /envelope stable); (4) SDK org-query arm + buildAuditRequest + iterator filter
+  survival + NDJSON export helper; (5) CLI `--actor/--actor-type/--subject-kind
+  /--subject-id/--event-type/--from/--to` flags + NDJSON export mode; (6) Console
+  filter UI + Load-more cursor pagination + export button, SDK-only via `wrap()`,
+  U4/U8 designed empty + loading states; (7) tests on every surface.
+- May land as 1 PR or a SDK-before-consumers sequence (contracts+DB+worker+SDK
+  first, then CLI + Console). Implementer MUST branch + commit + push + open ≥1
+  PR and write `ai/reports/task-0121-implementer.md`.
+- Hard exclusions: NO new audit-entry fields / payload-shape change / envelope
+  widening; NO org-less or cross-org query path (spec forbids); NO write/mutation
+  of audit entries (read+export only); NO api-edge behaviour change; NO cursor
+  encoding / DEFAULT_LIMIT / MAX_LIMIT change; NO `querySecurityEvents` surface
+  work (separate leg); NO R2/dead-letter/replay/analytics. Do NOT touch
+  `ai/deferred.md` zones or `infra/terraform/cloudflare-domain/**` / cloudflare
+  provider pin.
+- Multi-component: `db` + `events-worker` + `contracts` + `sdk` (turbo packages)
+  + `cli` (turbo package) + `web-console-next` (cloudflare-pages turbo,
+  deploy-gated — post-merge main-CI smoke + live-URL is the verifier PASS gate).
+  BEHIND-main rebase is the verifier's responsibility (recurring 0103-0120).
+- Selection rationale: highest-leverage human-independent forward pick now that
+  B5 is closed — backend filter surface is well-bounded, every consumer is a
+  thin pass-through, and audit slicing/export is a concrete buyer-credibility
+  win. Chosen over security-events exposure (separate follow-on leg),
+  VALID_CONTEXTS drift-proofing (low priority), and B8 admin-worker (greenfield).
+
