@@ -1,96 +1,67 @@
 # Current Context
 
-Last updated: 2026-05-31 — Task 0106 closed (PASS+MERGED on
-`a99788b`). Task **0107 SCOPED** (orchestrator) — adds the
-`sourceplane webhook sign` CLI subcommand, the symmetric
-counterpart to 0106's `webhook verify`. Pure local crypto consumer
-of `signWebhookPayload` from `@saas/webhook-verifier`. Tight 5-path
-PR boundary mirroring 0106. Sealed snapshot main: `4387f50`.
+Last updated: 2026-05-31 — Task 0107 closed (PASS+MERGED on
+`e08d106`). The B5 webhook-helper dogfood arc is now fully closed
+(0105 `@saas/webhook-verifier` helper → 0106 `webhook verify` CLI →
+0107 `webhook sign` CLI). `@saas/cli` ships symmetric local-crypto
+sign/verify subcommands wired through the helper end-to-end inside
+the monorepo.
 
-## Current Task — 0107 (scoped, awaiting implementer)
+## Last completed task — 0107 (PASS+MERGED)
 
-**Agent:** Implementer
-**Prompt:** `ai/tasks/task-0107.md`
-**Branch:** `impl/task-0107-cli-webhook-sign`
-**Roadmap leg:** B5 — Webhooks polish (CLI sign symmetric to verify)
-**Sealed snapshot main:** `4387f50`
+**Result:** PASS — squash on main `e08d106`, post-merge main-CI run
+`26703647036` 4/4 SUCCESS (`plan` + `cli·{dev,stage,prod}·Verify`).
+Turbo-package shape — no deploy lane, no live URL surface.
 
-### Surface
+**Verifier report:** `ai/reports/task-0107-verifier.md`
+**Implementer report:** `ai/reports/task-0107-implementer.md`
 
-```
-sourceplane webhook sign
-  --secret=SECRET                 (required)
-  --timestamp=UNIX_SECONDS        (required, integer)
-  [--body=PATH]                   file bytes — mutex with piped STDIN
-  [--output=human|json]           default human
-```
+**Surface shipped:** `sourceplane webhook sign --secret=...
+--timestamp=... [--body=PATH] [--output=human|json]`. Output human:
+`signature: sha256=<hex>\ntimestamp: <ts>`. Output json:
+`{"signature":"sha256=...","timestamp":"..."}`. Exit 0 success, exit
+2 UsageError. Pure local crypto via `signWebhookPayload` from
+`@saas/webhook-verifier` — no SDK, no network, no `/v1/`, no
+`node:crypto`/`node:buffer`.
 
-Output (human): `signature: sha256=<hex>\ntimestamp: <ts>`.
-Output (json): `{"signature":"sha256=...","timestamp":"..."}`.
-Exit 0 on success, exit 2 on `UsageError`.
-
-### PR boundary (≤ 5 paths)
-
-- `packages/cli/src/commands/webhook-sign.ts` — NEW
-- `packages/cli/src/cli-runner.ts` — register `["webhook","sign"]`
-  route + help line
-- `packages/cli/src/__tests__/webhook-sign.test.ts` — NEW, ≥ 12
-  cases including round-trip integration with helper's
-  `verifyWebhookSignature`
-- `pnpm-lock.yaml` — likely no delta (helper dep already on
-  `packages/cli` from 0106)
-- `ai/reports/task-0107-implementer.md` — committed on PR branch
-  (do NOT repeat 0106 missing-report gap)
-
-### Hard rules
-
-- Zero edits anywhere outside `packages/cli/**` (apps, sdk,
-  contracts, console, tooling, tests/api-edge, infra, kiox.lock all
-  forbidden).
-- `packages/webhook-verifier/**` is locked from 0105 — do NOT touch.
-- No `node:crypto` / `node:buffer` / Node-only crypto. Sign through
-  `signWebhookPayload` only.
-- Body bytes verbatim — no `.trim()`, no `JSON.parse`, no
-  decode-then-re-encode.
-- No new `eslint-disable` / `@ts-ignore` / `@ts-expect-error` /
-  `as any`. The single `as unknown as StdinLike` boundary cast at
-  the `process.stdin` seam (pattern from `webhook-verify.ts:179`)
-  is acceptable.
-
-### Acceptance gates
-
-- `pnpm -r typecheck=0` across all 39 workspaces.
-- `pnpm -r --no-bail lint` ≤ 45 warnings, all in
-  `tests/api-edge/**`.
-- `@saas/cli` build + test green with ≥ 123 total cases (existing
-  111 + ≥ 12 new).
-- Mandatory local e2e smoke 3 transcripts via
-  `child_process.spawn` harness (sign+verify roundtrip green,
-  sign+verify tampered → exit 4 `signature_mismatch`).
-- `kiox -- orun validate / plan --changed --base origin/main / run
-  --dry-run` green selecting ONLY `cli·{dev,stage,prod}·Verify`
-  lanes.
-- PR-CI 4/4 SUCCESS via `gh run view --log`.
+**Round-trip equivalence with Task 0106 confirmed via local e2e
+smoke** — sign output verifies against `webhook verify` ⇒ exit 0
+`{"ok":true}`; tampered body ⇒ exit 4
+`{"ok":false,"reason":"signature_mismatch"}`.
 
 ## Pipeline status
 
-- **Active task:** 0107 (Implementer, awaiting dispatch).
+- **Active task:** none — awaiting next orchestrator pass.
 - **Open PRs:** none from orchestrator workflow.
-- **`main` HEAD:** `4387f50` (Task 0106 verifier-PASS bookkeeping).
+- **`main` HEAD:** `e08d106` (Task 0107 squash). Will advance to the
+  Task 0107 verifier-PASS bookkeeping commit after this commit lands.
 - **Working tree:** clean except long-standing unrelated `kiox.lock`
   v2.3.0→v2.9.0 drift (NOT bundled).
+- **`@saas/cli` test count:** 9 files, 123 cases (was 8/111 before
+  0107).
+- **B5 webhook-helper dogfood arc:** CLOSED.
 
-## Recommended Next Move (after 0107 PASS)
+## Next Task — Recommended Next Move
 
-- **B5 rotate UX** (multi-PR shape — backend reveal-once changes
-  required since rotate currently returns no plaintext: the
-  webhooks-worker handler `randomHex(32)` then encrypts; never
-  echoes — would need a `revealNewSecret`-style response shape
-  change in contracts + worker + SDK + console).
-- **B5 replay UI / failure-budget alerts** (similarly multi-PR).
-- **B7 audit-log UX expansion** (events-worker reads already live;
-  needs SDK + api-edge + contracts + console — multi-PR).
-- **B8 admin-worker scaffold** (greenfield, larger).
+Orchestrator picks at next pass from these candidates (priority
+order):
+
+- **B5 — `webhook secrets rotate` UX** (canonical operational pain
+  point — multi-PR shape since `webhooks-worker` rotate currently
+  returns no plaintext; needs reveal-once secret on rotate +
+  dual-secret window + audit hook → contracts + worker + SDK +
+  console + CLI surfaces touched). Highest user-visibility of
+  remaining B5 work.
+- **B5 — webhook replay UI / failure-budget alerts** (console-side;
+  pure consumer of existing events-worker read APIs once SDK
+  delivery-history client is final).
+- **B7 — Audit-log UX expansion** (events-worker read APIs are
+  live; console has basic audit page; full filter set —
+  actor / resource / action / time-range + NDJSON export — needs
+  SDK + api-edge + contracts + console; multi-PR shape).
+- **B8 — admin-worker scaffold** (spec 16 has no app yet;
+  greenfield; cleanest single-PR shape if the orchestrator wants a
+  greenfield breather between B5 multi-PR clusters).
 
 ## Deferred (unchanged)
 

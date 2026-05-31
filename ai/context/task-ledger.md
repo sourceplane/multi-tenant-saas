@@ -3058,3 +3058,106 @@ on the SDK side.
   reveal-once changes required since `webhooks-worker` rotate
   currently returns no plaintext), B5 replay UI / failure-budget
   alerts, B7 audit-log UX expansion, or B8 admin-worker scaffold.
+
+## Task 0107 — Verifier closure
+
+- Agent: Verifier
+- Verifier prompt: `ai/tasks/task-0107-verifier.md`
+- Status: VERIFIED PASS + MERGED 2026-05-31
+- PR: #162 (`impl/task-0107-cli-webhook-sign`) → squashed onto `main`
+  at `e08d1063cf09d5f3e51f71746e535145d0732622` ("Task 0107:
+  sourceplane webhook sign CLI subcommand (#162)")
+- PR-CI history:
+  - `7157f21` (hand-off HEAD: impl + impl-report committed) →
+    run `26703256895` 4/4 SUCCESS
+  - `736dad2` (post-rebase HEAD: rebased onto `origin/main` after
+    `gh pr update-branch` produced a no-op merge HEAD that did NOT
+    re-fire CI — recurring GitHub edge case — resolved by local
+    rebase + force-push) → run `26703619248` 4/4 SUCCESS (merge gate)
+- Post-merge main-CI on `e08d106`: run `26703647036` 4/4 SUCCESS
+  (`plan` + `cli·{dev,stage,prod}·Verify`). Turbo-package shape with
+  no deploy lane, no live URL surface — no live-resource verification
+  protocol applied.
+- Verifier report: `ai/reports/task-0107-verifier.md`
+- Implementer report: `ai/reports/task-0107-implementer.md`
+  (committed on PR branch by implementer at hand-off — no fix-up
+  needed, 0106 missing-report gap NOT repeated)
+- All 8 phases green:
+  - **Phase 0** — readiness check passed; impl report on PR branch.
+  - **Phase 1** — PR sanity: 4 paths
+    (`packages/cli/{src/commands/webhook-sign.ts NEW,
+    src/cli-runner.ts, src/__tests__/webhook-sign.test.ts NEW}` +
+    `ai/reports/task-0107-implementer.md`), no
+    `pnpm-lock.yaml`/`packages/cli/package.json` delta (workspace
+    edge for `@saas/webhook-verifier` already shipped with 0106),
+    `packages/cli/src/commands/webhook-verify.ts` NOT touched (Task
+    0106 lock preserved), 4 files +818/-0,
+    OPEN/MERGEABLE/CLEAN.
+  - **Phase 2** — hazard scan clean: zero new
+    `eslint-disable`/`@ts-ignore`/`@ts-expect-error`/`as any`/
+    `require('node:…')`/bare `crypto|buffer|util` imports under
+    `packages/cli/src/commands/webhook-sign.ts`. ONE
+    `as unknown as StdinLike` boundary cast at line 188 mirroring
+    `webhook-verify.ts:179` (impl report §5; permitted). ONE
+    `import { promises as fs } from "node:fs"` for `--body=PATH` file
+    I/O mirroring `webhook-verify.ts:23` symmetric pattern (file I/O,
+    not crypto bypass; helper handles all crypto). Zero
+    `Sourceplane`/`client.`/`fetch(`/`/v1/` in code (only one
+    comment-string hit in module header). Zero `.trim()`/`JSON.parse`
+    against body bytes (only comment-string hits documenting the rule).
+  - **Phase 3** — quality gates green: `pnpm install
+    --frozen-lockfile` clean (Scope: 39 workspaces), `pnpm -r
+    typecheck=0` across 39, `pnpm -r --no-bail lint` 45 warnings ALL
+    in `tests/api-edge/**` (zero under `packages/cli/**`), `@saas/cli`
+    build green, vitest 9/9 files 123/123 cases (exactly 111 prior +
+    12 new in `webhook-sign.test.ts`), local e2e smoke 3 transcripts
+    via `child_process.spawn` against built `dist/cli.js`:
+    sign `--output=json` with stdin body → exit 0
+    `sha256=c712493c463bc56022918c4f91b71c0848c45ab9e41bba1dc00d496e17cb42ef`,
+    verify matching body via stdin (tolerance 3153600000) → exit 0
+    `{"ok":true}`, verify tampered body via stdin → exit 4
+    `{"ok":false,"reason":"signature_mismatch"}`. Round-trip
+    equivalence with Task 0106 `webhook verify` confirmed.
+  - **Phase 4** — orun gates green: `kiox -- orun validate` valid;
+    `plan --changed --base origin/main` selected ONLY 1 component
+    × 3 envs = 3 jobs all `cli·{dev,stage,prod}·Verify` (plan id
+    `10229e4181b0`); `run --dry-run --runner github-actions`
+    preview-success — all 3 lanes ✓.
+  - **Phase 5** — PR-CI logs inspected via `gh run view --log` on
+    both runs; per-lane `Run orun run \` output captured (pnpm setup,
+    install, build, typecheck, test, lint), not just summary.
+  - **Phase 6** — squash merge with rebase recovery: PR was
+    `BLOCKED`/`BEHIND` after Phase 5 (orchestrator dispatch commit
+    `f13fb04` advanced main past PR base `16eaae9`), `gh pr
+    update-branch 162` produced merge commit `5d437cd` but did NOT
+    re-fire CI; resolved by `git rebase origin/main` +
+    `git push --force-with-lease` to clean HEAD `736dad2`; fresh
+    PR-CI run `26703619248` 4/4 SUCCESS, then standard
+    `gh pr merge --squash --delete-branch` succeeded. Post-merge
+    main-CI 4/4.
+  - **Phase 6.5** — N/A (turbo-package, no live URL surface, no
+    deploy profile).
+  - **Phase 7** — verifier report committed.
+  - **Phase 8** — PASS bookkeeping commit on `main` (this entry +
+    state.json + current.md update).
+- Surface shipped: `sourceplane webhook sign` —
+  `--secret/--timestamp` REQUIRED; `--body=PATH` or STDIN (mutex);
+  `--output=human|json` (default human). Exit 0 success, exit 2
+  `UsageError` via `formatCliError`. Pure local-crypto wrapper around
+  `signWebhookPayload` from `@saas/webhook-verifier` — no SDK, no
+  network, no `/v1/`, no `node:crypto`/`node:buffer`. Symmetric
+  counterpart to Task 0106 `webhook verify`. **B5 webhook-helper
+  dogfood arc CLOSED** (0105 helper → 0106 verify CLI → 0107 sign CLI).
+- Diff at merge: 4 files, +818 / -0. All under `packages/cli/**` +
+  `ai/reports/`. No `pnpm-lock.yaml` delta. No
+  `packages/cli/package.json` delta.
+- Implementer chose inline body-reading helper over optional shared
+  `packages/cli/src/utils/webhook-body.ts` extraction (impl report §7
+  rationale: extraction would have required out-of-scope edit to
+  locked `webhook-verify.ts`) — accepted.
+- Recommended-next: **B5 rotate UX** (canonical operational pain
+  point: reveal-once secret on rotate, dual-secret window, audit
+  hook — multi-PR shape since `webhooks-worker` rotate currently
+  returns no plaintext); alternatives B5 replay UI / failure-budget
+  alerts, B7 audit-log UX expansion, B8 admin-worker scaffold.
+  Orchestrator picks at next pass.
