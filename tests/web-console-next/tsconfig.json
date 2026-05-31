@@ -8,7 +8,8 @@
   },
   "include": [
     "src/**/*.ts",
-    "../../apps/web-console-next/src/components/webhooks/rotate-flow.ts"
+    "../../apps/web-console-next/src/components/webhooks/rotate-flow.ts",
+    "../../apps/web-console-next/src/components/webhooks/endpoint-crud.ts"
   ],
   "exclude": ["node_modules", "dist"]
 }

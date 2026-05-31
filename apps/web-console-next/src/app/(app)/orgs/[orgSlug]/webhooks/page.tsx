@@ -2,9 +2,10 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { Webhook, ArrowRight } from "lucide-react";
+import { useParams, useRouter } from "next/navigation";
+import { Webhook, ArrowRight, Plus } from "lucide-react";
 import { OrgScope } from "@/components/shell/org-scope";
+import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +14,7 @@ import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@
 import { useSession } from "@/lib/session";
 import { useAsync } from "@/lib/use-async";
 import { wrap } from "@/lib/api";
+import { CreateEndpointDialog } from "@/components/webhooks/create-endpoint-dialog";
 
 export default function WebhooksListPage() {
   const params = useParams<{ orgSlug: string }>();
@@ -26,19 +28,34 @@ export default function WebhooksListPage() {
 
 function Inner({ orgId, orgSlug }: { orgId: string; orgSlug: string }) {
   const { client } = useSession();
+  const router = useRouter();
   const endpoints = useAsync(
     () => wrap(async () => (await client.webhooks.listEndpoints(orgId)).endpoints),
     [client, orgId],
   );
+  const [createOpen, setCreateOpen] = React.useState(false);
+
+  const handleCreated = React.useCallback(
+    (endpointId: string) => {
+      router.push(`/orgs/${orgSlug}/webhooks/${endpointId}`);
+    },
+    [router, orgSlug],
+  );
 
   return (
     <div className="space-y-5">
-      <header>
-        <h1 className="text-xl font-semibold tracking-tight">Webhooks</h1>
-        <p className="text-sm text-muted-foreground">
-          Endpoints that receive signed event deliveries from this organization.
-          Open an endpoint to inspect its signing-secret version or rotate it.
-        </p>
+      <header className="flex items-end justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">Webhooks</h1>
+          <p className="text-sm text-muted-foreground">
+            Endpoints that receive signed event deliveries from this organization.
+            Open an endpoint to inspect its signing-secret version or rotate it.
+          </p>
+        </div>
+        <Button onClick={() => setCreateOpen(true)}>
+          <Plus className="h-4 w-4 mr-1.5" />
+          New endpoint
+        </Button>
       </header>
 
       {endpoints.loading ? (
@@ -60,7 +77,8 @@ function Inner({ orgId, orgSlug }: { orgId: string; orgSlug: string }) {
         <EmptyState
           icon={Webhook}
           title="No webhook endpoints"
-          description="When you create a webhook endpoint, it'll appear here. Use the API or CLI to create one — UI creation is coming in a follow-up."
+          description="Create your first endpoint to start receiving signed event deliveries from this organization."
+          primaryAction={{ label: "Create endpoint", onClick: () => setCreateOpen(true) }}
         />
       ) : (
         <Card>
@@ -114,6 +132,13 @@ function Inner({ orgId, orgSlug }: { orgId: string; orgSlug: string }) {
           </Table>
         </Card>
       )}
+
+      <CreateEndpointDialog
+        orgId={orgId}
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onCreated={handleCreated}
+      />
     </div>
   );
 }

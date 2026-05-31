@@ -2,8 +2,15 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { ChevronLeft, RefreshCcw, Webhook as WebhookIcon } from "lucide-react";
+import { useParams, useRouter } from "next/navigation";
+import {
+  ChevronLeft,
+  RefreshCcw,
+  Webhook as WebhookIcon,
+  Pencil,
+  ShieldOff,
+  Trash2,
+} from "lucide-react";
 import { OrgScope } from "@/components/shell/org-scope";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -14,6 +21,9 @@ import { useSession } from "@/lib/session";
 import { useAsync } from "@/lib/use-async";
 import { wrap } from "@/lib/api";
 import { RotateSecretDialog } from "@/components/webhooks/rotate-secret-dialog";
+import { EditEndpointDialog } from "@/components/webhooks/edit-endpoint-dialog";
+import { DisableEndpointDialog } from "@/components/webhooks/disable-endpoint-dialog";
+import { DeleteEndpointDialog } from "@/components/webhooks/delete-endpoint-dialog";
 
 export default function WebhookEndpointDetailPage() {
   const params = useParams<{ orgSlug: string; endpointId: string }>();
@@ -36,11 +46,15 @@ function Inner({
   endpointId: string;
 }) {
   const { client } = useSession();
+  const router = useRouter();
   const endpoints = useAsync(
     () => wrap(async () => (await client.webhooks.listEndpoints(orgId)).endpoints),
     [client, orgId],
   );
   const [rotateOpen, setRotateOpen] = React.useState(false);
+  const [editOpen, setEditOpen] = React.useState(false);
+  const [disableOpen, setDisableOpen] = React.useState(false);
+  const [deleteOpen, setDeleteOpen] = React.useState(false);
 
   const endpoint = React.useMemo(
     () => endpoints.data?.find((e) => e.id === endpointId) ?? null,
@@ -84,6 +98,7 @@ function Inner({
   }
 
   const label = endpoint.name ?? endpoint.url;
+  const isDisabled = endpoint.status === "disabled";
 
   return (
     <div className="space-y-5">
@@ -106,13 +121,42 @@ function Inner({
             {endpoint.url}
           </p>
         </div>
-        <div className="shrink-0">
-          <Button variant="destructive" onClick={() => setRotateOpen(true)}>
+        <div className="shrink-0 flex items-center gap-2 flex-wrap justify-end">
+          <Button variant="outline" onClick={() => setEditOpen(true)}>
+            <Pencil className="h-4 w-4 mr-1.5" />
+            Edit
+          </Button>
+          {!isDisabled && (
+            <Button variant="outline" onClick={() => setDisableOpen(true)}>
+              <ShieldOff className="h-4 w-4 mr-1.5" />
+              Disable
+            </Button>
+          )}
+          <Button variant="outline" onClick={() => setRotateOpen(true)}>
             <RefreshCcw className="h-4 w-4 mr-1.5" />
-            Rotate signing secret
+            Rotate secret
+          </Button>
+          <Button variant="destructive" onClick={() => setDeleteOpen(true)}>
+            <Trash2 className="h-4 w-4 mr-1.5" />
+            Delete
           </Button>
         </div>
       </header>
+
+      {isDisabled && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">This endpoint is disabled</CardTitle>
+            <CardDescription>
+              No deliveries are being attempted. Re-enabling an endpoint from the
+              console is not supported by the current API surface — use the CLI
+              or recreate the endpoint. (Tracked in
+              {" "}
+              <span className="font-mono">/ai/proposals/task-0112-spec-update.md</span>.)
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
@@ -175,6 +219,34 @@ function Inner({
         open={rotateOpen}
         onOpenChange={setRotateOpen}
         onRotated={() => endpoints.reload()}
+      />
+      <EditEndpointDialog
+        orgId={orgId}
+        endpointId={endpoint.id}
+        current={{
+          url: endpoint.url,
+          name: endpoint.name,
+          description: endpoint.description,
+        }}
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        onUpdated={() => endpoints.reload()}
+      />
+      <DisableEndpointDialog
+        orgId={orgId}
+        endpointId={endpoint.id}
+        endpointLabel={label}
+        open={disableOpen}
+        onOpenChange={setDisableOpen}
+        onDisabled={() => endpoints.reload()}
+      />
+      <DeleteEndpointDialog
+        orgId={orgId}
+        endpointId={endpoint.id}
+        endpointUrl={endpoint.url}
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        onDeleted={() => router.push(`/orgs/${orgSlug}/webhooks`)}
       />
     </div>
   );
