@@ -4422,3 +4422,57 @@ One PR, one reviewer-holdable outcome (rotate UX backend), one rollback (single 
   win. Chosen over security-events exposure (separate follow-on leg),
   VALID_CONTEXTS drift-proofing (low priority), and B8 admin-worker (greenfield).
 
+## Task 0122
+
+- Agent: Implementer
+- Prompt: `ai/tasks/task-0122.md`
+- Status: scoped and ready to begin (2026-05-31)
+- Milestone: `B7-security-events-consumer-surfaces`. Branch
+  `impl/task-0122-security-events-surfaces`. Sealed snapshot main HEAD `2b52d2b`
+  (Task 0121 verifier-PASS bookkeeping; PR #176 squash `2b98507` was the feature).
+- Objective: surface the already-shipped **account security-events read backend**
+  through the SDK (cursor pagination), the CLI, and the new Next.js Console —
+  closing the B7 security-events consumer leg end to end. No backend / route /
+  contract-shape / DB change.
+- Selection (trust-code-over-docs): roadmap B7 names a "security-events surface"
+  but the BACKEND IS FULLY SHIPPED on main — DB `querySecurityEventsByUser`
+  (cursor-keyset paginated); api-edge `auth-facade.ts` `GET /v1/auth/security-events`
+  (**actor-scoped** not org-scoped; envelope `{data:{securityEvents},
+  meta:{requestId,cursor?}}`); contracts `PublicSecurityEvent` +
+  `SecurityEventListResponse` (locked); SDK `SecurityEventsClient.list()` EXISTS
+  but FLAT (no limit/cursor, drops `meta.cursor`). The CONSUMER GAP is the
+  milestone: new console has no account/security page (nav entirely org-scoped),
+  CLI has no security command. Old vanilla console surfaced it (Tasks 0046/0054)
+  but it never carried to web-console-next. Mirrors Task 0120 (webhook
+  delivery-history) byte-for-byte.
+- Scope boundary (3 surfaces):
+  1. SDK — plumb `limit`/`cursor` + surface `meta.cursor` (additive, keep flat
+     `list()` working); export new types from `index.ts`. Opaque cursor:
+     `meta.cursor ?? null`, forward verbatim.
+  2. CLI — `sourceplane security events` read command (human + `--output=json` +
+     `--limit`/`--cursor` + `--all` seen-cursor guard) mirroring
+     `webhook-deliveries.ts`; pure SDK consumer; NO `--org`/`resolveOrgId`
+     (actor-scoped).
+  3. Console — account-security page at a **non-org route** (e.g.
+     `/account/security`) + dependency-free helper + nav entry; SDK-only via
+     `wrap()` (zero `fetch`); empty state + skeleton + Load-more; render only safe
+     redacted `PublicSecurityEvent` fields.
+- Hard exclusions: NO contract-shape / api-edge-route / identity-worker / DB
+  change; NO org-scoping or new org route; NO `querySecurityEventsByUser`
+  SQL/cursor/limit change; NO audit or webhook surface change; NO `ai/deferred.md`
+  or `infra/terraform/cloudflare-domain/**` / cloudflare provider pin touch.
+- Component shape: multi-component — `sdk` + `cli` (turbo) + `web-console-next`
+  (cloudflare-pages turbo, **deploy-gated** — post-merge main-CI smoke + live-URL
+  is the verifier PASS gate). BEHIND-main rebase is the verifier's responsibility
+  (recurring 0103-0121). May land 1 combined PR (0120 precedent) or
+  SDK-before-consumers sequence — implementer's call. Implementer MUST branch +
+  commit + push + open ≥1 PR and write `ai/reports/task-0122-implementer.md` with
+  the real PR#.
+- Acceptance: `pnpm -r typecheck` 0; sdk/cli/web-console-next-tests green with
+  net-new cases each; `pnpm -r --no-bail lint` 0 new warnings; Orun validate/plan
+  --changed (sdk+cli+web-console-next lanes)/run --dry-run green; CLI human/json/
+  `--all` loop + seen-cursor guard + usage errors; Console zero `fetch`; PR-CI
+  green (`gh run view --log` not no-op); `kiox.lock` reverted, no `plan.json`.
+- Spec basis: `specs/roadmap.md` §B7. Prior-art template: Task 0120
+  (`ai/tasks/task-0120.md` + `webhook-deliveries.ts` + audit page/helper pair).
+

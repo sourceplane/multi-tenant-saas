@@ -1,46 +1,41 @@
 # Orchestrator Brief
 
 ## Snapshot
-- snapshot_at: 2026-05-31T21:00:00Z
-- head_sha: 2b98507 (origin/main, Task 0121 squash-merge) | 0 open PRs
-- state_json_mtime_marker: post-task-0121-verifier-PASS
-- last_task_id: task-0121-verifier (DONE — PASS)
-- last_report_id: task-0121-verifier
+- snapshot_at: 2026-05-31T22:30:00Z
+- head_sha: 2b52d2b (origin/main, Task 0121 verifier-PASS bookkeeping) | 0 open PRs
+- state_json_mtime_marker: post-task-0122-scope
+- last_task_id: task-0122 (SCOPED — implementer not yet started)
+- last_report_id: task-0121-verifier (DONE — PASS)
 - cycle_mode: warm
 - repo_health: green
 
 ## Working Hypothesis
-Task **0121 is CLOSED** — verifier PASS, PR **#176** squash-merged as `2b98507`
-on main. The full B7 audit-log filtering + export milestone shipped end to end in
-ONE combined PR (17 files, +1218/-55) across DB → contracts → events-worker → SDK
-→ CLI → Console, with the Console deploy leg proven on post-merge main-CI run
-`26715563040` (21/21) + a live prod-Worker probe (`/`→307→`/orgs`→200,
-`/orgs/test/audit`→200). Both inherited facts resolved: Phase-0 report fix-up done
-(`d70291f`), 400→422 accepted as the canonical worker convention (no spec proposal).
-The orchestrator's next move is to **scope the next forward milestone** — ranked #1
-below is the B7 security-events surface.
-
-Carry-forward nit (non-blocking, no task needed yet): `cross-reads.ts`
-`parseAuditFilterFlags` doc-comment still says malformed input "surfaces as a 400" —
-worker returns 422. Fold into any future cross-reads touch.
+Task **0121 is CLOSED** (verifier PASS, PR #176 squash `2b98507`; bookkeeping
+committed `2b52d2b` this cycle — it had been left uncommitted in the working tree).
+Task **0122 is SCOPED** (`ai/tasks/task-0122.md`), not yet implemented. Milestone
+**B7-security-events-consumer-surfaces**: surface the already-shipped account
+security-events read backend (DB `querySecurityEventsByUser` + api-edge
+`/v1/auth/security-events` + contracts + flat SDK `SecurityEventsClient.list()`)
+through SDK cursor pagination + a CLI command + a new Console account-security
+page. Actor-scoped (NOT org-scoped). Mirrors Task 0120 byte-for-byte. The
+implementer's next move is to branch `impl/task-0122-security-events-surfaces`,
+build the three surfaces, open ≥1 PR, write the report. Then the orchestrator
+scopes the matching **verifier** task (deploy-gated — post-merge main-CI + live
+`/account/security` curl is the PASS gate).
 
 ## Hot Files
-- hot_context_sections: `current.md#active-task-0121-verifier`,
-  `task-ledger.md#task-0121`
-- hot_code (Task 0121 verifier inspection targets):
-  - `packages/db/src/events/repository.ts` (`queryAuditByOrg` parameterized
-    filter clauses; SQL-injection-safety + cursor-keyset-unchanged check)
-  - `apps/events-worker/src/pagination.ts` (`parseAuditFilters`) +
-    `src/handlers/list-audit.ts` (422 wiring) + `src/http.ts:36` (422 convention)
-  - `packages/contracts/src/events.ts` (`AuditQueryByOrg` +7 fields;
-    `PublicAuditEntry`/envelope byte-stable)
-  - `packages/sdk/src/events.ts` (`iterAuditEntries` per-page filter survival +
-    `exportAuditEntriesNdjson`) + `src/index.ts`
-  - `packages/cli/src/commands/cross-reads.ts` + `cli-runner.ts` (filter flags +
-    `--format=ndjson` mutex)
-  - `apps/web-console-next/src/components/audit/audit-log.ts` +
-    `audit/page.tsx` (SDK-only, deploy-gated)
-  - read-only ref: `apps/api-edge/src/audit-facade.ts` (must be UNCHANGED)
+- hot_context_sections: `current.md#active-task-0122`, `task-ledger.md#task-0122`
+- hot_code (Task 0122 implementer targets):
+  - `packages/sdk/src/securityEvents.ts` (flat `list()` → add limit/cursor +
+    meta.cursor) + `src/transport.ts` (query + `meta.cursor` seam) + `src/index.ts`
+  - `packages/cli/src/commands/webhook-deliveries.ts` (CLI cursor-loop template) +
+    `cli-runner.ts` (register)
+  - `apps/web-console-next/src/app/(app)/orgs/[orgSlug]/audit/page.tsx` +
+    `components/audit/audit-log.ts` (Console page+helper template) +
+    `components/shell/sidebar.tsx` (nav)
+  - read-only refs (must be UNCHANGED): `packages/contracts/src/security-events.ts`,
+    `apps/api-edge/src/auth-facade.ts`, `packages/db/src/identity/repository.ts`
+  - prior-art: `ai/tasks/task-0120.md` + `ai/reports/task-0120-implementer.md`
 
 ## Deferred Watch
 - `0085b` (cloudflare-domain v4→v5): user lifts the defer.
@@ -50,28 +45,32 @@ worker returns 422. Fold into any future cross-reads touch.
   `/v1/deployments` GET (+ `resource create` POST) on api-edge + contracts.
 
 ## Invalidate When
-- Orchestrator scopes the next forward milestone (B7 security-events surface,
-  ranked #1) → this brief is superseded.
+- Implementer opens the Task 0122 PR → orchestrator scopes the verifier task →
+  this brief is superseded.
 - `current.md` rewritten outside the orchestrator's hand.
 - `state.json.goal` changes, or a new spec proposal under `/ai/proposals/` is filed.
 
 ## Next Move
-**Orchestrator (next cycle): scope the next forward milestone.** Task 0121 is
-closed (verifier PASS, PR #176 merged `2b98507`). Ranked pick #1 below is the
-B7 security-events surface — a separate leg from 0121's audit filtering.
+**Implementer (next): execute Task 0122** (`ai/tasks/task-0122.md`) — three
+consumer surfaces (SDK pagination + CLI + Console account-security page), open
+≥1 PR, write `ai/reports/task-0122-implementer.md` with the real PR#. **Then
+orchestrator: scope the Task 0122 verifier** (deploy-gated: post-merge main-CI
+smoke + live `/account/security` curl is the PASS gate; BEHIND-main rebase is
+verifier's job).
 
-## Ranked Candidate Queue
-1. **B7 security-events surface** — `querySecurityEvents` consumer exposure
-   (DB → contracts → events-worker → SDK → CLI → Console), explicitly out of
-   scope for 0121. Next forward leg. Mirror the 0121 keyset/cursor/parameterized
-   -SQL/422 conventions.
-2. **`VALID_CONTEXTS` drift-proofing (hygiene)** — derive the test array from the
+## Ranked Candidate Queue (after 0122)
+1. **`VALID_CONTEXTS` drift-proofing (hygiene)** — derive the test array from the
    `BoundedContext` union via `as const`. Low priority.
-3. **B8 admin-worker scaffold** — greenfield; cross-tenant ops surface. Later.
+2. **B8 admin-worker scaffold** — greenfield cross-tenant ops surface (spec 16).
+3. **B6 Stripe / B1 real auth** — larger baseline legs; B6 waits on U7.
 
 ## Open Questions To Self
-- For the B7 security-events leg: confirm whether `querySecurityEvents` already
-  exists in `packages/db` (read-side) or needs the full DB→Console stack — scope
-  accordingly to avoid over/under-reach.
-- Carry the 0121 cross-reads "400→422" comment nit into the first security-events
+- Task 0122 Console route placement: there is no existing `/account/*` route group
+  in web-console-next (nav is org-scoped only) — the implementer must create the
+  first account-scoped route + nav affordance. Watch the verifier for nav/route
+  correctness, not just the page.
+- Carry the 0121 cross-reads "400→422" comment nit into the first future
   cross-reads touch (non-blocking, no standalone task).
+- Recurring ops gap: verifier PASS bookkeeping was left UNCOMMITTED after Task
+  0121 (caught + fixed this cycle as `2b52d2b`). Confirm each verifier cycle ends
+  with the report + state files committed AND pushed, not just written.
