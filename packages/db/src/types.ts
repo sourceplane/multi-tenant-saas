@@ -8,7 +8,8 @@ export type BoundedContext =
   | "config"
   | "webhooks"
   | "metering"
-  | "notifications";
+  | "notifications"
+  | "support";
 
 export interface MigrationEntry {
   id: string;
