@@ -129,5 +129,14 @@ export const manifest: MigrationManifest = {
       description:
         "Dual-secret rotation window — adds previous_secret_{ciphertext,version,expires_at} for grace-period delivery signing",
     },
+    {
+      id: "140_support_action_records",
+      context: "support",
+      path: "140_support_action_records/up.sql",
+      checksum:
+        "50262de186b5ec91797e25532b56cf69028f3975dcc58751c07de6ef1517f190",
+      description:
+        "Support persistence foundation — append-only audited support-action ledger owned by the admin-support worker",
+    },
   ],
 };
