@@ -3823,3 +3823,62 @@ One PR, one reviewer-holdable outcome (rotate UX backend), one rollback (single 
   delivery-attempts UX, OR B7 audit-log UX, OR B8 admin-worker
   scaffold, OR `cross-reads.ts:resolveOrgId` housekeeping fold-in
   (Task 0111 verifier-flagged Remaining Gap)
+
+## Task 0113
+
+- Agent: Implementer (complete) → Verifier (scoped)
+- Implementer prompt: `ai/tasks/task-0113.md`
+- Verifier prompt: `ai/tasks/task-0113-verifier.md`
+- Status: implementer complete on PR #168 (OPEN, MERGEABLE,
+  mergeStateStatus UNSTABLE — 13/17 PR-CI lanes SUCCESS, 4/17 deploy
+  lanes IN_PROGRESS at HEAD `98cc3d3`); verifier scoped 2026-05-31
+- Objective: Close the documented contract gap from Task 0112 by
+  shipping the webhook-endpoint **re-enable** surface as one
+  vertical-slice PR — contract `EnableWebhookEndpoint{Request,Response}`
+  → SDK `WebhooksClient.enableEndpoint` → api-edge facade matcher
+  pin (regex already covers `/enable`) → webhooks-worker `POST
+  /v1/organizations/:orgId/webhooks/endpoints/:endpointId/enable`
+  + `handleEnableWebhookEndpoint` (Task 0024 atomicity pattern) →
+  db repo `enableEndpoint(orgId, endpointId)` (sets `status='active'`,
+  nulls `disabled_reason`/`disabled_at`, `WHERE status='disabled'`
+  guard, RETURNING `ENDPOINT_SAFE_COLUMNS` — no `secret_ciphertext`)
+  → console detail-page Re-enable button + new
+  `enable-endpoint-dialog.tsx`, with the disabled-state inline notice
+  card rewritten to point at the new button instead of the spec
+  proposal
+- Scope boundary: 15 files +799/-15 across packages/contracts,
+  packages/sdk + tests, packages/db + tests, apps/webhooks-worker
+  + tests, apps/web-console-next (page + new dialog +
+  endpoint-crud.ts pointer swap), tests/api-edge (matcher pin),
+  ai/reports/task-0113-implementer.md NEW (real PR #168),
+  ai/proposals/task-0112-spec-update.md flipped to RESOLVED.
+  api-edge facade source UNCHANGED. CLI surface intentionally
+  deferred. NO migration / secrets / delivery-loop / rotate /
+  Task 0112 surface touch
+- Acceptance (verifier): 8-phase verifier shape adapted for
+  cloudflare-pages-turbo + cloudflare-worker-turbo deploy-gated
+  subscribers — Phase 0 readiness; Phase 1 PR sanity (15-file
+  allowlist EXACTLY + forbidden-zone scans); Phase 2 hazard scan
+  + behaviour audit + code-path inspection (transactional
+  atomicity in `handleEnableWebhookEndpoint` per
+  references/verifier-code-path-inspection.md); Phase 3 quality
+  gates (typecheck 44/44, lint 37/37, ≥+11 net new passing tests,
+  pre-existing notifications migration failure documented as
+  baseline); Phase 4 orun gates (validate ✓, plan --changed
+  selects ONLY 7 in-scope components → 17 jobs, dry-run 17/17 ✓);
+  Phase 5 PR-CI 17/17 SUCCESS with per-lane log evidence; Phase 6
+  squash merge with BEHIND-main pattern handling; **Phase 6.5
+  MANDATORY post-merge main-CI watch + live-URL curl** (per
+  references/post-merge-deploy-profile-gap.md — verify profile
+  alone insufficient; must wait for {web-console-next,webhooks-worker}·{dev,stage,prod}·Verify
+  deploy 6/6 SUCCESS AND curl https://stage.sourceplane.ai/orgs +
+  /orgs/test/webhooks confirming HTTP 200 + Sourceplane Console
+  title + notice-card pointer rewritten + carry-forward placeholder
+  absent + webhooks-worker /health ok); Phase 7 verifier report;
+  Phase 8 PASS bookkeeping (state.json/current.md/ledger commit on
+  main) or FAIL bookkeeping (PR comment + report on PR branch, no
+  merge)
+- Expected outcome: PR #168 squash-merged on main; live re-enable
+  surface end-to-end (contract → SDK → api-edge → worker → db →
+  console); Task 0112 spec proposal RESOLVED on main; B5
+  endpoint-CRUD arc closed
