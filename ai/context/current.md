@@ -1,19 +1,45 @@
 # Current Context
 
-Last updated: 2026-05-31 — Task 0108 VERIFIED PASS + MERGED. PR #163 squash
-`28b3ca1` on main. Post-merge main-CI run `26704557782` 14/14 SUCCESS,
-including db-migrate apply on stage and prod. B5 secret-rotation backend
-slice locked; downstream consumers (Task 0109 console, Task 0110 CLI) now
-unblocked on a stable contract.
+Last updated: 2026-05-31 — Task 0109 implementer COMPLETE; verifier
+dispatched. PR #164 OPEN, MERGEABLE/CLEAN, PR-CI 5/5 SUCCESS at HEAD
+`f95befa`. Verifier prompt at `ai/tasks/task-0109-verifier.md`.
 
-## Current Task — 0109 (next)
+## Current Task — 0109 (verifier in flight)
 
-**Recommended:** Task 0109 — console reveal-once modal. Pure SDK consumer of
-`RotateWebhookSecretResponse.secret`; the contract is now locked on `main`.
-Single-PR shape under `apps/web-console-next/**`. No backend changes needed.
+**PR:** #164 — https://github.com/sourceplane/multi-tenant-saas/pull/164
+**Branch:** `impl/task-0109-webhook-console-reveal-once`
+**HEAD:** `f95befa6137b424fba286b4e96ca26a66cfacf82`
+**State:** OPEN / MERGEABLE / CLEAN
+**Diff:** 12 files, +1170/-0, scope-clean (`apps/web-console-next/**`,
+`tests/web-console-next/**`, report, lockfile only).
+**PR-CI lanes (all SUCCESS):** plan +
+`web-console-next-tests · dev · Verify` +
+`web-console-next · {dev,stage,prod} · Verify deploy`.
 
-Task 0110 (`sourceplane webhook secrets rotate` CLI subcommand) is symmetric
-and parallel-safe with 0109 (file-disjoint).
+Implementer report at `ai/reports/task-0109-implementer.md` (committed
+on PR branch). Highlights:
+
+- Two-page route shape: list at `/orgs/{orgSlug}/webhooks` + detail at
+  `/orgs/{orgSlug}/webhooks/{endpointId}`. Mirrors `members` /
+  `api-keys` precedent.
+- Reveal-once invariant enforced at the **state-machine level**
+  (discriminated union in `rotate-flow.ts`): `secret` field exists
+  ONLY on the `revealing` arm; `closeReveal` returns to `idle`,
+  dropping the secret from React state. Defensive `useEffect` cleanup
+  on dialog unmount as belt-and-braces.
+- Sidebar gains exactly one new "Webhooks" entry under
+  `Org · {orgSlug}` (between API keys and Config), `Webhook` icon
+  from `lucide-react`.
+- Legacy no-encryption-key case handled: when `secret` is undefined
+  on `RotateWebhookSecretResponse`, dialog renders an amber-toned
+  "rotation completed — secret not returned" affordance.
+- New workspace `tests/web-console-next` (mirroring `tests/contracts`
+  shape) with 18-test Jest suite — includes
+  `JSON.stringify(state).includes("whsec_")` scrub assertion after
+  `closeReveal`.
+- Decisions deferred (record-only, not blockers): Cmd-K palette
+  entry, console-side endpoint creation UX, narrow-viewport sidebar
+  visual regression check.
 
 ## Just-merged — 0108
 
@@ -43,45 +69,26 @@ and parallel-safe with 0109 (file-disjoint).
 6. Contract addition to `RotateWebhookSecretResponse` is purely additive
    (optional `secret`, new `previousSecretExpiresAt`, `gracePeriodSeconds`).
 
-**Verification highlights:**
-
-- PR-CI 14/14 SUCCESS on initial HEAD `90044b1` (run `26704364701`) and on
-  rebased HEAD `a1945ed` (run `26704498632`, after `gh pr update-branch 163`
-  for the recurring BEHIND-main pattern).
-- Post-merge main-CI 14/14 SUCCESS (run `26704557782`).
-- Migration apply on stage AND prod confirmed via `gh run view --log`
-  grepping the runner's `applied` JSON list (not just job conclusion).
-- Quality gates: typecheck 43/43 FULL TURBO, lint 36/36 FULL TURBO,
-  contracts-tests 95/95, db-tests 512/513 (1 pre-existing notifications
-  failure unchanged from main), webhooks-worker-tests 70/70 (+6 new).
-- Orun gates: validate green, plan --changed selects exactly 6 components ×
-  3 envs → 13 jobs, dry-run 13/13 preview-green.
-- Hazard scan clean (zero new `eslint-disable`/`@ts-ignore`/`@ts-expect-error`/
-  `as any`/`as unknown as`/`node:*` under PR diff).
-- Plaintext leak scan: `whsec_` ONLY in success-response builder; payload
-  literal carries no plaintext or ciphertext.
-- `encryptSigningSecret` shape change (`{secret, ciphertext}`) — only two
-  call sites in the workspace, both updated; no external consumers.
-
 ## Pipeline status
 
-- **Active task:** 0109 (next pass — orchestrator scopes).
-- **Open PRs:** none.
-- **`main` HEAD:** `28b3ca1` (Task 0108 squash). State-update commit will
-  advance HEAD on next push.
+- **Active task:** 0109 (verifier dispatched).
+- **Open PRs:** #164.
+- **`main` HEAD:** advances on this dispatch commit.
 - **B5 webhook-helper dogfood arc:** CLOSED (0105/0106/0107 merged).
-- **B5 secret-rotation arc:** backend slice (0108) MERGED. Console (0109)
-  and CLI (0110) follow as pure SDK consumers on locked contract.
+- **B5 secret-rotation arc:** backend (0108) MERGED. Console (0109)
+  in verification. CLI (0110) follows after 0109 PASS.
 
 ## Next Tasks
 
-- **Task 0109 — console reveal-once modal.** Pure SDK consumer of
-  `RotateWebhookSecretResponse.secret`. Stripe/Linear-quality reveal-once
-  modal in `apps/web-console-next/**`. Single-PR shape.
 - **Task 0110 — `sourceplane webhook secrets rotate` CLI subcommand.**
-  Symmetric CLI surface; pure SDK consumer; mirrors 0106/0107 conventions.
+  Symmetric CLI surface; pure SDK consumer; mirrors 0106/0107
+  conventions. File-disjoint from 0109 — could be parallel-scoped if
+  needed, but per user-profile rule (Orun SaaS task agents run inline
+  by default), wait for 0109 PASS before scoping.
 - **B5 — replay UI / failure-budget alerts** (console-side; consumer
   of existing events-worker read APIs once SDK delivery-history is final).
+- **B5 — webhook subscriptions UX / delivery-attempts UX** (console;
+  separate B5 follow-ups deferred from 0109).
 - **B7 — Audit-log UX expansion.**
 - **B8 — admin-worker scaffold** (greenfield single-PR breather).
 
