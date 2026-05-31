@@ -1,10 +1,30 @@
 # Current Context
 
-Last updated: 2026-05-31 — **Task 0124 CLOSED** (B9 entitlement-decision observability;
-verifier PASS, PR #179 squash `0a8f9d7`, post-merge deploy gate satisfied, migration 150
-applied stage+prod). Milestone **B9 (read API) closed**. **Task 0125 SCOPED** — `VALID_CONTEXTS`
-drift-proofing (hygiene). Implementer prompt at `ai/tasks/task-0125.md`. Repo health green;
-0 open PRs; sealed snapshot main HEAD `0a8f9d7`.
+Last updated: 2026-06-01 — **Task 0125 CLOSED** (hygiene: drift-proof
+`VALID_CONTEXTS` single source of truth; verifier PASS, PR #180 squash `c25fce5`,
+db-tests 522/522, union equivalence proven from dist artifact — drift class
+permanently killed). Bookkeeping back-fill: `completed[]` now includes BOTH 0124
+and 0125 (0124/PR #179 was merged but never appended). **Task 0126 SCOPED** —
+B5 webhooks polish: manual delivery replay. Implementer prompt at
+`ai/tasks/task-0126.md`. Repo health green; 0 open PRs; sealed snapshot main HEAD
+`c25fce5`.
+
+## Cycle note (Task 0126 — next-leg selection, full B/U/P frontier survey)
+
+Roadmap statuses lag code reality. Inspection this cycle confirmed **B3** (edge
+idempotency + rate limiting) is already shipped (`apps/api-edge/src/{idempotency,
+rate-limit}.ts`, wired across every facade) and **U7** (precondition_failed /
+upgrade UX) is already shipped across the console (orgs/projects/api-keys/billing/
+invitations/environments + a demo gallery covering all four reason codes). The
+B-track forward legs B1 (OAuth + email creds), B6 (Stripe creds + receipts), and
+B10 (SSO/SCIM creds) are all human-blocked; B9-console stays deferred on a human
+architecture decision. The one named, human-independent B5 surface still missing
+on main is **manual delivery replay** — there is no "redeliver this specific past
+delivery attempt" path anywhere (only the background `retryFailedDeliveries()`
+cron, which stops terminal at `MAX_RETRIES=5`). Selected as Task 0126: reconstruct
+a fresh attempt and re-drive it through the existing `deliverAttempt()` signing/
+delivery chokepoint, surfaced as a "Redeliver" action across worker → contracts →
+SDK → CLI → Console. See `ai/state.json` notes[0] for the full scope/exclusions.
 
 ## Cycle note (Task 0124 — warm-boot trust-but-verify, inline verifier)
 
