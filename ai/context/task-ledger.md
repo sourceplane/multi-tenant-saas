@@ -4475,4 +4475,56 @@ One PR, one reviewer-holdable outcome (rotate UX backend), one rollback (single 
   green (`gh run view --log` not no-op); `kiox.lock` reverted, no `plan.json`.
 - Spec basis: `specs/roadmap.md` §B7. Prior-art template: Task 0120
   (`ai/tasks/task-0120.md` + `webhook-deliveries.ts` + audit page/helper pair).
+- Outcome: **VERIFIED PASS + MERGED (2026-05-31)** — PR #177
+  `feat(security-events): account-scoped observability surface (SDK + CLI + Console)`
+  squash `5b791a1`. **Reconciliation cycle:** PR #177 was merged out-of-band before a
+  verifier task was scoped and without an implementer report; orchestrator ran the
+  verifier pass retroactively. 10-file delivery exactly on boundary (+1115/-5); all
+  hard exclusions honored (zero change to contracts/api-edge/identity-worker/db/audit/
+  webhook). PR-CI run 26716402252 11/11 SUCCESS; post-merge main-CI 26716481899 SUCCESS;
+  deploy-gate satisfied (prod build emitted `ƒ /account/security`, live curl → HTTP 200
+  real HTML, NOT white-page). Report: `ai/reports/task-0122-verifier.md`.
+
+## Task 0123
+
+- Agent: Implementer
+- Prompt: `ai/tasks/task-0123.md`
+- Status: scoped and ready to begin (2026-05-31)
+- Milestone: `B8-admin-support-worker`. Branch `impl/task-0123-admin-worker`. Sealed
+  snapshot main HEAD `5b791a1` (Task 0122 / PR #177 squash).
+- Objective: stand up the greenfield **`apps/admin-worker`** internal support/admin
+  worker per **spec 16** (`specs/components/16-admin-support.md`), delivering V1 audited
+  **read-only support diagnostics** with deny-by-default support authorization and a
+  support-action audit trail. Satisfies roadmap **B8**.
+- Selection: B7 fully closed (0121 + 0122). B8 is the next unlocked human-independent
+  milestone — spec 16 is "Ready for implementation" but has NO app (`apps/admin-worker`
+  absent); all deps (identity, membership, events-audit) are shipped. V1 needs no human
+  decision (system override + recognized support-role claim).
+- Scope boundary:
+  1. New `cloudflare-worker-turbo` `apps/admin-worker` (router/handlers/env/http +
+     **component.yaml**), internal-only (NOT via api-edge). V1 handlers:
+     `authorizeSupportAction` (deny-by-default → `support.access_denied`),
+     `recordSupportAction` + `listSupportActions` (→ `support.action_recorded` via
+     `appendEventWithAudit` inside a tx, mirror membership-worker atomicity),
+     `lookupOrganizationForSupport` + `lookupUserForSupport` (narrow read-only
+     projections).
+  2. New DB migration `packages/db/src/migrations/140_*` for support-action records.
+  3. Tests for deny-path (+event), record/list round-trip (+event), read-only lookups.
+- Hard exclusions: NO impersonation (V1 out, clean seam only); NO api-edge route /
+  public exposure; NO web-console-next support UI; NO change to existing workers /
+  contracts / events-audit model; NO privileged DB shortcut bypassing policy/audit;
+  NO `ai/deferred.md` or `infra/terraform/cloudflare-domain/**` touch.
+- Component shape: `apps/admin-worker` (deploy-gated) + `packages/db` migration.
+  `component.yaml` mandatory (mirror `apps/policy-worker` / `apps/membership-worker`;
+  verify dev, deploy on `github-push-main` stage/prod) or invisible to Orun + CI.
+  Deploy-gated verifier PASS gate = post-merge main-CI deploy job. BEHIND-main rebase =
+  verifier's job. May land 1 PR or a short sequence — implementer's call.
+- Acceptance: `kiox -- orun validate`/`plan --changed`/`run --dry-run` green with
+  admin-worker discovered + jobs in plan; deny-by-default proven by test (+event);
+  record/list round-trip proven (+event); read-only lookups (no secrets); migration
+  `140_*` checked in; no api-edge/Console/impersonation code; PR-CI green; clean history.
+- Spec basis: `specs/roadmap.md` §B8; `specs/components/16-admin-support.md`;
+  `specs/contracts/tenancy-and-rbac.md`; `specs/components/09-events-audit-observability.md`.
+  Prior-art: `apps/membership-worker/**` (worker shape + `appendEventWithAudit`
+  atomicity), `apps/policy-worker/**` (internal-only analog).
 

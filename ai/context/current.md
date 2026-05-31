@@ -1,75 +1,79 @@
 # Current Context
 
-Last updated: 2026-05-31 — Task 0121 CLOSED (verifier PASS bookkeeping committed
-`2b52d2b`). **Task 0122 SCOPED** — B7 security-events consumer surfaces (SDK
-pagination + CLI + Console). Implementer prompt at `ai/tasks/task-0122.md`. Repo
-health green; 0 open PRs; sealed snapshot main HEAD `2b52d2b`.
+Last updated: 2026-05-31 — **Task 0122 CLOSED** (verifier PASS, PR #177 squash
+`5b791a1`; reconciliation cycle — see note). Milestone **B7 fully closed** (0121
+audit-log UX + 0122 security-events surfaces). **Task 0123 SCOPED** — B8 admin/support
+worker. Implementer prompt at `ai/tasks/task-0123.md`. Repo health green; 0 open PRs;
+sealed snapshot main HEAD `5b791a1`.
 
-## Active task: Task 0122 — B7 security-events consumer surfaces (Implementer)
+## Reconciliation note (Task 0122)
 
-**Milestone:** `B7-security-events-consumer-surfaces`. Branch
-`impl/task-0122-security-events-surfaces`.
+PR #177 (Task 0122 — the three security-events consumer surfaces) was opened, CI-green,
+and **merged out-of-band** before a verifier task was scoped and without an implementer
+report being filed. The warm-boot brief was stale (expected `2b52d2b` / 0122-not-started;
+reality was already-merged at `5b791a1`). This cycle the orchestrator ran the verifier
+pass retroactively: 10-file delivery exactly on boundary, PR-CI 11/11 + post-merge
+main-CI green, deploy-gate satisfied (live `GET /account/security` → HTTP 200, real HTML,
+NOT white-page). Verified PASS. Report: `ai/reports/task-0122-verifier.md`. Ongoing watch:
+ensure each implementer/verifier cycle commits AND pushes its report + state files (the
+missing-report gap recurred here).
 
-**Selection (trust-code-over-docs).** Roadmap B7 names a "security-events surface"
-but inspection this cycle shows the **backend is already fully shipped on main** —
-do NOT rebuild it:
+## Active task: Task 0123 — B8 admin/support worker (Implementer)
 
-- **DB** `packages/db/src/identity/repository.ts` `querySecurityEventsByUser`
-  (cursor-keyset paginated; `SecurityEventPageQueryParams` / `…PagedResult`).
-- **api-edge** `apps/api-edge/src/auth-facade.ts` proxies
-  `GET /v1/auth/security-events` — **actor-scoped, not org-scoped**; envelope
-  `{ data: { securityEvents }, meta: { requestId, cursor? } }`.
-- **Contracts** `packages/contracts/src/security-events.ts` — `PublicSecurityEvent`
-  + `SecurityEventListResponse` (locked, byte-stable).
-- **SDK** `packages/sdk/src/securityEvents.ts` `SecurityEventsClient.list()` EXISTS
-  but is **flat** — threads no `limit`/`cursor`, drops `meta.cursor`.
+**Milestone:** `B8-admin-support-worker`. Branch `impl/task-0123-admin-worker`.
 
-**The consumer gap = the milestone.** The new Next.js console
-(`apps/web-console-next`) has **no account/security page** (nav is entirely
-org-scoped), and `packages/cli` has **no security command**. The old vanilla
-console surfaced this (Tasks 0046/0054) but it never carried to web-console-next.
+**Selection.** B7 is fully closed. B8 (roadmap) is the next unlocked, human-independent
+milestone: **spec 16** (`specs/components/16-admin-support.md`) is "Ready for
+implementation" but has **no app** — `apps/admin-worker` does not exist. All
+dependencies are shipped (identity, membership, events-audit workers + policy seam). V1
+needs no human decision (system-override + a recognized support-role claim; no real
+support staff need naming).
 
-**Three surfaces (mirrors Task 0120 webhook delivery-history byte-for-byte):**
+**Scope — greenfield `apps/admin-worker`, internal-only, V1 read-only diagnostics:**
 
-1. **SDK** — plumb `limit`/`cursor` into `SecurityEventsClient` + surface
-   `meta.cursor` (additive; keep flat `list()` working); export new types from
-   `index.ts`. Cursor opaque — read `meta.cursor ?? null`, forward verbatim.
-2. **CLI** — `sourceplane security events` read command: human table +
-   `--output=json` + `--limit`/`--cursor` + `--all` seen-cursor guard, mirroring
-   `webhook-deliveries.ts`. Pure SDK consumer; **NO `--org`/`resolveOrgId`**
-   (actor-scoped).
-3. **Console** — account-security page at a **non-org route** (e.g.
-   `/account/security`) + dependency-free helper + nav entry; SDK-only via
-   `wrap()` (zero `fetch`); empty state + skeleton + cursor Load-more; render only
-   safe redacted `PublicSecurityEvent` fields.
+1. New `cloudflare-worker-turbo` app mirroring the established worker shape (router.ts,
+   handlers/, env.ts, http.ts, **component.yaml**). **NOT** routed through api-edge; no
+   public surface. V1 capability subset:
+   - `authorizeSupportAction` — **deny-by-default**; denial emits `support.access_denied`.
+   - `recordSupportAction` + `listSupportActions` — persist/read support-action rows
+     (support actor, target org, reason, requestId, timestamp); record emits
+     `support.action_recorded` via `appendEventWithAudit` **inside a transaction**
+     (mirror `membership-worker/handlers/revoke-invitation.ts` atomicity).
+   - `lookupOrganizationForSupport` + `lookupUserForSupport` — narrow read-only
+     diagnostic projections (no secrets, no raw domain-table dump).
+2. New DB migration `packages/db/src/migrations/140_*` for support-action records
+   (next ordinal after `130_webhook_secret_rotation_grace`).
+3. Tests: deny-path (+event), record/list round-trip (+event), read-only lookups.
 
-**Hard exclusions:** NO contract-shape / api-edge-route / identity-worker / DB
-change; NO org-scoping; NO `querySecurityEventsByUser` SQL/cursor/limit change; NO
-audit or webhook surface change; NO `ai/deferred.md` or
-`infra/terraform/cloudflare-domain/**` / cloudflare provider pin touch.
+**Hard exclusions:** NO impersonation (`startImpersonation`/`endImpersonation` /
+`support.impersonation_*` — V1 out, clean seam only); NO api-edge route / public
+exposure; NO web-console-next support UI; NO change to existing workers / contracts /
+the events-audit model; NO privileged DB shortcut bypassing policy/audit; NO
+`ai/deferred.md` or `infra/terraform/cloudflare-domain/**` / cloudflare provider touch.
 
-**Component shape:** multi-component — `sdk` + `cli` (turbo) + `web-console-next`
-(cloudflare-pages turbo, **deploy-gated**). May land as 1 combined PR (0120
-precedent) or SDK-before-consumers sequence — implementer's call. Console leg's
-verifier PASS gate is **post-merge main-CI smoke + live-URL curl**, not PR-CI
-alone. **BEHIND-main rebase is the verifier's responsibility** (recurring
-0103–0121).
+**Component shape:** new `apps/admin-worker` (cloudflare-worker-turbo, **deploy-gated**)
++ a `packages/db` migration. `component.yaml` is **mandatory** (mirror
+`apps/policy-worker` or `apps/membership-worker`; verify on dev, deploy on
+`github-push-main` for stage/prod) or the app is invisible to Orun discovery + CI.
+Deploy-gated verifier PASS gate = **post-merge main-CI deploy job** for stage/prod.
+**BEHIND-main rebase is the verifier's responsibility** (recurring 0103–0122). May land
+as one PR or a short sequence — implementer's call.
 
-## Next focus after 0122
+## Next focus after 0123
 
 1. **`VALID_CONTEXTS` drift-proofing (hygiene)** — derive the test array from the
    `BoundedContext` union via `as const`. Low priority.
-2. **B8 admin-worker** — greenfield cross-tenant ops surface (spec 16). Later.
+2. **B9 — Entitlement-decision observability** (billing-worker counts → admin-worker
+   dashboard); naturally follows B8.
 3. **B6 Stripe / B1 real auth** — larger baseline legs; B6 waits on U7.
 
 Carry-forward nit (non-blocking): `packages/cli/src/commands/cross-reads.ts`
-`parseAuditFilterFlags` doc-comment says malformed input "surfaces as a 400" —
-worker returns 422. Comment-only; fold into any future cross-reads touch (Task
-0122 MAY fold it if it touches cross-reads, not required).
+`parseAuditFilterFlags` doc-comment says malformed input "surfaces as a 400" — worker
+returns 422. Comment-only; fold into any future cross-reads touch.
 
 Deferred (Deferred Decision Protocol, human input required, NOT picked):
 `0085b` (cloudflare-domain v4→v5), `notifications-provider-swap`,
 `notifications-worker-dev-reframe`, `optional-spec-13-commands`.
 
-Repo health: green. 0 open PRs. Task 0121 closed; Task 0122 scoped + ready for
+Repo health: green. 0 open PRs. Task 0122 closed; Task 0123 scoped + ready for
 implementer.
