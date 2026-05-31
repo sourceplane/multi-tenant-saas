@@ -86,7 +86,11 @@ export {
   type ListAuditEntriesQuery,
   type ListAuditEntriesResult,
 } from "./events.js";
-export { SecurityEventsClient } from "./securityEvents.js";
+export {
+  SecurityEventsClient,
+  type ListSecurityEventsQuery,
+  type SecurityEventsPage,
+} from "./securityEvents.js";
 export { ConfigClient, type ConfigScope } from "./config.js";
 export { NotificationsClient } from "./notifications.js";
 export { AuthClient } from "./auth.js";

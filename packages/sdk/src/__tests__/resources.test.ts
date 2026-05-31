@@ -468,6 +468,51 @@ describe("SecurityEventsClient", () => {
     expect(calls[0]!.init.method).toBe("GET");
   });
 
+  it("list threads limit + opaque cursor into the query verbatim", async () => {
+    const { fetch, calls } = captureFetch(
+      jsonResponse(envelope({ securityEvents: [] })),
+    );
+    const opaque = "eyJjcm...2In0=";
+    await client(fetch).securityEvents.list({ limit: 25, cursor: opaque });
+    expect(calls[0]!.url).toContain("limit=25");
+    expect(calls[0]!.url).toContain(`cursor=${encodeURIComponent(opaque)}`);
+  });
+
+  it("listPage surfaces meta.cursor as nextCursor", async () => {
+    const { fetch } = captureFetch(
+      jsonResponse({
+        data: { securityEvents: [{ id: "se_1" }] },
+        meta: { requestId: "req_1", cursor: "CUR_NEXT" },
+      }),
+    );
+    const page = await client(fetch).securityEvents.listPage();
+    expect(page.securityEvents).toHaveLength(1);
+    expect(page.nextCursor).toBe("CUR_NEXT");
+  });
+
+  it("listPage returns nextCursor null when the server omits meta.cursor", async () => {
+    const { fetch } = captureFetch(
+      jsonResponse({
+        data: { securityEvents: [] },
+        meta: { requestId: "req_1" },
+      }),
+    );
+    const page = await client(fetch).securityEvents.listPage();
+    expect(page.nextCursor).toBeNull();
+  });
+
+  it("listPage forwards the opaque cursor verbatim on the follow-up page", async () => {
+    const { fetch, calls } = captureFetch(
+      jsonResponse({
+        data: { securityEvents: [] },
+        meta: { requestId: "req_1", cursor: null },
+      }),
+    );
+    const opaque = "eyJvZmZzZXQ...In0=";
+    await client(fetch).securityEvents.listPage({ cursor: opaque });
+    expect(calls[0]!.url).toContain(`cursor=${encodeURIComponent(opaque)}`);
+  });
+
   it("surfaces ForbiddenError on 403", async () => {
     const { fetch } = captureFetch(errorResponse("forbidden", 403));
     await expect(client(fetch).securityEvents.list()).rejects.toBeInstanceOf(

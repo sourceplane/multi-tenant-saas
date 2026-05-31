@@ -16,6 +16,7 @@ import {
   Users,
   Mail,
   Webhook,
+  ShieldCheck,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 
@@ -60,6 +61,16 @@ export function Sidebar() {
         <Section label="Workspace">
           <SidebarLink href="/orgs" icon={Building2} active={pathname === "/orgs"}>
             Organizations
+          </SidebarLink>
+        </Section>
+
+        <Section label="Account">
+          <SidebarLink
+            href="/account/security"
+            icon={ShieldCheck}
+            active={pathname?.startsWith("/account/security") ?? false}
+          >
+            Security activity
           </SidebarLink>
         </Section>
 
