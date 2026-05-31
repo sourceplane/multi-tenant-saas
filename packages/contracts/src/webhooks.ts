@@ -205,3 +205,29 @@ export interface ListWebhookDeliveryAttemptsResponse {
 export interface GetWebhookDeliveryAttemptResponse {
   deliveryAttempt: PublicWebhookDeliveryAttempt;
 }
+
+/**
+ * Manual delivery replay (B5). Re-send the same event to the same endpoint
+ * through the existing signing/delivery seam, recording a fresh attempt in
+ * history.
+ *
+ * Request body is intentionally empty — replay carries no operator-supplied
+ * metadata; the target attempt is fully identified by the path
+ * `:id`. Reserved for future expansion (e.g. a one-shot override URL) under a
+ * fresh spec proposal.
+ */
+export interface ReplayWebhookDeliveryRequest {
+  // No fields.
+}
+
+/**
+ * Response for POST /webhooks/delivery-attempts/{id}/replay.
+ *
+ * `deliveryAttempt` is the NEWLY-created attempt (fresh id, `attemptNumber` 1),
+ * carrying its post-delivery status. The original attempt is unchanged. No
+ * secret material or raw event payload is ever included — only the safe public
+ * delivery-attempt projection.
+ */
+export interface ReplayWebhookDeliveryResponse {
+  deliveryAttempt: PublicWebhookDeliveryAttempt;
+}

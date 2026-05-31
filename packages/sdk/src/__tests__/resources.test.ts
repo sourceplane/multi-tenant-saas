@@ -294,6 +294,41 @@ describe("WebhooksClient", () => {
     // The supplied cursor was forwarded as the request query param.
     expect(new URL(calls[0]!.url).searchParams.get("cursor")).toBe("PREV_CURSOR");
   });
+
+  it("replayDelivery hits the replay subpath as POST with empty body", async () => {
+    const { fetch, calls } = captureFetch(
+      jsonResponse(
+        envelope({ deliveryAttempt: { id: "whd_new", status: "success" } }),
+        { status: 201 },
+      ),
+    );
+    const res = await client(fetch).webhooks.replayDelivery("org_1", "whd_old");
+    expect(calls[0]!.url).toBe(
+      "https://api.test/v1/organizations/org_1/webhooks/delivery-attempts/whd_old/replay",
+    );
+    expect(calls[0]!.init.method).toBe("POST");
+    expect(res.deliveryAttempt.id).toBe("whd_new");
+  });
+
+  it("replayDelivery propagates an idempotency-key when supplied", async () => {
+    const { fetch, calls } = captureFetch(
+      jsonResponse(envelope({ deliveryAttempt: { id: "whd_new" } }), {
+        status: 201,
+      }),
+    );
+    await client(fetch).webhooks.replayDelivery("org_1", "whd_old", {
+      idempotencyKey: "ikey_replay_1",
+    });
+    const headers = new Headers(calls[0]!.init.headers as HeadersInit);
+    expect(headers.get("idempotency-key")).toBe("ikey_replay_1");
+  });
+
+  it("replayDelivery surfaces NotFoundError on 404", async () => {
+    const { fetch } = captureFetch(errorResponse("not_found", 404));
+    await expect(
+      client(fetch).webhooks.replayDelivery("org_1", "whd_missing"),
+    ).rejects.toBeInstanceOf(NotFoundError);
+  });
 });
 
 // ---------------------------------------------------------------------------

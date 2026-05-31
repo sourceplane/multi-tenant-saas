@@ -586,3 +586,48 @@ describe("events repository: JSON handling", () => {
     expect(queries[0]!.params[1]).toBe("org_a1b2c3d4e5f67890abcdef1234567890");
   });
 });
+
+describe("events repository: getEventById", () => {
+  it("returns the mapped event when the row exists", async () => {
+    const { executor, queries } = createFakeExecutor({ rows: [SAMPLE_EVENT_ROW] });
+    const repo = createEventsRepository(executor);
+
+    const result = await repo.getEventById("org-001", "evt-001");
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value).not.toBeNull();
+      expect(result.value!.id).toBe("evt-001");
+      expect(result.value!.type).toBe("organization.created");
+      // Full payload is rehydrated — this is what makes manual replay
+      // resend the original body rather than data:{}.
+      expect(result.value!.payload).toEqual({ name: "Acme Corp" });
+    }
+    // Parameterized, org-scoped lookup by id.
+    expect(queries).toHaveLength(1);
+    expect(queries[0]!.text).toContain("FROM events.event_log");
+    expect(queries[0]!.params).toEqual(["org-001", "evt-001"]);
+  });
+
+  it("returns null when no row matches (absent, not an error)", async () => {
+    const { executor } = createFakeExecutor({ rows: [] });
+    const repo = createEventsRepository(executor);
+
+    const result = await repo.getEventById("org-001", "evt-missing");
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value).toBeNull();
+  });
+
+  it("surfaces a safe error when the query throws", async () => {
+    const { executor } = createFakeExecutor({ error: new Error("connection lost") });
+    const repo = createEventsRepository(executor);
+
+    const result = await repo.getEventById("org-001", "evt-001");
+
+    expect(result.ok).toBe(false);
+    if (!result.ok && result.error.kind === "internal") {
+      expect(result.error.message).toBe("Failed to get event by id");
+    }
+  });
+});

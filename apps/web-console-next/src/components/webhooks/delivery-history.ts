@@ -158,3 +158,17 @@ export function appendDeliveryPage(
 export function hasMoreDeliveries(state: DeliveryHistoryState): boolean {
   return state.cursor !== null;
 }
+
+/**
+ * Whether a delivery attempt is eligible for manual replay.
+ *
+ * Replay re-sends the same event to the same endpoint, so it only makes sense
+ * for TERMINAL attempts — `success` (re-deliver a delivered event) or `failed`
+ * (retry after the endpoint was fixed). In-flight attempts (`pending`,
+ * `retrying`) are still owned by the automatic dispatch/retry path; offering
+ * replay on them would race the cron and create a confusing duplicate, so the
+ * Redeliver affordance is hidden/disabled for those states.
+ */
+export function canReplayAttempt(status: DeliveryStatus | string): boolean {
+  return status === "success" || status === "failed";
+}

@@ -16,6 +16,7 @@ import type {
   ListWebhookEndpointsResponse,
   ListWebhookSubscriptionsResponse,
   PublicWebhookDeliveryAttempt,
+  ReplayWebhookDeliveryResponse,
   RotateWebhookSecretResponse,
   UpdateWebhookEndpointRequest,
   UpdateWebhookEndpointResponse,
@@ -389,6 +390,30 @@ export class WebhooksClient {
       {
         method: "GET",
         path: `/v1/organizations/${encodeURIComponent(orgId)}/webhooks/delivery-attempts/${encodeURIComponent(attemptId)}`,
+      },
+      opts,
+    );
+  }
+
+  /**
+   * POST /v1/organizations/:orgId/webhooks/delivery-attempts/:attemptId/replay
+   *
+   * Manually replay a past delivery attempt — re-send the same event to the
+   * same endpoint through the existing signing/delivery seam. Creates and
+   * returns a NEW delivery attempt (fresh id, `attemptNumber` 1) carrying its
+   * post-delivery status; the original attempt is unchanged. Empty body. 404
+   * if the attempt is missing or belongs to another org.
+   */
+  replayDelivery(
+    orgId: string,
+    attemptId: string,
+    opts: RequestOptions = {},
+  ): Promise<ReplayWebhookDeliveryResponse> {
+    return this.transport.request<ReplayWebhookDeliveryResponse>(
+      {
+        method: "POST",
+        path: `/v1/organizations/${encodeURIComponent(orgId)}/webhooks/delivery-attempts/${encodeURIComponent(attemptId)}/replay`,
+        body: {},
       },
       opts,
     );

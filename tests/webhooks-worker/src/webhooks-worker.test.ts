@@ -485,6 +485,16 @@ describe("router", () => {
     const res = await route(req, env);
     expect(res.status).toBe(405);
   });
+
+  // ── Manual delivery replay route plumbing (Task 0126) ──────
+  it("returns 405 for GET on delivery-attempt replay", async () => {
+    const env = createFakeEnv();
+    const req = makeRequest("GET", `/v1/organizations/${TEST_ORG_PUBLIC}/webhooks/delivery-attempts/${TEST_DELIVERY_PUBLIC}/replay`);
+    const res = await route(req, env);
+    // GET is not a registered method on the replay route → 405, proving the
+    // path is wired (a fully-unmatched path would 404 instead).
+    expect(res.status).toBe(405);
+  });
 });
 
 // ── handleEnableWebhookEndpoint atomicity (Task 0024 pattern) ──

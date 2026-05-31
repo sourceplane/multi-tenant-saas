@@ -10,6 +10,8 @@ import type {
   ListWebhookDeliveryAttemptsResponse,
   RotateWebhookSecretResponse,
   DisableWebhookEndpointRequest,
+  ReplayWebhookDeliveryRequest,
+  ReplayWebhookDeliveryResponse,
   DeleteWebhookEndpointResponse,
 } from "@saas/contracts/webhooks";
 
@@ -216,5 +218,36 @@ describe("contracts: webhook delivery attempt types", () => {
   it("PublicWebhookDeliveryAttempt supports all status values", () => {
     const statuses: PublicWebhookDeliveryAttempt["status"][] = ["pending", "success", "failed", "retrying"];
     statuses.forEach((s) => expect(typeof s).toBe("string"));
+  });
+
+  it("ReplayWebhookDeliveryResponse wraps a single public delivery attempt", () => {
+    const response: ReplayWebhookDeliveryResponse = {
+      deliveryAttempt: {
+        id: "del-replay-001",
+        orgId: "org-001",
+        endpointId: "whe-001",
+        subscriptionId: "whs-001",
+        eventId: "evt-001",
+        eventType: "user.created",
+        status: "success",
+        attemptNumber: 1,
+        httpStatusCode: 200,
+        failureReason: null,
+        idempotencyKey: "whs-001:evt-001:replay:new-uuid",
+        nextRetryAt: null,
+        completedAt: "2026-02-01T10:00:00.000Z",
+        createdAt: "2026-02-01T09:59:59.000Z",
+        updatedAt: "2026-02-01T10:00:00.000Z",
+      },
+    };
+    expect(response.deliveryAttempt.status).toBe("success");
+    // No secret material or raw payload field on the response.
+    expect(JSON.stringify(response)).not.toContain("payload");
+    expect(JSON.stringify(response)).not.toContain("secret");
+  });
+
+  it("ReplayWebhookDeliveryRequest is an empty (fieldless) body", () => {
+    const request: ReplayWebhookDeliveryRequest = {};
+    expect(Object.keys(request)).toHaveLength(0);
   });
 });

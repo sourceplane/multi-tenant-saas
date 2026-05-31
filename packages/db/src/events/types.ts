@@ -176,4 +176,11 @@ export interface EventsRepository {
   queryAuditByTarget(orgId: string, subjectKind: string, subjectId: string, params: EventsPageQueryParams): Promise<EventsResult<EventsPagedResult<StoredAuditEntry>>>;
   /** Query events for an org after a cursor position (for webhook dispatch fanout). */
   queryEventsByOrg(orgId: string, afterOccurredAt: string | null, afterEventId: string | null, limit: number): Promise<EventsResult<StoredEvent[]>>;
+  /**
+   * Read a single org-scoped event by id. Returns `null` (not an error) when no
+   * row matches — callers distinguish "absent" from "infra failure" without a
+   * dedicated `not_found` error kind. Used by the webhooks manual-replay path to
+   * rehydrate the full original event payload by id.
+   */
+  getEventById(orgId: string, eventId: string): Promise<EventsResult<StoredEvent | null>>;
 }

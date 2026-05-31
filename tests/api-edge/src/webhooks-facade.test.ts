@@ -89,6 +89,10 @@ describe("api-edge webhooks facade", () => {
       expect(isWebhooksRoute("/v1/organizations/org_abc/webhooks/delivery-attempts/whd_abc123")).toBe(true);
     });
 
+    it("matches org-scoped webhook delivery-attempt replay (Task 0126)", () => {
+      expect(isWebhooksRoute("/v1/organizations/org_abc/webhooks/delivery-attempts/whd_abc123/replay")).toBe(true);
+    });
+
     it("matches project-scoped webhook endpoints", () => {
       expect(isWebhooksRoute("/v1/organizations/org_abc/projects/prj_def/webhooks/endpoints")).toBe(true);
     });

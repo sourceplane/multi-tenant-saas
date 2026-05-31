@@ -20,6 +20,7 @@ import {
 import {
   handleGetDeliveryAttempt,
   handleListDeliveryAttempts,
+  handleReplayDeliveryAttempt,
 } from "./handlers/webhook-delivery-attempts.js";
 import { errorResponse, notFound, methodNotAllowed } from "./http.js";
 import {
@@ -70,6 +71,7 @@ const ORG_SUBSCRIPTION_ITEM_RE = /^\/v1\/organizations\/([^/]+)\/webhooks\/subsc
 
 // Delivery attempts
 const ENDPOINT_DELIVERY_ATTEMPTS_RE = /^\/v1\/organizations\/([^/]+)\/webhooks\/endpoints\/([^/]+)\/delivery-attempts$/;
+const ORG_DELIVERY_ATTEMPT_REPLAY_RE = /^\/v1\/organizations\/([^/]+)\/webhooks\/delivery-attempts\/([^/]+)\/replay$/;
 const ORG_DELIVERY_ATTEMPT_ITEM_RE = /^\/v1\/organizations\/([^/]+)\/webhooks\/delivery-attempts\/([^/]+)$/;
 
 // ── Main router ─────────────────────────────────────────────
@@ -229,6 +231,16 @@ export async function route(request: Request, env: Env): Promise<Response> {
     const endpointId = parseWebhookEndpointPublicId(m[2]!);
     if (!orgId || !endpointId) return notFound(requestId, pathname);
     return handleListDeliveryAttempts(request, env, requestId, actor, orgId, endpointId);
+  }
+
+  // POST /v1/organizations/:orgId/webhooks/delivery-attempts/:id/replay
+  m = pathname.match(ORG_DELIVERY_ATTEMPT_REPLAY_RE);
+  if (m) {
+    if (request.method !== "POST") return methodNotAllowed(requestId);
+    const orgId = parseOrgPublicId(m[1]!);
+    const attemptId = parseWebhookDeliveryAttemptPublicId(m[2]!);
+    if (!orgId || !attemptId) return notFound(requestId, pathname);
+    return handleReplayDeliveryAttempt(request, env, requestId, actor, orgId, attemptId);
   }
 
   // GET /v1/organizations/:orgId/webhooks/delivery-attempts/:id

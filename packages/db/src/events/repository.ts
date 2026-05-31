@@ -404,5 +404,20 @@ export function createEventsRepository(executor: SqlExecutor): EventsRepository 
         return safeError("Failed to query events by org");
       }
     },
+
+    async getEventById(orgId: string, eventId: string): Promise<EventsResult<StoredEvent | null>> {
+      try {
+        const result = await executor.execute<Record<string, unknown>>(
+          `SELECT * FROM events.event_log WHERE org_id = $1 AND id = $2`,
+          [orgId, eventId],
+        );
+        if (result.rows.length === 0) {
+          return { ok: true, value: null };
+        }
+        return { ok: true, value: mapEvent(result.rows[0]!) };
+      } catch {
+        return safeError("Failed to get event by id");
+      }
+    },
   };
 }

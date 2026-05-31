@@ -38,9 +38,11 @@ import {
   appendDeliveryPage,
   hasMoreDeliveries,
   toDeliveryRow,
+  canReplayAttempt,
   EMPTY_DELIVERY_HISTORY,
   type DeliveryHistoryState,
 } from "@/components/webhooks/delivery-history";
+import { useToast } from "@/components/ui/toast";
 
 export default function WebhookEndpointDetailPage() {
   const params = useParams<{ orgSlug: string; endpointId: string }>();
@@ -293,10 +295,12 @@ function DeliveryHistoryPanel({
   endpointId: string;
 }) {
   const { client } = useSession();
+  const { toast } = useToast();
   const [state, setState] = React.useState<DeliveryHistoryState>(
     EMPTY_DELIVERY_HISTORY,
   );
   const [loadingMore, setLoadingMore] = React.useState(false);
+  const [replayingId, setReplayingId] = React.useState<string | null>(null);
 
   const initial = useAsync(
     () =>
@@ -309,6 +313,41 @@ function DeliveryHistoryPanel({
         return page;
       }),
     [client, orgId, endpointId],
+  );
+
+  const reloadFirstPage = React.useCallback(async () => {
+    const r = await wrap(() =>
+      client.webhooks.listDeliveryAttemptsPage(orgId, endpointId),
+    );
+    if (r.ok) {
+      setState((prev) => appendDeliveryPage(prev, r.data, true));
+    }
+  }, [client, orgId, endpointId]);
+
+  const replay = React.useCallback(
+    async (attemptId: string) => {
+      setReplayingId(attemptId);
+      const r = await wrap(() =>
+        client.webhooks.replayDelivery(orgId, attemptId),
+      );
+      setReplayingId(null);
+      if (!r.ok) {
+        toast({
+          kind: "error",
+          title: "Redeliver failed",
+          description: r.error.message,
+        });
+        return;
+      }
+      toast({
+        kind: "success",
+        title: "Delivery replayed",
+        description: `New attempt ${r.data.deliveryAttempt.status}.`,
+      });
+      // Re-fetch the first page so the fresh attempt appears at the top.
+      await reloadFirstPage();
+    },
+    [client, orgId, toast, reloadFirstPage],
   );
 
   const loadMore = React.useCallback(async () => {
@@ -374,6 +413,7 @@ function DeliveryHistoryPanel({
                     <TableHead>HTTP</TableHead>
                     <TableHead>Completed</TableHead>
                     <TableHead>Detail</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -398,6 +438,21 @@ function DeliveryHistoryPanel({
                           : row.nextRetryAtLabel
                             ? `next retry ${row.nextRetryAtLabel}`
                             : "—"}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {canReplayAttempt(row.status) ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => void replay(row.id)}
+                            disabled={replayingId !== null}
+                          >
+                            <RefreshCcw className="h-3.5 w-3.5 mr-1" />
+                            {replayingId === row.id ? "Redelivering…" : "Redeliver"}
+                          </Button>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}

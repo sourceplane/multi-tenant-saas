@@ -196,6 +196,8 @@ export type {
   PublicWebhookDeliveryAttempt,
   ListWebhookDeliveryAttemptsResponse,
   GetWebhookDeliveryAttemptResponse,
+  ReplayWebhookDeliveryRequest,
+  ReplayWebhookDeliveryResponse,
 } from "@saas/contracts/webhooks";
 
 export type {
