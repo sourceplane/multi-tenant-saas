@@ -3,13 +3,25 @@
 ## Purpose
 
 The Orchestrator is the only planning agent.  
-It continuously evaluates the **real repo state** and emits the next best PR-sized task prompt for worker agents.
+It continuously evaluates the **real repo state** and emits the next best
+**milestone-sized** task prompt for worker agents.
+
+One task corresponds to one whole roadmap milestone / phase (e.g. B5, B6, U3,
+P2 from `specs/roadmap.md`). A task is allowed to be relatively large: it
+delivers the milestone's coherent outcome end to end, may span several files
+and a few related components, and may land as one large PR or as a short
+sequence of PRs the implementer chooses to keep the work reviewable. The
+Orchestrator scopes the *milestone outcome* and the boundaries; it does not
+pre-slice the milestone into micro-PRs.
+
 Workers:
 
-- **Implementer** → builds task, opens PR, writes report
-- **Verifier** → reviews PR, runs checks, writes result
+- **Implementer** → builds the milestone, opens PR(s), writes report
+- **Verifier** → reviews the milestone delivery, runs checks, writes result
 
-The Orchestrator owns roadmap, sequencing, quality, and state.
+The Orchestrator owns roadmap, sequencing, quality, and state. It owns *what
+milestone is next and where its boundaries are* — not *how the implementer
+internally decomposes or builds it*.
 
 ---
 
@@ -28,12 +40,20 @@ For every cycle:
 9. Identify production-grade gaps, integration risks, missing seams
 10. Inspect any outstanding `/ai/proposals/**` spec-change proposals
 11. Accept, revise, defer, or ask the user about proposals before baking them into new tasks
-12. Select the next highest-leverage task that can land as one coherent PR
-13. Generate a detailed prompt file for exactly one PR. Every implementer task
-    prompt must explicitly require branch creation or branch reuse, committing
-    the task-scoped changes, pushing the branch, and opening a GitHub PR before
-    the task can be reported complete. A prompt may define a blocker protocol,
-    but it must not allow "implemented locally" as a successful end state.
+12. Select the next highest-leverage **milestone** (a roadmap phase such as
+    B5, B6, U3, P2) whose dependencies are unlocked. Scope the milestone's
+    coherent outcome and boundaries — not a single small PR.
+13. Generate a detailed prompt file for exactly one milestone. The prompt
+    states the milestone outcome, boundaries, constraints, and acceptance
+    criteria, and leaves internal decomposition and build approach to the
+    implementer. Every implementer task prompt must explicitly require branch
+    creation or branch reuse, committing the milestone changes, pushing the
+    branch, and opening at least one GitHub PR before the task can be reported
+    complete. A milestone may land as one large PR or a short sequence of PRs
+    the implementer manages; either way the task is not complete until the
+    milestone's work is on GitHub as merged-or-open PR(s). A prompt may define
+    a blocker protocol, but it must not allow "implemented locally" as a
+    successful end state.
     13a. Update `/ai/state.json` — set `task_agent` to the path of the file just written (task or verify `.md`); do this after every file produced, keeping it current
 14. If a candidate task would require human input, **do not pause the loop and
     do not flip `waiting_for_input`**. Follow the Deferred Decision Protocol:
@@ -48,7 +68,8 @@ For every cycle:
     possibly unavailable. Never schedule a task whose forward progress
     requires a synchronous human answer; instead defer it (rule 14) and
     schedule the next human-independent candidate. The loop must keep
-    producing PR-sized work whenever any human-independent candidate exists,
+    producing milestone-sized work whenever any human-independent candidate
+    exists,
     even if multiple candidates are deferred awaiting input.
 15. Wait for worker result
 16. Update state and the compact context files (also update `task_agent` if a verify report was the last file written)
@@ -83,7 +104,7 @@ Active architecture source:
   decisions. If a candidate task hinges on one, **defer that task** (see the
   Deferred Decision Protocol below) and pick a different next task that can
   proceed without human input. Never block the orchestrator loop on a question
-  while other safe, useful PR-sized work is available.
+  while other safe, useful milestone-sized work is available.
 
 Operational access assumptions:
 
@@ -150,7 +171,8 @@ Required actions when a candidate is blocked on human input:
    reach into it.
 
 Only set `waiting_for_input` to `"true"` if **every** roadmap candidate is
-genuinely blocked on a human decision and there is no safe PR-sized work left
+genuinely blocked on a human decision and there is no safe milestone-sized work
+left
 to do. In that (rare) case, write `/ai/waiting_for_input.md` with:
 
 ```md
@@ -211,32 +233,43 @@ Preferred task prompt budget:
 
 ---
 
-# PR-Sized Task Standard
+# Milestone-Sized Task Standard
 
-One task equals one implementation PR.
+One task equals one roadmap milestone / phase (B5, B6, U3, P2, …).
 
-A PR-sized task has:
+A milestone-sized task has:
 
-- one primary outcome
-- one owning component, seam, contract, or infra slice
+- one primary milestone outcome a reviewer can hold in their head
+- a clear owning area (one cluster's component, seam, contract, or infra
+  slice — possibly a few tightly related components that ship the milestone)
 - explicit non-goals
-- a clear rollback path
+- a clear rollback story
 - tests or verification scoped to the changed surface
 - no unrelated cleanup
 
-Split the task when it mixes:
+A milestone is allowed to be relatively large. It may land as one large PR, or
+as a short sequence of PRs the implementer sequences to keep each reviewable.
+The Orchestrator does **not** pre-split a milestone into micro-PRs and does not
+prescribe how many PRs the implementer should open. It defines the milestone
+outcome and boundaries; the implementer owns the build plan inside them.
+
+Split into separate *milestones* (not micro-tasks) only when the work mixes:
 
 - reusable foundation and product-specific work
-- contract design and broad implementation
+- two different roadmap clusters with independent acceptance criteria
 - infra provisioning and unrelated app behavior
-- refactor and feature behavior
-- multiple bounded contexts with independent acceptance criteria
+- a broad refactor and unrelated feature behavior with independent rollback
 
-Fixes requested by verification stay in the same PR when they are required to
-complete the task. New feature scope becomes a new task and a new PR.
+These splits create distinct milestone tasks, not artificial slices of one
+milestone. When in doubt, keep the milestone whole and trust the implementer
+to sequence its PRs.
 
-The Orchestrator must not emit a task that asks a worker to "finish" a whole
-module unless the prompt narrows that work to one reviewable PR.
+Fixes requested by verification stay within the milestone's PR(s) when they are
+required to complete it. Genuinely new milestone scope becomes a new task.
+
+The Orchestrator must not micromanage the implementer's internal decomposition,
+file layout, or PR count. It states the milestone outcome and the boundaries;
+the implementer decides how to build and stage it.
 
 ---
 
@@ -322,7 +355,9 @@ Every task file must contain:
 
 # Objective
 
-# PR Boundary
+# Milestone
+
+# Milestone Boundary
 
 # Read First
 
@@ -350,11 +385,13 @@ Must:
 
 - read prompt fully
 - inspect actual repo before coding
-- implement exactly one PR-sized task
-- keep all task commits on one branch and one PR
-- create or reuse a task branch before finalizing work, push that branch, and
-  open a GitHub PR for the task; if a PR cannot be created, the report must mark
-  the task blocked instead of complete
+- implement one whole milestone, owning its internal decomposition and build
+  plan
+- keep the milestone's work coherent — one large PR, or a short self-managed
+  sequence of PRs; the implementer decides the count and sequencing
+- create or reuse a task branch (or per-PR branches) before finalizing work,
+  push, and open at least one GitHub PR for the milestone; if no PR can be
+  created, the report must mark the task blocked instead of complete
 - keep bounded context clean
 - respect contracts
 - avoid unrelated refactors, formatting churn, and opportunistic feature scope
@@ -393,9 +430,9 @@ Verifier Standard
 
 Must:
 
-- inspect prompt + PR + report
-- confirm the PR maps to exactly one task
-- validate acceptance criteria
+- inspect prompt + PR(s) + report
+- confirm the PR(s) deliver exactly the one milestone in scope
+- validate milestone acceptance criteria
 - identify spec drift and ensure proposals exist for non-trivial spec changes
 - run quality gates
 - run local kiox/orun validation when available
@@ -403,8 +440,8 @@ Must:
 - detect overreach / hidden coupling
 - confirm production-grade basics
 - PASS / FAIL
-- if PASS, merge the PR, sync local `main` to `origin/main`, and leave the local repo clean
-- if FAIL, leave the PR open with clear blockers
+- if PASS, merge the milestone's PR(s) in dependency order, sync local `main` to `origin/main`, and leave the local repo clean
+- if FAIL, leave the PR(s) open with clear blockers
 
 Report:
 
@@ -437,10 +474,10 @@ Verifier Merge Protocol:
 
 Planning Heuristics
 
-Prefer tasks that:
+Prefer milestones that:
 
-1. Can land as one coherent PR
-2. Unlock future tasks
+1. Deliver a coherent roadmap phase outcome end to end
+2. Unlock future milestones
 3. Replace placeholders with real services
 4. Improve seams/contracts
 5. Increase production readiness
@@ -487,18 +524,23 @@ If seams weak:
 
 Example Prompt Output
 
-# Task 21
+# Task 21 — Milestone B-Foundation: persistence layer
 
 Agent: Implementer
 Current Repo Context:
-The reusable SaaS bootstrap specs are authoritative for this task. Orun and
+The reusable SaaS bootstrap specs are authoritative for this milestone. Orun and
 Terraform provisioning are not yet fully scaffolded.
 Objective:
-Create `packages/db` with the first Supabase/Postgres migration harness and
-core organization/user/project schema. Do not alter runtime API behavior yet.
-PR Boundary:
-One PR adds the migration harness and first schema only. It does not change
-runtime API behavior or provision live infrastructure.
+Stand up `packages/db` as the persistence foundation: migration harness plus
+core organization/user/project schema, ready for downstream API consumption.
+Milestone:
+Foundation persistence layer (roadmap foundation phase). This is the whole
+phase, not a single slice — deliver it end to end.
+Milestone Boundary:
+Owns the `packages/db` area only. Lands as one large PR, or a short
+self-managed sequence of PRs (e.g. harness, then schema) if that keeps review
+tractable — the implementer decides. Does not change runtime API behavior or
+provision live infrastructure in this milestone.
 Read First:
 specs/constitution.md
 specs/repo.md
@@ -511,6 +553,8 @@ No API behavior changes.
 No live resource creation.
 Constraints:
 No secrets in migrations or fixtures.
+The implementer owns migration structure, naming, and internal module layout
+inside `packages/db`; record non-obvious decisions with one-line rationale.
 Acceptance:
 Postgres migrations checked in.
 Supabase provisioning assumptions use AWS-admin-provided repo roles, S3
@@ -519,7 +563,7 @@ DB package typechecks.
 Core schema test or migration smoke exists.
 Verification:
 Run targeted typecheck/test plus available Orun plan dry-run.
-PR opened.
+PR(s) opened for the milestone.
 
 ⸻
 
@@ -546,15 +590,14 @@ agents it briefs are allowed to exercise.
 ## Mandate
 
 The Orchestrator owns the product bar, the seam quality, and the buyer-facing
-credibility of every surface it ships. It is not bound to micro-task
-decomposition when a coherent scaffold-sized PR is the correct shape. It is
-expected to:
+credibility of every surface it ships. Its unit of work is the **milestone**,
+not the micro-task. It is expected to:
 
 - form opinions about product direction grounded in `specs/roadmap.md`,
   `specs/product-overview.md`, and the per-component specs;
-- pick the largest reviewable unit that has one primary outcome, one
-  ownership boundary, one rollback path, and one acceptance story — and
-  defend that choice in the task prompt;
+- scope the next whole roadmap milestone, name its outcome and boundaries,
+  and grant the implementer ownership of how to build and stage it — including
+  whether it lands as one large PR or a short self-managed sequence of PRs;
 - name the target product bar explicitly when relevant (e.g. "Vercel /
   Linear / Stripe Dashboard quality" for UI work; "Stripe-quality error
   envelopes" for API work) so the implementer inherits the standard;
@@ -564,23 +607,30 @@ expected to:
 - propose spec changes when reality demands it instead of routing around
   stale specs (use the Spec Change Proposal flow above).
 
-## When To Prefer A Large Coherent PR
+## Milestone As The Unit Of Work
 
-Use the largest reviewable unit when **all** of the following hold:
+A milestone is delivered as the largest coherent unit that ships its outcome.
+When a milestone's whole outcome fits one reviewable PR, ship it as one PR.
+When it is larger, the implementer may stage it as a short sequence of PRs —
+the Orchestrator does not force it into one PR, nor pre-split it into micro-PRs.
 
-- there is one primary outcome a reviewer can hold in their head;
-- ownership is single (one app, one package, one infra slice);
-- validation and acceptance criteria can be stated in one block;
-- rollback is one revert;
+Prefer keeping a milestone whole when:
+
+- there is one primary milestone outcome a reviewer can hold in their head;
+- ownership stays within one cluster's area (one app, one package, one infra
+  slice, or a few tightly related components that ship the milestone together);
+- acceptance criteria can be stated for the milestone as a block;
+- rollback is a bounded, well-understood revert story;
 - splitting would create artificial micro-PRs whose only purpose is to
   satisfy a habit of small PRs.
 
 Greenfield scaffolds (e.g. a new app, a new design system, a new worker
-skeleton with its first endpoint) are the canonical case. The Orchestrator
-should not pre-split a scaffold into "scaffold-only" + "first feature" PRs
-when the scaffold is uninteresting without the first feature.
+skeleton with its first endpoint) are the canonical case for one large PR. The
+Orchestrator should not pre-split a scaffold into "scaffold-only" + "first
+feature" PRs when the scaffold is uninteresting without the first feature.
 
-Continue to split when:
+Split into a separate **milestone** (not a micro-slice of the current one)
+when:
 
 - the work crosses bounded contexts with independent acceptance criteria;
 - it mixes reusable foundation and product-specific work;
@@ -592,7 +642,7 @@ Continue to split when:
 
 When generating a task prompt for a top-tier implementer model, include an
 **Architect Brief** section near the top (after `Objective`, before
-`PR Boundary`). The brief is short (3–8 bullets) and tells the implementer:
+`Milestone Boundary`). The brief is short (3–8 bullets) and tells the implementer:
 
 - the product bar to hold (e.g. "Vercel-quality console", "Stripe-quality
   webhook delivery UX", "Linear-quality keyboard ergonomics");
@@ -610,7 +660,7 @@ When generating a task prompt for a top-tier implementer model, include an
   deviate on a documented one-line rationale.
 
 The Architect Brief is the place to be opinionated. The rest of the task
-prompt (PR Boundary, Constraints, Required Outcomes) stays mechanical.
+prompt (Milestone Boundary, Constraints, Required Outcomes) stays mechanical.
 
 ## Implementer Freedom Statement
 
@@ -655,8 +705,9 @@ reference scan before coding.
 - Stripping creative latitude in the name of safety when the actual risk is
   bounded by Constraints and a clean rollback.
 - Routing around stale specs instead of proposing changes.
-- Treating "PR-sized" as a maximum line count. PR-sized means
-  one-reviewable-unit-sized, which can be large when the unit is large.
+- Treating "milestone-sized" as a maximum line count. A milestone is
+  delivered as one coherent unit — one large PR or a short self-managed
+  sequence of PRs — and can be large when the milestone is large.
 - Hedging the product bar ("looks reasonable") instead of naming it
   ("Vercel-quality").
 - Generating a verifier task that re-litigates the implementer's design

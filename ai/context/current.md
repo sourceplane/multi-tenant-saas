@@ -1,51 +1,83 @@
 # Current Context
 
-Last updated: 2026-05-31 — Task 0119 VERIFIED PASS + MERGED (PR #174). main is FULLY GREEN.
+Last updated: 2026-05-31 — Task 0120 SCOPED (orchestrator). Implementer prompt at `ai/tasks/task-0120.md`. main is FULLY GREEN at `ba274f3` (Task 0119 code) / `269db18` (post-0119 bookkeeping). 0 open PRs.
 
-PR #174 (Task 0119 `Bump GitHub Actions to Node 24 runtimes`) squash-merged to
-main as `ba274f3`. Inline 8-phase verifier PASS adapted for an infra/tooling-only
-PR (no Orun component, no deploy lane, no live-URL surface): EXACTLY 2 files
-(+99/−5) on the boundary — `.github/workflows/ci.yml` (+5/−5, four action-ref
-token bumps: `checkout@v4`→`@v6` ×2, `upload-artifact@v4`→`@v7`,
-`download-artifact@v4`→`@v8`, `docker/login-action@v3`→`@v4`),
-`ai/reports/task-0119-implementer.md` NEW. Byte-identity guard confirmed: both
-`sourceplane/orun-action@v1.2.0` pins, both `orun` step bodies, env/permissions/
-matrix/job-names/`if:` guard all unchanged; no touch to `intent.yaml`,
-`component.yaml`, lockfiles, `kiox.lock`, or `plan.json`. Orun: validate ok;
-`plan --changed --base origin/main` = 0 components × 3 envs → 0 jobs (expected
-no-op for `.github/**`-only diff — Orun keys off intent paths, not workflow
-files); no `kiox.lock` mutation. PR-CI run 26711979395 = `plan` SUCCESS +
-`matrix.job-name` skipping (correct empty-plan shape); `gh run view --log`
-confirms the `plan` job ran on `actions/checkout@v6` + `actions/upload-artifact@v7`,
-and the Node 20 deprecation banner now lists ONLY `actions/cache@v4` — the four
-bumped actions are gone. PR was BEHIND main at scope hand-off (recurring
-0103-0118 pattern); `gh pr update-branch 174` produced rebased HEAD `dc6f9c5`,
-re-poll PR-CI run 26712180399 = SUCCESS before merge. Post-merge main-CI run
-26712209500 at `ba274f3` = SUCCESS, banner still lists ONLY `actions/cache@v4`.
-Reports: `ai/reports/task-0119-implementer.md`, `ai/reports/task-0119-verifier.md`.
+## Active task: 0120 — B5 webhook delivery history (milestone)
 
-The CI workflow now runs on Node 24 runtimes for the four bumped actions, well
-ahead of the June 16 2026 forced-default cutover and the September 16 2026
-Node 20 removal. Only the transitive `actions/cache@v4` (pulled in by
-`sourceplane/orun-action`) still triggers the warning — out of scope for this
-repo, addressable in the `orun-action` repo itself. **main remains FULLY GREEN.**
+Milestone `B5-webhook-delivery-history`: ship the per-endpoint webhook
+delivery-history observability surface **end to end** (Console + CLI + the SDK
+plumbing they require). This is the next buyer-credible B5 leg now that
+endpoint-CRUD, signing-key rotation, and SDK/CLI symmetry have all landed
+(`specs/roadmap.md:79` "per-endpoint delivery history").
 
-Repo health: green. Working tree clean. main HEAD `ba274f3`.
+**The backend is already shipped on main** (verified by inspection this cycle —
+NOT to be rebuilt):
 
-## Recommended next focus after 0119
+- Contracts: `PublicWebhookDeliveryAttempt` + `ListWebhookDeliveryAttemptsResponse`
+  (`deliveryAttempts[]` + `nextCursor`) + `GetWebhookDeliveryAttemptResponse`
+  (`packages/contracts/src/webhooks.ts:176-207`), re-exported from
+  `packages/sdk/src/index.ts:187-189`.
+- Worker: `GET …/endpoints/:id/delivery-attempts` (cursor-paginated, `limit`
+  1-100 default 50) + `GET …/delivery-attempts/:attemptId`
+  (`apps/webhooks-worker/src/router.ts:71-73,222-241`,
+  `handlers/webhook-delivery-attempts.ts`, `pagination.ts`
+  DEFAULT_LIMIT=50/MAX_LIMIT=100; cursor = base64 JSON `{v:1,t:createdAt,i:id}`).
+- api-edge: webhooks-facade proxies all `/v1/organizations/:orgId/webhooks/`
+  routes (delivery-attempts included) and forwards the query string verbatim
+  (`apps/api-edge/src/webhooks-facade.ts:7,19-20,64`).
 
-1. **Delivery-attempts UX** — next B5 leg per `specs/roadmap.md` for a richer
-   console or CLI slice now that endpoint-CRUD + SDK symmetry are fully closed.
-2. **SDK `EnableWebhookEndpointResponse` re-export** — close the gap noted in
-   Task 0114 verifier report; `webhook-enable.test.ts` currently reconstructs
-   the response shape locally because the type isn't exposed from `@saas/sdk`.
-   Symmetric to the disable side.
-3. **`VALID_CONTEXTS` drift-proofing (hygiene)** — derive the test array from
-   the `BoundedContext` union via `as const` so the duplication fixed in Task
-   0117 cannot re-break. Low priority; flagged in the Task 0117 implementer
-   report as a future improvement.
-4. **`actions/cache@v4` Node 24 follow-on** — only addressable in the
-   `sourceplane/orun-action` repo (transitive dep). External-repo work, not in
-   scope for this monorepo unless explicitly opened.
+**The milestone = the three missing consumer surfaces:**
 
-Repo health: green. main HEAD `ba274f3`.
+1. **SDK plumbing** — `listDeliveryAttempts` / `getDeliveryAttempt` EXIST
+   (`packages/sdk/src/webhooks.ts:310-338`) but do NOT thread `limit`/`cursor`
+   query params. Plumb them through the transport `query` record following the
+   `metering.ts` `buildQueryRecord` pattern.
+2. **Console delivery-history panel** — the endpoint detail page
+   (`apps/web-console-next/src/app/(app)/orgs/[orgSlug]/webhooks/[endpointId]/page.tsx`)
+   shows endpoint metadata + CRUD only. Add a designed delivery-history panel:
+   status badge, attempt#, `httpStatusCode`, safe `failureReason`,
+   `nextRetryAt`/`completedAt`, skeleton + EmptyState + Load-more via
+   `nextCursor` (U4/U8 bars).
+3. **CLI `webhook deliveries <endpointId>`** — CLI currently has
+   create/verify/sign/secrets-rotate/enable/disable
+   (`packages/cli/src/cli-runner.ts:167-173`). Add the deliveries command
+   (human + `--json` + `--limit`/`--cursor`), mirroring
+   `webhook-disable.ts`/`enable.ts`.
+
+Plus tests on each surface. May land as 1 PR or a short SDK→Console→CLI
+sequence (implementer's call; SDK before consumers). Implementer MUST
+branch + commit + push + open ≥1 PR before reporting done.
+
+**Hard exclusions:** NO replay/redeliver (zero worker route — spec-proposal
+territory); NO contract/db/worker/api-edge behaviour change; NO new server
+query filters (worker `parsePageParams` reads ONLY `limit`+`cursor`); NO
+secret/raw-body/full-payload render (contract exposes a safe `failureReason`
+summary only); NO B2 failure-budget alert wiring.
+
+Multi-component: `sdk` (turbo package) + `web-console-next` (cloudflare-pages
+turbo, deploy-gated — post-merge main-CI smoke + live-URL is the verifier PASS
+gate) + `cli` (turbo package). BEHIND-main rebase is the verifier's
+responsibility (recurring 0103-0119 pattern).
+
+## Just landed: Task 0119 (PR #174, merged `ba274f3`)
+
+Bumped the four deprecated Node-20-runtime GitHub Actions in
+`.github/workflows/ci.yml` to Node-24 majors (`checkout@v4`→`@v6` ×2,
+`upload-artifact@v4`→`@v7`, `download-artifact@v4`→`@v8`,
+`docker/login-action@v3`→`@v4`). Only the transitive `actions/cache@v4`
+(pulled in by `sourceplane/orun-action`) still triggers the deprecation
+warning — out of scope for this repo. main FULLY GREEN.
+
+## Next focus after 0120
+
+1. **B7 audit-log** — larger multi-PR surface; next-up once B5 closes.
+2. **`VALID_CONTEXTS` drift-proofing (hygiene)** — derive the test array from
+   the `BoundedContext` union via `as const` so the Task 0117 duplication
+   cannot re-break. Low priority.
+3. **B8 admin-worker** — greenfield; later.
+
+Deferred (Deferred Decision Protocol, human input required, NOT picked):
+`0085b` (cloudflare-domain v4→v5), `notifications-provider-swap`,
+`notifications-worker-dev-reframe`, `optional-spec-13-commands`.
+
+Repo health: green. main HEAD `ba274f3` / `269db18`. 0 open PRs.

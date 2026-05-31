@@ -1,6 +1,6 @@
 # Task Ledger
 
-Last updated: 2026-05-31 (Task 0119 Verifier PASS + MERGED — PR #174 `Task 0119: Bump GitHub Actions to Node 24 runtimes` squash-merged as `ba274f3` on main; inline 8-phase verifier PASS adapted for an infra/tooling-only no-deploy PR (no Orun component, no live-URL surface): EXACTLY 2 files (+99/−5), four action-ref token bumps (`checkout@v4`→`@v6` ×2, `upload-artifact@v4`→`@v7`, `download-artifact@v4`→`@v8`, `docker/login-action@v3`→`@v4`); byte-identity guard confirmed for both `sourceplane/orun-action@v1.2.0` pins and both `orun` step bodies + env/permissions/matrix/job-names/`if:` guard; `orun validate` ok; `orun plan --changed --base origin/main` = 0 components × 3 envs → 0 jobs (expected no-op for `.github/**` diff); PR-CI run `26711979395` SUCCESS at original HEAD + run `26712180399` SUCCESS at rebased HEAD `dc6f9c5` (BEHIND-main `gh pr update-branch` recurring 0103-0118 pattern); `gh run view --log` confirms `plan` job ran on `checkout@v6` + `upload-artifact@v7` and the Node 20 deprecation banner now lists ONLY `actions/cache@v4` (out of scope, transitive via orun-action); post-merge main-CI run `26712209500` at `ba274f3` SUCCESS with same banner shape — bump effective on main. Closes recommended-next-focus #2; CI workflow now runs Node 24 for the four bumped actions ahead of the June 16 2026 forced-default cutover and Sept 16 2026 Node 20 removal. main remains FULLY GREEN.)
+Last updated: 2026-05-31 (Task 0120 SCOPED — `ai/tasks/task-0120.md`, milestone `B5-webhook-delivery-history`: ship the per-endpoint webhook delivery-history observability surface end to end. Backend already shipped on main (contracts `PublicWebhookDeliveryAttempt`/`List…`/`Get…`, cursor-paginated webhooks-worker routes, api-edge proxy) — the milestone is the three missing consumer surfaces: SDK `limit`/`cursor` threading on `listDeliveryAttempts`/`getDeliveryAttempt`, a designed Console delivery-history panel on the endpoint detail page, and a `webhook deliveries <endpointId>` CLI command, each with tests. May land as 1 PR or a short SDK→Console→CLI sequence; implementer MUST branch+commit+push+open ≥1 PR. Hard exclusions: no replay/redeliver, no contract/db/worker/api-edge behaviour change, no new server query filters, no secret/raw-payload render, no B2 alert wiring. Chosen over VALID_CONTEXTS drift-proofing, B7 audit-log, and B8 admin-worker as the highest-leverage human-independent B5 leg. — prior: Task 0119 Verifier PASS + MERGED — PR #174 `Task 0119: Bump GitHub Actions to Node 24 runtimes` squash-merged as `ba274f3` on main; inline 8-phase verifier PASS adapted for an infra/tooling-only no-deploy PR (no Orun component, no live-URL surface): EXACTLY 2 files (+99/−5), four action-ref token bumps (`checkout@v4`→`@v6` ×2, `upload-artifact@v4`→`@v7`, `download-artifact@v4`→`@v8`, `docker/login-action@v3`→`@v4`); byte-identity guard confirmed for both `sourceplane/orun-action@v1.2.0` pins and both `orun` step bodies + env/permissions/matrix/job-names/`if:` guard; `orun validate` ok; `orun plan --changed --base origin/main` = 0 components × 3 envs → 0 jobs (expected no-op for `.github/**` diff); PR-CI run `26711979395` SUCCESS at original HEAD + run `26712180399` SUCCESS at rebased HEAD `dc6f9c5` (BEHIND-main `gh pr update-branch` recurring 0103-0118 pattern); `gh run view --log` confirms `plan` job ran on `checkout@v6` + `upload-artifact@v7` and the Node 20 deprecation banner now lists ONLY `actions/cache@v4` (out of scope, transitive via orun-action); post-merge main-CI run `26712209500` at `ba274f3` SUCCESS with same banner shape — bump effective on main. Closes recommended-next-focus #2; CI workflow now runs Node 24 for the four bumped actions ahead of the June 16 2026 forced-default cutover and Sept 16 2026 Node 20 removal. main remains FULLY GREEN.)
 
 ## Task 0001
 
@@ -4252,4 +4252,54 @@ One PR, one reviewer-holdable outcome (rotate UX backend), one rollback (single 
   pitfall, the orchestrator's correct next move is to emit the matching
   verifier task (8-phase, adapted for a tooling-only no-deploy PR) before
   scoping any new forward work.
+
+## Task 0120
+
+- Agent: Implementer
+- Prompt: `ai/tasks/task-0120.md`
+- Status: SCOPED 2026-05-31 (orchestrator). Awaiting implementer pickup.
+- Milestone: `B5-webhook-delivery-history` — ship the per-endpoint webhook
+  delivery-history observability surface end to end (Console + CLI + the SDK
+  plumbing they need). Buyer-credible webhook debuggability is the next B5 leg
+  after endpoint-CRUD, signing-key rotation, and SDK/CLI symmetry all landed
+  (specs/roadmap.md:79).
+- Backend already shipped on main (verified by inspection this cycle, NOT
+  rebuilt): contracts `PublicWebhookDeliveryAttempt` +
+  `ListWebhookDeliveryAttemptsResponse` (`deliveryAttempts[]` + `nextCursor`) +
+  `GetWebhookDeliveryAttemptResponse` (`packages/contracts/src/webhooks.ts:176-207`,
+  re-exported `sdk/src/index.ts:187-189`); webhooks-worker routes
+  `GET …/endpoints/:id/delivery-attempts` (cursor-paginated, `limit` 1-100
+  default 50) + `GET …/delivery-attempts/:attemptId`
+  (`router.ts:71-73,222-241`, `handlers/webhook-delivery-attempts.ts`,
+  `pagination.ts` DEFAULT_LIMIT=50/MAX_LIMIT=100); api-edge webhooks-facade
+  proxies all `/v1/organizations/:orgId/webhooks/` routes and forwards the
+  query string verbatim (`webhooks-facade.ts:7,19-20,64`).
+- Three consumer surfaces (the milestone): (1) SDK `listDeliveryAttempts` /
+  `getDeliveryAttempt` EXIST (`webhooks.ts:310-338`) but do NOT thread
+  `limit`/`cursor` query params — plumb them via the `metering.ts`
+  `buildQueryRecord` + transport `query` pattern; (2) Console detail page
+  (`web-console-next/.../webhooks/[endpointId]/page.tsx`) shows endpoint
+  metadata + CRUD only — add a designed delivery-history panel (status badge,
+  attempt#, `httpStatusCode`, safe `failureReason`, `nextRetryAt`/`completedAt`,
+  skeleton + EmptyState + Load-more via `nextCursor`, U4/U8 bars); (3) CLI has
+  create/verify/sign/secrets-rotate/enable/disable — add `webhook deliveries
+  <endpointId>` (human + `--json` + `--limit`/`--cursor`, mirroring
+  `webhook-disable.ts`/`enable.ts`). Plus tests on each surface.
+- May land as 1 PR or a short SDK→Console→CLI sequence (implementer's call;
+  SDK before consumers). Implementer MUST branch + commit + push + open ≥1 PR
+  before reporting done.
+- Hard exclusions: NO replay/redeliver (zero worker route — spec-proposal
+  territory); NO contract/db/worker/api-edge behaviour change; NO new server
+  query filters (worker `parsePageParams` reads ONLY `limit`+`cursor`); NO
+  secret/raw-body/full-payload render (contract exposes safe `failureReason`
+  summary only); NO B2 failure-budget alert wiring.
+- Multi-component: `sdk` (turbo package) + `web-console-next` (cloudflare-pages
+  turbo, deploy-gated — post-merge main-CI smoke + live-URL is the verifier
+  PASS gate) + `cli` (turbo package). BEHIND-main rebase is the verifier's
+  responsibility (recurring 0103-0119).
+- Selection rationale: highest-leverage human-independent B5 leg — backend is
+  fully shipped and cursor-paginated, only the consumer surfaces are missing,
+  so it is a low-risk buyer-credible observability win that needs no human
+  input. Chosen over VALID_CONTEXTS drift-proofing (low priority), B7 audit-log
+  (larger multi-PR scope), and B8 admin-worker (greenfield).
 

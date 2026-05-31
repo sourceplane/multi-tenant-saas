@@ -1,55 +1,57 @@
 # Orchestrator Brief
 
 ## Snapshot
-- snapshot_at: 2026-05-31T12:05:00Z
-- head_sha: eda4a3a (main) — PR #174 not yet merged
-- state_json_mtime_marker: post-task-0119-verifier-scope
-- last_task_id: task-0119-verifier
-- last_report_id: task-0119-implementer
+- snapshot_at: 2026-05-31T12:20:00Z
+- head_sha: ba274f3 (main code) / 269db18 (post-0119 bookkeeping); origin/main = 269db18
+- state_json_mtime_marker: post-task-0120-scope
+- last_task_id: task-0120 (implementer)
+- last_report_id: task-0119-verifier
 - cycle_mode: warm
 - repo_health: green
 
 ## Working Hypothesis
-Task 0119 (CI Node-20 → Node-24 action bump) implementer pass is **complete on
-PR #174** (HEAD `f0ac5ce`, OPEN / MERGEABLE / CLEAN). Implementer report is on
-the PR branch with real PR `#174` — no Phase-0 reconstruction needed. The
-orchestrator's job this cycle was to (a) emit the matching **verifier prompt**
-at `ai/tasks/task-0119-verifier.md` adapted for a tooling-only no-deploy PR, and
-(b) commit the verifier-scope bookkeeping (state.json + current.md +
-task-ledger.md + this brief). Both done this cycle.
+Task 0119 (CI Node-20→Node-24 action bump) is **VERIFIED PASS + MERGED** (PR #174
+squash `ba274f3`). No open PRs, working tree clean. The orchestrator's job this
+cycle was to **scope the next forward milestone** and emit its implementer prompt.
 
-The verifier agent's next pickup is the 8-phase verification of PR #174:
-2-file boundary + four-token byte-identity guard + empty/no-op changed-plan +
-PR-CI `plan`-job log inspection (new majors + Node 20 banner gone) → squash
-merge → post-merge main-CI watch (green + banner dropped, no deploy/live-URL
-probe) → report + Phase-8 bookkeeping.
+Selected forward pick: **Task 0120 — B5 webhook delivery history**
+(`ai/tasks/task-0120.md`, milestone `B5-webhook-delivery-history`). The
+delivery-attempts BACKEND is already fully shipped on main (contracts + worker
+routes + cursor pagination + api-edge proxy — all verified by inspection this
+cycle, NOT to be rebuilt). The milestone is the three missing CONSUMER surfaces:
+SDK `limit`/`cursor` threading, a Console delivery-history panel, and a CLI
+`webhook deliveries` command, each with tests. Implementer MUST branch + commit +
+push + open ≥1 PR. May land as 1 PR or a short SDK→Console→CLI sequence.
+
+This cycle also committed the philosophy shift in `agents/orchestrator.md`
+(PR-sized → milestone-sized tasks) and the scope bookkeeping (state.json +
+current.md + task-ledger.md + this brief).
 
 ## Ranked Candidate Queue
-1. **Task 0119 verifier** (EMITTED THIS CYCLE) — PR #174 verification gates the
-   next forward pick. Tooling-only, no deploy lane.
-2. **Delivery-attempts UX** — next B5 leg per `specs/roadmap.md` (console or CLI
-   slice) now that endpoint-CRUD + SDK symmetry are fully closed. Verify SDK +
-   worker list-delivery-attempts surface exists before scoping.
-3. **`VALID_CONTEXTS` drift-proofing (hygiene)** — derive the test array from
-   the `BoundedContext` union via `as const` so the Task-0117 duplication can't
+1. **Task 0120 — B5 webhook delivery history** (EMITTED THIS CYCLE) — implementer
+   pickup next. Backend shipped; consumer surfaces only. Human-independent,
+   low-risk, buyer-credible.
+2. **B7 audit-log console UX** — surface `audit_events` stream in Console. Larger
+   multi-PR scope; next-up once B5 closes.
+3. **`VALID_CONTEXTS` drift-proofing (hygiene)** — derive the test array from the
+   `BoundedContext` union via `as const` so the Task-0117 duplication can't
    re-break. Low priority.
-4. **B7 audit-log console UX** — surface `audit_events` stream in Console.
-   Larger scope; multi-PR.
-5. **B8 admin-worker scaffold** — greenfield; cross-tenant ops surface.
+4. **B8 admin-worker scaffold** — greenfield; cross-tenant ops surface. Later.
 
 ## In-Flight
-- PR #174 (Task 0119 implementer pass) OPEN, MERGEABLE, CLEAN at HEAD `f0ac5ce`.
-  PR-CI run 26711979395 = `plan` SUCCESS + `run` matrix skipping (expected
-  empty-plan shape). Verifier waits to verify + merge.
-- No other open PRs.
+- No open PRs. Task 0120 awaiting implementer pickup.
 - No mid-write implementer worktree.
 
 ## Hot Files
-- hot_context_sections: `current.md#current-task-0119-verification`,
-  `task-ledger.md#task-0119`
-- hot_code (verifier inspection target):
-  - `.github/workflows/ci.yml` (the only changed file — confirm exactly four
-    ref tokens bumped, everything else byte-identical to main)
+- hot_context_sections: `current.md#active-task-0120`, `task-ledger.md#task-0120`
+- hot_code (Task 0120 implementer targets):
+  - `packages/sdk/src/webhooks.ts:310-338` (thread `limit`/`cursor`)
+  - `packages/sdk/src/transport.ts` (`query` record) + `metering.ts` `buildQueryRecord` pattern
+  - `apps/web-console-next/src/app/(app)/orgs/[orgSlug]/webhooks/[endpointId]/page.tsx` (add panel)
+  - `packages/cli/src/cli-runner.ts:167-173` + `commands/webhook-*.ts` (add `deliveries`)
+  - read-only refs: `packages/contracts/src/webhooks.ts:176-207`,
+    `apps/webhooks-worker/src/{router.ts,handlers/webhook-delivery-attempts.ts,pagination.ts}`,
+    `apps/api-edge/src/webhooks-facade.ts`
 
 ## Deferred Watch
 - `0085b` (cloudflare-domain v4→v5): user lifts the defer.
@@ -59,29 +61,26 @@ probe) → report + Phase-8 bookkeeping.
   `/v1/deployments` GET (+ `resource create` POST) on api-edge + contracts.
 
 ## Invalidate When
-- PR #174 PR-CI conclusion flips, or PR #174 merges (squash SHA appears).
-- A new GitHub PR opens.
+- A new GitHub PR opens (Task 0120 implementer PR).
+- Task 0120 implementer report lands → orchestrator emits the matching verifier task.
 - `current.md` rewritten outside the orchestrator's hand.
 - `state.json.goal` changes.
 - A new spec proposal under `/ai/proposals/` is filed.
-- A verifier FAIL appears for #174.
-- Implementer reverts or force-pushes `impl/task-0119-ci-actions-node24-bump`.
 
 ## Next Move
-Verifier agent (next pickup): execute `ai/tasks/task-0119-verifier.md`
-end-to-end. On PASS: squash merge PR #174, sync main, post-merge main-CI watch
-(confirm banner dropped for the four bumped actions), write
-`ai/reports/task-0119-verifier.md`, commit Phase-8 bookkeeping on main. On FAIL:
-leave PR open with documented blockers; PR comment + report on PR branch.
+Implementer agent (next pickup): execute `ai/tasks/task-0120.md` end-to-end —
+plumb SDK `limit`/`cursor`, build the Console delivery-history panel, add the CLI
+`webhook deliveries` command, add tests on each surface, then branch + commit +
+push + open ≥1 PR and write the implementer report.
 
-After 0119 verifier PASS, the next orchestrator pick is the B5 delivery-attempts
-UX leg (verify SDK/worker surface first) OR the `VALID_CONTEXTS` drift-proofing
-hygiene fold — whichever matches user intent at that moment.
+After the Task 0120 implementer pass lands a PR, the orchestrator's correct next
+move (Operating Loop steps 15-16, "forgetting verifier tasks exist" pitfall) is
+to emit the matching **verifier** task BEFORE scoping any new forward work —
+multi-component, deploy-gated (Console post-merge main-CI smoke + live-URL is the
+PASS gate), SDK-before-consumers merge order, BEHIND-main rebase is the verifier's
+responsibility.
 
 ## Open Questions To Self
-- Confirm the post-merge main-CI run's `plan` job log likewise drops the Node 20
-  banner for checkout/upload-artifact/download-artifact/docker-login (the
-  download leg + docker-login are NOT exercised in the PR-CI `plan`-only run, so
-  the post-merge run is the first place all four bumped actions are observed in
-  one pipeline pass — though `run`-job download still only fires when a future
-  PR produces a non-empty changed-plan).
+- If the implementer elects a multi-PR sequence, the orchestrator should be ready
+  to emit a verifier per PR (or a single verifier covering the merged set) — watch
+  the implementer report to learn which shape landed before scoping the verifier.
