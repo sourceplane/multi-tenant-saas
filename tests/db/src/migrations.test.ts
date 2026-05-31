@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { readFileSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { manifest } from "@saas/db";
+import { manifest, BOUNDED_CONTEXTS } from "@saas/db";
 import type { BoundedContext, MigrationEntry } from "@saas/db";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -49,19 +49,7 @@ describe("Migration Manifest Verifier", () => {
   });
 
   describe("bounded context ownership", () => {
-    const VALID_CONTEXTS: BoundedContext[] = [
-      "control",
-      "identity",
-      "membership",
-      "projects",
-      "billing",
-      "events",
-      "config",
-      "webhooks",
-      "metering",
-      "notifications",
-      "support",
-    ];
+    const VALID_CONTEXTS = BOUNDED_CONTEXTS;
 
     it("each migration declares a valid bounded context", () => {
       for (const m of migrations) {
