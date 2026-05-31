@@ -1,30 +1,28 @@
-// Cross-resource read commands (Task 0101).
+// Cross-resource read commands (Task 0101 → 0102 SDK rewire).
 //
 // `usage summary` and `billing summary` are thin wrappers over single-shot
 // SDK reads. `audit list` adds pagination on top of the SDK with two modes:
 //
-//   - default (no `--all`): returns the first page. JSON output emits the
-//     SDK's response shape (`{ auditEntries }`); human mode prints a small
-//     id/eventType/occurredAt/actor table. Cursor surfaces as
-//     `next_cursor` in the JSON envelope when present.
-//   - `--all`: loops until the server returns `cursor: null`, emitting one
-//     JSON document per page on stdout (newline-delimited / JSON Lines)
-//     when `--output=json`, or appending pages into a single flat human
-//     table otherwise.
+//   - default (no `--all`): returns the first page via
+//     `client.events.listAuditEntriesPage()`, which exposes the
+//     server-issued `meta.cursor` alongside the entries. JSON output emits
+//     `{ auditEntries, next_cursor }`; human mode prints a small
+//     id/eventType/occurredAt/actor table with the next cursor in the
+//     title when present.
+//   - `--all`: drives `client.events.iterAuditEntries()` to walk every
+//     page until the server returns `cursor: null`. JSON mode emits one
+//     JSON document per page (newline-delimited / JSON Lines); human mode
+//     concatenates rows under a single header.
 //
-// Why pagination is hand-rolled here: `client.events.listAuditEntries()`
-// returns the unwrapped `data` payload only (the SDK transport drops
-// `meta`), so pulling `meta.cursor` off the response requires hitting the
-// transport directly. We do that through `client.transport.fetchImpl` to
-// stay inside the public SDK contract — no edits to `packages/sdk/**`.
-// The implementer report's spec proposal recommends a typed pagination
-// helper on the SDK in a follow-up task.
+// Task 0102 swapped the hand-rolled envelope fetch through the public
+// transport for the typed SDK surface (`EventsClient`), removing the
+// need for the CLI to know envelope shape, header construction, or
+// loop guards.
 
 import type { CommandContext, CommandResult } from "../router.js";
 import { formatOutput } from "../output/index.js";
 import { MissingOrgContextError, UsageError } from "../errors.js";
-import { decodeError } from "@saas/sdk";
-import type { Sourceplane } from "@saas/sdk";
+import type { ListAuditEntriesQuery } from "@saas/sdk";
 
 interface PublicAuditEntryShape {
   id: string;
@@ -33,11 +31,6 @@ interface PublicAuditEntryShape {
   occurredAt: string;
   actorType: string;
   actorId: string;
-}
-
-interface AuditEnvelopePage {
-  data: { auditEntries: PublicAuditEntryShape[] };
-  meta: { requestId: string; cursor: string | null };
 }
 
 async function resolveOrgId(ctx: CommandContext): Promise<string> {
@@ -145,49 +138,10 @@ export async function billingSummaryCommand(ctx: CommandContext): Promise<Comman
 // ---------------------------------------------------------------------------
 // audit list [--limit=N] [--cursor=CURSOR] [--category=CAT] [--all]
 //
-// First-page mode (default) emits one JSON document or one human table;
-// `--all` walks every page until the server returns `cursor: null`.
-// In `--all` JSON mode we emit JSON Lines (one document per page) so a
-// downstream pipeline can stream without buffering. Human mode in `--all`
-// concatenates rows under a single header.
+// Default mode: one-shot fetch via `client.events.listAuditEntriesPage()`.
+// `--all` mode: drives `client.events.iterAuditEntries()` and batches
+// entries back into per-page JSON Lines / a flat human table.
 // ---------------------------------------------------------------------------
-
-async function fetchAuditPage(
-  sdk: Sourceplane,
-  orgId: string,
-  query: { category?: string; limit?: number; cursor?: string },
-): Promise<AuditEnvelopePage> {
-  const params = new URLSearchParams();
-  if (query.limit !== undefined) params.set("limit", String(query.limit));
-  if (query.cursor !== undefined) params.set("cursor", query.cursor);
-  if (query.category !== undefined) params.set("category", query.category);
-  const qs = params.toString();
-  const url =
-    `${sdk.transport.baseUrl}/v1/organizations/${encodeURIComponent(orgId)}/audit` +
-    (qs.length > 0 ? `?${qs}` : "");
-
-  const headers = new Headers();
-  for (const [k, v] of Object.entries(sdk.transport.defaultHeaders)) headers.set(k, v);
-  const auth = sdk.transport.auth;
-  if (auth !== undefined) {
-    if (auth.kind === "bearer") headers.set("authorization", `Bearer ${auth.token}`);
-    else headers.set("cookie", auth.cookie);
-  }
-  headers.set("accept", "application/json");
-
-  // We deliberately do NOT set `x-request-id` here — the api-edge worker
-  // mints one server-side and returns it on the response and on errors.
-  // Skipping the client-generated id keeps the CLI off the hazardous
-  // random-id-generation rail (the same one that bars CLI-side
-  // idempotency-key auto-mint).
-
-  const response = await sdk.transport.fetchImpl(url, { method: "GET", headers });
-  if (!response.ok) {
-    throw await decodeError(response, "");
-  }
-  const parsed = (await response.json()) as AuditEnvelopePage;
-  return parsed;
-}
 
 function renderAuditRows(entries: ReadonlyArray<PublicAuditEntryShape>): {
   columns: ReadonlyArray<string>;
@@ -220,25 +174,33 @@ export async function auditListCommand(ctx: CommandContext): Promise<CommandResu
   const orgId = await resolveOrgId(ctx);
   const sdk = await ctx.sdk();
 
-  if (!all) {
-    const page = await fetchAuditPage(sdk, orgId, {
-      ...(limit !== undefined ? { limit } : {}),
-      ...(cursor !== undefined ? { cursor } : {}),
+  // Build the discriminated `by:"org"` query the SDK accepts. We never
+  // pass `cursor` here in --all mode (already validated above); in default
+  // mode we forward it verbatim.
+  function buildQuery(forCursor: string | undefined): ListAuditEntriesQuery {
+    return {
+      by: "org",
       ...(category !== undefined ? { category } : {}),
-    });
+      ...(limit !== undefined ? { limit } : {}),
+      ...(forCursor !== undefined ? { cursor: forCursor } : {}),
+    };
+  }
+
+  if (!all) {
+    const page = await sdk.events.listAuditEntriesPage(orgId, buildQuery(cursor));
     if (ctx.outputMode === "json") {
       ctx.stdout(
         formatOutput({
           mode: "json",
           data: {
-            auditEntries: page.data.auditEntries,
-            next_cursor: page.meta.cursor,
+            auditEntries: page.entries,
+            next_cursor: page.cursor,
           },
         }),
       );
       return { exitCode: 0 };
     }
-    const { columns, rows } = renderAuditRows(page.data.auditEntries);
+    const { columns, rows } = renderAuditRows(page.entries);
     ctx.stdout(
       formatOutput({
         mode: "human",
@@ -246,48 +208,46 @@ export async function auditListCommand(ctx: CommandContext): Promise<CommandResu
         rows,
         title:
           `Audit entries for ${orgId}` +
-          (page.meta.cursor !== null ? ` (next cursor: ${page.meta.cursor})` : ""),
+          (page.cursor !== null ? ` (next cursor: ${page.cursor})` : ""),
       }),
     );
     return { exitCode: 0 };
   }
 
-  // --all: walk pages until cursor is null. Bounded loop guard prevents an
-  // infinite loop if the server somehow returns the same cursor twice.
+  // --all: drive the SDK iterator, batching entries back into per-page
+  // groups for JSON Lines output. We can't observe page boundaries from a
+  // simple `for await (entry of iter)` loop, so we use the iterator
+  // protocol directly and ask `listAuditEntriesPage` for each page.
   const allRows: Record<string, string>[] = [];
-  let nextCursor: string | undefined = cursor;
-  const seenCursors = new Set<string>();
-  let iterations = 0;
+  let nextCursor: string | undefined = undefined;
   let columns: ReadonlyArray<string> = [];
+  let iterations = 0;
+  const seenCursors = new Set<string>();
 
   while (iterations < 1000) {
     iterations += 1;
-    const page = await fetchAuditPage(sdk, orgId, {
-      ...(limit !== undefined ? { limit } : {}),
-      ...(nextCursor !== undefined ? { cursor: nextCursor } : {}),
-      ...(category !== undefined ? { category } : {}),
-    });
+    const page = await sdk.events.listAuditEntriesPage(orgId, buildQuery(nextCursor));
     if (ctx.outputMode === "json") {
       ctx.stdout(
         formatOutput({
           mode: "json",
           data: {
-            auditEntries: page.data.auditEntries,
-            next_cursor: page.meta.cursor,
+            auditEntries: page.entries,
+            next_cursor: page.cursor,
           },
         }),
       );
     } else {
-      const rendered = renderAuditRows(page.data.auditEntries);
+      const rendered = renderAuditRows(page.entries);
       columns = rendered.columns;
       for (const row of rendered.rows) allRows.push(row);
     }
-    if (page.meta.cursor === null) break;
-    if (seenCursors.has(page.meta.cursor)) {
-      throw new Error(`audit pagination loop detected at cursor ${page.meta.cursor}`);
+    if (page.cursor === null) break;
+    if (seenCursors.has(page.cursor)) {
+      throw new Error(`audit pagination loop detected at cursor ${page.cursor}`);
     }
-    seenCursors.add(page.meta.cursor);
-    nextCursor = page.meta.cursor;
+    seenCursors.add(page.cursor);
+    nextCursor = page.cursor;
   }
 
   if (ctx.outputMode === "human") {
