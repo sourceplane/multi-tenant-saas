@@ -6,12 +6,6 @@
 // so direct SDK-layer injection lets us assert the call shape (orgId,
 // endpointId, body, options) without modelling the request envelope.
 // The fake mirrors only the subset of the SDK the command touches.
-//
-// Note: `EnableWebhookEndpointResponse` is not (yet) re-exported from
-// `@saas/sdk`'s package index — only the underlying `PublicWebhookEndpoint`
-// is. Editing `packages/sdk/**` is out of this PR's boundary, so we build
-// the response shape locally from `PublicWebhookEndpoint`. The missing
-// re-export is recorded as a remaining gap in the implementer report.
 
 import { promises as fs } from "node:fs";
 import * as os from "node:os";
@@ -19,17 +13,17 @@ import * as path from "node:path";
 
 import { describe, expect, it, vi } from "vitest";
 
-import type { Sourceplane, PublicWebhookEndpoint } from "@saas/sdk";
+import type {
+  Sourceplane,
+  PublicWebhookEndpoint,
+  EnableWebhookEndpointResponse,
+} from "@saas/sdk";
 
 import { runCli } from "../cli-runner.js";
 import { ContextStore } from "../context/store.js";
 import { MemoryTokenStore } from "./helpers.js";
 
 // ---- fixtures -------------------------------------------------------------
-
-interface EnableResponse {
-  endpoint: PublicWebhookEndpoint;
-}
 
 const FIXTURE_ENDPOINT: PublicWebhookEndpoint = {
   id: "wh_abc",
@@ -47,7 +41,7 @@ const FIXTURE_ENDPOINT: PublicWebhookEndpoint = {
   updatedAt: "2025-06-15T12:34:56Z",
 };
 
-const RESPONSE: EnableResponse = { endpoint: FIXTURE_ENDPOINT };
+const RESPONSE: EnableWebhookEndpointResponse = { endpoint: FIXTURE_ENDPOINT };
 
 // ---- harness --------------------------------------------------------------
 
@@ -66,7 +60,7 @@ interface Cap {
 
 interface HarnessOpts {
   /** Controls what the fake `sdk.webhooks.enableEndpoint` returns. */
-  response?: EnableResponse;
+  response?: EnableWebhookEndpointResponse;
   /** Force the enableEndpoint mock to reject. */
   rejectWith?: Error;
   /** Active org id to seed in the context store (default org_1). */
@@ -103,7 +97,7 @@ async function withHarness(
         endpointArg: string,
         bodyArg: unknown = {},
         callOpts: Record<string, unknown> = {},
-      ): Promise<EnableResponse> => {
+      ): Promise<EnableWebhookEndpointResponse> => {
         cap.enableCalls.push({
           orgId: orgArg,
           endpointId: endpointArg,

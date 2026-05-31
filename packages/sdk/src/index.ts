@@ -170,6 +170,8 @@ export type {
   CreateWebhookEndpointResponse,
   UpdateWebhookEndpointRequest,
   UpdateWebhookEndpointResponse,
+  EnableWebhookEndpointRequest,
+  EnableWebhookEndpointResponse,
   DisableWebhookEndpointRequest,
   DisableWebhookEndpointResponse,
   DeleteWebhookEndpointResponse,
