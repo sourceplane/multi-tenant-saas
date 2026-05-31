@@ -2,7 +2,7 @@
 
 Agent: Implementer
 Branch: `impl/task-0118-cli-cross-reads-resolveorgid-fold`
-PR Number: TBD (updated after `gh pr create`)
+PR Number: #173
 
 ## Summary
 
