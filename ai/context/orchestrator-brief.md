@@ -1,61 +1,64 @@
 # Orchestrator Brief
 
 ## Snapshot
-- snapshot_at: 2026-05-31T14:00:00Z
-- head_sha: 99877e0 (main code, PR #175 squash) / bookkeeping advancing past c393dc3
-- state_json_mtime_marker: post-task-0121-scope
-- last_task_id: task-0121 (implementer)
-- last_report_id: task-0120-verifier
+- snapshot_at: 2026-05-31T20:00:00Z
+- head_sha: ef38e780 (origin/main, Task 0121 scope commit) | PR #176 head 40d9f43
+- state_json_mtime_marker: post-task-0121-verifier-scope
+- last_task_id: task-0121-verifier (emitted)
+- last_report_id: task-0121-implementer (UNTRACKED — Phase-0 fix-up owed)
 - cycle_mode: warm
 - repo_health: green
 
 ## Working Hypothesis
-Task 0120 (B5 webhook delivery history) is **VERIFIED PASS + MERGED** (PR #175
-squash `99877e0`); its verifier report has landed. No open PRs, working tree
-clean. The orchestrator's job this cycle was to **scope the next forward
-milestone** and emit its implementer prompt.
+Last cycle the brief said "Task 0121 scoped, awaiting implementer." Reality this
+cycle: the **implementer pass completed** — PR **#176** is OPEN, MERGEABLE/CLEAN,
+**21/21 PR-CI green** at HEAD `40d9f43` (base `ef38e780` = origin/main, 0 behind),
+delivering the full B7 audit-log filtering + export milestone in ONE combined PR
+(17 files, +1218/-55). Per Operating Loop steps 15-16 + the "forgetting verifier
+tasks exist" pitfall, the orchestrator's correct move was to **emit the matching
+verifier task BEFORE any new forward work** — done: `ai/tasks/task-0121-verifier.md`.
 
-Selected forward pick: **Task 0121 — B7 audit-log filtering + export**
-(`ai/tasks/task-0121.md`, milestone `B7-audit-log-filtering-export`). The audit
-BACKEND is shipped but filter-poor: the org-scoped read API supports ONLY a
-`category` filter + cursor pagination (verified by inspection this cycle, NOT to
-be rebuilt). The milestone makes the stream buyer-credible by adding actor /
-resource(subject) / action(eventType) / time-range filters + an NDJSON export,
-end to end across DB → worker → contracts → SDK → CLI → Console, each with tests.
-api-edge needs NO change (audit-facade forwards query string verbatim).
-Implementer MUST branch + commit + push + open ≥1 PR. May land as 1 PR or a
-SDK-before-consumers sequence.
+Two facts the verifier inherits, both pre-resolved by orchestrator inspection:
+1. **Phase-0 report fix-up** — `ai/reports/task-0121-implementer.md` is UNTRACKED,
+   never committed to the PR branch (recurring 0031-0034/0106 gap). Verifier
+   commits + pushes it, re-polls CI before merge.
+2. **400 → 422 reconciliation** — task prompt acceptance said 400 on malformed
+   from/to + bad actorType; implementer shipped **422 validation_failed**.
+   Confirmed 422 is the canonical events-worker convention
+   (`apps/events-worker/src/http.ts:36` `validationError` → 422). ACCEPT per
+   trust-code-over-docs; NO spec proposal (worker error-envelope detail).
 
 ## Ranked Candidate Queue
-1. **Task 0121 — B7 audit-log filtering + export** (EMITTED THIS CYCLE) —
-   implementer pickup next. Backend shipped (category-only); add filters +
-   export across all consumers. Human-independent, buyer-credible.
+1. **Task 0121 verifier** (EMITTED THIS CYCLE) — execute next. Console leg
+   DEPLOY-GATED: PASS gate = post-merge main-CI smoke + live prod-Worker
+   audit-page probe (`/`→307→`/orgs`→200), not PR-CI alone.
 2. **B7 follow-on / security-events surface** — `querySecurityEvents` consumer
-   exposure (explicitly out of scope for 0121). Next-up once 0121 closes.
+   exposure (explicitly out of scope for 0121). Next forward leg once 0121 closes.
 3. **`VALID_CONTEXTS` drift-proofing (hygiene)** — derive the test array from the
    `BoundedContext` union via `as const`. Low priority.
 4. **B8 admin-worker scaffold** — greenfield; cross-tenant ops surface. Later.
 
 ## In-Flight
-- No open PRs. Task 0121 awaiting implementer pickup.
-- No mid-write implementer worktree.
+- PR #176 OPEN (`impl/task-0121-audit-filter-export`), 21/21 CI green, 0 behind.
+- Verifier task awaiting pickup. No mid-write implementer worktree.
 
 ## Hot Files
-- hot_context_sections: `current.md#active-task-0121`, `task-ledger.md#task-0121`
-- hot_code (Task 0121 implementer targets):
-  - `packages/db/src/events/repository.ts:~295` (`queryAuditByOrg` filter clauses;
-    mirror `queryAuditByTarget`)
-  - `apps/events-worker/src/pagination.ts` (parse from/to + ISO_TS_RE) +
-    `src/handlers/list-audit.ts` (new param validation) + `src/router.ts` (read-only)
-  - `packages/contracts/src/events.ts:110` (`AuditQueryByOrg` filter fields;
-    keep `PublicAuditEntry`/envelope stable)
-  - `packages/sdk/src/events.ts:21,127,177` (`ListAuditEntriesQuery` org arm +
-    `buildAuditRequest` + iterator query reconstruction + NDJSON helper)
-  - `packages/cli/src/commands/cross-reads.ts` (`auditListCommand`) +
-    `cli-runner.ts:179` (new flags + export)
-  - `apps/web-console-next/src/app/(app)/orgs/[orgSlug]/audit/page.tsx`
-    (filter UI + Load-more + export, SDK-only)
-  - read-only ref: `apps/api-edge/src/audit-facade.ts` (NO change — forwards verbatim)
+- hot_context_sections: `current.md#active-task-0121-verifier`,
+  `task-ledger.md#task-0121`
+- hot_code (Task 0121 verifier inspection targets):
+  - `packages/db/src/events/repository.ts` (`queryAuditByOrg` parameterized
+    filter clauses; SQL-injection-safety + cursor-keyset-unchanged check)
+  - `apps/events-worker/src/pagination.ts` (`parseAuditFilters`) +
+    `src/handlers/list-audit.ts` (422 wiring) + `src/http.ts:36` (422 convention)
+  - `packages/contracts/src/events.ts` (`AuditQueryByOrg` +7 fields;
+    `PublicAuditEntry`/envelope byte-stable)
+  - `packages/sdk/src/events.ts` (`iterAuditEntries` per-page filter survival +
+    `exportAuditEntriesNdjson`) + `src/index.ts`
+  - `packages/cli/src/commands/cross-reads.ts` + `cli-runner.ts` (filter flags +
+    `--format=ndjson` mutex)
+  - `apps/web-console-next/src/components/audit/audit-log.ts` +
+    `audit/page.tsx` (SDK-only, deploy-gated)
+  - read-only ref: `apps/api-edge/src/audit-facade.ts` (must be UNCHANGED)
 
 ## Deferred Watch
 - `0085b` (cloudflare-domain v4→v5): user lifts the defer.
@@ -65,31 +68,30 @@ SDK-before-consumers sequence.
   `/v1/deployments` GET (+ `resource create` POST) on api-edge + contracts.
 
 ## Invalidate When
-- A new GitHub PR opens (Task 0121 implementer PR).
-- Task 0121 implementer report lands → orchestrator emits the matching verifier task.
+- Task 0121 verifier merges PR #176 → orchestrator scopes the next forward
+  milestone (B7 security-events surface is the ranked #2).
+- Verifier reports FAIL → orchestrator re-scopes blockers within the milestone.
 - `current.md` rewritten outside the orchestrator's hand.
-- `state.json.goal` changes.
-- A new spec proposal under `/ai/proposals/` is filed.
+- `state.json.goal` changes, or a new spec proposal under `/ai/proposals/` is filed.
 
 ## Next Move
-Implementer agent (next pickup): execute `ai/tasks/task-0121.md` end-to-end —
-extend `queryAuditByOrg` with actor/subject/eventType/time-range clauses, add
-worker param validation, widen contracts `AuditQueryByOrg` + SDK org query arm +
-NDJSON export helper, add CLI filter flags + export, build the Console filter UI
-+ Load-more + export, add tests on each surface, then branch + commit + push +
-open ≥1 PR and write the implementer report.
+Verifier agent (next pickup): execute `ai/tasks/task-0121-verifier.md` —
+Phase-0 commit the untracked implementer report to the PR branch + re-poll CI;
+Phase 1 confirm the 17-file boundary; Phase 2 hazard/forbidden-zone scan
+(api-edge UNCHANGED, zero `fetch` in Console, no parked-zone touches); Phase 3
+SQL-safety + cursor-keyset-unchanged + filter-survives-≥2-pages + 422-accept;
+Phase 4-6 quality + Orun + PR-CI log gates; Phase 6.5 BEHIND-main rebase if needed;
+**Phase 7 MANDATORY** squash-merge + post-merge main-CI deploy + live prod-Worker
+audit-page probe; Phase 8 verifier report + PASS/FAIL bookkeeping on main.
 
-After the Task 0121 implementer pass lands a PR, the orchestrator's correct next
-move (Operating Loop steps 15-16, "forgetting verifier tasks exist" pitfall) is
-to emit the matching **verifier** task BEFORE scoping any new forward work —
-multi-component, Console leg deploy-gated (post-merge main-CI smoke + live-URL is
-the PASS gate), SDK-before-consumers merge order, BEHIND-main rebase is the
-verifier's responsibility.
+After Task 0121 verifier closes (PASS + merged), the orchestrator's next forward
+pick is the **B7 security-events (`querySecurityEvents`) consumer surface** — a
+separate leg from 0121's audit filtering.
 
 ## Open Questions To Self
-- If the implementer elects a multi-PR sequence, the orchestrator should be ready
-  to emit a verifier per PR (or a single verifier covering the merged set) — watch
-  the implementer report for the chosen split + merge order.
-- Confirm the implementer carries filters into `iterAuditEntries` per-page query
-  reconstruction (events.ts ~L177) — easy silent drop-after-page-1 bug; the task
-  calls for an explicit ≥2-page filter-survival test.
+- Confirm the verifier actually inspects the `iterAuditEntries` per-page query
+  reconstruction (events.ts ~L177) and the ≥2-page filter-survival test — the
+  silent drop-after-page-1 bug is the highest-risk seam in this milestone.
+- If post-merge prod-Worker audit-page probe needs a seeded org slug, fall back to
+  `/orgs` 200 + green web-console-next-tests jest as the Console proof (do not
+  invent an org/audit fixture).

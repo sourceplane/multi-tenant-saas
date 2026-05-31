@@ -4334,8 +4334,15 @@ One PR, one reviewer-holdable outcome (rotate UX backend), one rollback (single 
 
 - Agent: Implementer
 - Prompt: `ai/tasks/task-0121.md`
-- Status: EMITTED 2026-05-31 (implementer pickup pending). main code HEAD
-  `99877e0`, 0 open PRs, working tree clean.
+- Status: IMPLEMENTER COMPLETE + VERIFIER SCOPED 2026-05-31. PR #176 OPEN,
+  MERGEABLE/CLEAN, 21/21 PR-CI green (run 26715065143) at HEAD `40d9f43`, base
+  `ef38e780` = origin/main (0 behind); 17 files +1218/-55, one combined PR.
+  Verifier prompt `ai/tasks/task-0121-verifier.md`. Two carried flags: (1) Phase-0
+  fix-up — implementer report UNTRACKED, not on PR branch (recurring 0031-0034/
+  0106); (2) 400→422 RECONCILED — impl shipped 422 validation_failed (canonical
+  events-worker convention, http.ts:36), prompt's "400" was stale, ACCEPT 422, no
+  spec proposal. Console leg deploy-gated (PASS = post-merge main-CI + live
+  prod-Worker audit-page probe).
 - Milestone: `B7-audit-log-filtering-export`. Take the org-scoped audit read API
   (`GET /v1/organizations/:orgId/audit`) from category-only to buyer-credible by
   adding actor (actorId/actorType), resource (subjectKind/subjectId), action
