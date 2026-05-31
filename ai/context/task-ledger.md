@@ -3995,3 +3995,90 @@ One PR, one reviewer-holdable outcome (rotate UX backend), one rollback (single 
   arc fully closed end-to-end (create/edit/disable/delete/re-enable all have CLI
   parity with console).
 
+## Task 0115 — VERIFIED PASS + MERGED (2026-05-31)
+- PR #170 (`feat(cli): webhook disable subcommand`) squash-merged as `558d8d5`
+  on main (mergedAt 2026-05-31T10:58:56Z); branch deleted, local main ff-synced.
+- 8-phase verifier PASS:
+  - Phase 0 readiness: impl report `ai/reports/task-0115-implementer.md` on PR
+    branch with real #170; two commits `76b7315` (code) + `09a3ab8`
+    (report PR# fix-up). No verifier fix-up needed.
+  - Phase 1 PR sanity: EXACTLY 4 files (+566/-0) — `webhook-disable.ts` NEW,
+    `cli-runner.ts` +3 (import+register+help, all after the enable peer),
+    `webhook-disable.test.ts` NEW (11 cases), `task-0115-implementer.md` NEW.
+    Scope commit `ac40edb` already on origin/main, so PR showed 4 files from the
+    start — no merge-base recompute needed. MERGEABLE/CLEAN.
+  - Phase 2 hazard + forbidden-zone: zero hits across `packages/(contracts|sdk|
+    db|webhook-verifier|notifications-client|shared|eslint-config|tsconfig)/`,
+    apps/, infra/, tooling/, stack-tectonic/, lockfiles, cli package.json/
+    component.yaml, all sibling cli commands. `webhook-disable.ts` clean: no
+    eslint-disable/ts-ignore/as any/as unknown as/node:/fetch(/Math.random; pure
+    SDK consumer — single `sdk.webhooks.disableEndpoint` call, `resolveOrgId(ctx,
+    false)`, no auth/header/idempotency auto-mint.
+  - Phase 3 quality gates: `pnpm install --frozen-lockfile` Already up to date,
+    `@saas/cli` typecheck 0, lint 0 warnings, test 13 files 164/164 (+11 over
+    baseline 153), `webhook-disable.test.ts` 11/11.
+  - Phase 4 behaviour-equivalence vs `webhook-enable.ts` template + 3 intentional
+    divergences present: `--reason=TEXT` → body `{reason}`/`{}`/UsageError on bare
+    boolean/empty-string forwarded; 4-line human block (status/disabledReason/
+    disabledAt/updatedAt); test imports `DisableWebhookEndpointResponse` directly
+    from `@saas/sdk`.
+  - Phase 5 Orun gates: validate ok; plan --changed --base origin/main = 1
+    component cli × 3 envs = 3 jobs (plan `3101ef9487df`); run --dry-run 3
+    selected (cli dev/stage/prod Verify). PR-CI run 26710641780 = 4/4 SUCCESS;
+    `gh run view --log` confirms `orun run --plan plan.json --runner
+    github-actions` actually executed per lane.
+  - Phase 6 CLEAN: no update-branch needed.
+  - Phase 7 merge: squash --delete-branch, fast-forward main to `558d8d5`;
+    `kiox.lock` local Orun-run mutation reverted; working tree clean.
+- Post-merge main-CI run 26710731525 = 4/4 SUCCESS at `558d8d5` (turbo-package,
+  no deploy lane, no live URL surface).
+- Reports: `ai/reports/task-0115-implementer.md`, `ai/reports/task-0115-verifier.md`.
+- Durable outcome: `sourceplane webhook disable <endpointId> [--reason=TEXT]` is
+  live. B5 endpoint-CRUD CLI arc now CLOSED end-to-end (create/disable/re-enable
+  + sign/verify/secrets-rotate all at CLI parity with console).
+- CI deprecation note (non-blocking): Node.js 20 actions deprecated, forced to
+  Node 24 by June 16 2026.
+
+
+## Task 0116
+
+- Agent: Implementer
+- Prompt: `ai/tasks/task-0116.md`
+- Status: scoped and ready to begin (2026-05-31)
+- Branch: `impl/task-0116-sdk-enable-response-reexport`
+- Sealed snapshot main: `558d8d5` (Task 0115 squash).
+- Objective: Close the `EnableWebhookEndpointRequest` / `EnableWebhookEndpointResponse`
+  SDK-index re-export carry-forward gap surfaced in Task 0114 + 0115 reports.
+  `packages/sdk/src/index.ts` (lines 165–186) re-exports the whole webhook-endpoint
+  type surface (Create/Get/List/Update/Disable/Delete/Rotate) but is MISSING the
+  Enable pair — both defined in `packages/contracts/src/webhooks.ts:80,85` and
+  already imported+used in `packages/sdk/src/webhooks.ts:10-11,170-178`.
+  Consequence: `webhook-enable.test.ts` locally reconstructs
+  `interface EnableResponse { endpoint: PublicWebhookEndpoint }` because it can't
+  import the type; the disable test imports `DisableWebhookEndpointResponse`
+  directly. This task removes that asymmetry.
+- Scope boundary: 3 files EXACTLY —
+  `packages/sdk/src/index.ts` (MODIFIED, additive: add the 2 names to the
+  existing `export type` block adjacent to the Disable pair),
+  `packages/cli/src/__tests__/webhook-enable.test.ts` (MODIFIED: swap local
+  interface for `import type EnableWebhookEndpointResponse` from `@saas/sdk`,
+  delete the stale "not yet re-exported" comment, keep `PublicWebhookEndpoint`
+  import for the fixture, ZERO assertion / case-count change),
+  `ai/reports/task-0116-implementer.md` (NEW, real PR#).
+- Forbidden zones: `packages/contracts/**` (source of truth — re-export only,
+  never redefine), `packages/sdk/src/webhooks.ts` + all other `packages/sdk/**`,
+  `packages/cli/**` except the named test, apps/infra/tooling/stack-tectonic/
+  lockfiles/package.json/component.yaml.
+- NOT a single-component turbo PR: Orun changed-plan selects BOTH sdk + cli lanes
+  (2 components × 3 envs = 6 jobs + plan) since both packages have a changed file.
+  That union is expected/correct — do NOT force to one component.
+- Hard rules: additive re-export only (no reorder/removal); test refactor is a
+  pure type-source swap with zero behaviour change; no new eslint-disable/
+  ts-ignore/as any in the SDK index change; revert `kiox.lock`; real PR#
+  (TBD = BLOCKED); BEHIND-main rebase remains verifier responsibility.
+- Title: `refactor(sdk): re-export EnableWebhookEndpoint request/response types`.
+- Selection rationale: `current.md` recommended-next-focus #1; narrow,
+  human-independent gap closure; parallel-safe; touches no deferred decisions.
+- Verifier prompt to be scoped after implementer completes (8-phase adapted for a
+  2-component sdk+cli turbo PR, no deploy lane).
+
