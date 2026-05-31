@@ -1,61 +1,79 @@
 # Current Context
 
-Last updated: 2026-05-31 — Task 0108 IMPLEMENTER COMPLETE; PR #163 OPEN
-+ MERGEABLE/BLOCKED on required CI checks (CI in flight at hand-off).
-Verifier task scoped and dispatched.
+Last updated: 2026-05-31 — Task 0108 VERIFIED PASS + MERGED. PR #163 squash
+`28b3ca1` on main. Post-merge main-CI run `26704557782` 14/14 SUCCESS,
+including db-migrate apply on stage and prod. B5 secret-rotation backend
+slice locked; downstream consumers (Task 0109 console, Task 0110 CLI) now
+unblocked on a stable contract.
 
-## Active Task — 0108 (Verifier dispatched)
+## Current Task — 0109 (next)
 
-**Branch:** `impl/task-0108-webhook-secret-rotation-grace`
-**HEAD:** `90044b1` (impl + report w/ real PR number).
+**Recommended:** Task 0109 — console reveal-once modal. Pure SDK consumer of
+`RotateWebhookSecretResponse.secret`; the contract is now locked on `main`.
+Single-PR shape under `apps/web-console-next/**`. No backend changes needed.
+
+Task 0110 (`sourceplane webhook secrets rotate` CLI subcommand) is symmetric
+and parallel-safe with 0109 (file-disjoint).
+
+## Just-merged — 0108
+
+**Branch (deleted):** `impl/task-0108-webhook-secret-rotation-grace`
+**Squash merge:** `28b3ca1` (merged 2026-05-31T05:43:20Z)
 **PR:** #163 — https://github.com/sourceplane/multi-tenant-saas/pull/163
-**Sealed snapshot:** main `aae8d35` (Task 0107 verifier-PASS bookkeeping).
-**Verifier prompt:** `ai/tasks/task-0108-verifier.md`
-**Implementer report:** `ai/reports/task-0108-implementer.md` (committed
-on PR branch, commit `cada19b`).
-**Status:** awaiting verifier pickup.
+**Reports:**
+- Implementer: `ai/reports/task-0108-implementer.md`
+- Verifier: `ai/reports/task-0108-verifier.md`
 
-**Diff:** 13 files, +736/-26. Eight prompted slots + three structurally
-forced overshoots: `packages/db/src/manifest.ts` (mandatory migration
-registration), `apps/webhooks-worker/src/env.ts` (declares the new
-`WEBHOOK_SECRET_ROTATION_GRACE_SECONDS` env var), and the contracts/db
-test files (acceptance gates listed in the prompt). Verifier evaluates
-deviation acceptability.
+**Durable outcome on main:**
 
-**What shipped (per implementer report):**
-
-1. Forward-only migration `130_webhook_secret_rotation_grace` adds three
-   nullable previous-* columns (`previous_secret_ciphertext`,
-   `previous_secret_version`, `previous_secret_expires_at`) on
-   `webhooks.webhook_endpoints`; idempotent `ADD COLUMN IF NOT EXISTS`.
-2. `rotateEndpointSecret` is atomic: a single UPDATE snapshots
-   current ciphertext/version into previous-* columns, writes new + bumps
-   version, stamps `previous_secret_expires_at = now() + grace`.
-3. Worker rotate handler returns reveal-once `{ secret: whsec_<32hex>,
+1. Migration `130_webhook_secret_rotation_grace` adds three nullable
+   `previous_*` columns to `webhooks.webhook_endpoints` (forward-only,
+   idempotent, applied on stage + prod).
+2. `rotateEndpointSecret` is atomic single-UPDATE with optional grace
+   window; `ENDPOINT_SAFE_COLUMNS` continues to exclude
+   `previous_secret_ciphertext`.
+3. Rotate handler returns reveal-once `{ secret: whsec_<32hex>,
    previousSecretExpiresAt, gracePeriodSeconds }`. Event/audit payload
    carries ONLY `{ secretVersion, previousSecretExpiresAt }`.
 4. Worker delivery dual-signs with `X-Webhook-Signature` (current) and
-   `X-Webhook-Signature-Previous` (previous, when un-expired); clean
+   `X-Webhook-Signature-Previous` (previous, when un-expired); silent
    fallthrough on decryption failure.
-5. New env: `WEBHOOK_SECRET_ROTATION_GRACE_SECONDS` (default 86400).
-6. 6 new test cases (delivery x4, handler x2) + contracts + repository.
+5. New env: `WEBHOOK_SECRET_ROTATION_GRACE_SECONDS` (default 86400, 0 to
+   disable snapshot).
+6. Contract addition to `RotateWebhookSecretResponse` is purely additive
+   (optional `secret`, new `previousSecretExpiresAt`, `gracePeriodSeconds`).
 
-**Implementer-reported checks:** typecheck 43/43, lint 0 errors / 45
-pre-existing warnings, contracts-tests 95/95, db-tests 512/513 (1
-pre-existing notifications failure unrelated to PR), webhooks-worker-tests
-70/70 (+6 new vs baseline).
+**Verification highlights:**
+
+- PR-CI 14/14 SUCCESS on initial HEAD `90044b1` (run `26704364701`) and on
+  rebased HEAD `a1945ed` (run `26704498632`, after `gh pr update-branch 163`
+  for the recurring BEHIND-main pattern).
+- Post-merge main-CI 14/14 SUCCESS (run `26704557782`).
+- Migration apply on stage AND prod confirmed via `gh run view --log`
+  grepping the runner's `applied` JSON list (not just job conclusion).
+- Quality gates: typecheck 43/43 FULL TURBO, lint 36/36 FULL TURBO,
+  contracts-tests 95/95, db-tests 512/513 (1 pre-existing notifications
+  failure unchanged from main), webhooks-worker-tests 70/70 (+6 new).
+- Orun gates: validate green, plan --changed selects exactly 6 components ×
+  3 envs → 13 jobs, dry-run 13/13 preview-green.
+- Hazard scan clean (zero new `eslint-disable`/`@ts-ignore`/`@ts-expect-error`/
+  `as any`/`as unknown as`/`node:*` under PR diff).
+- Plaintext leak scan: `whsec_` ONLY in success-response builder; payload
+  literal carries no plaintext or ciphertext.
+- `encryptSigningSecret` shape change (`{secret, ciphertext}`) — only two
+  call sites in the workspace, both updated; no external consumers.
 
 ## Pipeline status
 
-- **Active task:** 0108 (verifier dispatched).
-- **Open PRs:** #163 (Task 0108).
-- **`main` HEAD:** `aae8d35` (Task 0107 verifier-PASS bookkeeping); will
-  advance with orchestrator state-update commit on next push.
+- **Active task:** 0109 (next pass — orchestrator scopes).
+- **Open PRs:** none.
+- **`main` HEAD:** `28b3ca1` (Task 0108 squash). State-update commit will
+  advance HEAD on next push.
 - **B5 webhook-helper dogfood arc:** CLOSED (0105/0106/0107 merged).
-- **B5 secret-rotation arc:** OPEN — backend slice (0108) verifier in
-  flight; console (0109) and CLI (0110) follow on stable contract.
+- **B5 secret-rotation arc:** backend slice (0108) MERGED. Console (0109)
+  and CLI (0110) follow as pure SDK consumers on locked contract.
 
-## Next Tasks (after 0108 PASS)
+## Next Tasks
 
 - **Task 0109 — console reveal-once modal.** Pure SDK consumer of
   `RotateWebhookSecretResponse.secret`. Stripe/Linear-quality reveal-once
@@ -66,6 +84,15 @@ pre-existing notifications failure unrelated to PR), webhooks-worker-tests
   of existing events-worker read APIs once SDK delivery-history is final).
 - **B7 — Audit-log UX expansion.**
 - **B8 — admin-worker scaffold** (greenfield single-PR breather).
+
+## Spec Proposals (non-blocking)
+
+- Webhook docs update for the new `X-Webhook-Signature-Previous` header +
+  grace-window operational guidance for subscribers (verify-either-key
+  during the window).
+- `@saas/webhook-verifier` multi-key extension (out-of-scope per 0108
+  spec): accept an array of secrets and validate against any. Track as a
+  B5 tail item.
 
 ## Deferred (unchanged)
 

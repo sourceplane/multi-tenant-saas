@@ -3219,3 +3219,98 @@ One PR, one reviewer-holdable outcome (rotate UX backend), one rollback (single 
 - Scope boundary: 13 files +736/-26 across `packages/db/**`, `packages/contracts/**`, `apps/webhooks-worker/**`, `tests/{contracts,db,webhooks-worker}/**`. New migration `130_webhook_secret_rotation_grace`. Three structurally forced overshoots beyond the 8-slot prompt budget (manifest registration, env var declaration, test files explicitly listed in acceptance criteria) — verifier judges deviation.
 - Acceptance: PR-CI all required lanes green via `gh run view --log`; atomic single-UPDATE rotate; `ENDPOINT_SAFE_COLUMNS` excludes `previous_secret_ciphertext`; reveal-once `/^whsec_[0-9a-f]{32}$/`; payload sanitisation (no plaintext in audit/event); ≥4 new worker test cases; quality gates green; orun gates green; post-merge main-CI migration apply on stage/prod successful.
 - Expected outcome: PASS → merge with `--squash --delete-branch`, fast-forward main, post-merge main-CI green (incl. db migration apply), bookkeeping commit on main, advance to Task 0109. FAIL → leave PR open with documented blockers.
+
+
+## Task 0108 — Verifier closure
+
+- Agent: Verifier
+- Verifier prompt: `ai/tasks/task-0108-verifier.md`
+- Status: VERIFIED PASS + MERGED 2026-05-31
+- PR: #163 (`impl/task-0108-webhook-secret-rotation-grace`) → squashed onto
+  `main` at `28b3ca1` ("Task 0108: webhook secret rotation grace —
+  backend slice (#163)"); branch deleted post-merge; `mergedAt`
+  2026-05-31T05:43:20Z.
+- Verifier report: `ai/reports/task-0108-verifier.md`
+- Implementer report: `ai/reports/task-0108-implementer.md` (committed on
+  PR branch by implementer at hand-off — no fix-up required).
+- Diff at merge: 13 files, +738 / -26.
+  - Migration: `packages/db/src/migrations/130_webhook_secret_rotation_grace/up.sql`
+    NEW (forward-only, idempotent ADD COLUMN IF NOT EXISTS for
+    `previous_secret_ciphertext`, `previous_secret_version`,
+    `previous_secret_expires_at`).
+  - DB: `packages/db/src/webhooks/{repository,types}.ts` (atomic
+    single-UPDATE rotate with optional grace; `ENDPOINT_SAFE_COLUMNS`
+    excludes `previous_secret_ciphertext`; delivery-bound endpoint type
+    hydrates 3 previous-* fields).
+  - Contracts: `packages/contracts/src/webhooks.ts`
+    (`RotateWebhookSecretResponse` extended additively with optional
+    `secret`, new `previousSecretExpiresAt`, `gracePeriodSeconds`).
+  - Worker: `apps/webhooks-worker/src/handlers/webhook-endpoints.ts`
+    (rotate handler returns reveal-once `whsec_<32hex>`; event/audit
+    payload carries ONLY `{ secretVersion, previousSecretExpiresAt }`);
+    `apps/webhooks-worker/src/delivery.ts` (dual-sign with
+    `X-Webhook-Signature` + `X-Webhook-Signature-Previous` during grace,
+    silent fallthrough on decryption failure);
+    `apps/webhooks-worker/src/env.ts` (new
+    `WEBHOOK_SECRET_ROTATION_GRACE_SECONDS`, default 86400).
+  - Manifest: `packages/db/src/manifest.ts` (mandatory migration
+    registration — structurally forced overshoot).
+  - Tests: `tests/contracts/src/webhooks.test.ts`,
+    `tests/db/src/webhooks.test.ts`,
+    `apps/webhooks-worker/src/__tests__/*.test.ts` (+6 new worker cases:
+    `whsec_` shape regex; plaintext absent from event/audit; dual-sig
+    within grace; single-sig post-expiry; cipher decryption failure
+    fallthrough; grace=0 semantics).
+- Verifier protocol: 8 phases (matches `orun-saas-verifier` skill).
+  - Phase 0 readiness — impl report present on PR branch (commit
+    `cada19b`). No fix-up.
+  - Phase 1 PR sanity — 13 files +738/-26. 8 prompted slots + 3
+    structurally forced overshoots (manifest registration, env-var
+    typing, test files explicitly listed in acceptance criteria) accepted
+    per implementer report rationale.
+  - Phase 2 hazard scan — zero new
+    `eslint-disable`/`@ts-ignore`/`@ts-expect-error`/`as any`/
+    `as unknown as`/`node:*` under PR diff. Plaintext leak audit:
+    `whsec_` only in success-response builder (handlers/webhook-endpoints.ts:595);
+    payload literal at lines 577-580 carries no plaintext;
+    `ENDPOINT_SAFE_COLUMNS` (repository.ts:28) excludes ciphertext;
+    atomic single-UPDATE rotate at repository.ts:303-333; delivery
+    dual-sign at delivery.ts:259-273 gated on previous secret + expiry;
+    `encryptSigningSecret` `{secret, ciphertext}` shape change — only 2
+    call sites in workspace, both updated, no external consumers.
+  - Phase 3 quality gates — `pnpm install --frozen-lockfile` clean across
+    39 workspaces; `pnpm -w typecheck` 43/43 FULL TURBO; `pnpm -w lint`
+    36/36 FULL TURBO (0 errors / 45 pre-existing warnings in
+    `tests/api-edge/**`); `@saas/contracts-tests` 95/95;
+    `@saas/db-tests` 512/513 (1 documented pre-existing notifications
+    migration test fail, unchanged from main); `@saas/webhooks-worker-tests`
+    70/70 (baseline +6 new).
+  - Phase 4 orun gates — `kiox -- orun validate` valid;
+    `orun plan --changed --base origin/main` selected exactly 6
+    components × 3 envs → 13 jobs covering contracts, contracts-tests,
+    db, db-migrate, db-tests, webhooks-worker; `orun run --dry-run
+    --runner github-actions` 13/13 preview-green.
+  - Phase 5 PR-CI — initial PR-CI run `26704364701` on HEAD `90044b1`
+    14/14 SUCCESS. After `gh pr update-branch 163` (recurring
+    BEHIND-main pattern from 0103/0104/0105/0107), rebased HEAD
+    `a1945ed` produced PR-CI run `26704498632` 14/14 SUCCESS. Both runs
+    show migration `130_webhook_secret_rotation_grace` applied on stage
+    + prod via `gh run view --log` grepping the runner's `applied` JSON
+    list (not just job conclusion).
+  - Phase 6 squash merge — `gh pr merge 163 --squash --delete-branch`,
+    `git checkout main && git pull --ff-only` → main HEAD `28b3ca1`.
+  - Phase 6.5 post-merge main-CI — run `26704557782` on `28b3ca1`
+    14/14 SUCCESS. Migration `130_webhook_secret_rotation_grace`
+    re-applied on stage + prod (idempotent — re-apply is a no-op once
+    columns exist).
+  - Phase 7 verifier report — `ai/reports/task-0108-verifier.md`.
+  - Phase 8 PASS bookkeeping — this commit (state.json + current.md +
+    task-ledger.md).
+- Outcome: B5 webhook secret-rotation backend slice locked on `main`.
+  Reveal-once contract (`RotateWebhookSecretResponse.secret`) is now
+  stable, unblocking Task 0109 (console reveal-once modal) and Task 0110
+  (CLI `webhook secrets rotate`) as pure SDK-consumer PRs.
+- Spec proposals (non-blocking): webhook docs update for the new
+  `X-Webhook-Signature-Previous` header + grace-window operational
+  guidance for subscribers; `@saas/webhook-verifier` multi-key extension
+  (B5 tail item, single-key today by design).
