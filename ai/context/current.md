@@ -1,134 +1,85 @@
 # Current Context
 
-Last updated: 2026-05-31 — Task 0104 closed (PASS+MERGED). Task **0105
-SCOPED** (orchestrator). Pivoted from the originally sketched
-"`packages/cli` auth/SDK consumer swap" — that work is **already on
-main** (login/whoami/logout already construct `Sourceplane`, zero
-`fetch(`, zero `/v1/`, zero header building) and the only remaining
-move (swap validation to `client.auth.getSession()`) would regress
-because CLI uses API-key bearers (`actorType=service_principal`) but
-`/v1/auth/session` only accepts user-session bearers. Per orchestrator
-"trust code reality over stale docs" rule, pivoted Task 0105 to the
-next-highest-leverage human-independent candidate: **B5 webhook-verifier
-helper** (`specs/roadmap.md:81-82`).
+Last updated: 2026-05-31 — **Task 0105 closed (PASS+MERGED)**.
+`@saas/webhook-verifier` zero-dep WebCrypto helper now ships on `main`
+at squash `a1436fc`. B5 polish leg #1 (the helper-library surface) is
+done. Roadmap B5 follow-ups (rotate UX, replay UI, failure-budget
+alerts) and B7 (audit-log console UX) are the next leverage targets.
 
-## Current Task — 0105 (scoped, awaiting implementer)
+## Last completed task — 0105
 
-**Agent:** Implementer
-**Prompt:** `ai/tasks/task-0105.md`
-**Branch:** `impl/task-0105-webhook-verifier`
-**Roadmap leg:** B5 — Webhooks polish (helper-library surface only;
-rotate UX / replay UI / failure-budget alerts remain open for later)
-**Sealed snapshot main:** `f01d61f`
+**Verifier:** PASS
+**PR:** #160 — squash `a1436fc91b11db34d0af841e841e982f18ffb4a0`
+**Branch:** `impl/task-0105-webhook-verifier` (deleted on merge)
+**Verifier report:** `ai/reports/task-0105-verifier.md`
+**Implementer report:** `ai/reports/task-0105-implementer.md`
+**Pre-merge PR-CI** (rebased HEAD `fba8ea7`): run `26701706018` 4/4 SUCCESS
+**Post-merge main-CI:** run `26701735837` 4/4 SUCCESS
+**Lanes:** plan + `webhook-verifier · {dev,stage,prod} · Verify`
+(all `turbo-package.quick-check`, no deploy)
 
-### Objective
+### Durable outcome on main
 
-Add a new workspace package `@saas/webhook-verifier` at
-`packages/webhook-verifier/`. Tiny, dependency-free helper for
-**third-party consumers** to verify the HMAC-SHA256 signatures
-Sourceplane attaches to outbound webhook deliveries. Codifies the
-existing scheme from `apps/webhooks-worker/src/delivery.ts:45-61`
-(HMAC-SHA256 over `${timestamp}.${body}`, header
-`X-Webhook-Signature`, prefix `sha256=`) so external customers and
-future replay tooling don't reinvent it. WebCrypto only — runs verbatim
-on Workers / Bun / browsers / modern Node.
+- New workspace package `@saas/webhook-verifier` at
+  `packages/webhook-verifier/` (10 files, +837 / -8).
+- `src/index.ts` (204 LOC) exports `verifyWebhookSignature`,
+  `signWebhookPayload`, header constants
+  (`SIGNATURE_HEADER = "X-Webhook-Signature"`,
+  `TIMESTAMP_HEADER = "X-Webhook-Timestamp"`,
+  `WEBHOOK_ID_HEADER = "X-Webhook-ID"`,
+  `SIGNATURE_PREFIX = "sha256="`,
+  `DEFAULT_TOLERANCE_SECONDS = 300`), and tagged-result types.
+- WebCrypto only — zero `node:` imports, zero runtime `dependencies`.
+- Constant-time XOR-accumulator equality (no early return mid-loop).
+- Case-insensitive `lookupHeader` for both `Headers` instance and
+  `Record<string, string|string[]|undefined>`.
+- Vitest 22-test suite covers all 6 reason codes + inline reciprocity
+  test against the `apps/webhooks-worker/src/delivery.ts:45-61`
+  algorithm without cross-package import.
+- `component.yaml` mirrors `packages/notifications-client` shape
+  (`turbo-package` · `starter-shared` · 3 envs `quick-check`).
+- Workspace count: **38 → 39** (`pnpm -m ls` Scope: 39).
 
-### PR Boundary
+## Next Task — open candidates
 
-1. New `packages/webhook-verifier/` directory: `package.json`
-   (zero runtime deps), `tsconfig.json`, `tsconfig.build.json`,
-   `component.yaml` (mirrors `packages/notifications-client/component.yaml`
-   structurally — `turbo-package`, `starter-shared`, 3-env quick-check),
-   `README.md` (≤1.5 KB), `src/index.ts`,
-   `src/__tests__/verify.test.ts` (≥18 tests).
-2. `src/index.ts` exports: `SIGNATURE_HEADER`, `TIMESTAMP_HEADER`,
-   `WEBHOOK_ID_HEADER`, `SIGNATURE_PREFIX`,
-   `DEFAULT_TOLERANCE_SECONDS=300`, async `verifyWebhookSignature(input)`
-   returning a tagged result with eight enumerated `reason` codes,
-   async `signWebhookPayload({secret, body, timestamp})`. Constant-time
-   comparison; case-insensitive header lookup for both
-   `Record<string, string|string[]|undefined>` and `Headers`.
+After Task 0105 PASS+MERGE, candidates in priority order:
 
-### Hard rules
+1. **B5 follow-ups** — `webhook secrets rotate` UX, replay UI,
+   failure-budget alerts. Helper unblocks none directly, but the
+   surface is now coherent. Each likely its own task.
+2. **B7 — Audit-log UX**. Events-worker read APIs are live;
+   `apps/web-console-next` lacks the audit-log viewer.
+3. **B8 — admin-worker scaffold** (spec 16 has no app yet).
 
-- WebCrypto only — zero `node:` imports anywhere under
-  `packages/webhook-verifier/**`.
-- Zero runtime `dependencies` (devDependencies only).
-- `component.yaml` MANDATORY (workspace-package-component-yaml audit).
-- Zero edits to `apps/webhooks-worker/**`, `packages/sdk/**`,
-  `packages/cli/**`, `packages/contracts/**`,
-  `apps/web-console-next/**`, `tooling/**`, `tests/api-edge/**`,
-  `kiox.lock`.
-- Constant-time signature comparison — no early `return` mid byte loop.
-- Real PR number in implementer report (`TBD` = blocked).
-
-### Acceptance
-
-- `pnpm -r typecheck` exit 0 (workspace count +1 vs main).
-- `pnpm -r --no-bail lint` ≤45 warnings, all in `tests/api-edge/**`.
-- `pnpm --filter @saas/webhook-verifier build/test` exit 0,
-  ≥18 tests passing.
-- `kiox -- orun validate/plan --changed/run --dry-run` green;
-  plan selects exactly 3 `webhook-verifier` Verify lanes.
-- PR-CI 4/4 green via `gh run view --log` (not just summary).
-
-### Why this scope, why now
-
-- Task 0104 closed Console U10; SDK is at 13 clients on main; B4 +
-  U10 fully closed both directions.
-- Originally-sketched CLI consumer swap is already on main (verified
-  by inspecting `packages/cli/src/auth/{login,whoami,logout}.ts` —
-  all three flows construct `Sourceplane` and use it as the wire).
-- Roadmap B5 explicitly lists "ship a small `webhook-verifier`
-  helper" as a leaf candidate (`specs/roadmap.md:81-82`).
-- Pure external-consumer helper, zero coupling to internal workers,
-  parallel-safe with the still-active Task 0096f verifier prompt
-  (zero file overlap with `tests/api-edge/**`).
-- Mirrors the proven `@saas/notifications-client` zero-deps shape.
-
-## Next Task After 0105
-
-After Task 0105 verifier PASS+MERGE, candidates in priority order:
-
-- **B5 follow-ups** — rotate-UX, replay UI, failure-budget alerts
-  (each likely its own task; the helper unblocks none of these
-  directly, but B5 cluster polish is now in-flight).
-- **B7 — Audit-log UX** (events-worker read API surfaces are live;
-  console UI is the gap).
-- **B8 — admin-worker scaffold** (spec 16 has no app yet).
-
-## Out of scope (deferred, parked, untouched this cycle)
+## Out of scope (deferred / parked)
 
 - `tests/api-edge/**` (sealed Task 0096f verifier prompt remains
-  active and orthogonal — zero file overlap with Task 0105)
-- `packages/cli/**` (CLI consumer swap is already on main; auth
-  validation surface change is a backend-decision deferral)
+  active and orthogonal)
 - `apps/notifications-worker/**` (deferred provider-swap and
   dev-reframe)
 - `infra/terraform/cloudflare-domain/**` and the cloudflare provider
   pin (deferred 0085b)
 - `tooling/eslint/**` (sealed since Task 0092)
-- Optional spec-13 CLI commands (`component list`, `resource
-  create/get`, `deployment get`) — deferred behind P2 backend slice
+- Optional spec-13 CLI commands (deferred behind P2 backend slice)
 - `apps/web-console/**` (Vite-based legacy console — not in U10
   roadmap)
-- `kiox.lock` v2.3.0→v2.9.0 working-tree drift (unrelated to 0105;
-  do NOT bundle into the PR)
+- `kiox.lock` v2.3.0→v2.9.0 working-tree drift (unrelated; do NOT
+  bundle into the next task)
 
 ## Repo Checkpoint
 
 | Attribute | Value |
 |-----------|-------|
 | **Branch (local)** | `main` (synced with `origin/main`) |
-| **HEAD** | `f01d61f` (verifier bookkeeping for Task 0104 PASS+MERGED) |
+| **HEAD** | `a1436fc` (Task 0105: `@saas/webhook-verifier` helper merged via PR #160) |
 | **Repo health** | 🟢 Green |
 | **Open PRs** | none |
-| **Tasks completed** | 118 (through Task 0104) |
-| **Current task** | 0105 (scoped — `@saas/webhook-verifier` helper, B5) |
+| **Tasks completed** | 119 (through Task 0105) |
+| **Current task** | none — awaiting next orchestrator scope |
 | **Deferred** | `0085b`, `notifications-provider-swap`, `notifications-worker-dev-reframe`, `optional-spec-13-commands` |
-| **Last verified main-CI run** | `26700942407` (post-Task-0104 merge, 4/4 SUCCESS) |
-| **Console live URL** | `https://{stage,prod}.sourceplane.ai` (HTTP/2 307 → /orgs, `x-opennext: 1`, real Next app shell) |
-| **`@saas/sdk` clients on main** | 13 (organizations, projects, memberships, apiKeys, webhooks, metering, billing, events, securityEvents, config, notifications, environments, auth) |
-| **`@saas/cli` commands on main** | full spec-13 required surface live, dispatched through `@saas/sdk` |
-| **Console SDK adoption** | `apps/web-console-next` consumes `Sourceplane` end-to-end (hand-rolled `ApiClient` deleted) |
-| **Working-tree drift (out of scope)** | `kiox.lock` v2.3.0→v2.9.0 unstaged — do NOT bundle into Task 0105 |
+| **Last verified main-CI run** | `26701735837` (post-Task-0105 merge, 4/4 SUCCESS) |
+| **Workspace count on main** | 39 (was 38; +1 for `@saas/webhook-verifier`) |
+| **Lint baseline** | 45 warnings, all in `tests/api-edge/**` (preserved) |
+| **`@saas/sdk` clients on main** | 13 |
+| **Console live URL** | `https://{stage,prod}.sourceplane.ai` (HTTP/2 307 → /orgs, real Next app shell) |
+| **Working-tree drift (out of scope)** | `kiox.lock` v2.3.0→v2.9.0 unstaged — do NOT bundle into the next task |

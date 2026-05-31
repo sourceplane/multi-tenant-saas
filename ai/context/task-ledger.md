@@ -2760,3 +2760,70 @@ on the SDK side.
 - Unlocks: rest of B5 cluster polish (rotate UX, replay UI,
   failure-budget alerts) plus a future `sourceplane webhooks verify`
   CLI subcommand once the helper is on main.
+
+## Task 0105 — Verifier closure
+
+- **Agent:** Verifier (subagent dispatched by orchestrator)
+- **Verifier prompt:** `ai/tasks/task-0105-verifier.md`
+- **Verifier report:** `ai/reports/task-0105-verifier.md`
+- **Implementer report:** `ai/reports/task-0105-implementer.md`
+- **Status:** verified PASS
+- **Implementation:**
+  - PR: **#160** — https://github.com/sourceplane/multi-tenant-saas/pull/160
+  - Branch: `impl/task-0105-webhook-verifier` (deleted on merge)
+  - Pre-rebase HEAD: `d6bd7dc6f82e095cd6bc14c195cc11708b098f1a`
+  - Post-`update-branch` HEAD: `fba8ea7bf486d60f3b2cf215323d8386643e962a`
+  - Squash merge SHA on `main`: **`a1436fc91b11db34d0af841e841e982f18ffb4a0`**
+  - Diff: 10 files, +837 / -8
+- **CI:**
+  - Original PR-CI on `d6bd7dc`: run `26701550634` 4/4 SUCCESS
+  - Rebased PR-CI on `fba8ea7`: run `26701706018` 4/4 SUCCESS
+  - Post-merge main-CI on `a1436fc`: run **`26701735837`** 4/4 SUCCESS
+  - Lanes (all turbo-package.quick-check, no deploy):
+    - `plan` 11s
+    - `webhook-verifier · dev · Verify` 37s
+    - `webhook-verifier · stage · Verify` 30s
+    - `webhook-verifier · prod · Verify` 69s
+- **Objective:** Ship the `@saas/webhook-verifier` workspace package — a
+  zero-dependency, WebCrypto-only helper that codifies the
+  HMAC-SHA256 signature scheme used by `apps/webhooks-worker/src/delivery.ts:45-61`
+  so external integrators (and future console replay tooling) don't
+  reinvent verification.
+- **Scope boundary:** Only `packages/webhook-verifier/**`,
+  `pnpm-lock.yaml`, and `ai/reports/task-0105-implementer.md` were
+  touched. Zero edits to `apps/webhooks-worker/**`, `packages/sdk/**`,
+  `packages/cli/**`, `packages/contracts/**`, `apps/web-console-next/**`,
+  `tooling/**`, `tests/api-edge/**`, `kiox.lock`, or `infra/**`.
+- **Durable outcome on main:**
+  - New workspace package `@saas/webhook-verifier` (workspace count
+    38 → 39).
+  - `src/index.ts` exports `verifyWebhookSignature` and
+    `signWebhookPayload` (async, WebCrypto only) plus header constants
+    (`SIGNATURE_HEADER`, `TIMESTAMP_HEADER`, `WEBHOOK_ID_HEADER`,
+    `SIGNATURE_PREFIX`, `DEFAULT_TOLERANCE_SECONDS = 300`).
+  - Tagged result `{ ok: true } | { ok: false, reason }` with 6 reason
+    codes: `missing_signature`, `missing_timestamp`,
+    `malformed_timestamp`, `timestamp_out_of_tolerance`,
+    `malformed_signature`, `signature_mismatch`.
+  - Constant-time XOR-accumulator equality (no early return
+    mid-byte-loop).
+  - Case-insensitive `lookupHeader` accepts both a `Headers` instance
+    and `Record<string, string | string[] | undefined>`.
+  - Vitest suite: 22 tests passing, including an inline reciprocity
+    test that duplicates the `apps/webhooks-worker/src/delivery.ts`
+    algorithm without cross-package import.
+  - `component.yaml` mirrors `packages/notifications-client/component.yaml`
+    structurally (`turbo-package` · `starter-shared` · 3 envs `quick-check`).
+- **Caveats:**
+  - PR-branch rebase (`gh pr update-branch 160`) was required because
+    main advanced to the orchestrator seal commit `0d9ee71` after PR
+    open. PR-CI re-ran 4/4 green on the rebased HEAD before merge.
+  - `pnpm-lock.yaml` delta limited to the new workspace import section
+    (`pnpm install --frozen-lockfile` reported "Lockfile is up to date");
+    no existing pinned versions touched.
+  - `tests/db/migrations.test.ts` failure tolerated (reproduces on main).
+  - `kiox.lock` v2.3.0→v2.9.0 working-tree drift preserved unstaged on
+    local main per prompt — out of scope.
+- **Recommended-next:** B5 follow-ups (rotate UX / replay UI /
+  failure-budget alerts) OR B7 audit-log console UX OR B8 admin-worker
+  scaffold.
