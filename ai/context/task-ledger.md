@@ -2569,3 +2569,37 @@ on the SDK side.
   `apps/web-console-next/src/app/login/page.tsx`, replace with
   `Sourceplane` from `@saas/sdk` end-to-end. Pure consumer-side swap;
   estimated single PR.
+
+## Task 0104
+
+- Agent: Implementer (scoping, awaiting handoff)
+- Prompt: `ai/tasks/task-0104.md`
+- Branch: `impl/task-0104-console-u10-sdk-refactor`
+- Status: scoped 2026-05-31 (orchestrator)
+- Objective: Console U10 SDK refactor — replace
+  `apps/web-console-next/src/lib/api.ts` (297 LOC duplicated `ApiClient`)
+  with `Sourceplane` from `@saas/sdk`. Pure consumer-side swap unblocked
+  by the AuthClient shipped in Task 0103. Subsumes the
+  `apps/web-console-next/src/app/login/page.tsx` auth flow through
+  `client.auth.*`.
+- Two acceptable paths: (A) delete `lib/api.ts`, migrate consumers to
+  `Promise<T>` + typed errors via try/catch; (B) keep ≤60 LOC envelope
+  adapter that wraps `Sourceplane` and re-exports an `ApiResult<T>`
+  shim — implementer picks based on call-site churn.
+- Hard rules: zero new `eslint-disable` / `@ts-ignore` /
+  `@ts-expect-error` / `as unknown as` / `as any` / `node:*` under
+  `apps/web-console-next/**`; no edits to `packages/sdk/**` or
+  `packages/contracts/**` (proposal-then-defer if a contract gap
+  surfaces); multi-target switcher (`ALL_TARGETS`, `DEPLOY_ENV`,
+  `IS_LOCKED`, `NEXT_PUBLIC_DEPLOY_ENV`) preserved byte-for-byte;
+  bearer-token re-construction wired on `setTarget`/`setToken`.
+- Acceptance: `pnpm -r typecheck` exit 0 across 38 workspaces;
+  `pnpm -r --no-bail lint` ≤ 45 warnings (all in `tests/api-edge/**`);
+  `pnpm --filter @saas/web-console-next build` green; vitest green;
+  `kiox -- orun validate / plan --changed / run --dry-run` green for
+  the changed `web-console-next` Verify lanes; PR-CI green; real PR
+  number in report (`TBD` = blocked).
+- Parallel-safe with sealed Task 0096f verifier (zero file overlap
+  with `tests/api-edge/**`).
+- Unlocks: CLI auth/SDK consumer swap (`packages/cli`) and broader
+  U10 console hardening.
