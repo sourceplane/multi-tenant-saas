@@ -15,6 +15,7 @@ import {
   Receipt,
   Users,
   Mail,
+  Webhook,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 
@@ -39,6 +40,7 @@ export function Sidebar() {
         { href: `${orgBase}/members`, label: "Members", icon: Users },
         { href: `${orgBase}/invitations`, label: "Invitations", icon: Mail },
         { href: `${orgBase}/api-keys`, label: "API keys", icon: KeyRound },
+        { href: `${orgBase}/webhooks`, label: "Webhooks", icon: Webhook },
         { href: `${orgBase}/config`, label: "Config", icon: Settings },
         { href: `${orgBase}/audit`, label: "Audit log", icon: ScrollText },
         { href: `${orgBase}/billing`, label: "Billing", icon: Receipt },
