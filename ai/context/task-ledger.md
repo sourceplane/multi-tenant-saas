@@ -1,6 +1,6 @@
 # Task Ledger
 
-Last updated: 2026-05-31 (Task 0106 Verifier PASS + MERGED — PR #161 squash `a99788b` on main, post-merge main-CI run `26702888086` 4/4 SUCCESS for `plan` + `cli·{dev,stage,prod}·Verify`; `@saas/cli` `sourceplane webhook verify` subcommand now consumes `@saas/webhook-verifier` end-to-end inside the monorepo; turbo-package shape, no deploy lane, no live URL surface; merge required `gh pr update-branch 161` (BEHIND main, recurring pattern across 0103/0104/0105/0106); two documented prompt-strict-language deviations accepted: `node:fs` for `--body=PATH` file I/O and one `as unknown as StdinLike` boundary cast at `process.stdin` seam — both scope-wording oversights, not impl bugs)
+Last updated: 2026-05-31 (Task 0114 Verifier PASS + MERGED — PR #169 `feat(cli): webhook enable subcommand` squash-merged as `227face` on main; 8-phase verifier PASS: exactly 4 files (+494/-0), zero forbidden-zone touches, pure SDK consumer of `client.webhooks.enableEndpoint` (no fetch/header/auth/env, no idempotency auto-mint), 4 pnpm gates green (153/153 tests, 12 files), 3 Orun gates green (plan `4c7dc40ecadb` → cli·{dev,stage,prod}·Verify), PR-CI 4/4 SUCCESS; verifier had to `git push origin main` the local-only scope commit `0bf3b80` to recompute the PR merge-base down to the exact 4-file boundary before merging — lesson folded into 0115 verifier Phase 1; remaining gap: `EnableWebhookEndpointResponse` not re-exported from `@saas/sdk` index. Task 0115 (`sourceplane webhook disable` CLI — final B5 endpoint-CRUD CLI leg) SCOPED and ready for implementer.)
 
 ## Task 0001
 
@@ -3910,13 +3910,37 @@ One PR, one reviewer-holdable outcome (rotate UX backend), one rollback (single 
 
 ## Task 0114
 
-- Agent: Implementer
+- Agent: Implementer → Verifier
 - Prompt: `ai/tasks/task-0114.md`
-- Status: scoped and ready to begin (2026-05-31)
+- Verifier report: `ai/reports/task-0114-verifier.md`
+- Status: VERIFIED PASS + MERGED (2026-05-31)
+- PR: #169 (`feat(cli): webhook enable subcommand`), squash-merged as `227face`
+  on main.
 - Objective: Ship the symmetric CLI subcommand `sourceplane webhook enable
   <endpointId>` as a pure consumer of the Task 0113-locked
   `client.webhooks.enableEndpoint` SDK shape, closing the B5 endpoint-CRUD
   CLI gap for re-enable.
+- Verifier 8-phase result: exactly 4 files (+494/-0), zero forbidden-zone
+  touches, pure SDK consumer (no fetch/header/auth/env, no idempotency
+  auto-mint, `resolveOrgId(ctx,false)`, inlined `assertOutputModeValid` with
+  `webhook enable:` prefix), 4 pnpm gates green (153/153 tests, 12 files), 3
+  Orun gates green (plan `4c7dc40ecadb` → cli·{dev,stage,prod}·Verify, dry-run 3
+  selected), PR-CI 4/4 SUCCESS (plan + 3 cli·env·Verify).
+- Verifier ops note: the scope commit `0bf3b80` was sealed on **local** main
+  only and never pushed, so PR #169 initially showed 8 files (scope 4 + impl 4).
+  Verifier pushed `bc15418..0bf3b80` to origin/main to recompute the PR
+  merge-base down to the exact 4-file implementer boundary before merging.
+  Lesson folded into the Task 0115 verifier Phase 1 instructions.
+- Remaining gap (carried to 0115 + recommended-next): `EnableWebhookEndpointResponse`
+  is NOT re-exported from `@saas/sdk` index — `webhook-enable.test.ts`
+  reconstructs the response shape locally from `PublicWebhookEndpoint`. Candidate
+  SDK-surface task (lives in forbidden `packages/sdk/**`, not CLI-addressable).
+- Durable outcome: `sourceplane webhook enable <endpointId> [--idempotency-key=KEY]
+  [--output=human|json]` is live, mirroring the Task 0110 rotate cadence and the
+  Task 0113 console "Re-enable" UX. B5 endpoint-CRUD CLI arc now has re-enable
+  closed; only `webhook disable` (Task 0115) remains.
+
+### Original scope snapshot (pre-merge)
 - Scope boundary: 4 files exactly —
   `packages/cli/src/commands/webhook-enable.ts` (NEW),
   `packages/cli/src/cli-runner.ts` (1 import + 1 register + 1 help line),
@@ -3933,4 +3957,41 @@ One PR, one reviewer-holdable outcome (rotate UX backend), one rollback (single 
 - Expected outcome: `sourceplane webhook enable <endpointId>
   [--idempotency-key=KEY] [--output=human|json]` shipped, mirroring the
   Task 0110 rotate cadence and the Task 0113 console "Re-enable" UX.
+
+## Task 0115
+
+- Agent: Implementer
+- Prompt: `ai/tasks/task-0115.md`
+- Status: scoped and ready to begin (2026-05-31)
+- Objective: Ship the symmetric CLI subcommand `sourceplane webhook disable
+  <endpointId> [--reason=TEXT]` as a pure consumer of the locked
+  `client.webhooks.disableEndpoint` SDK shape, closing the FINAL B5
+  endpoint-CRUD CLI leg (disable). Mirror of Task 0114 (`webhook enable`).
+- Scope boundary: 4 files exactly —
+  `packages/cli/src/commands/webhook-disable.ts` (NEW),
+  `packages/cli/src/cli-runner.ts` (1 import + 1 register + 1 help line),
+  `packages/cli/src/__tests__/webhook-disable.test.ts` (NEW, ≥ 9 vitest
+  cases), `ai/reports/task-0115-implementer.md` (NEW with real PR#).
+  Forbidden zones cover all other packages (incl. `packages/sdk/**` — do NOT
+  fix the enable re-export gap here), apps, infra, tooling, lockfiles, and
+  sibling cli command files (incl. `webhook-enable.ts`).
+- Three intentional divergences from the 0114 template: (1) new optional
+  `--reason=TEXT` flag → `DisableWebhookEndpointRequest.reason` (body
+  `{ reason }` when supplied, `{}` when absent, `UsageError` on bare boolean);
+  (2) 4-line human block (`status`/`disabledReason`/`disabledAt`/`updatedAt`);
+  (3) test imports `DisableWebhookEndpointResponse` directly from `@saas/sdk`
+  (it IS re-exported — no local-reconstruction workaround, unlike enable).
+- Acceptance: 4-file allowlist EXACTLY; `pnpm install --frozen-lockfile` clean;
+  `pnpm --filter @saas/cli typecheck` 0; lint no new warnings; `pnpm --filter
+  @saas/cli test` green with ≥ +9 net new passing cases (baseline 153);
+  `kiox -- orun validate/plan/run --dry-run` green selecting only
+  `cli·{dev,stage,prod}·Verify` (3 lanes); PR-CI 4/4 green; real PR# in
+  implementer report (TBD = BLOCKED).
+- Verifier Phase 1 lesson (from 0114): push the scope commit to origin/main
+  BEFORE judging PR file count so the merge-base recomputes to the exact 4
+  implementer files.
+- Expected outcome: `sourceplane webhook disable <endpointId> [--reason=TEXT]
+  [--idempotency-key=KEY] [--output=human|json]` shipped; B5 endpoint-CRUD CLI
+  arc fully closed end-to-end (create/edit/disable/delete/re-enable all have CLI
+  parity with console).
 
