@@ -1,0 +1,14 @@
+{
+  "extends": "../../tooling/tsconfig/base.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM"],
+    "paths": {
+      "@web-console-next/*": ["../../apps/web-console-next/src/*"]
+    }
+  },
+  "include": [
+    "src/**/*.ts",
+    "../../apps/web-console-next/src/components/webhooks/rotate-flow.ts"
+  ],
+  "exclude": ["node_modules", "dist"]
+}
