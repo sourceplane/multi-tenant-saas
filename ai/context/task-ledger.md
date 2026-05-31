@@ -4528,3 +4528,62 @@ One PR, one reviewer-holdable outcome (rotate UX backend), one rollback (single 
   Prior-art: `apps/membership-worker/**` (worker shape + `appendEventWithAudit`
   atomicity), `apps/policy-worker/**` (internal-only analog).
 
+
+## Task 0123 — VERIFIED PASS + MERGED (2026-05-31)
+- PR #178 'feat(admin-worker): B8 internal support worker (V1 audited read-only diagnostics)'
+  squash-merged as `4991f37` on main. Milestone **B8 CLOSED**.
+- Inline full-cycle: prior implementer session had built 0123 but never committed/pushed/PR'd/
+  reported (caught by trust-but-verify warm boot — working tree vs brief mismatch). Orchestrator
+  finished missing pieces (router.ts, index.ts, list-support-actions + lookup-support handlers,
+  pagination.ts, tests/admin-worker Jest package), fixed 3 exactOptionalPropertyTypes errors in
+  record-support-action.ts, then committed → PR → verified → merged.
+- Delivery: NEW apps/admin-worker (cloudflare-worker-turbo, internal-only, /v1/internal/support/*
+  + /health): deny-by-default authorizeSupportAction, support-action ledger (support.action_recorded
+  via appendEventWithAudit in a tx; denial → support.access_denied), narrow secret-free org/user
+  projections. NEW packages/db/src/support + migration 140_support_action_records (registered
+  manifest.ts/types.ts). NEW tests/admin-worker (3 suites/19 tests).
+- Gates: full-repo typecheck 46/46, admin-worker-tests 19/19, db-tests 521/521, lint clean,
+  wrangler dry-run prod binds SOURCEPLANE_DB. PR-CI 26719757146 all green; post-merge main-CI
+  26719812786 at 4991f37 11/11 SUCCESS — deploy gate satisfied (Uploaded admin-worker-prod;
+  db-migrate stage/prod). Reports: ai/reports/task-0123-{implementer,verifier}.md.
+
+## Task 0124
+- Prompt: `ai/tasks/task-0124.md`
+- Scoped 2026-05-31 (orchestrator).
+- Milestone: `B9-entitlement-decision-observability`. Branch
+  `impl/task-0124-entitlement-observability`. Sealed snapshot main HEAD `4991f37`.
+- Selection: B8 closed; B9 is the roadmap's natural next leg (specs/roadmap.md §B9 — counts
+  only by caller × entitlement key from billing-worker, used by admin-worker dashboard +
+  on-call). Grounded: the decision is apps/billing-worker/src/handlers/check-entitlement.ts
+  decideEntitlement → allowed + reason (not_configured|disabled) via internal POST
+  /v1/internal/billing/entitlements/check; NO decision is observed today.
+- Scope:
+  1. billing-worker emits counts-only decision observation (orgId, entitlementKey, outcome
+     allowed|denied, denial reason, timestamp) on the check-entitlement path — best-effort,
+     non-blocking, behind CheckEntitlementDeps; frozen CheckBillingEntitlementResponse.
+  2. NEW migration packages/db/src/migrations/150_* for decision-observation storage
+     (forward-only/idempotent, registered manifest.ts/types.ts).
+  3. admin-worker NEW internal-only deny-by-default aggregation read (e.g. GET
+     /v1/internal/support/organizations/:orgId/entitlement-decisions) → per-(entitlementKey,
+     outcome) counts over a bounded window; reuses authorizeSupportAction (denied →
+     support.access_denied) + narrow-projection discipline (no limitValue/subscriptionId/secret).
+  4. Tests: emission allowed+denied + emission-failure-doesnt-change-response; admin
+     deny-by-default (+event); aggregation correctness + no-secret projection.
+- Hard exclusions: NO Analytics Engine / external sink binding (in-repo packages/db +
+  Hyperdrive only); NO change to decideEntitlement semantics / response bytes; NO secrets /
+  payloads / limit values / subscription IDs in observations; NO api-edge route / public
+  exposure; NO web-console-next UI; NO impersonation; NO peer-worker contract change beyond
+  the additive billing emission seam; NO ai/deferred.md or cloudflare-domain touch.
+- Component shape: extends billing-worker + admin-worker + packages/db (both workers
+  deploy-gated; verifier PASS gate = post-merge main-CI deploy job stage/prod). Implementer
+  owns storage-shape choice (append-only aggregated-at-read vs rollup counter — justify) +
+  PR count. BEHIND-main rebase = verifier's job.
+- Acceptance: kiox -- orun validate/plan --changed/run --dry-run green with billing-worker +
+  admin-worker + db jobs in plan; emission proven on allowed+denied paths + failure-doesnt-
+  change-response; admin deny-by-default proven (+event); aggregation counts correct + no-secret
+  projection; migration 150_* checked in; no contract/api-edge/Console/binding/impersonation
+  change; PR-CI green; clean history.
+- Spec basis: specs/roadmap.md §B9; specs/components/11-billing.md;
+  specs/components/16-admin-support.md; specs/components/09-events-audit-observability.md.
+  Prior-art: apps/admin-worker/src/{support-auth,handlers/lookup-support,handlers/
+  record-support-action}.ts; packages/db/src/support; migration 140_support_action_records.
