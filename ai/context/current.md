@@ -1,16 +1,21 @@
 # Current Context
 
-Last updated: 2026-05-31 — Track B4 fully closed. Orchestrator pass
-selected **Task 0103 (sdk AuthClient)** as the next PR-sized task,
-unblocking U10 (Task 0104) cleanly. Prompt sealed at
-`ai/tasks/task-0103.md`.
+Last updated: 2026-05-31 — Task 0103 implementer phase complete; PR
+#158 OPEN, MERGEABLE/CLEAN, 4/4 PR-CI green. Verifier prompt sealed
+at `ai/tasks/task-0103-verifier.md` and active. Orchestrator
+hand-off complete; next move is the verifier execution.
 
 ## Current Task — 0103 (sdk AuthClient)
 
-**Agent:** Implementer
+**Agent:** Verifier (sealed and active)
 **Branch:** `impl/task-0103-sdk-auth-client`
-**Prompt:** `ai/tasks/task-0103.md`
-**Status:** scoped and ready, awaiting implementer
+**Implementer prompt:** `ai/tasks/task-0103.md`
+**Implementer report:** `ai/reports/task-0103-implementer.md`
+**Verifier prompt:** `ai/tasks/task-0103-verifier.md`
+**PR:** #158 — base `main`, head `impl/task-0103-sdk-auth-client`,
+state OPEN/MERGEABLE/CLEAN, PR-CI run `26699737104` 4/4 SUCCESS
+(plan + sdk·{dev,stage,prod} Verify).
+**Status:** verifier sealed, awaiting execution.
 
 **Objective.** Add a 13th `@saas/sdk` resource client `AuthClient`
 that wraps the identity-worker public auth surface (`loginStart`,

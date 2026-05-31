@@ -2513,9 +2513,22 @@ on the SDK side.
 
 ## Task 0103
 
-- Agent: Implementer
-- Prompt: `ai/tasks/task-0103.md`
-- Status: scoped and ready to begin (2026-05-31)
+- Agent: Implementer (complete) + Verifier (sealed, active)
+- Implementer prompt: `ai/tasks/task-0103.md`
+- Implementer report: `ai/reports/task-0103-implementer.md`
+- Verifier prompt: `ai/tasks/task-0103-verifier.md`
+- Status: implementer phase complete 2026-05-31; PR #158 OPEN,
+  MERGEABLE/CLEAN, PR-CI run `26699737104` 4/4 SUCCESS (plan +
+  sdk·{dev,stage,prod} Verify). Verifier prompt sealed and awaiting
+  execution. SDK tests 89 → 106 (+17 it() blocks; target was ≥10).
+  Hazard scan clean, no spec proposals, `packages/sdk/component.yaml`
+  byte-identical vs main. Verifier prompt is 7-phase, mirrors the
+  Task 0098 SDK-only shape (no stacked-PR rebase phase needed). On
+  PASS: squash-merge, post-merge main-CI watch, bookkeeping commit
+  on main, recommended-next is Task 0104 (Console U10 SDK refactor —
+  pure consumer-side swap of `apps/web-console-next/src/lib/api.ts`
+  for `Sourceplane` from `@saas/sdk`, now unblocked).
+- Original scoping (preserved for context):
 - Objective: Add a 13th `@saas/sdk` resource client `AuthClient`
   wrapping the identity-worker public auth surface (`loginStart`,
   `loginComplete`, `getSession`, `logout`, `getProfile`,
