@@ -1,6 +1,6 @@
 # Current Context
 
-Last updated: 2026-05-31 — Task 0118 VERIFIED + MERGED; Task 0119 SCOPED (orchestrator). Awaiting implementer.
+Last updated: 2026-05-31 — Task 0119 IMPLEMENTER COMPLETE (PR #174); Verifier SCOPED (orchestrator). Awaiting verifier.
 
 PR #173 (Task 0118 `refactor(cli): fold cross-reads resolveOrgId onto shared
 helper`) squash-merged to main as `eda4a3a`. Inline 8-phase verifier PASS adapted
@@ -27,37 +27,34 @@ deferred Remaining Gap is closed. **main remains FULLY GREEN.**
 
 Repo health: green. Working tree clean. main HEAD `eda4a3a`.
 
-## Current task — 0119
+## Current task — 0119 (verification)
 
-**Bump the four deprecated Node-20-runtime GitHub Actions in
-`.github/workflows/ci.yml` to Node-24 majors before the June 16 2026 hard
-cutover.**
+**Verify PR #174 — bump the four deprecated Node-20-runtime GitHub Actions in
+`.github/workflows/ci.yml` to Node-24 majors before the June 16 2026 cutover.**
 
-- Prompt: `ai/tasks/task-0119.md`
-- Agent: Implementer
+- Implementer pass COMPLETE: PR #174 OPEN, MERGEABLE, CLEAN at HEAD `f0ac5ce`
+  (base main `eda4a3a`; scope commits `f350bbf` ci bump + `f0ac5ce` report PR#).
+- Verifier prompt: `ai/tasks/task-0119-verifier.md`
+- Agent: Verifier
 - Branch: `impl/task-0119-ci-actions-node24-bump`
-- Sealed snapshot main: `eda4a3a` (Task 0118 squash).
-- Trigger: every CI run now emits the Node 20 deprecation annotation for
-  `actions/checkout@v4`, `actions/upload-artifact@v4`,
-  `actions/download-artifact@v4`, `docker/login-action@v3`. Actions forced to
-  Node 24 starting **June 16 2026**.
-- PR boundary: 2 files exactly — `.github/workflows/ci.yml` (four single-token
-  ref bumps: both `checkout@v4`→`@v6`, `upload-artifact@v4`→`@v7`,
+- Diff EXACTLY 2 files (+99/−5): `.github/workflows/ci.yml` (+5/−5, four
+  action-ref token bumps — `checkout@v4`→`@v6` ×2, `upload-artifact@v4`→`@v7`,
   `download-artifact@v4`→`@v8`, `docker/login-action@v3`→`@v4`),
-  `ai/reports/task-0119-implementer.md` (NEW, real PR#).
-- Grounded versions (orchestrator research via `gh api` `action.yml` `using:`):
-  checkout node24 from v5+ (latest v6.0.2), upload-artifact from v7 (latest
-  v7.0.1), download-artifact from v8 (latest v8.0.1), docker/login-action from
-  v4 (v4.2.0).
-- Out of scope: `sourceplane/orun-action@v1.2.0` (org composite, not in the
-  banner); `actions/cache@v4` (named in the banner but injected transitively by
-  orun-action's tooling, not present in `ci.yml`, not addressable here).
-- Behaviour-preserving: both `orun` step bodies + env + permissions + matrix +
-  job names byte-identical. Expected: `orun plan --changed` likely EMPTY (keys
-  off `intent.yaml` paths, not `.github/**`), so PR-CI shows only the `plan`
-  job; that is the verification surface (plan job green on new majors + banner
-  gone).
-- Title: `ci(tooling): bump GitHub Actions off deprecated Node 20 runtimes`.
+  `ai/reports/task-0119-implementer.md` (NEW, real PR #174).
+- Implementer pin choice: floating major (matches existing `@v4`/`@v3`
+  convention; recorded rationale). Spec proposals: none.
+- INFRA/TOOLING-ONLY PR — not an Orun component, no `component.yaml`, no deploy
+  lane, no live-URL surface. `orun plan --changed` EXPECTED empty (keys off
+  `intent.yaml` paths, not `.github/**`); `run` job skipped by the `if:` guard.
+  PR-CI run 26711979395 = `plan` SUCCESS + `matrix.job-name` skipping (correct
+  empty-plan shape). `gh run view --log` confirms the `plan` job ran on
+  `checkout@v6` + `upload-artifact@v7`; Node 20 banner gone for the four bumped
+  actions. (`actions/cache` still banners — out of scope, transitive via
+  `orun-action` tooling, documented in the impl report Remaining Gaps.)
+- Verifier shape: 8-phase ADAPTED for tooling-only no-deploy PR — Phase 6.5
+  post-merge main-CI watch confirms green + banner dropped; no deploy/live-URL
+  probe. On PASS: squash-merge `--delete-branch`, sync main, Phase-8 bookkeeping.
+  On FAIL: leave PR open with documented blockers.
 
 ## Recommended next focus after 0119
 
