@@ -3588,3 +3588,44 @@ One PR, one reviewer-holdable outcome (rotate UX backend), one rollback (single 
   and `webhook-secrets-rotate.ts` consume it via import, vitest floor
   raised to ≥142, zero observable CLI behaviour change. Closes the
   Task 0110 verifier housekeeping recommendation.
+
+## Task 0111 — Verifier
+
+- Agent: Verifier
+- Prompt: `ai/tasks/task-0111-verifier.md`
+- Status: scoped and ready to begin (2026-05-31)
+- PR: #166 OPEN, MERGEABLE/CLEAN, 4/4 PR-CI green at HEAD `ad2964b`
+  (run `26706640065`: plan + cli·{dev,stage,prod}·Verify)
+- Implementer report committed on PR branch (`dbb862d`) — no
+  Task 0106-style fix-up needed
+- Diff: 5 files +394/-65 — `helpers.ts` NEW (61 LOC),
+  `writes.ts` (deletions + 1 import), `webhook-secrets-rotate.ts`
+  (deletions + 1 import + comment edit + 1 call-site swap to
+  `resolveOrgId(ctx, /* allowOverride */ false)`),
+  `helpers.test.ts` NEW (161 LOC, 8 vitest cases above ≥6 floor),
+  `ai/reports/task-0111-implementer.md` NEW
+- Objective: independently verify byte-equivalence of the extracted
+  helpers vs the previous inline copies on `origin/main`, confirm PR
+  boundary (exactly 5 paths) + forbidden-zone clean, run quality
+  gates + Orun gates, inspect PR-CI lane logs, squash-merge on PASS
+- Scope boundary: 8-phase verifier shape (turbo-package, no deploy
+  lane, no live URL); accept the documented `cross-reads.ts`
+  no-override `resolveOrgId` Remaining-Gap as risk-noted-forward
+  rather than as a blocker (PR-Boundary explicitly forbids touching
+  it; one-line future housekeeping task)
+- Acceptance: PR-Boundary clean (5 listed paths exactly); zero
+  forbidden-zone hits; zero new hazard-suppressing syntax in
+  production source under PR diff; `rg` residual-duplicate audit
+  matches expected counts (`resolveOrgId` 1+1 pre-existing;
+  `readIdempotencyKey` 1; `resolveActiveOrgId` 0); vitest ≥144/144
+  across 11 files; `pnpm -r typecheck=0` across 39 workspaces; lint
+  ≤ baseline; orun changed-plan selects ONLY 3 cli Verify lanes; PR-CI
+  4/4 SUCCESS verified via `gh run view --log` per lane; post-merge
+  main-CI 4/4 SUCCESS on PASS
+- Expected outcome on PASS: PR #166 squash-merged, main fast-forwarded,
+  state.json/current.md/ledger committed on main as Task 0111
+  verifier-PASS bookkeeping; B5 secret-rotation arc + housekeeping
+  closer fully closed; next orchestrator candidates: console webhook
+  subscriptions UX, console delivery-attempts UX, B7 audit-log UX,
+  B8 admin-worker scaffold, or the `cross-reads.ts` no-override
+  fold-in housekeeping follow-up
