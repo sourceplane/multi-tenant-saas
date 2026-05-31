@@ -1441,6 +1441,56 @@ Last updated: 2026-05-31 (Task 0106 Verifier PASS + MERGED — PR #161 squash `a
   housekeeping task: extract a shared `cli-helpers` module ahead of
   the next CLI write/rotate surface.
 
+## Task 0111 — Verifier PASS + Merged
+
+- **Agent:** Verifier
+- **Prompt:** `ai/tasks/task-0111-verifier.md`
+- **Status:** verified PASS, squash-merged on main 2026-05-31
+- **PR:** #166 — squash `da9810f`
+- **Branch (deleted):** `impl/task-0111-cli-helpers-extract`
+- **PR-CI runs:**
+  - Initial HEAD `ad2964b`: run `26706640065` 4/4 SUCCESS
+  - Post-`update-branch` HEAD `66729b5`: run `26706832113` 4/4 SUCCESS
+- **Post-merge main-CI:** run `26706881757` at `da9810f` 4/4 SUCCESS
+  (plan + `cli · {dev,stage,prod} · Verify`). Turbo-package shape, no
+  deploy lane, no live URL surface.
+- **Reports:**
+  - Implementer: `ai/reports/task-0111-implementer.md`
+  - Verifier: `ai/reports/task-0111-verifier.md`
+- **Objective:** Extract `resolveOrgId(ctx, allowOverride)` and
+  `readIdempotencyKey(ctx)` from `writes.ts` and
+  `webhook-secrets-rotate.ts` into a new shared module
+  `packages/cli/src/commands/helpers.ts`. Pure behaviour-preserving
+  refactor — closes the Task 0110 verifier housekeeping recommendation
+  and the B5 secret-rotation arc + housekeeping closer.
+- **Scope boundary:** 5 files +394/-65 exactly per task brief
+  (helpers.ts NEW 61 LOC, writes.ts deletions + 1 import,
+  webhook-secrets-rotate.ts deletions + 1 import + comment edit + 1
+  call-site swap to `resolveOrgId(ctx, /* allowOverride */ false)`,
+  helpers.test.ts NEW 161 LOC with 8 vitest cases above ≥6 floor,
+  task-0111-implementer.md NEW). Zero forbidden-zone hits.
+- **Durable outcome on main:** Shared `commands/helpers.ts` module
+  consumed by both `writes.ts` and `webhook-secrets-rotate.ts` via
+  `from "./helpers.js"`. Behaviour byte-equivalent to prior inline
+  copies (verified by direct diff vs `origin/main` — true-branch
+  matches `writes.ts:41-55`, false-branch collapses correctly to the
+  old `resolveActiveOrgId(ctx)` body, `readIdempotencyKey` matches
+  both prior copies). Vitest floor lifted to 144/144 across 11 files
+  (136 prior + 8 new). Zero observable CLI surface change.
+- **Pattern hits:** BEHIND-main on dispatch (recurring 0103–0111);
+  `gh pr update-branch 166` produced rebased HEAD that auto-fired
+  fresh PR-CI (no Task-0107 force-push fallback needed).
+- **Risk-noted-forward (NOT a blocker):**
+  `packages/cli/src/commands/cross-reads.ts:36` still defines its own
+  single-arg `async function resolveOrgId(ctx)` no-override read
+  variant. PR-Boundary explicitly forbade touching `cross-reads.ts`.
+  Folding it into `helpers.ts:resolveOrgId(ctx, false)` is a one-line
+  future housekeeping task; reads have no idempotency dimension and
+  the duplicate body is byte-equivalent — low-risk.
+- **B5 secret-rotation arc + housekeeping closer FULLY CLOSED**
+  (0108 backend → 0109 console reveal-once → 0110 CLI rotate → 0111
+  helpers extract).
+
 ## Historical Notes
 
 - PR #1 split product-specific V2 Git catalog work away from the reusable SaaS
