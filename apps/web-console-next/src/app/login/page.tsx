@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useSession } from "@/lib/session";
+import { wrap } from "@/lib/api";
 import { useToast } from "@/components/ui/toast";
 import { ZodForm } from "@/components/ui/zod-form";
 
@@ -71,7 +72,7 @@ export default function LoginPage() {
                     ]}
                     submitLabel="Send code"
                     onSubmit={async ({ email }) => {
-                      const r = await client.loginStart(email);
+                      const r = await wrap(() => client.auth.loginStart({ email }));
                       if (!r.ok) {
                         toast({ kind: "error", title: "Login failed", description: r.error.message });
                         return;
@@ -114,7 +115,9 @@ export default function LoginPage() {
                         onClick={async () => {
                           if (!challengeId) return;
                           setBusy(true);
-                          const r = await client.loginComplete(challengeId, code);
+                          const r = await wrap(() =>
+                            client.auth.loginComplete({ challengeId, code }),
+                          );
                           setBusy(false);
                           if (!r.ok) {
                             toast({ kind: "error", title: "Code rejected", description: r.error.message });

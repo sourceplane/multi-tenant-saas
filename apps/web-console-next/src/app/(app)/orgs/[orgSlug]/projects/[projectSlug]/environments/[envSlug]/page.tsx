@@ -7,6 +7,7 @@ import { OrgScope } from "@/components/shell/org-scope";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { wrap } from "@/lib/api";
 import { useSession } from "@/lib/session";
 import { useAsync } from "@/lib/use-async";
 
@@ -32,13 +33,20 @@ function Inner({
   envSlug: string;
 }) {
   const { client } = useSession();
-  const projects = useAsync(() => client.listProjects(orgId), [client, orgId]);
+  const projects = useAsync(
+    () => wrap(async () => (await client.projects.list(orgId)).projects),
+    [client, orgId],
+  );
   const project = projects.data?.find((p) => p.slug === projectSlug) ?? null;
   const envs = useAsync(
     () =>
       project
-        ? client.listEnvironments(orgId, project.id)
-        : Promise.resolve({ ok: false as const, status: 0, error: { code: "pending", message: "loading project" } }),
+        ? wrap(async () => (await client.environments.list(orgId, project.id)).environments)
+        : Promise.resolve({
+            ok: false as const,
+            status: 0,
+            error: { code: "pending", message: "loading project" },
+          }),
     [client, orgId, project?.id],
   );
   const env = envs.data?.find((e) => e.slug === envSlug) ?? null;

@@ -17,7 +17,7 @@ import { PreconditionInsight } from "@/components/precondition/insight";
 import { useSession } from "@/lib/session";
 import { useAsync } from "@/lib/use-async";
 import { useToast } from "@/components/ui/toast";
-import type { ApiErrorBody } from "@/lib/api";
+import { wrap, type ApiErrorBody } from "@/lib/api";
 
 const schema = z.object({
   name: z.string().min(2).max(64),
@@ -33,7 +33,10 @@ export default function ProjectsPage() {
 function Inner({ orgId, orgSlug }: { orgId: string; orgSlug: string }) {
   const { client } = useSession();
   const { toast } = useToast();
-  const projects = useAsync(() => client.listProjects(orgId), [client, orgId]);
+  const projects = useAsync(
+    () => wrap(async () => (await client.projects.list(orgId)).projects),
+    [client, orgId],
+  );
   const [open, setOpen] = React.useState(false);
   const [precondition, setPrecondition] = React.useState<ApiErrorBody | null>(null);
 
@@ -67,7 +70,9 @@ function Inner({ orgId, orgSlug }: { orgId: string; orgSlug: string }) {
               onSubmit={async (v) => {
                 const payload: { name: string; slug?: string } = { name: v.name };
                 if (v.slug) payload.slug = v.slug;
-                const r = await client.createProject(orgId, payload);
+                const r = await wrap(async () =>
+                  (await client.projects.create(orgId, payload)).project,
+                );
                 if (!r.ok) {
                   if (r.error.code === "precondition_failed") setPrecondition(r.error);
                   else toast({ kind: "error", title: "Create failed", description: r.error.message });
