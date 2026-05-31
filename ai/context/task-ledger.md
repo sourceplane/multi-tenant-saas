@@ -1,6 +1,6 @@
 # Task Ledger
 
-Last updated: 2026-05-31 (Task 0106 Implementer COMPLETE + Verifier SEALED — PR #161 OPEN/MERGEABLE/CLEAN at HEAD `a39c0d6`, PR-CI run `26702180473` 4/4 SUCCESS, +710/-3 across 5 files all under `packages/cli/**` + `pnpm-lock.yaml`; verifier prompt at `ai/tasks/task-0106-verifier.md` carries Phase 0 fix-up requiring implementer report be committed to PR branch before merge; sealed snapshot main `f614fb1`, awaiting Verifier dispatch)
+Last updated: 2026-05-31 (Task 0106 Verifier PASS + MERGED — PR #161 squash `a99788b` on main, post-merge main-CI run `26702888086` 4/4 SUCCESS for `plan` + `cli·{dev,stage,prod}·Verify`; `@saas/cli` `sourceplane webhook verify` subcommand now consumes `@saas/webhook-verifier` end-to-end inside the monorepo; turbo-package shape, no deploy lane, no live URL surface; merge required `gh pr update-branch 161` (BEHIND main, recurring pattern across 0103/0104/0105/0106); two documented prompt-strict-language deviations accepted: `node:fs` for `--body=PATH` file I/O and one `as unknown as StdinLike` boundary cast at `process.stdin` seam — both scope-wording oversights, not impl bugs)
 
 ## Task 0001
 
@@ -2931,42 +2931,86 @@ on the SDK side.
 - Agent: Verifier
 - Prompt: `ai/tasks/task-0106-verifier.md` (≈ 17.6 KB,
   8-phase shape mirroring Task 0105 verifier)
-- Status: SEALED 2026-05-31 (orchestrator) — awaiting Verifier dispatch
+- Status: **PASS + MERGED** 2026-05-31
 - Sealed snapshot main: `f614fb1`
 - PR under verification: #161 (`impl/task-0106-cli-webhook-verify`)
-  HEAD `a39c0d6a8b5c4d55dee44a1d5700ad3593f44715`
-- Phases:
-  - **Phase 0** — working-dir setup + missing-implementer-report
-    fix-up (commit on PR branch, wait for fresh PR-CI 4/4).
-  - **Phase 1** — PR sanity (file list ≤ 6 incl. report after
-    fix-up, no out-of-scope diff, OPEN/MERGEABLE/CLEAN).
-  - **Phase 2** — hazard + boundary scan: zero new
-    `eslint-disable` / `@ts-ignore` / `@ts-expect-error` /
-    `as unknown as` / `as any` / `node:*` / `Sourceplane` /
-    `fetch(` / `/v1/` / `.trim()` / `JSON.parse` on body input
-    under `packages/cli/**` new paths; lockfile delta limited to
-    the new workspace edge; zero edits to
-    `packages/webhook-verifier/**`.
-  - **Phase 3** — quality gates: `pnpm -r typecheck=0` across 39
-    workspaces, `pnpm -r --no-bail lint` ≤ 45 warnings all in
-    `tests/api-edge/**`, `pnpm --filter @saas/cli build/test`
-    green with ≥ 12 new passing cases, mandatory local e2e smoke
-    3 transcripts (human / json / tampered).
-  - **Phase 4** — `kiox -- orun validate / plan --changed / run
-    --dry-run`; plan must select ONLY `cli·{dev,stage,prod}·Verify`
-    lanes (FAIL if any other component is pulled in).
-  - **Phase 5** — PR-CI 4/4 on post-fix-up HEAD via
-    `gh run view --log` (NOT just summary).
-  - **Phase 6** — squash merge + post-merge main-CI watch (4 lanes:
-    plan + `cli·{dev,stage,prod}·Verify`, no deploy lane —
-    turbo-package shape).
-  - **Phase 7** — verifier report at
-    `ai/reports/task-0106-verifier.md` (PASS / FAIL with full
-    per-phase evidence).
-  - **Phase 8** — PASS bookkeeping commit on `main` (state.json /
-    current.md / ledger), or FAIL bookkeeping (PR comment +
-    report on PR branch, no merge).
-- Recommended-next on PASS: B5 follow-ups (rotate UX / replay UI /
-  failure-budget alerts), B7 audit-log UX expansion (multi-PR), or
-  B8 admin-worker scaffold (greenfield) — orchestrator picks at
-  next pass.
+- Squash merge SHA on `main`: `a99788b7495c0c568c65b54f7a687ab657fe4094`
+- PR-CI history (all 4/4 SUCCESS):
+  - `a39c0d6` (impl) → run `26702180473`
+  - `9a5ec31` (Phase 0 fix-up: implementer report
+    reconstructed by verifier from PR body + diff + re-run smoke
+    transcripts) → run `26702795482`
+  - `8066c8d` (post-`gh pr update-branch` rebase-of-main, required
+    because orchestrator dispatch commit `1a01dba` advanced main
+    past PR base — recurring BEHIND-main pattern across
+    0103/0104/0105/0106) → run `26702859636`
+- Post-merge main-CI on `a99788b`: run `26702888086` 4/4 SUCCESS
+  (`plan` + `cli·{dev,stage,prod}·Verify`). Turbo-package shape
+  with no deploy lane, no live URL surface — no live-resource
+  verification protocol applied.
+- Verifier report: `ai/reports/task-0106-verifier.md`
+- Implementer report (verifier-reconstructed): `ai/reports/task-0106-implementer.md`
+- All 8 phases green:
+  - **Phase 0** — Phase 0 missing-report fix-up landed as commit
+    `9a5ec31` on PR branch.
+  - **Phase 1** — PR sanity OK after fix-up: 6 paths
+    (`packages/cli/{package.json, src/commands/webhook-verify.ts,
+    src/cli-runner.ts, src/__tests__/webhook-verify.test.ts}` +
+    `pnpm-lock.yaml` + `ai/reports/task-0106-implementer.md`),
+    OPEN/MERGEABLE/CLEAN.
+  - **Phase 2** — hazard scan clean except two documented
+    deviations from prompt strict language (both scope-wording
+    oversights, not impl bugs):
+    1. `node:fs` import in command + test files — necessary for
+       `--body=PATH` file I/O and tempdir test harness; the hard
+       rule was authored to prevent Node-only crypto bypassing
+       WebCrypto, pure file I/O is in scope.
+    2. One `as unknown as StdinLike` cast at the `process.stdin`
+       seam (single typed-seam adapter, not hazard suppression).
+    All other rules upheld verbatim (`Sourceplane` / `client.*` /
+    `fetch(` / `/v1/` / `node:crypto` / `node:buffer` / `.trim()` /
+    `JSON.parse` on body input / `eslint-disable` / `@ts-ignore` /
+    `@ts-expect-error` / `as any`).
+  - **Phase 3** — quality gates green: `pnpm install
+    --frozen-lockfile` clean (Scope: 39 workspaces), `pnpm -r
+    typecheck=0` across 39, lint 45 warnings ALL in
+    `tests/api-edge/**`, `@saas/cli` build green, vitest 8/8 files
+    111/111 cases including 16/16 new in `webhook-verify.test.ts`
+    (above ≥12 floor), local e2e smoke 3 transcripts green via
+    `child_process.spawn` harness (initial shell-pipeline attempt
+    showed false sig-mismatches root-caused to shell
+    command-substitution corruption, not a CLI bug).
+  - **Phase 4** — orun gates green: `kiox -- orun validate` valid;
+    `plan --changed --base origin/main` selected ONLY 1 component
+    × 3 envs = 3 jobs all `cli·{dev,stage,prod}·Verify` (zero
+    unrelated components pulled in); `run --dry-run`
+    preview-success.
+  - **Phase 5** — PR-CI logs inspected via `gh run view --log` on
+    stage Verify job showing `steps: 4 passed, 0 failed, 0
+    skipped`, `04 verify-package-structure` checkpoint, vitest
+    invocation (`+ vitest 2.1.9`, `Done in 6.9s`), and `✓ Done in
+    19.8s` orun-action terminal step.
+  - **Phase 6** — merge + post-merge main-CI 4/4. Initial merge
+    rejected `BEHIND main`; `gh pr update-branch` then re-poll
+    PR-CI before squash merge.
+  - **Phase 7** — verifier report committed.
+  - **Phase 8** — PASS bookkeeping commit on `main` (this entry +
+    state.json + current.md update).
+- Surface shipped: `sourceplane webhook verify` —
+  `--secret/--signature/--timestamp` REQUIRED; `--body=PATH` or
+  STDIN (mutex); `--tolerance-seconds` (default 300);
+  `--output=human|json` (default human). Exit 0 valid sig, exit 4
+  verifier failure (helper reason codes verbatim:
+  `signature_mismatch`, `missing_signature_header`,
+  `missing_timestamp_header`, `malformed_signature`,
+  `malformed_timestamp`, `timestamp_out_of_tolerance`), exit 2
+  `UsageError` via `formatCliError`. `@saas/cli` now dogfoods
+  `@saas/webhook-verifier` end-to-end inside the monorepo.
+- Diff at merge: 6 files, +921 / -3 (5 impl + reconstructed
+  implementer report). All under `packages/cli/**` +
+  `pnpm-lock.yaml` + `ai/reports/`.
+- Recommended-next: **B5 rotate UX** (smallest backend surface,
+  highest user-visibility — canonical webhook-secret operational
+  pain point), B5 replay UI / failure-budget alerts, B7 audit-log
+  UX expansion (multi-PR), or B8 admin-worker scaffold
+  (greenfield) — orchestrator picks at next pass.
