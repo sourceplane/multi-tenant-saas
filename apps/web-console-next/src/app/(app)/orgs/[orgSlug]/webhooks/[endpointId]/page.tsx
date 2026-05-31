@@ -18,6 +18,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from "@/components/ui/table";
 import { useSession } from "@/lib/session";
 import { useAsync } from "@/lib/use-async";
 import { wrap } from "@/lib/api";
@@ -26,6 +34,13 @@ import { EditEndpointDialog } from "@/components/webhooks/edit-endpoint-dialog";
 import { DisableEndpointDialog } from "@/components/webhooks/disable-endpoint-dialog";
 import { EnableEndpointDialog } from "@/components/webhooks/enable-endpoint-dialog";
 import { DeleteEndpointDialog } from "@/components/webhooks/delete-endpoint-dialog";
+import {
+  appendDeliveryPage,
+  hasMoreDeliveries,
+  toDeliveryRow,
+  EMPTY_DELIVERY_HISTORY,
+  type DeliveryHistoryState,
+} from "@/components/webhooks/delivery-history";
 
 export default function WebhookEndpointDetailPage() {
   const params = useParams<{ orgSlug: string; endpointId: string }>();
@@ -220,6 +235,8 @@ function Inner({
         </CardContent>
       </Card>
 
+      <DeliveryHistoryPanel orgId={orgId} endpointId={endpoint.id} />
+
       <RotateSecretDialog
         orgId={orgId}
         endpointId={endpoint.id}
@@ -265,6 +282,143 @@ function Inner({
         onDeleted={() => router.push(`/orgs/${orgSlug}/webhooks`)}
       />
     </div>
+  );
+}
+
+function DeliveryHistoryPanel({
+  orgId,
+  endpointId,
+}: {
+  orgId: string;
+  endpointId: string;
+}) {
+  const { client } = useSession();
+  const [state, setState] = React.useState<DeliveryHistoryState>(
+    EMPTY_DELIVERY_HISTORY,
+  );
+  const [loadingMore, setLoadingMore] = React.useState(false);
+
+  const initial = useAsync(
+    () =>
+      wrap(async () => {
+        const page = await client.webhooks.listDeliveryAttemptsPage(
+          orgId,
+          endpointId,
+        );
+        setState((prev) => appendDeliveryPage(prev, page, true));
+        return page;
+      }),
+    [client, orgId, endpointId],
+  );
+
+  const loadMore = React.useCallback(async () => {
+    if (state.cursor === null || loadingMore) return;
+    const cursor = state.cursor;
+    setLoadingMore(true);
+    try {
+      const result = await wrap(() =>
+        client.webhooks.listDeliveryAttemptsPage(orgId, endpointId, {
+          cursor,
+        }),
+      );
+      if (result.ok) {
+        setState((prev) => appendDeliveryPage(prev, result.data));
+      }
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [client, orgId, endpointId, state.cursor, loadingMore]);
+
+  const rows = React.useMemo(
+    () => state.attempts.map(toDeliveryRow),
+    [state.attempts],
+  );
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-sm">Delivery history</CardTitle>
+        <CardDescription>
+          Recent delivery attempts for this endpoint, newest first. Failure
+          summaries are safe — no raw response bodies or event payloads are
+          shown.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {initial.loading ? (
+          <div className="space-y-2">
+            <Skeleton className="h-9 w-full" />
+            <Skeleton className="h-9 w-full" />
+            <Skeleton className="h-9 w-full" />
+          </div>
+        ) : initial.error ? (
+          <div className="text-xs text-destructive">
+            <span className="font-medium">{initial.error.code}</span>{" "}
+            {initial.error.message}
+          </div>
+        ) : rows.length === 0 ? (
+          <EmptyState
+            icon={WebhookIcon}
+            title="No delivery attempts yet"
+            description="Once a matching event is published, delivery attempts to this endpoint will appear here."
+          />
+        ) : (
+          <div className="space-y-3">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Event</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Attempt</TableHead>
+                    <TableHead>HTTP</TableHead>
+                    <TableHead>Completed</TableHead>
+                    <TableHead>Detail</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {rows.map((row) => (
+                    <TableRow key={row.id}>
+                      <TableCell className="font-mono text-xs">
+                        {row.eventType}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={row.badge.variant}>{row.badge.label}</Badge>
+                      </TableCell>
+                      <TableCell className="tabular-nums">
+                        #{row.attemptNumber}
+                      </TableCell>
+                      <TableCell className="tabular-nums">{row.httpStatus}</TableCell>
+                      <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                        {row.completedAtLabel}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground max-w-[18rem] truncate">
+                        {row.failureReason
+                          ? row.failureReason
+                          : row.nextRetryAtLabel
+                            ? `next retry ${row.nextRetryAtLabel}`
+                            : "—"}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            {hasMoreDeliveries(state) && (
+              <div className="flex justify-center">
+                <Button
+                  variant="outline"
+                  onClick={() => void loadMore()}
+                  disabled={loadingMore}
+                >
+                  {loadingMore ? "Loading…" : "Load more"}
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

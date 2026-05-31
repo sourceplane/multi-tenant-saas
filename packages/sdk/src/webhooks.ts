@@ -15,6 +15,7 @@ import type {
   ListWebhookDeliveryAttemptsResponse,
   ListWebhookEndpointsResponse,
   ListWebhookSubscriptionsResponse,
+  PublicWebhookDeliveryAttempt,
   RotateWebhookSecretResponse,
   UpdateWebhookEndpointRequest,
   UpdateWebhookEndpointResponse,
@@ -23,6 +24,33 @@ import type {
 } from "@saas/contracts/webhooks";
 
 import type { RequestOptions, Transport } from "./transport.js";
+
+/**
+ * Cursor-pagination query for the delivery-attempts list. Both fields are
+ * optional and map 1:1 to the only two query params the webhooks-worker
+ * `parsePageParams` reads (`limit` 1–100 default 50, opaque `cursor`).
+ *
+ * `cursor` is the server-issued continuation token surfaced on the previous
+ * page's `meta.cursor` (an opaque base64 string — callers MUST NOT construct
+ * or parse it). Pass it back verbatim to fetch the next page.
+ */
+export interface ListDeliveryAttemptsQuery {
+  /** Page size, 1–100. Server defaults to 50 when omitted. */
+  limit?: number;
+  /** Opaque continuation cursor from the previous page's `meta.cursor`. */
+  cursor?: string;
+}
+
+/**
+ * Single page of delivery attempts plus the server-issued continuation
+ * cursor. `nextCursor` is `null` when there are no further pages, mirroring
+ * the api-edge `meta.cursor` field exactly (same shape as
+ * `EventsClient.listAuditEntriesPage`).
+ */
+export interface DeliveryAttemptsPage {
+  deliveryAttempts: ReadonlyArray<PublicWebhookDeliveryAttempt>;
+  nextCursor: string | null;
+}
 
 /**
  * Webhooks resource client.
@@ -307,19 +335,48 @@ export class WebhooksClient {
   // Delivery attempts
   // -------------------------------------------------------------------------
 
-  /** GET /v1/organizations/:orgId/webhooks/endpoints/:endpointId/delivery-attempts */
+  /**
+   * GET /v1/organizations/:orgId/webhooks/endpoints/:endpointId/delivery-attempts
+   *
+   * Threads optional `limit`/`cursor` query params through to the worker
+   * (`parsePageParams` reads ONLY these two). Returns the contract `data`
+   * payload. The continuation cursor lives on `meta.cursor`, NOT in this
+   * body — use {@link listDeliveryAttemptsPage} when you need to paginate.
+   */
   listDeliveryAttempts(
     orgId: string,
     endpointId: string,
+    query: ListDeliveryAttemptsQuery = {},
     opts: RequestOptions = {},
   ): Promise<ListWebhookDeliveryAttemptsResponse> {
     return this.transport.request<ListWebhookDeliveryAttemptsResponse>(
-      {
-        method: "GET",
-        path: `/v1/organizations/${encodeURIComponent(orgId)}/webhooks/endpoints/${encodeURIComponent(endpointId)}/delivery-attempts`,
-      },
+      buildDeliveryAttemptsRequest(orgId, endpointId, query),
       opts,
     );
+  }
+
+  /**
+   * Single-page delivery-attempts fetch that also exposes the server-issued
+   * continuation cursor (`meta.cursor`). Use this to drive a paginated UI:
+   * the returned `nextCursor` is `null` when there are no further pages, and
+   * otherwise an opaque token to pass back as `query.cursor` for the next
+   * call. Mirrors `EventsClient.listAuditEntriesPage`.
+   */
+  async listDeliveryAttemptsPage(
+    orgId: string,
+    endpointId: string,
+    query: ListDeliveryAttemptsQuery = {},
+    opts: RequestOptions = {},
+  ): Promise<DeliveryAttemptsPage> {
+    const { data, meta } =
+      await this.transport.requestWithEnvelope<ListWebhookDeliveryAttemptsResponse>(
+        buildDeliveryAttemptsRequest(orgId, endpointId, query),
+        opts,
+      );
+    return {
+      deliveryAttempts: data.deliveryAttempts,
+      nextCursor: meta.cursor ?? null,
+    };
   }
 
   /** GET /v1/organizations/:orgId/webhooks/delivery-attempts/:attemptId */
@@ -336,4 +393,29 @@ export class WebhooksClient {
       opts,
     );
   }
+}
+
+/**
+ * Build the GET request for the delivery-attempts list, threading the
+ * optional `limit`/`cursor` query params (omitting `undefined` so the URL
+ * builder never emits an empty `key=`). Shared by `listDeliveryAttempts`
+ * and `listDeliveryAttemptsPage` so the wire shape stays in lock-step.
+ */
+function buildDeliveryAttemptsRequest(
+  orgId: string,
+  endpointId: string,
+  query: ListDeliveryAttemptsQuery,
+): {
+  method: "GET";
+  path: string;
+  query: Record<string, string | number | undefined>;
+} {
+  const params: Record<string, string | number | undefined> = {};
+  if (query.limit !== undefined) params.limit = query.limit;
+  if (query.cursor !== undefined) params.cursor = query.cursor;
+  return {
+    method: "GET",
+    path: `/v1/organizations/${encodeURIComponent(orgId)}/webhooks/endpoints/${encodeURIComponent(endpointId)}/delivery-attempts`,
+    query: params,
+  };
 }

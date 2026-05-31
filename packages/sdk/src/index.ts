@@ -72,7 +72,11 @@ export {
   type CreateApiKeyResponse,
   type RevokeApiKeyResponse,
 } from "./apiKeys.js";
-export { WebhooksClient } from "./webhooks.js";
+export {
+  WebhooksClient,
+  type ListDeliveryAttemptsQuery,
+  type DeliveryAttemptsPage,
+} from "./webhooks.js";
 export { MeteringClient } from "./metering.js";
 export { BillingClient } from "./billing.js";
 export {

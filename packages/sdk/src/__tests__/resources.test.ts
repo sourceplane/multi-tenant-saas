@@ -225,6 +225,75 @@ describe("WebhooksClient", () => {
       client(fetch).webhooks.getDeliveryAttempt("org_1", "att_x"),
     ).rejects.toBeInstanceOf(NotFoundError);
   });
+
+  it("listDeliveryAttempts hits the endpoint-scoped path with no query when none given", async () => {
+    const { fetch, calls } = captureFetch(
+      jsonResponse(envelope({ deliveryAttempts: [], nextCursor: null })),
+    );
+    await client(fetch).webhooks.listDeliveryAttempts("org_1", "wh_1");
+    expect(calls[0]!.url).toBe(
+      "https://api.test/v1/organizations/org_1/webhooks/endpoints/wh_1/delivery-attempts",
+    );
+    expect(calls[0]!.init.method).toBe("GET");
+  });
+
+  it("listDeliveryAttempts threads limit + cursor into the query string", async () => {
+    const { fetch, calls } = captureFetch(
+      jsonResponse(envelope({ deliveryAttempts: [], nextCursor: null })),
+    );
+    await client(fetch).webhooks.listDeliveryAttempts("org_1", "wh_1", {
+      limit: 25,
+      cursor: "CURSOR_TOKEN_ABC",
+    });
+    const url = new URL(calls[0]!.url);
+    expect(url.pathname).toBe(
+      "/v1/organizations/org_1/webhooks/endpoints/wh_1/delivery-attempts",
+    );
+    expect(url.searchParams.get("limit")).toBe("25");
+    expect(url.searchParams.get("cursor")).toBe("CURSOR_TOKEN_ABC");
+  });
+
+  it("listDeliveryAttempts omits limit/cursor when only one is supplied", async () => {
+    const { fetch, calls } = captureFetch(
+      jsonResponse(envelope({ deliveryAttempts: [], nextCursor: null })),
+    );
+    await client(fetch).webhooks.listDeliveryAttempts("org_1", "wh_1", {
+      limit: 10,
+    });
+    const url = new URL(calls[0]!.url);
+    expect(url.searchParams.get("limit")).toBe("10");
+    expect(url.searchParams.has("cursor")).toBe(false);
+  });
+
+  it("listDeliveryAttemptsPage round-trips meta.cursor as nextCursor", async () => {
+    const { fetch } = captureFetch(
+      jsonResponse({
+        data: { deliveryAttempts: [{ id: "att_1" }], nextCursor: null },
+        meta: { requestId: "req_test", cursor: "NEXT_PAGE_CURSOR" },
+      }),
+    );
+    const page = await client(fetch).webhooks.listDeliveryAttemptsPage(
+      "org_1",
+      "wh_1",
+      { limit: 1 },
+    );
+    expect(page.deliveryAttempts).toHaveLength(1);
+    expect(page.nextCursor).toBe("NEXT_PAGE_CURSOR");
+  });
+
+  it("listDeliveryAttemptsPage returns nextCursor null on the last page", async () => {
+    const { fetch, calls } = captureFetch(
+      jsonResponse(envelope({ deliveryAttempts: [], nextCursor: null })),
+    );
+    const page = await client(fetch).webhooks.listDeliveryAttemptsPage(
+      "org_1",
+      "wh_1",
+      { cursor: "PREV_CURSOR" },
+    );
+    expect(page.nextCursor).toBeNull();
+    // The supplied cursor was forwarded as the request query param.
+    expect(new URL(calls[0]!.url).searchParams.get("cursor")).toBe("PREV_CURSOR");
+  });
 });
 
 // ---------------------------------------------------------------------------
