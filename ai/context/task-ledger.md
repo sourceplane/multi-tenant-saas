@@ -3457,3 +3457,50 @@ One PR, one reviewer-holdable outcome (rotate UX backend), one rollback (single 
   reviewable, parallel-safe CLI slice; durable subcommand path
   `["webhook","secrets","rotate"]` (three-segment plural) leaves
   room for future `webhook secrets list/reveal/revoke`.
+
+## Task 0110 — Verifier pass
+
+- Agent: Verifier
+- Prompt: `ai/tasks/task-0110-verifier.md`
+- Status: verifier dispatch ready (2026-05-31)
+- PR: #165 — OPEN, MERGEABLE/CLEAN, 4/4 PR-CI SUCCESS at HEAD `3d6b324`
+  (run `26705959245`: plan + `cli·{dev,stage,prod}·Verify`).
+- Branch: `impl/task-0110-cli-webhook-secrets-rotate`.
+- Sealed snapshot main: `3cfdeb0` (Task 0109 verifier-PASS bookkeeping).
+- Implementer outcome: 4 files +720/-0 exactly per PR boundary —
+  `packages/cli/src/commands/webhook-secrets-rotate.ts` NEW (160 LOC),
+  `packages/cli/src/cli-runner.ts` +3 LOC,
+  `packages/cli/src/__tests__/webhook-secrets-rotate.test.ts` NEW
+  (361 LOC, 13 cases above ≥ 12 floor),
+  `ai/reports/task-0110-implementer.md` NEW (committed on PR branch — no
+  0106 missing-report gap). NO `pnpm-lock.yaml` / `package.json` delta.
+- Hazard prophylaxis confirmed at scope: `readIdempotencyKey` imported
+  (not duplicated); `resolveOrgId` no-override branch inlined in
+  command file (writes.ts is forbidden); zero edits to existing CLI
+  commands or any forbidden zone.
+- Reveal-once shape (per implementer report §4): `response.secret`
+  read exactly once at line 130; `${secretPlaintext}` written to stdout
+  exactly once at line 134; `whsec_` literal does NOT appear in
+  production source/comments. Test 12 asserts
+  `stdout.match(/whsec_/g).length === 1` against captured human-mode
+  stdout. Verifier Phase 2 confirms data-flow trace (no
+  `JSON.stringify` of wider object, no error-path interpolation, no
+  log strings).
+- Verifier prompt is 9-phase shape mirroring Task 0107 verifier
+  (turbo-package, no deploy lane, no live URL surface): Phase 0
+  working-dir + readiness → Phase 1 PR sanity + 4-file scope-clean →
+  Phase 2 hazard + boundary scan + reveal-once audit → Phase 3 quality
+  gates (pnpm typecheck/lint/build/test) → Phase 4 orun gates (only
+  `cli·{dev,stage,prod}·Verify` selected) → Phase 5 mandatory local
+  CLI smoke against built `dist/cli.js` (`--help` registration,
+  exit-2 on missing endpointId / invalid `--output`) → Phase 6 PR-CI
+  via `gh run view --log` (NOT summary; recurring 0103–0109 lesson) →
+  Phase 7 `gh pr update-branch 165` + fresh PR-CI + squash --delete-
+  branch → Phase 8 post-merge main-CI watch → Phase 9 verifier report
+  + PASS bookkeeping (state.json/current.md/task-ledger.md commit on
+  main).
+- Expected outcome on PASS: B5 secret-rotation arc CLOSED (0108
+  backend → 0109 console → 0110 CLI all merged). Recommended next
+  candidates: B5 follow-ups (replay UI, failure-budget alerts,
+  console webhook subscriptions UX, console delivery-attempts UX),
+  B7 audit-log UX expansion, or B8 admin-worker scaffold breather.

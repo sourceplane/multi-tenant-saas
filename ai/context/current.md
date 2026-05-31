@@ -1,7 +1,9 @@
 # Current Context
 
-Last updated: 2026-05-31 — Task 0110 SCOPED. B5 secret-rotation arc closer:
-0108 (backend) → 0109 (console) → **0110 (CLI)**. Implementer dispatch ready.
+Last updated: 2026-05-31 — Task 0110 IMPLEMENTER COMPLETE → VERIFIER
+SCOPED. PR #165 OPEN, 4/4 PR-CI SUCCESS at HEAD `3d6b324`. Verifier
+dispatch ready. B5 secret-rotation arc closer: 0108 (backend) → 0109
+(console) → **0110 (CLI, in verification)**.
 
 ## Just-merged — 0109
 
@@ -28,13 +30,42 @@ enforced discriminated-union state machine; sidebar "Webhooks" entry under
 suite). Full detail in prior `current.md` revision (preserved in
 `task-ledger.md`).
 
-## Active Task — 0110
+## Active Task — 0110 (Verifier pass)
 
-**Agent:** Implementer
-**Prompt:** `ai/tasks/task-0110.md`
+**Agent:** Verifier
+**Prompt:** `ai/tasks/task-0110-verifier.md`
+**PR:** #165 — https://github.com/sourceplane/multi-tenant-saas/pull/165
 **Branch:** `impl/task-0110-cli-webhook-secrets-rotate`
+**HEAD:** `3d6b32436d228573c4ed3cb18b282a644f9a2eb9`
 **Sealed snapshot main:** `3cfdeb0` (Task 0109 verifier-PASS bookkeeping).
-**Status:** scoped and ready to begin (2026-05-31).
+**PR-CI:** 4/4 SUCCESS at HEAD `3d6b324` (run `26705959245`: plan +
+`cli·{dev,stage,prod}·Verify`).
+**Status:** verifier dispatch ready (2026-05-31). Expect BEHIND-main
+on orchestrator-dispatch commit per recurring 0103–0109 pattern;
+verifier handles via `gh pr update-branch 165` + fresh PR-CI.
+
+### Implementer outcome
+
+- 4 files committed exactly per PR boundary (+720/-0):
+  `packages/cli/src/commands/webhook-secrets-rotate.ts` NEW (160 LOC),
+  `packages/cli/src/cli-runner.ts` +3 LOC,
+  `packages/cli/src/__tests__/webhook-secrets-rotate.test.ts` NEW
+  (361 LOC, 13 cases — above ≥ 12 floor),
+  `ai/reports/task-0110-implementer.md` NEW (committed on PR branch —
+  no 0106 missing-report gap).
+- No `pnpm-lock.yaml` delta, no `packages/cli/package.json` delta
+  (SDK workspace edge already shipped from 0106).
+- Zero edits to forbidden zones (sdk, contracts, webhook-verifier,
+  apps, tests, infra, tooling, stack-tectonic) or to existing CLI
+  command files (writes / webhook-verify / webhook-sign / cross-reads
+  / commands/index).
+- `readIdempotencyKey` imported from `writes.ts` (not duplicated);
+  `resolveOrgId` no-override branch inlined (writes.ts is forbidden
+  zone) — verifier Phase 2 confirms byte-equivalence.
+- Reveal-once: `response.secret` read once, written to stdout once via
+  `${secretPlaintext}` interpolation; no `whsec_` literal anywhere in
+  production source. Test 12 asserts
+  `stdout.match(/whsec_/g).length === 1`.
 
 ### Objective
 
