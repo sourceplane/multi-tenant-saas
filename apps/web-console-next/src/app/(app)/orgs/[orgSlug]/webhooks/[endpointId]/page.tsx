@@ -9,6 +9,7 @@ import {
   Webhook as WebhookIcon,
   Pencil,
   ShieldOff,
+  ShieldCheck,
   Trash2,
 } from "lucide-react";
 import { OrgScope } from "@/components/shell/org-scope";
@@ -23,6 +24,7 @@ import { wrap } from "@/lib/api";
 import { RotateSecretDialog } from "@/components/webhooks/rotate-secret-dialog";
 import { EditEndpointDialog } from "@/components/webhooks/edit-endpoint-dialog";
 import { DisableEndpointDialog } from "@/components/webhooks/disable-endpoint-dialog";
+import { EnableEndpointDialog } from "@/components/webhooks/enable-endpoint-dialog";
 import { DeleteEndpointDialog } from "@/components/webhooks/delete-endpoint-dialog";
 
 export default function WebhookEndpointDetailPage() {
@@ -54,6 +56,7 @@ function Inner({
   const [rotateOpen, setRotateOpen] = React.useState(false);
   const [editOpen, setEditOpen] = React.useState(false);
   const [disableOpen, setDisableOpen] = React.useState(false);
+  const [enableOpen, setEnableOpen] = React.useState(false);
   const [deleteOpen, setDeleteOpen] = React.useState(false);
 
   const endpoint = React.useMemo(
@@ -132,6 +135,12 @@ function Inner({
               Disable
             </Button>
           )}
+          {isDisabled && (
+            <Button variant="outline" onClick={() => setEnableOpen(true)}>
+              <ShieldCheck className="h-4 w-4 mr-1.5" />
+              Re-enable endpoint
+            </Button>
+          )}
           <Button variant="outline" onClick={() => setRotateOpen(true)}>
             <RefreshCcw className="h-4 w-4 mr-1.5" />
             Rotate secret
@@ -148,11 +157,10 @@ function Inner({
           <CardHeader>
             <CardTitle className="text-sm">This endpoint is disabled</CardTitle>
             <CardDescription>
-              No deliveries are being attempted. Re-enabling an endpoint from the
-              console is not supported by the current API surface — use the CLI
-              or recreate the endpoint. (Tracked in
-              {" "}
-              <span className="font-mono">/ai/proposals/task-0112-spec-update.md</span>.)
+              No deliveries are being attempted. Use{" "}
+              <span className="font-medium">Re-enable endpoint</span> above
+              to resume delivery on the next matching event — the signing
+              secret is preserved.
             </CardDescription>
           </CardHeader>
         </Card>
@@ -239,6 +247,14 @@ function Inner({
         open={disableOpen}
         onOpenChange={setDisableOpen}
         onDisabled={() => endpoints.reload()}
+      />
+      <EnableEndpointDialog
+        orgId={orgId}
+        endpointId={endpoint.id}
+        endpointLabel={label}
+        open={enableOpen}
+        onOpenChange={setEnableOpen}
+        onEnabled={() => endpoints.reload()}
       />
       <DeleteEndpointDialog
         orgId={orgId}

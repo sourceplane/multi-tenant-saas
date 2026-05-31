@@ -7,6 +7,8 @@ import type {
   DeleteWebhookSubscriptionResponse,
   DisableWebhookEndpointRequest,
   DisableWebhookEndpointResponse,
+  EnableWebhookEndpointRequest,
+  EnableWebhookEndpointResponse,
   GetWebhookDeliveryAttemptResponse,
   GetWebhookEndpointResponse,
   GetWebhookSubscriptionResponse,
@@ -150,6 +152,31 @@ export class WebhooksClient {
       {
         method: "POST",
         path: `/v1/organizations/${encodeURIComponent(orgId)}/webhooks/endpoints/${encodeURIComponent(endpointId)}/disable`,
+        body,
+      },
+      opts,
+    );
+  }
+
+  /**
+   * POST /v1/organizations/:orgId/webhooks/endpoints/:endpointId/enable
+   *
+   * Re-enable a disabled webhook endpoint. Body is empty (the contract
+   * carries no fields). Pass `idempotencyKey` in `opts` for retry safety.
+   * The worker returns the public endpoint envelope on success and a
+   * standard `not_found` envelope when the endpoint is already active or
+   * missing.
+   */
+  enableEndpoint(
+    orgId: string,
+    endpointId: string,
+    body: EnableWebhookEndpointRequest = {},
+    opts: RequestOptions = {},
+  ): Promise<EnableWebhookEndpointResponse> {
+    return this.transport.request<EnableWebhookEndpointResponse>(
+      {
+        method: "POST",
+        path: `/v1/organizations/${encodeURIComponent(orgId)}/webhooks/endpoints/${encodeURIComponent(endpointId)}/enable`,
         body,
       },
       opts,

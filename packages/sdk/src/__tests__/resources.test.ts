@@ -203,6 +203,22 @@ describe("WebhooksClient", () => {
     expect(calls[0]!.init.method).toBe("POST");
   });
 
+  it("enableEndpoint hits the enable subpath as POST with empty body", async () => {
+    const { fetch, calls } = captureFetch(jsonResponse(envelope({ endpoint: { status: "active" } })));
+    await client(fetch).webhooks.enableEndpoint("org_1", "wh_1");
+    expect(calls[0]!.url).toBe(
+      "https://api.test/v1/organizations/org_1/webhooks/endpoints/wh_1/enable",
+    );
+    expect(calls[0]!.init.method).toBe("POST");
+  });
+
+  it("enableEndpoint surfaces NotFoundError on 404 (already-active or missing)", async () => {
+    const { fetch } = captureFetch(errorResponse("not_found", 404));
+    await expect(
+      client(fetch).webhooks.enableEndpoint("org_1", "wh_missing"),
+    ).rejects.toBeInstanceOf(NotFoundError);
+  });
+
   it("getDeliveryAttempt surfaces NotFoundError on 404", async () => {
     const { fetch } = captureFetch(errorResponse("not_found", 404));
     await expect(

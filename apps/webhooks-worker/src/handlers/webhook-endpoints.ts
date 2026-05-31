@@ -10,7 +10,8 @@ import { toPublicWebhookEndpoint } from "../mappers.js";
 import { parsePageParams, encodeCursor } from "../pagination.js";
 import { parseWebhookEndpointPublicId } from "../ids.js";
 import type { PolicyResource } from "@saas/contracts/policy";
-import type { UpdateWebhookEndpointInput, DisableWebhookEndpointInput } from "@saas/db/webhooks";
+import type { UpdateWebhookEndpointInput, DisableWebhookEndpointInput, WebhookRepository } from "@saas/db/webhooks";
+import type { EventsRepository } from "@saas/db/events";
 
 const URL_RE = /^https:\/\/.{1,2048}$/;
 
@@ -444,6 +445,153 @@ export async function handleDisableWebhookEndpoint(
     return errorResponse("internal_error", "Service unavailable", 503, requestId);
   } finally {
     await executor.dispose();
+  }
+}
+
+// ── Enable ───────────────────────────────────────────────────
+
+export interface EnableWebhookEndpointDeps {
+  /** Repository implementation (full surface — `getEndpoint` + `enableEndpoint` are used). */
+  repo: Pick<WebhookRepository, "getEndpoint" | "enableEndpoint">;
+  /** Optional events-repo seam for atomicity tests. When omitted, the
+   *  non-tx path simply skips event/audit emission (used by tests that
+   *  only exercise the policy/repo branches). */
+  eventsRepo?: Pick<EventsRepository, "appendEventWithAudit">;
+  generateId?: () => string;
+  now?: () => Date;
+}
+
+export async function handleEnableWebhookEndpoint(
+  _request: Request,
+  env: Env,
+  requestId: string,
+  actor: ActorContext,
+  orgId: string,
+  endpointId: string,
+  deps?: EnableWebhookEndpointDeps,
+): Promise<Response> {
+  const executor = deps ? null : createSqlExecutor(env.SOURCEPLANE_DB!);
+  try {
+    const repo = deps ? deps.repo : createWebhookRepository(executor!);
+
+    const existing = await repo.getEndpoint(orgId, endpointId);
+    if (!existing.ok) {
+      return errorResponse("not_found", "Webhook endpoint not found", 404, requestId);
+    }
+
+    const policyAction = existing.value.projectId
+      ? "project.webhook.write" as const
+      : "organization.webhook.write" as const;
+    const denied = await authorizeWebhook(env, actor, orgId, existing.value.projectId, policyAction, requestId);
+    if (denied) return denied;
+
+    const genId = deps?.generateId ?? (() => randomHex(16));
+    const now = deps?.now ? deps.now() : new Date();
+
+    // Transactional path: mutation + event/audit emit atomically.
+    // Mutation failure → callback returns early, no event append.
+    // Event append failure → throw rolls back the mutation.
+    if (executor && "transaction" in executor) {
+      try {
+        const txResult = await executor.transaction(async (txExec) => {
+          const txRepo = createWebhookRepository(txExec);
+          const txEventsRepo = createEventsRepository(txExec);
+
+          const enableResult = await txRepo.enableEndpoint(orgId, endpointId);
+          if (!enableResult.ok) {
+            return { enableResult } as const;
+          }
+
+          const eventResult = await txEventsRepo.appendEventWithAudit({
+            event: {
+              id: genId(),
+              type: "webhook_endpoint.enabled",
+              version: 1,
+              source: "webhooks-worker",
+              occurredAt: now,
+              actorType: actor.subjectType,
+              actorId: actor.subjectId,
+              orgId,
+              projectId: existing.value.projectId,
+              subjectKind: "webhook_endpoint",
+              subjectId: endpointId,
+              requestId,
+              payload: {},
+            },
+            audit: {
+              id: genId(),
+              category: "webhooks",
+              description: "Webhook endpoint re-enabled",
+              projectId: existing.value.projectId,
+            },
+          });
+
+          if (!eventResult.ok) {
+            throw new Error("event_append_failed");
+          }
+
+          return { enableResult } as const;
+        });
+
+        if (!txResult.enableResult.ok) {
+          if (txResult.enableResult.error.kind === "not_found") {
+            return errorResponse("not_found", "Webhook endpoint not found or already active", 404, requestId);
+          }
+          return errorResponse("internal_error", "Service unavailable", 503, requestId);
+        }
+        return successResponse({ endpoint: toPublicWebhookEndpoint(txResult.enableResult.value) }, requestId);
+      } catch {
+        return errorResponse("internal_error", "Service unavailable", 503, requestId);
+      }
+    }
+
+    // Non-transactional path (unit tests with injected deps): mutation
+    // first, then optional event/audit emit. Tests that need atomicity
+    // semantics should exercise the transactional branch via the live
+    // executor; this branch keeps the policy/repo path testable in
+    // isolation.
+    const enableResult = await repo.enableEndpoint(orgId, endpointId);
+    if (!enableResult.ok) {
+      if (enableResult.error.kind === "not_found") {
+        return errorResponse("not_found", "Webhook endpoint not found or already active", 404, requestId);
+      }
+      return errorResponse("internal_error", "Service unavailable", 503, requestId);
+    }
+
+    if (deps?.eventsRepo) {
+      const eventResult = await deps.eventsRepo.appendEventWithAudit({
+        event: {
+          id: genId(),
+          type: "webhook_endpoint.enabled",
+          version: 1,
+          source: "webhooks-worker",
+          occurredAt: now,
+          actorType: actor.subjectType,
+          actorId: actor.subjectId,
+          orgId,
+          projectId: existing.value.projectId,
+          subjectKind: "webhook_endpoint",
+          subjectId: endpointId,
+          requestId,
+          payload: {},
+        },
+        audit: {
+          id: genId(),
+          category: "webhooks",
+          description: "Webhook endpoint re-enabled",
+          projectId: existing.value.projectId,
+        },
+      });
+      if (!eventResult.ok) {
+        return errorResponse("internal_error", "Service unavailable", 503, requestId);
+      }
+    }
+
+    return successResponse({ endpoint: toPublicWebhookEndpoint(enableResult.value) }, requestId);
+  } catch {
+    return errorResponse("internal_error", "Service unavailable", 503, requestId);
+  } finally {
+    if (executor) await executor.dispose();
   }
 }
 

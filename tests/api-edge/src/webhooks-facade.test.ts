@@ -97,6 +97,10 @@ describe("api-edge webhooks facade", () => {
       expect(isWebhooksRoute("/v1/organizations/org_abc/webhooks/endpoints/whe_abc123/disable")).toBe(true);
     });
 
+    it("matches endpoint enable route", () => {
+      expect(isWebhooksRoute("/v1/organizations/org_abc/webhooks/endpoints/whe_abc123/enable")).toBe(true);
+    });
+
     it("matches endpoint rotate-secret route", () => {
       expect(isWebhooksRoute("/v1/organizations/org_abc/webhooks/endpoints/whe_abc123/rotate-secret")).toBe(true);
     });
