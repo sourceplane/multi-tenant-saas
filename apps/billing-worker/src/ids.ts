@@ -20,3 +20,18 @@ export function generateRequestId(): string {
   crypto.getRandomValues(bytes);
   return "req_" + Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
+
+// RFC-4122 v4 UUID from getRandomValues. Used for entitlement-decision
+// observation primary keys. crypto.randomUUID may be unavailable in some
+// Workers contexts, so we hand-roll for determinism via injectable deps in tests.
+export function generateUuid(): string {
+  const buf = new Uint8Array(16);
+  crypto.getRandomValues(buf);
+  buf[6] = (buf[6]! & 0x0f) | 0x40;
+  buf[8] = (buf[8]! & 0x3f) | 0x80;
+  let hex = "";
+  for (let i = 0; i < buf.length; i++) {
+    hex += buf[i]!.toString(16).padStart(2, "0");
+  }
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}

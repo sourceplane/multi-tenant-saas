@@ -688,3 +688,177 @@ describe("handleCheckEntitlement (with injected repo)", () => {
     expect(text).not.toContain("line 42");
   });
 });
+
+// ── Decision-observation emission (B9) ───────────────────────
+
+describe("handleCheckEntitlement decision-observation emission (B9)", () => {
+  function makeReq(body: unknown): Request {
+    return new Request(
+      "https://billing-worker/v1/internal/billing/entitlements/check",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: typeof body === "string" ? body : JSON.stringify(body),
+      },
+    );
+  }
+
+  interface CapturedObservation {
+    id: string;
+    orgId: string;
+    entitlementKey: string;
+    outcome: "allowed" | "denied";
+    denialReason?: "not_configured" | "disabled" | null;
+    occurredAt: Date;
+  }
+
+  function recordingRecorder(captured: CapturedObservation[]) {
+    return {
+      recordDecisionObservation: (input: CapturedObservation) => {
+        captured.push(input);
+        return Promise.resolve({ ok: true as const, value: undefined });
+      },
+    };
+  }
+
+  function throwingRecorder() {
+    return {
+      recordDecisionObservation: () => {
+        throw new Error("recorder exploded");
+      },
+    };
+  }
+
+  function failingRecorder() {
+    return {
+      recordDecisionObservation: () =>
+        Promise.resolve({
+          ok: false as const,
+          error: { kind: "internal" as const, message: "db down" },
+        }),
+    };
+  }
+
+  it("records an allowed observation (counts only, no secret fields)", async () => {
+    const env = createFakeEnv();
+    const captured: CapturedObservation[] = [];
+    const res = await handleCheckEntitlement(
+      makeReq({ orgId: TEST_ORG_PUBLIC, entitlementKey: "feature.custom_domains" }),
+      env,
+      "req_test",
+      {
+        repoFactory: () =>
+          fakeRepo({
+            ok: true,
+            value: makeEntitlement({
+              valueType: "quantity",
+              limitValue: 99,
+              source: "override",
+              subscriptionId: "sub-secret-x",
+            }),
+          }),
+        recorderFactory: () => recordingRecorder(captured),
+        now: () => new Date("2026-02-01T00:00:00.000Z"),
+        generateId: () => "00000000-0000-4000-8000-000000000001",
+      },
+    );
+    expect(res.status).toBe(200);
+    expect(captured).toHaveLength(1);
+    const obs = captured[0]!;
+    expect(obs.outcome).toBe("allowed");
+    expect(obs.orgId).toBe(TEST_ORG_HEX);
+    expect(obs.entitlementKey).toBe("feature.custom_domains");
+    expect(obs.denialReason ?? null).toBeNull();
+    // Counts only — the observation carries no value/secret fields.
+    const keys = Object.keys(obs);
+    expect(keys).not.toContain("limitValue");
+    expect(keys).not.toContain("subscriptionId");
+    expect(keys).not.toContain("source");
+    expect(keys).not.toContain("valueType");
+    expect(keys).not.toContain("metadata");
+  });
+
+  it("records a denied observation with the denial reason", async () => {
+    const env = createFakeEnv();
+    const captured: CapturedObservation[] = [];
+    const res = await handleCheckEntitlement(
+      makeReq({ orgId: TEST_ORG_PUBLIC, entitlementKey: "feature.custom_domains" }),
+      env,
+      "req_test",
+      {
+        repoFactory: () => fakeRepo({ ok: true, value: makeEntitlement({ enabled: false }) }),
+        recorderFactory: () => recordingRecorder(captured),
+      },
+    );
+    expect(res.status).toBe(200);
+    expect(captured).toHaveLength(1);
+    expect(captured[0]!.outcome).toBe("denied");
+    expect(captured[0]!.denialReason).toBe("disabled");
+  });
+
+  it("records a not_configured denial for a missing entitlement", async () => {
+    const env = createFakeEnv();
+    const captured: CapturedObservation[] = [];
+    await handleCheckEntitlement(
+      makeReq({ orgId: TEST_ORG_PUBLIC, entitlementKey: "feature.unknown" }),
+      env,
+      "req_test",
+      {
+        repoFactory: () => fakeRepo({ ok: false, error: { kind: "not_found" } }),
+        recorderFactory: () => recordingRecorder(captured),
+      },
+    );
+    expect(captured).toHaveLength(1);
+    expect(captured[0]!.outcome).toBe("denied");
+    expect(captured[0]!.denialReason).toBe("not_configured");
+  });
+
+  it("does NOT emit an observation on a repo_error (decision never produced)", async () => {
+    const env = createFakeEnv();
+    const captured: CapturedObservation[] = [];
+    const res = await handleCheckEntitlement(
+      makeReq({ orgId: TEST_ORG_PUBLIC, entitlementKey: "feature.custom_domains" }),
+      env,
+      "req_test",
+      {
+        repoFactory: () => fakeRepo({ ok: false, error: { kind: "internal", message: "boom" } }),
+        recorderFactory: () => recordingRecorder(captured),
+      },
+    );
+    expect(res.status).toBe(503);
+    expect(captured).toHaveLength(0);
+  });
+
+  it("returns the unchanged decision when the recorder THROWS (best-effort, non-blocking)", async () => {
+    const env = createFakeEnv();
+    const res = await handleCheckEntitlement(
+      makeReq({ orgId: TEST_ORG_PUBLIC, entitlementKey: "feature.custom_domains" }),
+      env,
+      "req_test",
+      {
+        repoFactory: () => fakeRepo({ ok: true, value: makeEntitlement() }),
+        recorderFactory: () => throwingRecorder(),
+      },
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { data: { allowed: boolean } };
+    expect(body.data.allowed).toBe(true);
+  });
+
+  it("returns the unchanged decision when the recorder RETURNS an error result", async () => {
+    const env = createFakeEnv();
+    const res = await handleCheckEntitlement(
+      makeReq({ orgId: TEST_ORG_PUBLIC, entitlementKey: "feature.custom_domains" }),
+      env,
+      "req_test",
+      {
+        repoFactory: () => fakeRepo({ ok: true, value: makeEntitlement({ enabled: false }) }),
+        recorderFactory: () => failingRecorder(),
+      },
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { data: { allowed: boolean; reason: string } };
+    expect(body.data.allowed).toBe(false);
+    expect(body.data.reason).toBe("disabled");
+  });
+});

@@ -3,11 +3,13 @@ import type {
   CheckBillingEntitlementRequest,
   CheckBillingEntitlementResponse,
 } from "@saas/contracts/billing";
-import type { BillingRepository } from "@saas/db/billing";
+import type { BillingRepository, EntitlementDecisionRepository } from "@saas/db/billing";
 import { createSqlExecutor } from "@saas/db/hyperdrive";
 import { createBillingRepository } from "@saas/db/billing";
+import { createEntitlementDecisionRepository } from "@saas/db/billing";
 import { errorResponse, successResponse, validationError } from "../http.js";
 import { parseOrgPublicId } from "../ids.js";
+import { generateUuid } from "../ids.js";
 
 // Entitlement keys are stable machine identifiers like "feature.custom_domains"
 // or "limit.projects". Constrain to a conservative character set so the route
@@ -112,6 +114,14 @@ export async function decideEntitlement(
 
 export interface CheckEntitlementDeps {
   repoFactory?: (env: Env) => Pick<BillingRepository, "getEntitlement">;
+  // Best-effort decision-observation recorder. Injected for unit-testing the
+  // emission seam without a DB. When omitted, production uses the Hyperdrive
+  // executor + billing.entitlement_decision_observations.
+  recorderFactory?: (
+    env: Env,
+  ) => Pick<EntitlementDecisionRepository, "recordDecisionObservation">;
+  now?: () => Date;
+  generateId?: () => string;
 }
 
 function defaultRepoFactory(
@@ -119,6 +129,55 @@ function defaultRepoFactory(
 ): Pick<BillingRepository, "getEntitlement"> {
   const executor = createSqlExecutor(env.SOURCEPLANE_DB!);
   return createBillingRepository(executor);
+}
+
+function defaultRecorderFactory(
+  env: Env,
+): Pick<EntitlementDecisionRepository, "recordDecisionObservation"> {
+  const executor = createSqlExecutor(env.SOURCEPLANE_DB!);
+  return createEntitlementDecisionRepository(executor);
+}
+
+/**
+ * Emit a counts-only observation for a produced entitlement decision.
+ *
+ * BEST-EFFORT + NON-BLOCKING by contract: any failure (recorder throws, DB
+ * down, validation) is swallowed here so it can NEVER change the entitlement
+ * response returned to the caller. Counts only — orgId + entitlementKey +
+ * outcome (+ denial reason). Never limit values, subscription IDs, source, or
+ * any provider/secret material.
+ */
+async function recordDecisionObservation(
+  recorder: Pick<EntitlementDecisionRepository, "recordDecisionObservation">,
+  parsed: ParsedRequest,
+  decision: CheckBillingEntitlementResponse,
+  occurredAt: Date,
+  genId: () => string,
+): Promise<void> {
+  try {
+    if (decision.allowed) {
+      await recorder.recordDecisionObservation({
+        id: genId(),
+        orgId: parsed.orgId,
+        entitlementKey: parsed.entitlementKey,
+        outcome: "allowed",
+        denialReason: null,
+        occurredAt,
+      });
+    } else {
+      await recorder.recordDecisionObservation({
+        id: genId(),
+        orgId: parsed.orgId,
+        entitlementKey: parsed.entitlementKey,
+        outcome: "denied",
+        denialReason: decision.reason,
+        occurredAt,
+      });
+    }
+  } catch {
+    // Swallow — the observation is a pure side-effect. The entitlement decision
+    // has already been computed and is returned unchanged regardless.
+  }
 }
 
 export async function handleCheckEntitlement(
@@ -153,6 +212,14 @@ export async function handleCheckEntitlement(
   if (outcome.kind === "repo_error") {
     return errorResponse("internal_error", "Failed to check entitlement", 503, requestId);
   }
+
+  // Best-effort, non-blocking decision observation. A recording failure must
+  // NOT change the response — recordDecisionObservation swallows all errors.
+  const recorder = (deps.recorderFactory ?? defaultRecorderFactory)(env);
+  const now = deps.now ? deps.now() : new Date();
+  const genId = deps.generateId ?? generateUuid;
+  await recordDecisionObservation(recorder, parsed, outcome.body, now, genId);
+
   return successResponse(outcome.body, requestId);
 }
 
