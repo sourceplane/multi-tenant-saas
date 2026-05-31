@@ -1,6 +1,6 @@
 # Task Ledger
 
-Last updated: 2026-05-31 (Task 0116 Verifier PASS + MERGED — PR #171 `refactor(sdk): re-export EnableWebhookEndpoint request/response types` squash-merged as `c860053` on main; inline 8-phase verifier PASS adapted for a 2-component sdk+cli turbo PR: EXACTLY 3 files (+108/-14), zero forbidden-zone hits, additive SDK-index re-export + pure type-source swap in webhook-enable.test.ts, 164/164 cli tests UNCHANGED, both packages typecheck+lint 0, Orun plan `81a5caa8cc5d` = 2 components × 3 envs = 6 jobs, PR-CI run `26710989224` 7/7 SUCCESS, post-merge main-CI `26711085547` 7/7 SUCCESS, 0 behind main (first non-BEHIND merge since 0103-0115 streak). `@saas/sdk` webhook-endpoint type surface now fully symmetric. Task 0117 (`fix(db-tests): add notifications to migration VALID_CONTEXTS` — stabilize-first: fix the baseline red `migrations.test.ts:66` failure) SCOPED and ready for implementer.)
+Last updated: 2026-05-31 (Task 0117 Verifier PASS + MERGED — PR #172 `Task 0117: Sync VALID_CONTEXTS with BoundedContext union (notifications)` squash-merged as `7440179` on main; inline 8-phase verifier PASS adapted for a 1-component db-tests turbo PR (no deploy lane): EXACTLY 2 files, single-line `"notifications"` add to the test's local `VALID_CONTEXTS` literal, `@saas/db-tests` 516/516 (was 515/516 — the last standing baseline red test, now cleared), `@saas/db` typecheck 0, Orun changed-plan `43b8f9647c5e` = 1 component (db-tests) × 1 job, PR-CI run `26711405821` 2/2 SUCCESS, post-merge main-CI `26711432243` SUCCESS, zero forbidden-zone hits, no kiox.lock mutation. main is now FULLY GREEN. Task 0118 (`refactor(cli): fold cross-reads resolveOrgId onto shared helper` — closes the Task 0111 deferred org-id-resolution fold gap) SCOPED and ready for implementer.)
 
 ## Task 0001
 
@@ -4107,11 +4107,13 @@ One PR, one reviewer-holdable outcome (rotate UX backend), one rollback (single 
 
 ## Task 0117
 
-- Agent: Implementer
-- Prompt: `ai/tasks/task-0117.md`
-- Status: scoped and ready to begin (2026-05-31)
-- Branch: `impl/task-0117-migrations-test-notifications-context`
-- Sealed snapshot main: `c860053` (Task 0116 squash).
+- Agent: Implementer + Verifier
+- Prompt: `ai/tasks/task-0117.md` · Verifier: `ai/tasks/task-0117-verifier.md`
+- Status: **verified and merged (PASS)** — PR #172 squash-merged as `7440179`
+  on main (2026-05-31). Reports: `ai/reports/task-0117-implementer.md`,
+  `ai/reports/task-0117-verifier.md`.
+- Branch: `impl/task-0117-migrations-test-notifications-context` (deleted post-merge)
+- Sealed snapshot main: `c860053` (Task 0116 squash) → base `5b7bd17`.
 - Objective: **Stabilize-first** — fix the long-standing baseline red test in
   `tests/db/src/migrations.test.ts:66` ("each migration declares a valid bounded
   context"). The test hard-codes a local `VALID_CONTEXTS: BoundedContext[]`
@@ -4143,6 +4145,42 @@ One PR, one reviewer-holdable outcome (rotate UX backend), one rollback (single 
 - Selection rationale: repo-health stabilization outranks feature work
   (orchestrator Task Selection Logic); narrow, human-independent, parallel-safe,
   touches no deferred decisions.
-- Verifier prompt to be scoped after implementer completes (8-phase adapted for
-  a 1-component db-tests turbo PR, no deploy lane).
+- Verifier outcome: inline 8-phase PASS adapted for a 1-component db-tests turbo
+  PR (no deploy lane). EXACTLY 2 files, single-line `"notifications"` add;
+  `@saas/db-tests` 516/516 (was 515/516); `@saas/db` typecheck 0; Orun
+  changed-plan `43b8f9647c5e` = 1 component (db-tests) × 1 job; PR-CI run
+  26711405821 2/2 SUCCESS (Verify step ran: 4 passed 0 failed); zero
+  forbidden-zone hits; no kiox.lock mutation; post-merge main-CI 26711432243
+  SUCCESS. Closes the last standing baseline test failure — main fully green.
+
+## Task 0118
+
+- Agent: Implementer
+- Prompt: `ai/tasks/task-0118.md`
+- Status: scoped and ready to begin (2026-05-31)
+- Branch: `impl/task-0118-cli-cross-reads-resolveorgid-fold`
+- Sealed snapshot main: `7440179` (Task 0117 squash).
+- Objective: close the Task 0111 deferred gap — fold the private no-override
+  `resolveOrgId(ctx)` in `packages/cli/src/commands/cross-reads.ts` (lines 36–43)
+  onto the shared `helpers.ts` variant `resolveOrgId(ctx, /* allowOverride */
+  false)`, eliminating the last byte-equivalent copy of org-id resolution in the
+  CLI. Pure internal refactor, zero behaviour change.
+- Scope boundary: 2 files EXACTLY — `cross-reads.ts` (delete local fn, import
+  shared, drop now-unused `MissingOrgContextError` import keeping `UsageError`,
+  update 3 call sites to pass `false`), `ai/reports/task-0118-implementer.md` NEW.
+- Forbidden zones: `helpers.ts` (already correct), all other CLI commands, all
+  packages outside `packages/cli/src/commands/cross-reads.ts`, test files (unless
+  a minimal typecheck/lint import fix is forced), lockfiles/package.json/
+  component.yaml.
+- Single-component turbo PR: Orun changed-plan selects ONLY `cli` (3 envs ×
+  Verify = 3 jobs + plan). No deploy/app lanes.
+- Acceptance: 2-file boundary; `@saas/cli` typecheck 0, lint 0 new warnings,
+  test green with UNCHANGED case count (pure refactor); orun validate/plan(cli
+  3 envs)/run dry-run green; PR-CI green; real PR# (TBD = BLOCKED); BEHIND-main
+  rebase = verifier responsibility.
+- Title: `refactor(cli): fold cross-reads resolveOrgId onto shared helper`.
+- Selection rationale: now-eligible one-component fold explicitly deferred from
+  Task 0111; smallest high-leverage hygiene PR that removes duplication risk;
+  human-independent, parallel-safe, touches no deferred decisions.
+- Verifier prompt to be scoped after implementer completes.
 

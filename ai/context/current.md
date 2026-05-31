@@ -1,83 +1,70 @@
 # Current Context
 
-Last updated: 2026-05-31 — Task 0116 VERIFIED + MERGED; Task 0117 SCOPED (orchestrator). Awaiting implementer.
+Last updated: 2026-05-31 — Task 0117 VERIFIED + MERGED; Task 0118 SCOPED (orchestrator). Awaiting implementer.
 
-PR #171 (Task 0116 `refactor(sdk): re-export EnableWebhookEndpoint
-request/response types`) squash-merged to main as `c860053` (mergedAt
-2026-05-31T11:15:50Z). Inline 8-phase verifier PASS adapted for a 2-component
-sdk+cli turbo PR: EXACTLY 3 files (+108/-14) on the boundary
-(`packages/sdk/src/index.ts` +2 additive re-export of
-`EnableWebhookEndpointRequest`+`EnableWebhookEndpointResponse` adjacent to the
-Update*/Disable* pairs, `packages/cli/src/__tests__/webhook-enable.test.ts`
-pure type-source swap removing the local `interface EnableResponse` + stale
-"not yet re-exported" comment, `ai/reports/task-0116-implementer.md` NEW), zero
-forbidden-zone hits, re-exported types confirmed live at
-`packages/contracts/src/webhooks.ts:80,85` (source of truth). Quality gates:
-@saas/sdk + @saas/cli typecheck 0, @saas/cli test 164/164 UNCHANGED (pure type
-swap, zero behaviour change), both packages lint 0. Orun: validate ok, plan
-`81a5caa8cc5d` = 2 components × 3 envs = 6 jobs (expected union, not overreach),
-dry-run 6 selected green. PR-CI run 26710989224 = 7/7 SUCCESS. Post-merge
-main-CI run 26711085547 at `c860053` = 7/7 SUCCESS (turbo-package, no deploy
-lane / no live-URL surface). **0 behind main at merge — no update-branch needed,
-the first non-BEHIND merge since the 0103-0115 streak.** `kiox.lock` Orun-run
-mutation reverted. Reports: `ai/reports/task-0116-implementer.md`,
-`ai/reports/task-0116-verifier.md`.
+PR #172 (Task 0117 `Sync VALID_CONTEXTS with BoundedContext union
+(notifications)`) squash-merged to main as `7440179`. Inline 8-phase verifier
+PASS adapted for a 1-component `db-tests` turbo PR (no deploy lane): EXACTLY 2
+files on the boundary (`tests/db/src/migrations.test.ts` +1 line single literal
+add of `"notifications"` adjacent to `"metering"`,
+`ai/reports/task-0117-implementer.md` NEW), zero forbidden-zone hits, no
+`kiox.lock` mutation. Quality gates: `@saas/db-tests` 516/516 (15 suites; was
+515/516), `@saas/db` typecheck 0. Orun: validate ok, changed-plan
+`43b8f9647c5e` = 1 component (db-tests) × 1 job, dry-run 1 selected green. PR-CI
+run 26711405821 = 2/2 SUCCESS (plan + db-tests·dev·Verify; `gh run view --log`
+confirms the Verify step ran the orun-run = 4 steps passed, not a no-op).
+Post-merge main-CI run 26711432243 at `7440179` = SUCCESS. 0 behind main at
+merge — no update-branch needed. Reports: `ai/reports/task-0117-implementer.md`,
+`ai/reports/task-0117-verifier.md`.
 
-The **`@saas/sdk` webhook-endpoint type surface is now fully symmetric** —
-Create/Get/List/Update/Enable/Disable/Delete/Rotate request + response types all
-re-exported from the package index. The B5 endpoint-CRUD CLI + SDK arc is
-complete; no consumer needs to locally reconstruct response shapes.
+**main is now FULLY GREEN** — the last standing baseline test failure
+(`migrations.test.ts:66` VALID_CONTEXTS drift) is cleared. No known baseline
+failures remain. The B5 endpoint-CRUD CLI + SDK arc is complete and symmetric.
 
-Repo health: green (modulo the one standing baseline test failure that Task 0117
-fixes). Working tree clean. main HEAD `c860053`.
+Repo health: green. Working tree clean. main HEAD `7440179`.
 
-## Current task — 0117
+## Current task — 0118
 
-**Stabilize-first: fix the baseline red `migrations.test.ts:66` failure by
-syncing the test's local `VALID_CONTEXTS` array with the `BoundedContext`
-union.**
+**Close the Task 0111 deferred gap: fold the private no-override `resolveOrgId`
+in `cross-reads.ts` onto the shared `helpers.ts` variant.**
 
-- Prompt: `ai/tasks/task-0117.md`
+- Prompt: `ai/tasks/task-0118.md`
 - Agent: Implementer
-- Branch: `impl/task-0117-migrations-test-notifications-context`
-- Sealed snapshot main: `c860053` (Task 0116 squash).
-- The failure: `tests/db/src/migrations.test.ts` hard-codes a local
-  `VALID_CONTEXTS: BoundedContext[]` array (lines 52–62) listing 9 contexts, but
-  the canonical `BoundedContext` union in `packages/db/src/types.ts:1-11` has 10
-  — the 10th, `"notifications"`, is declared by a real migration
-  (`packages/db/src/manifest.ts:116`, `context: "notifications"`). The
-  `"each migration declares a valid bounded context"` assertion at
-  `migrations.test.ts:66` therefore fails (`@saas/db-tests` jest = 1 failed /
-  515 passed / 516 total). Reproduces on main; documented as a known baseline
-  gap across Tasks 0113/0115 reports.
+- Branch: `impl/task-0118-cli-cross-reads-resolveorgid-fold`
+- Sealed snapshot main: `7440179` (Task 0117 squash).
+- The gap: `packages/cli/src/commands/cross-reads.ts` (lines 36–43) still carries
+  a private `resolveOrgId(ctx)` that is byte-equivalent to the shared
+  `helpers.ts` no-override branch (`resolveOrgId(ctx, /* allowOverride */
+  false)`, `helpers.ts:35-49`). Task 0111 extracted the shared helper and folded
+  `writes.ts` + `webhook-secrets-rotate.ts` but explicitly left `cross-reads.ts`
+  as a documented Remaining Gap.
 - PR boundary: 2 files exactly —
-  `tests/db/src/migrations.test.ts` (MODIFIED: add `"notifications"` to
-  `VALID_CONTEXTS` adjacent to `"metering"` to mirror the type-union ordering;
-  NO other change, no new cases, no assertion edits),
-  `ai/reports/task-0117-implementer.md` (NEW with real PR#, no TBD).
-- Forbidden zones: `packages/db/src/types.ts` (already correct — source of
-  truth, already includes `"notifications"`), `packages/db/src/manifest.ts` +
-  all migration files, any other `tests/db/**` source,
-  lockfiles/package.json/component.yaml.
-- **Single-component turbo PR.** Orun changed-plan selects ONLY `db-tests`
-  (subscribes `dev` · `quick-check` only) = 1 component × 1 env = 1 job + plan.
-  Do NOT expect stage/prod lanes.
-- Hard rules: test-only one-line literal add, exact string `"notifications"`
-  byte-for-byte; no new eslint-disable/ts-ignore/as any; no deriving the array
-  from the type; revert `kiox.lock`; real PR# (TBD = BLOCKED); BEHIND-main
-  rebase remains verifier responsibility.
-- Title: `fix(db-tests): add notifications to migration VALID_CONTEXTS`.
+  `packages/cli/src/commands/cross-reads.ts` (delete local fn; import
+  `resolveOrgId` from `./helpers.js`; drop now-unused `MissingOrgContextError`
+  from the `../errors.js` import, keep `UsageError`; update the 3 call sites
+  ~L70/L112/L174 to pass `false`),
+  `ai/reports/task-0118-implementer.md` (NEW, real PR#).
+- Pure internal refactor — ZERO behaviour change.
+- Forbidden zones: `helpers.ts` (already correct), all other CLI commands, all
+  packages outside `cross-reads.ts`, test files (unless a minimal forced
+  typecheck/lint import fix), lockfiles/package.json/component.yaml.
+- **Single-component turbo PR.** Orun changed-plan selects ONLY `cli`
+  (3 envs × Verify = 3 jobs + plan). No deploy/app lanes.
+- Hard rules: byte-equivalent fold; no new eslint-disable/ts-ignore/as any;
+  revert `kiox.lock`; no `plan.json` commit; real PR# (TBD = BLOCKED);
+  BEHIND-main rebase remains verifier responsibility.
+- Title: `refactor(cli): fold cross-reads resolveOrgId onto shared helper`.
 
-## Recommended next focus after 0117
+## Recommended next focus after 0118
 
-1. **CLI helpers fold for `cross-reads.ts:resolveOrgId`** — single-arg
-   no-override variant explicitly deferred from Task 0111 as "Remaining Gap";
-   now-eligible one-line import swap + delete (≤ 5-file PR).
-2. **Delivery-attempts UX** — next B5 leg per `specs/roadmap.md` if a richer
-   console slice is preferred now that CLI endpoint-CRUD + SDK symmetry are
-   fully closed.
-3. **Node 20 → 24 CI actions bump** — non-blocking deprecation warning, but a
-   hard cutover lands June 16 2026; a small infra/tooling PR de-risks it early.
+1. **Delivery-attempts UX** — next B5 leg per `specs/roadmap.md` for a richer
+   console or CLI slice now that endpoint-CRUD + SDK symmetry are fully closed.
+2. **Node 20 → 24 CI actions bump** — non-blocking deprecation warning today,
+   but a hard cutover lands June 16 2026; a small infra/tooling PR de-risks it
+   early.
+3. **`VALID_CONTEXTS` drift-proofing (hygiene)** — derive the test array from
+   the `BoundedContext` union via `as const` so the duplication fixed in Task
+   0117 cannot re-break. Low priority; flagged in the Task 0117 implementer
+   report as a future improvement.
 
-Repo health: green (Task 0117 closes the last standing baseline test failure).
-main HEAD `c860053`.
+Repo health: green. main HEAD `7440179`.
