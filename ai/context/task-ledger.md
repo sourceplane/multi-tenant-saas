@@ -3679,3 +3679,40 @@ One PR, one reviewer-holdable outcome (rotate UX backend), one rollback (single 
   subscriptions UX, console delivery-attempts UX, B7 audit-log UX,
   B8 admin-worker scaffold, or the `cross-reads.ts` no-override
   fold-in housekeeping follow-up
+
+## 2026-05-31 — Task 0112 Console webhook-endpoint CRUD (verifier scoped)
+
+- Status: implementer DONE → verifier SCOPED (awaiting execution)
+- Branch: `impl/task-0112-console-webhook-endpoint-crud`
+- PR: #167 — OPEN, MERGEABLE/CLEAN, 5/5 PR-CI green at HEAD `2e9bdb0`
+- Base: `c683f4f` (0112 scope-commit) on top of `da9810f` (Task 0111)
+- Diff: 12 files +1745/-15
+- Implementer report: `ai/reports/task-0112-implementer.md`
+- Spec proposal: `ai/proposals/task-0112-spec-update.md` (re-enable
+  surface — recommend Task 0113 follow-on; NOT a blocker)
+- Verifier prompt: `ai/tasks/task-0112-verifier.md`
+- Verifier shape: 8-phase ADAPTED for `cloudflare-pages-turbo`
+  deploy-gated component — mandatory Phase 6.5 post-merge main-CI
+  watch + live-URL curl on `/orgs/<test-org>/webhooks` confirming
+  new "Create endpoint" CTA copy lands and old placeholder copy is
+  gone (per `references/post-merge-deploy-profile-gap.md` +
+  `references/opennext-cloudflare-pages-deployment-shape.md`)
+- Forbidden zones (verifier auto-FAIL on hits): contracts, SDK,
+  api-edge, webhooks-worker, migrations, CLI, infra, rotate-secret
+  flow (`rotate-secret-dialog.tsx`, `rotate-flow.ts`, `rotate-flow.test.ts`),
+  `cross-reads.ts`, `apps/web-console-next/src/lib/`,
+  `apps/web-console-next/src/components/{ui,shell}/`,
+  `pnpm-lock.yaml`, `package.json`, `kiox.lock`,
+  `infra/tooling/stack-tectonic`
+- Test-harness deviation accepted as documented assumption: jest
+  workspace `tests/web-console-next/` (matches `rotate-flow.test.ts`
+  prior-art); 22 cases in new `endpoint-crud.test.ts` — well above
+  +6 floor; vitest under `apps/` not yet scaffolded
+- Test floor: ≥40 passed across `@saas/web-console-next-tests`
+  (18 prior + 22 new)
+- Expected outcome on PASS: PR #167 squash-merged, post-merge main-CI
+  4/4 SUCCESS, live `/orgs/:orgSlug/webhooks` shows new CRUD CTAs,
+  state files committed to main as 0112 verifier-PASS bookkeeping;
+  next orchestrator candidates: Task 0113 re-enable surface (contract
+  + SDK + worker + console), console delivery-attempts UX, B7
+  audit-log UX, B8 admin-worker scaffold, `cross-reads.ts` fold
