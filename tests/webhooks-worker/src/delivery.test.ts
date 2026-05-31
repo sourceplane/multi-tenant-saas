@@ -5,6 +5,7 @@
 import {
   dispatchNewEvents,
   retryFailedDeliveries,
+  replayDeliveryAttempt,
   isWebhookLifecycleEvent,
   buildDeliveryLifecyclePayload,
   AUTO_DISABLE_FAILURE_THRESHOLD,
@@ -615,6 +616,177 @@ describe("retryFailedDeliveries", () => {
 
     expect(result.retried).toBe(0);
     expect(result.errors).toBe(0);
+  });
+});
+
+// ── replayDeliveryAttempt (manual replay) ───────────────────
+
+describe("replayDeliveryAttempt", () => {
+  let fetchCalls: Array<{ url: string; init: RequestInit }>;
+  let originalFetch: typeof globalThis.fetch;
+
+  beforeEach(() => {
+    fetchCalls = [];
+    originalFetch = globalThis.fetch;
+    globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url;
+      fetchCalls.push({ url, init: init ?? {} });
+      return new Response("OK", { status: 200 });
+    };
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  function originalAttempt(
+    over: Partial<WebhookDeliveryAttempt> = {},
+  ): WebhookDeliveryAttempt {
+    return {
+      id: "whd_original",
+      orgId: TEST_ORG_UUID,
+      endpointId: TEST_ENDPOINT_UUID,
+      subscriptionId: TEST_SUBSCRIPTION_UUID,
+      eventId: TEST_EVENT_ID,
+      eventType: "project.created",
+      status: "failed",
+      attemptNumber: 3,
+      httpStatusCode: 500,
+      failureReason: "HTTP 500",
+      idempotencyKey: `${TEST_SUBSCRIPTION_UUID}:${TEST_EVENT_ID}:1`,
+      nextRetryAt: null,
+      completedAt: new Date(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      ...over,
+    };
+  }
+
+  it("creates a fresh attempt and delivers through the same chokepoint", async () => {
+    const webhookRepo = createMockWebhookRepo();
+    // Make getDeliveryAttempt return the freshly-updated success row.
+    (webhookRepo as unknown as { getDeliveryAttempt: unknown }).getDeliveryAttempt =
+      async (orgId: string, attemptId: string) => ({
+        ok: true,
+        value: { ...originalAttempt(), id: attemptId, orgId, status: "success", httpStatusCode: 200 },
+      });
+    const event = makeStoredEvent();
+    const eventsRepo = createMockEventsRepo([event]);
+
+    const result = await replayDeliveryAttempt(
+      { webhookRepo, eventsRepo, encryption: null },
+      originalAttempt(),
+      event,
+    );
+
+    expect(result.ok).toBe(true);
+    // A brand-new attempt was created (fresh uuid, not the original id).
+    expect(webhookRepo._createdAttempts).toHaveLength(1);
+    const created = webhookRepo._createdAttempts[0]!;
+    expect(created.id).not.toBe("whd_original");
+    expect(created.eventId).toBe(TEST_EVENT_ID);
+    expect(created.subscriptionId).toBe(TEST_SUBSCRIPTION_UUID);
+    // Replay-distinct idempotency key — never collides with dispatch `:1`.
+    expect(created.idempotencyKey).toMatch(
+      new RegExp(`^${TEST_SUBSCRIPTION_UUID}:${TEST_EVENT_ID}:replay:`),
+    );
+    expect(created.idempotencyKey).not.toBe(`${TEST_SUBSCRIPTION_UUID}:${TEST_EVENT_ID}:1`);
+    // Delivery happened through deliverAttempt → one HTTP POST.
+    expect(fetchCalls).toHaveLength(1);
+    expect(fetchCalls[0]!.url).toBe("https://example.com/webhook");
+  });
+
+  it("resends the FULL original payload (not data:{}) when the event is rehydrated", async () => {
+    const webhookRepo = createMockWebhookRepo();
+    (webhookRepo as unknown as { getDeliveryAttempt: unknown }).getDeliveryAttempt =
+      async () => ({ ok: false, error: { kind: "not_found" } });
+    const event = makeStoredEvent({ payload: { name: "My Project", extra: 42 } });
+    const eventsRepo = createMockEventsRepo([event]);
+
+    await replayDeliveryAttempt(
+      { webhookRepo, eventsRepo, encryption: null },
+      originalAttempt(),
+      event,
+    );
+
+    expect(fetchCalls).toHaveLength(1);
+    const body = JSON.parse(fetchCalls[0]!.init.body as string);
+    expect(body.data).toEqual({ name: "My Project", extra: 42 });
+    expect(body.id).toBe(TEST_EVENT_ID);
+    expect(body.type).toBe("project.created");
+  });
+
+  it("takes the endpoint_disabled terminal path for a disabled endpoint", async () => {
+    const endpoint: EndpointForDelivery = {
+      id: TEST_ENDPOINT_UUID,
+      orgId: TEST_ORG_UUID,
+      url: "https://example.com/webhook",
+      status: "disabled",
+      secretCiphertext: null,
+      secretVersion: 1,
+      previousSecretCiphertext: null,
+      previousSecretVersion: null,
+      previousSecretExpiresAt: null,
+    };
+    const webhookRepo = createMockWebhookRepo({ endpoint });
+    (webhookRepo as unknown as { getDeliveryAttempt: unknown }).getDeliveryAttempt =
+      async (orgId: string, attemptId: string) => ({
+        ok: true,
+        value: { ...originalAttempt(), id: attemptId, status: "failed", failureReason: "endpoint_disabled" },
+      });
+    const event = makeStoredEvent();
+    const eventsRepo = createMockEventsRepo([event]);
+
+    await replayDeliveryAttempt(
+      { webhookRepo, eventsRepo, encryption: null },
+      originalAttempt(),
+      event,
+    );
+
+    // No HTTP call — disabled endpoint short-circuits before fetch.
+    expect(fetchCalls).toHaveLength(0);
+    expect(webhookRepo._updatedAttempts).toHaveLength(1);
+    expect(webhookRepo._updatedAttempts[0]!.input.status).toBe("failed");
+    expect(webhookRepo._updatedAttempts[0]!.input.failureReason).toBe("endpoint_disabled");
+  });
+
+  it("returns create_failed when the initial insert fails", async () => {
+    const webhookRepo = createMockWebhookRepo();
+    (webhookRepo as unknown as { createDeliveryAttempt: unknown }).createDeliveryAttempt =
+      async () => ({ ok: false, error: { kind: "insert_failed" } });
+    const event = makeStoredEvent();
+    const eventsRepo = createMockEventsRepo([event]);
+
+    const result = await replayDeliveryAttempt(
+      { webhookRepo, eventsRepo, encryption: null },
+      originalAttempt(),
+      event,
+    );
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toBe("create_failed");
+    expect(fetchCalls).toHaveLength(0);
+  });
+
+  it("still delivers with data:{} when the original event is gone (event=null)", async () => {
+    const webhookRepo = createMockWebhookRepo();
+    (webhookRepo as unknown as { getDeliveryAttempt: unknown }).getDeliveryAttempt =
+      async (orgId: string, attemptId: string) => ({
+        ok: true,
+        value: { ...originalAttempt(), id: attemptId, status: "success" },
+      });
+    const eventsRepo = createMockEventsRepo([]);
+
+    const result = await replayDeliveryAttempt(
+      { webhookRepo, eventsRepo, encryption: null },
+      originalAttempt(),
+      null,
+    );
+
+    expect(result.ok).toBe(true);
+    expect(fetchCalls).toHaveLength(1);
+    const body = JSON.parse(fetchCalls[0]!.init.body as string);
+    expect(body.data).toEqual({});
   });
 });
 

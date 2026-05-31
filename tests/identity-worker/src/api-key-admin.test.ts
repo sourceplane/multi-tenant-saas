@@ -197,6 +197,9 @@ function createFakeEventsRepo(): FakeEventsRepo {
     async queryEventsByOrg(): Promise<EventsResult<StoredEvent[]>> {
       return { ok: true as const, value: [] };
     },
+    async getEventById(): Promise<EventsResult<StoredEvent | null>> {
+      return { ok: true as const, value: null };
+    },
   };
 }
 

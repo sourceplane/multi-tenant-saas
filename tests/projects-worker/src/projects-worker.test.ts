@@ -188,6 +188,7 @@ function createFakeEventsRepo(overrides?: Partial<Record<keyof EventsRepository,
       return { ok: true, value: { event: fakeEvent, audit: fakeAudit } };
     },
     async queryEventsByOrg() { return { ok: true, value: [] }; },
+    async getEventById() { return { ok: true, value: null }; },
     async queryAuditByOrg() { return { ok: true, value: { items: [], nextCursor: null } }; },
     async queryAuditByTarget() { return { ok: true, value: { items: [], nextCursor: null } }; },
   };

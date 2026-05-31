@@ -439,3 +439,70 @@ export async function retryFailedDeliveries(ctx: DeliveryContext): Promise<{ ret
 
   return { retried, errors };
 }
+
+// ── Manual replay ─────────────────────────────────────────────
+
+/**
+ * Manually replay a past delivery attempt: create a FRESH delivery attempt for
+ * the same `(endpointId, subscriptionId, eventId, eventType)` and deliver it
+ * through the single `deliverAttempt` chokepoint.
+ *
+ * Unlike the automatic `retryFailedDeliveries()` path (which passes
+ * `event=null` → `data:{}`), a buyer-credible manual replay resends the FULL
+ * original payload, so the caller rehydrates the `StoredEvent` by id and passes
+ * it through here. When `event` is null (original event no longer present), the
+ * delivery still proceeds with `data:{}` — same degradation as the auto-retry
+ * path — rather than failing the replay.
+ *
+ * The new attempt:
+ *   - gets a fresh uuid and starts at `attemptNumber = 1` (the
+ *     `createDeliveryAttempt` column default — symmetric to a first dispatch).
+ *   - uses a replay-distinct idempotency key
+ *     `${subscriptionId}:${eventId}:replay:${newAttemptId}` that can NEVER
+ *     collide with the dispatch key `${subscriptionId}:${eventId}:1` or another
+ *     replay (the new uuid is unique).
+ *   - flows through `deliverAttempt`, inheriting ALL existing semantics
+ *     unchanged: endpoint resolution, the `status!=='active'` →
+ *     `endpoint_disabled` terminal gate, HMAC signing + dual-signature grace
+ *     window, retry/backoff scheduling, success/failure lifecycle events, and
+ *     the consecutive-failure auto-disable check.
+ *
+ * Returns the new attempt's post-delivery row (re-read to capture the terminal
+ * status). `create_failed` is returned only when the initial insert fails.
+ */
+export async function replayDeliveryAttempt(
+  ctx: DeliveryContext,
+  original: WebhookDeliveryAttempt,
+  event: StoredEvent | null,
+): Promise<
+  | { ok: true; value: WebhookDeliveryAttempt }
+  | { ok: false; error: "create_failed" }
+> {
+  const newAttemptId = crypto.randomUUID();
+  const idempotencyKey = `${original.subscriptionId}:${original.eventId}:replay:${newAttemptId}`;
+
+  const createResult = await ctx.webhookRepo.createDeliveryAttempt({
+    id: newAttemptId,
+    orgId: original.orgId,
+    endpointId: original.endpointId,
+    subscriptionId: original.subscriptionId,
+    eventId: original.eventId,
+    eventType: original.eventType,
+    idempotencyKey,
+  });
+  if (!createResult.ok) {
+    return { ok: false, error: "create_failed" };
+  }
+
+  // Single delivery chokepoint — do NOT fork a second delivery path.
+  await deliverAttempt(ctx, createResult.value, event, null);
+
+  // Re-read to surface the post-delivery terminal status to the caller. If the
+  // read-back fails (infra), the delivery still happened; fall back to the
+  // freshly-created (pending) row rather than reporting a replay failure.
+  const finalResult = await ctx.webhookRepo.getDeliveryAttempt(original.orgId, newAttemptId);
+  if (!finalResult.ok) {
+    return { ok: true, value: createResult.value };
+  }
+  return { ok: true, value: finalResult.value };
+}
