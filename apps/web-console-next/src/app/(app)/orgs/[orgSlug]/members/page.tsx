@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
+import { wrap } from "@/lib/api";
 import { useSession } from "@/lib/session";
 import { useAsync } from "@/lib/use-async";
 import { useToast } from "@/components/ui/toast";
@@ -23,7 +24,10 @@ export default function MembersPage() {
 function Inner({ orgId }: { orgId: string }) {
   const { client } = useSession();
   const { toast } = useToast();
-  const members = useAsync(() => client.listMembers(orgId), [client, orgId]);
+  const members = useAsync(
+    () => wrap(async () => (await client.memberships.listMembers(orgId)).members),
+    [client, orgId],
+  );
 
   return (
     <div className="space-y-5">
@@ -95,7 +99,9 @@ function Inner({ orgId }: { orgId: string }) {
                       variant="ghost"
                       onClick={async () => {
                         if (!confirm(`Remove ${m.subjectId}?`)) return;
-                        const r = await client.removeMember(orgId, m.id);
+                        const r = await wrap(() =>
+                          client.memberships.removeMember(orgId, m.id),
+                        );
                         if (!r.ok) {
                           toast({ kind: "error", title: "Remove failed", description: r.error.message });
                           return;

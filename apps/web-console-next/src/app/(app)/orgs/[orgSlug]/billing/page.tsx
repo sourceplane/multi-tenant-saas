@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { PreconditionInsight } from "@/components/precondition/insight";
+import { wrap } from "@/lib/api";
 import { useSession } from "@/lib/session";
 import { useAsync } from "@/lib/use-async";
 
@@ -21,9 +22,9 @@ export default function BillingPage() {
 
 function Inner({ orgId }: { orgId: string }) {
   const { client } = useSession();
-  const summary = useAsync(() => client.getBillingSummary(orgId), [client, orgId]);
-  const ents = useAsync(() => client.getEntitlements(orgId), [client, orgId]);
-  const inv = useAsync(() => client.listInvoices(orgId), [client, orgId]);
+  const summary = useAsync(() => wrap(() => client.billing.getSummary(orgId)), [client, orgId]);
+  const ents = useAsync(() => wrap(() => client.billing.getEntitlements(orgId)), [client, orgId]);
+  const inv = useAsync(() => wrap(() => client.billing.listInvoices(orgId)), [client, orgId]);
 
   return (
     <div className="space-y-6">

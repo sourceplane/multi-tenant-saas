@@ -1,13 +1,19 @@
 "use client";
 
 import * as React from "react";
-import { ApiClient, TARGETS, DEPLOY_ENV, type ApiTarget } from "./api";
+import type { Sourceplane } from "@saas/sdk";
+import {
+  TARGETS,
+  DEPLOY_ENV,
+  createClient,
+  type ApiTarget,
+} from "./api";
 
 const TOKEN_KEY = "sourceplane.next.token";
 const TARGET_KEY = "sourceplane.next.target";
 
 interface SessionCtx {
-  client: ApiClient;
+  client: Sourceplane;
   target: ApiTarget;
   token: string | null;
   setToken: (t: string | null) => void;
@@ -39,11 +45,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const client = React.useMemo(() => {
-    const c = new ApiClient(target);
-    c.setToken(token);
-    return c;
-  }, [target, token]);
+  const client = React.useMemo(() => createClient(target, token), [target, token]);
 
   const setToken = React.useCallback((t: string | null) => {
     setTokenState(t);

@@ -25,7 +25,7 @@ import { PreconditionInsight } from "@/components/precondition/insight";
 import { useSession } from "@/lib/session";
 import { useAsync } from "@/lib/use-async";
 import { useToast } from "@/components/ui/toast";
-import type { ApiErrorBody } from "@/lib/api";
+import { wrap, type ApiErrorBody } from "@/lib/api";
 import { ORGANIZATION_ROLES } from "@saas/contracts/membership";
 
 const schema = z.object({
@@ -42,7 +42,10 @@ export default function ApiKeysPage() {
 function Inner({ orgId }: { orgId: string }) {
   const { client } = useSession();
   const { toast } = useToast();
-  const keys = useAsync(() => client.listApiKeys(orgId), [client, orgId]);
+  const keys = useAsync(
+    () => wrap(async () => (await client.apiKeys.list(orgId)).apiKeys),
+    [client, orgId],
+  );
   const [open, setOpen] = React.useState(false);
   const [reveal, setReveal] = React.useState<{ label: string; secret: string } | null>(null);
   const [precondition, setPrecondition] = React.useState<ApiErrorBody | null>(null);
@@ -79,7 +82,9 @@ function Inner({ orgId }: { orgId: string }) {
               submitLabel="Create key"
               cancel={{ label: "Cancel", onClick: () => setOpen(false) }}
               onSubmit={async (v) => {
-                const r = await client.createApiKey(orgId, { label: v.label, role: v.role });
+                const r = await wrap(async () =>
+                  (await client.apiKeys.create(orgId, { label: v.label, role: v.role })).apiKey,
+                );
                 if (!r.ok) {
                   if (r.error.code === "precondition_failed") setPrecondition(r.error);
                   else toast({ kind: "error", title: "Create failed", description: r.error.message });
@@ -184,7 +189,7 @@ function Inner({ orgId }: { orgId: string }) {
                         variant="ghost"
                         onClick={async () => {
                           if (!confirm(`Revoke API key “${k.label}”?`)) return;
-                          const r = await client.revokeApiKey(orgId, k.id);
+                          const r = await wrap(() => client.apiKeys.revoke(orgId, k.id));
                           if (!r.ok) {
                             toast({ kind: "error", title: "Revoke failed", description: r.error.message });
                             return;

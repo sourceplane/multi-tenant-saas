@@ -18,7 +18,7 @@ import { useSession } from "@/lib/session";
 import { useAsync } from "@/lib/use-async";
 import { useToast } from "@/components/ui/toast";
 import { ORGANIZATION_ROLES } from "@saas/contracts/membership";
-import type { ApiErrorBody } from "@/lib/api";
+import { wrap, type ApiErrorBody } from "@/lib/api";
 
 const schema = z.object({
   email: z.string().email("Enter a valid email"),
@@ -34,7 +34,10 @@ export default function InvitationsPage() {
 function Inner({ orgId }: { orgId: string }) {
   const { client } = useSession();
   const { toast } = useToast();
-  const invs = useAsync(() => client.listInvitations(orgId), [client, orgId]);
+  const invs = useAsync(
+    () => wrap(async () => (await client.memberships.listInvitations(orgId)).invitations),
+    [client, orgId],
+  );
   const [open, setOpen] = React.useState(false);
   const [precondition, setPrecondition] = React.useState<ApiErrorBody | null>(null);
 
@@ -66,7 +69,9 @@ function Inner({ orgId }: { orgId: string }) {
               submitLabel="Send invite"
               cancel={{ label: "Cancel", onClick: () => setOpen(false) }}
               onSubmit={async (v) => {
-                const r = await client.createInvitation(orgId, { email: v.email, role: v.role });
+                const r = await wrap(() =>
+                  client.memberships.createInvitation(orgId, { email: v.email, role: v.role }),
+                );
                 if (!r.ok) {
                   if (r.error.code === "precondition_failed") setPrecondition(r.error);
                   else toast({ kind: "error", title: "Invite failed", description: r.error.message });
@@ -156,7 +161,9 @@ function Inner({ orgId }: { orgId: string }) {
                         size="sm"
                         variant="ghost"
                         onClick={async () => {
-                          const r = await client.revokeInvitation(orgId, i.id);
+                          const r = await wrap(() =>
+                            client.memberships.revokeInvitation(orgId, i.id),
+                          );
                           if (!r.ok) {
                             toast({ kind: "error", title: "Revoke failed", description: r.error.message });
                             return;

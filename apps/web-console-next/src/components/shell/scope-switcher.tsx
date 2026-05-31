@@ -194,16 +194,24 @@ async function loadOrgs(
   client: ApiClient,
   setOrgs: (o: PublicOrganization[] | null) => void,
 ) {
-  const r = await client.listOrganizations();
-  setOrgs(r.ok ? r.data : []);
+  try {
+    const r = await client.organizations.list();
+    setOrgs(r.organizations);
+  } catch {
+    setOrgs([]);
+  }
 }
 async function loadProjects(
   client: ApiClient,
   orgId: string,
   setProjects: (p: PublicProject[] | null) => void,
 ) {
-  const r = await client.listProjects(orgId);
-  setProjects(r.ok ? r.data : []);
+  try {
+    const r = await client.projects.list(orgId);
+    setProjects(r.projects);
+  } catch {
+    setProjects([]);
+  }
 }
 async function loadEnvs(
   client: ApiClient,
@@ -211,8 +219,12 @@ async function loadEnvs(
   projectId: string,
   setEnvs: (e: PublicEnvironment[] | null) => void,
 ) {
-  const r = await client.listEnvironments(orgId, projectId);
-  setEnvs(r.ok ? r.data : []);
+  try {
+    const r = await client.environments.list(orgId, projectId);
+    setEnvs(r.environments);
+  } catch {
+    setEnvs([]);
+  }
 }
 
 void Link;

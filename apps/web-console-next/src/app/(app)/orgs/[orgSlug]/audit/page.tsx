@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { wrap } from "@/lib/api";
 import { useSession } from "@/lib/session";
 import { useAsync } from "@/lib/use-async";
 
@@ -25,7 +26,14 @@ function Inner({ orgId }: { orgId: string }) {
   const [category, setCategory] = React.useState("");
   const [appliedCategory, setAppliedCategory] = React.useState("");
   const audit = useAsync(
-    () => client.listAudit(orgId, appliedCategory ? { category: appliedCategory } : undefined),
+    () =>
+      wrap(async () => {
+        const q = appliedCategory
+          ? ({ by: "org", category: appliedCategory } as const)
+          : ({ by: "org" } as const);
+        const res = await client.events.listAuditEntries(orgId, q);
+        return res.auditEntries;
+      }),
     [client, orgId, appliedCategory],
   );
 

@@ -14,7 +14,7 @@ import { PreconditionInsight } from "@/components/precondition/insight";
 import { useSession } from "@/lib/session";
 import { useAsync } from "@/lib/use-async";
 import { useToast } from "@/components/ui/toast";
-import type { ApiErrorBody } from "@/lib/api";
+import { wrap, type ApiErrorBody } from "@/lib/api";
 
 const schema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters").max(64),
@@ -28,7 +28,10 @@ const schema = z.object({
 export default function OrgsPage() {
   const { client } = useSession();
   const { toast } = useToast();
-  const orgs = useAsync(() => client.listOrganizations(), [client]);
+  const orgs = useAsync(
+    () => wrap(async () => (await client.organizations.list()).organizations),
+    [client],
+  );
   const [open, setOpen] = React.useState(false);
   const [precondition, setPrecondition] = React.useState<ApiErrorBody | null>(null);
 
@@ -69,7 +72,9 @@ export default function OrgsPage() {
               onSubmit={async (v) => {
                 const payload: { name: string; slug?: string } = { name: v.name };
                 if (v.slug) payload.slug = v.slug;
-                const r = await client.createOrganization(payload);
+                const r = await wrap(async () =>
+                  (await client.organizations.create(payload)).organization,
+                );
                 if (!r.ok) {
                   if (r.error.code === "precondition_failed") {
                     setPrecondition(r.error);

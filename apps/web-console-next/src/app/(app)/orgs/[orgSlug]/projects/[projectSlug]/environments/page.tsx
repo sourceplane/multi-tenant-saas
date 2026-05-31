@@ -17,7 +17,7 @@ import { PreconditionInsight } from "@/components/precondition/insight";
 import { useSession } from "@/lib/session";
 import { useAsync } from "@/lib/use-async";
 import { useToast } from "@/components/ui/toast";
-import type { ApiErrorBody } from "@/lib/api";
+import { wrap, type ApiErrorBody } from "@/lib/api";
 
 const schema = z.object({
   name: z.string().min(2).max(48),
@@ -39,14 +39,24 @@ function Inner({ orgId, orgSlug, projectSlug }: { orgId: string; orgSlug: string
   const { client } = useSession();
   const { toast } = useToast();
 
-  const projectsList = useAsync(() => client.listProjects(orgId), [client, orgId]);
+  const projectsList = useAsync(
+    () => wrap(async () => (await client.projects.list(orgId)).projects),
+    [client, orgId],
+  );
   const project = React.useMemo(
     () => projectsList.data?.find((p) => p.slug === projectSlug) ?? null,
     [projectsList.data, projectSlug],
   );
 
   const envs = useAsync(
-    () => (project ? client.listEnvironments(orgId, project.id) : Promise.resolve({ ok: false as const, status: 0, error: { code: "pending", message: "loading project" } })),
+    () =>
+      project
+        ? wrap(async () => (await client.environments.list(orgId, project.id)).environments)
+        : Promise.resolve({
+            ok: false as const,
+            status: 0,
+            error: { code: "pending", message: "loading project" },
+          }),
     [client, orgId, project?.id],
   );
 
@@ -100,7 +110,9 @@ function Inner({ orgId, orgSlug, projectSlug }: { orgId: string; orgSlug: string
               onSubmit={async (v) => {
                 const payload: { name: string; slug?: string } = { name: v.name };
                 if (v.slug) payload.slug = v.slug;
-                const r = await client.createEnvironment(orgId, project.id, payload);
+                const r = await wrap(async () =>
+                  (await client.environments.create(orgId, project.id, payload)).environment,
+                );
                 if (!r.ok) {
                   if (r.error.code === "precondition_failed") setPrecondition(r.error);
                   else toast({ kind: "error", title: "Create failed", description: r.error.message });
