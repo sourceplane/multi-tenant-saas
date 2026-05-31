@@ -225,5 +225,7 @@ Repository (`tests/db/src/webhooks.test.ts`):
 
 ## PR
 
-PR Number: TBD — to be filled after `gh pr create` runs on user
-authorisation.
+PR Number: #163
+URL: https://github.com/sourceplane/multi-tenant-saas/pull/163
+Branch: `impl/task-0108-webhook-secret-rotation-grace` → `main`
+Sealed snapshot: main `aae8d35` (Task 0107 verifier-PASS bookkeeping).
