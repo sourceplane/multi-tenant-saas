@@ -21,7 +21,8 @@
 
 import type { CommandContext, CommandResult } from "../router.js";
 import { formatOutput } from "../output/index.js";
-import { MissingOrgContextError, UsageError } from "../errors.js";
+import { UsageError } from "../errors.js";
+import { resolveOrgId } from "./helpers.js";
 import type { ListAuditEntriesQuery } from "@saas/sdk";
 
 interface PublicAuditEntryShape {
@@ -31,15 +32,6 @@ interface PublicAuditEntryShape {
   occurredAt: string;
   actorType: string;
   actorId: string;
-}
-
-async function resolveOrgId(ctx: CommandContext): Promise<string> {
-  const cliCtx = await ctx.contextStore.load();
-  const orgId = cliCtx.activeOrgId;
-  if (orgId === undefined || orgId.length === 0) {
-    throw new MissingOrgContextError();
-  }
-  return orgId;
 }
 
 function parseLimit(flag: string | boolean | undefined): number | undefined {
@@ -67,7 +59,7 @@ export async function usageSummaryCommand(ctx: CommandContext): Promise<CommandR
   const toFlag = ctx.flags["to"];
   const metric = typeof metricFlag === "string" && metricFlag.length > 0 ? metricFlag : "requests";
 
-  const orgId = await resolveOrgId(ctx);
+  const orgId = await resolveOrgId(ctx, /* allowOverride */ false);
   const sdk = await ctx.sdk();
   const result = await sdk.metering.getUsageSummary(orgId, {
     metric,
@@ -109,7 +101,7 @@ export async function usageSummaryCommand(ctx: CommandContext): Promise<CommandR
 // ---------------------------------------------------------------------------
 
 export async function billingSummaryCommand(ctx: CommandContext): Promise<CommandResult> {
-  const orgId = await resolveOrgId(ctx);
+  const orgId = await resolveOrgId(ctx, /* allowOverride */ false);
   const sdk = await ctx.sdk();
   const result = await sdk.billing.getSummary(orgId);
 
@@ -171,7 +163,7 @@ export async function auditListCommand(ctx: CommandContext): Promise<CommandResu
     throw new UsageError("--all and --cursor are mutually exclusive");
   }
 
-  const orgId = await resolveOrgId(ctx);
+  const orgId = await resolveOrgId(ctx, /* allowOverride */ false);
   const sdk = await ctx.sdk();
 
   // Build the discriminated `by:"org"` query the SDK accepts. We never
