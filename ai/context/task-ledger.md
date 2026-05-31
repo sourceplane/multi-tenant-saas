@@ -3161,3 +3161,45 @@ on the SDK side.
   returns no plaintext); alternatives B5 replay UI / failure-budget
   alerts, B7 audit-log UX expansion, B8 admin-worker scaffold.
   Orchestrator picks at next pass.
+
+## Task 0108
+
+- Agent: Implementer
+- Prompt: `ai/tasks/task-0108.md`
+- Status: scoped and dispatched (2026-05-31)
+- Branch: `impl/task-0108-webhook-secret-rotation-grace`
+- Sealed snapshot: main `aae8d35` (Task 0107 verifier-PASS bookkeeping)
+- Active milestone: `B5-webhooks-polish-secret-rotation`
+
+### Objective
+Backend half of the B5 "webhook secrets rotate UX" arc. Ship a
+reveal-once `whsec_<32hex>` plaintext secret in the rotate response,
+a dual-secret grace window (default 24h) persisted on
+`webhooks.webhook_endpoints`, and a dual-signature delivery during the
+grace window via a new `X-Webhook-Signature-Previous` header. Lock the
+contract so the console reveal-once modal (Task 0109) and CLI
+`webhook secrets rotate` (Task 0110) become pure SDK-consumer PRs —
+mirrors the 0103→0104→0105 cadence used for the AuthClient arc.
+
+### Scope boundary (≤8 paths)
+In: migration `130_webhook_secret_rotation_grace`, `packages/db/src/webhooks/{repository,types}.ts`, `packages/contracts/src/webhooks.ts` (extend `RotateWebhookSecretResponse`), `apps/webhooks-worker/src/handlers/webhook-endpoints.ts`, `apps/webhooks-worker/src/delivery.ts`, `apps/webhooks-worker/src/__tests__/*.test.ts` (≥4 new cases), `ai/reports/task-0108-implementer.md`.
+
+Out: `packages/sdk/**`, `packages/webhook-verifier/**` (locked 0105, single-key today), `packages/cli/**` (locked 0106/0107), `apps/web-console-next/**` (Task 0109), `pnpm-lock.yaml` (no new deps expected).
+
+### Hard rules
+- Zero new `eslint-disable`/`@ts-ignore`/`@ts-expect-error`/`as any`/`as unknown as` under any path in scope.
+- Zero `node:*` imports under `apps/webhooks-worker/**` or `packages/db/**` new code.
+- Zero plaintext secret material in event payloads, audit rows, or `console.*` calls.
+- `ENDPOINT_SAFE_COLUMNS` must NOT include `previous_secret_ciphertext`.
+- Reveal-once: plaintext is generated, returned ONCE, never re-read from disk. No "fetch endpoint secret" surface introduced.
+- Reuse `computeSignature` verbatim — canonical sha256= scheme is locked since Task 0105.
+
+### Acceptance
+- `pnpm install --frozen-lockfile` clean; `pnpm -r typecheck=0` across 39 workspaces; `pnpm -r --no-bail lint` ≤45 warnings all in `tests/api-edge/**`.
+- `@sourceplane/webhooks-worker` build green; vitest worker test count strictly +≥4.
+- `kiox -- orun validate` valid; `orun plan --changed` selects ONLY webhooks-worker + db + contracts Verify lanes (no SDK/console/CLI); `orun run --dry-run --runner github-actions` green.
+- PR-CI 4/4 green via `gh run view --log` (NOT just summary).
+- Real PR number reported (TBD = blocked).
+
+### Expected outcome
+One PR, one reviewer-holdable outcome (rotate UX backend), one rollback (single revert), one acceptance story. Unlocks Tasks 0109 (console reveal-once modal) and 0110 (CLI `webhook secrets rotate`) as pure SDK-consumer PRs once `RotateWebhookSecretResponse` is on main.
