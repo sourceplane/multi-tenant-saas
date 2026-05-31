@@ -243,5 +243,4 @@ without writing the four-line Node script the 0106 smoke harness used.
 
 ## 11. PR Number
 
-TBD — filled after `gh pr create` + push. Verifier dispatch is
-blocked on this field per task spec §11.
+**PR #162** — https://github.com/sourceplane/multi-tenant-saas/pull/162
