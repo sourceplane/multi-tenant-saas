@@ -11,6 +11,7 @@
 // integration path is the `Sourceplane` class.
 
 import { ApiKeysClient } from "./apiKeys.js";
+import { AuthClient } from "./auth.js";
 import { BillingClient } from "./billing.js";
 import { ConfigClient } from "./config.js";
 import { EnvironmentsClient } from "./environments.js";
@@ -37,6 +38,7 @@ export class Sourceplane {
   readonly securityEvents: SecurityEventsClient;
   readonly config: ConfigClient;
   readonly notifications: NotificationsClient;
+  readonly auth: AuthClient;
   /** Underlying HTTP transport. Exposed for advanced extension. */
   readonly transport: Transport;
 
@@ -54,6 +56,7 @@ export class Sourceplane {
     this.securityEvents = new SecurityEventsClient(this.transport);
     this.config = new ConfigClient(this.transport);
     this.notifications = new NotificationsClient(this.transport);
+    this.auth = new AuthClient(this.transport);
   }
 }
 
@@ -81,6 +84,7 @@ export {
 export { SecurityEventsClient } from "./securityEvents.js";
 export { ConfigClient, type ConfigScope } from "./config.js";
 export { NotificationsClient } from "./notifications.js";
+export { AuthClient } from "./auth.js";
 
 // Transport surface.
 export {
@@ -280,3 +284,15 @@ export type {
 } from "@saas/contracts/notifications";
 
 export { ERROR_CODES, type ErrorCode } from "@saas/contracts/errors";
+
+export type {
+  LoginStartRequest,
+  LoginStartResponse,
+  LoginCompleteRequest,
+  LoginCompleteResponse,
+  SessionResponse,
+  LogoutResponse,
+  ProfileResponse,
+  UpdateProfileRequest,
+  AuthUser,
+} from "@saas/contracts/auth";
