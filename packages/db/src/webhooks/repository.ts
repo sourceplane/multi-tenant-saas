@@ -18,6 +18,8 @@ import type {
   EndpointForDelivery,
   MatchedSubscription,
   DispatchCursor,
+  RotateEndpointSecretInput,
+  RotateEndpointSecretResult,
 } from "./types.js";
 
 // ── Row mappers ────────────────────────────────────────────
@@ -282,27 +284,72 @@ export function createWebhookRepository(executor: SqlExecutor): WebhookRepositor
       }
     },
 
-    async rotateEndpointSecret(orgId: string, endpointId: string, secretCiphertext?: string): Promise<WebhookResult<WebhookEndpoint>> {
+    async rotateEndpointSecret(
+      orgId: string,
+      endpointId: string,
+      input?: RotateEndpointSecretInput,
+    ): Promise<WebhookResult<RotateEndpointSecretResult>> {
       try {
+        const secretCiphertext = input?.secretCiphertext;
+        const gracePeriodSeconds = input?.gracePeriodSeconds;
         const hasCiphertext = secretCiphertext !== undefined;
-        const sql = hasCiphertext
-          ? `UPDATE webhooks.webhook_endpoints
-             SET secret_version = secret_version + 1, secret_last_rotated_at = now(), secret_ciphertext = $3, updated_at = now()
-             WHERE org_id = $1 AND id = $2 AND status = 'active'
-             RETURNING ${ENDPOINT_SAFE_COLUMNS}`
-          : `UPDATE webhooks.webhook_endpoints
-             SET secret_version = secret_version + 1, secret_last_rotated_at = now(), updated_at = now()
-             WHERE org_id = $1 AND id = $2 AND status = 'active'
-             RETURNING ${ENDPOINT_SAFE_COLUMNS}`;
+        const useGrace = typeof gracePeriodSeconds === "number" && gracePeriodSeconds > 0 && hasCiphertext;
+
+        // When useGrace: snapshot current secret_ciphertext + secret_version into the
+        // previous_* columns and set previous_secret_expires_at = now() + N seconds.
+        // When !useGrace: clear any stale grace window (previous_* = NULL).
+        let setClause: string;
         const values: unknown[] = [orgId, endpointId];
-        if (hasCiphertext) {
+        if (useGrace) {
+          setClause = `secret_version = secret_version + 1,
+                       secret_last_rotated_at = now(),
+                       previous_secret_ciphertext = secret_ciphertext,
+                       previous_secret_version = secret_version,
+                       previous_secret_expires_at = now() + ($4::int * interval '1 second'),
+                       secret_ciphertext = $3,
+                       updated_at = now()`;
+          values.push(secretCiphertext, gracePeriodSeconds);
+        } else if (hasCiphertext) {
+          setClause = `secret_version = secret_version + 1,
+                       secret_last_rotated_at = now(),
+                       previous_secret_ciphertext = NULL,
+                       previous_secret_version = NULL,
+                       previous_secret_expires_at = NULL,
+                       secret_ciphertext = $3,
+                       updated_at = now()`;
           values.push(secretCiphertext);
+        } else {
+          setClause = `secret_version = secret_version + 1,
+                       secret_last_rotated_at = now(),
+                       previous_secret_ciphertext = NULL,
+                       previous_secret_version = NULL,
+                       previous_secret_expires_at = NULL,
+                       updated_at = now()`;
         }
+
+        const sql = `UPDATE webhooks.webhook_endpoints
+                     SET ${setClause}
+                     WHERE org_id = $1 AND id = $2 AND status = 'active'
+                     RETURNING ${ENDPOINT_SAFE_COLUMNS}, previous_secret_version, previous_secret_expires_at`;
+
         const result = await executor.execute<Record<string, unknown>>(sql, values);
         if (result.rowCount === 0) {
           return { ok: false, error: { kind: "not_found" } };
         }
-        return { ok: true, value: mapEndpoint(result.rows[0]!) };
+        const row = result.rows[0]!;
+        const previousSecretVersion = (row.previous_secret_version as number | null) ?? null;
+        const rawExpires = row.previous_secret_expires_at;
+        const previousSecretExpiresAt = rawExpires
+          ? new Date(rawExpires as string).toISOString()
+          : null;
+        return {
+          ok: true,
+          value: {
+            endpoint: mapEndpoint(row),
+            previousSecretVersion,
+            previousSecretExpiresAt,
+          },
+        };
       } catch {
         return safeError("Failed to rotate webhook endpoint secret");
       }
@@ -490,7 +537,8 @@ export function createWebhookRepository(executor: SqlExecutor): WebhookRepositor
     async getEndpointForDelivery(orgId: string, endpointId: string): Promise<WebhookResult<EndpointForDelivery>> {
       try {
         const result = await executor.execute<Record<string, unknown>>(
-          `SELECT id, org_id, url, status, secret_ciphertext, secret_version
+          `SELECT id, org_id, url, status, secret_ciphertext, secret_version,
+                  previous_secret_ciphertext, previous_secret_version, previous_secret_expires_at
            FROM webhooks.webhook_endpoints WHERE org_id = $1 AND id = $2`,
           [orgId, endpointId],
         );
@@ -498,6 +546,7 @@ export function createWebhookRepository(executor: SqlExecutor): WebhookRepositor
           return { ok: false, error: { kind: "not_found" } };
         }
         const row = result.rows[0]!;
+        const rawPrevExpires = row.previous_secret_expires_at;
         return {
           ok: true,
           value: {
@@ -507,6 +556,11 @@ export function createWebhookRepository(executor: SqlExecutor): WebhookRepositor
             status: row.status as EndpointForDelivery["status"],
             secretCiphertext: (row.secret_ciphertext as string) ?? null,
             secretVersion: row.secret_version as number,
+            previousSecretCiphertext: (row.previous_secret_ciphertext as string) ?? null,
+            previousSecretVersion: (row.previous_secret_version as number | null) ?? null,
+            previousSecretExpiresAt: rawPrevExpires
+              ? new Date(rawPrevExpires as string).toISOString()
+              : null,
           },
         };
       } catch {

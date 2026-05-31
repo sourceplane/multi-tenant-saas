@@ -67,7 +67,9 @@ async function authorizeWebhook(
 
 // ── Encrypt signing secret ───────────────────────────────────
 
-async function encryptSigningSecret(env: Env): Promise<string | undefined> {
+async function encryptSigningSecret(
+  env: Env,
+): Promise<{ secret: string; ciphertext: string } | undefined> {
   if (!env.SECRET_ENCRYPTION_KEY) return undefined;
 
   const secret = randomHex(32);
@@ -76,7 +78,7 @@ async function encryptSigningSecret(env: Env): Promise<string | undefined> {
   if (!adapter) return undefined;
 
   const envelope = await adapter.encrypt(secret);
-  return JSON.stringify(envelope);
+  return { secret, ciphertext: JSON.stringify(envelope) };
 }
 
 // ── Create ───────────────────────────────────────────────────
@@ -136,7 +138,8 @@ export async function handleCreateWebhookEndpoint(
 
   const endpointId = crypto.randomUUID();
 
-  const secretCiphertext = await encryptSigningSecret(env);
+  const encrypted = await encryptSigningSecret(env);
+  const secretCiphertext = encrypted?.ciphertext;
 
   const executor = createSqlExecutor(env.SOURCEPLANE_DB!);
   try {
@@ -533,9 +536,25 @@ export async function handleRotateWebhookSecret(
     const denied = await authorizeWebhook(env, actor, orgId, existing.value.projectId, policyAction, requestId);
     if (denied) return denied;
 
-    const secretCiphertext = await encryptSigningSecret(env);
+    const encrypted = await encryptSigningSecret(env);
+    const secretCiphertext = encrypted?.ciphertext;
+    const plaintextSecret = encrypted?.secret;
 
-    const result = await repo.rotateEndpointSecret(orgId, endpointId, secretCiphertext);
+    // Default grace window: 24h. Operators can override via env (0 disables snapshot).
+    const DEFAULT_GRACE_SECONDS = 24 * 60 * 60;
+    const rawGrace = env.WEBHOOK_SECRET_ROTATION_GRACE_SECONDS;
+    let graceSeconds = DEFAULT_GRACE_SECONDS;
+    if (typeof rawGrace === "string" && rawGrace.length > 0) {
+      const parsed = Number.parseInt(rawGrace, 10);
+      if (Number.isFinite(parsed) && parsed >= 0) {
+        graceSeconds = parsed;
+      }
+    }
+
+    const result = await repo.rotateEndpointSecret(orgId, endpointId, {
+      ...(secretCiphertext !== undefined ? { secretCiphertext } : {}),
+      ...(graceSeconds > 0 ? { gracePeriodSeconds: graceSeconds } : {}),
+    });
     if (!result.ok) {
       return errorResponse("internal_error", "Service unavailable", 503, requestId);
     }
@@ -554,7 +573,11 @@ export async function handleRotateWebhookSecret(
         subjectKind: "webhook_endpoint",
         subjectId: endpointId,
         requestId,
-        payload: { secretVersion: result.value.secretVersion },
+        // SECURITY: never include the plaintext signing secret in event payloads.
+        payload: {
+          secretVersion: result.value.endpoint.secretVersion,
+          previousSecretExpiresAt: result.value.previousSecretExpiresAt,
+        },
       },
       audit: {
         id: randomHex(16),
@@ -564,7 +587,17 @@ export async function handleRotateWebhookSecret(
       },
     });
 
-    return successResponse({ endpoint: toPublicWebhookEndpoint(result.value) }, requestId);
+    // Reveal-once response: plaintext is included exactly here, never persisted
+    // and never re-readable. Console (Task 0109) and CLI (Task 0110) consume this.
+    return successResponse(
+      {
+        endpoint: toPublicWebhookEndpoint(result.value.endpoint),
+        ...(plaintextSecret !== undefined ? { secret: `whsec_${plaintextSecret}` } : {}),
+        previousSecretExpiresAt: result.value.previousSecretExpiresAt,
+        gracePeriodSeconds: graceSeconds,
+      },
+      requestId,
+    );
   } catch {
     return errorResponse("internal_error", "Service unavailable", 503, requestId);
   } finally {

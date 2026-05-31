@@ -78,8 +78,33 @@ export interface DeleteWebhookEndpointResponse {
 // Secret Rotation
 // ---------------------------------------------------------------------------
 
+/**
+ * Response for POST /webhook-endpoints/{id}/rotate-secret.
+ *
+ * `secret` is a **reveal-once** plaintext signing secret in the form
+ * `whsec_<32 hex chars>`. It is generated server-side, encrypted at rest,
+ * and returned to the caller exactly once on rotation — never persisted in
+ * any log, event payload, audit row, or subsequent read surface. Optional
+ * because legacy callers without an active `SECRET_ENCRYPTION_KEY` cannot
+ * receive plaintext.
+ *
+ * `previousSecretExpiresAt` (when present) tells the operator until when the
+ * previous signing secret will continue to produce a valid
+ * `X-Webhook-Signature-Previous` header on outbound delivery attempts —
+ * giving subscribers a grace window to roll over without dropping events.
+ *
+ * `gracePeriodSeconds` echoes the dual-signature window length applied to
+ * this rotation (server default is 86400; operator may override or set 0
+ * to disable).
+ */
 export interface RotateWebhookSecretResponse {
   endpoint: PublicWebhookEndpoint;
+  /** Reveal-once plaintext secret. `whsec_<32 hex>`. Never persisted. */
+  secret?: string;
+  /** ISO timestamp the dual-signature grace window closes at. Null when no grace window was applied. */
+  previousSecretExpiresAt: string | null;
+  /** Echo of the grace-period window applied to this rotation, in seconds. */
+  gracePeriodSeconds: number;
 }
 
 // ---------------------------------------------------------------------------

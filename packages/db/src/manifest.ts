@@ -120,5 +120,14 @@ export const manifest: MigrationManifest = {
       description:
         "Notifications persistence foundation — preferences, notifications, attempts, suppressions",
     },
+    {
+      id: "130_webhook_secret_rotation_grace",
+      context: "webhooks",
+      path: "130_webhook_secret_rotation_grace/up.sql",
+      checksum:
+        "4c5474e7b5ca228adc18ca09b7cd2387938efab8f1e55b675fd4aee6e3ec4e5a",
+      description:
+        "Dual-secret rotation window — adds previous_secret_{ciphertext,version,expires_at} for grace-period delivery signing",
+    },
   ],
 };

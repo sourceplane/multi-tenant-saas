@@ -135,6 +135,9 @@ function createMockWebhookRepo(overrides?: {
           status: "active" as const,
           secretCiphertext: null,
           secretVersion: 1,
+          previousSecretCiphertext: null,
+          previousSecretVersion: null,
+          previousSecretExpiresAt: null,
         },
       };
     },
@@ -399,6 +402,9 @@ describe("dispatchNewEvents", () => {
       status: "active",
       secretCiphertext,
       secretVersion: 1,
+      previousSecretCiphertext: null,
+      previousSecretVersion: null,
+      previousSecretExpiresAt: null,
     };
 
     const event = makeStoredEvent();
@@ -415,6 +421,80 @@ describe("dispatchNewEvents", () => {
     const headers = fetchCalls[0]!.init.headers as Record<string, string>;
     expect(headers["X-Webhook-Signature"]).toMatch(/^sha256=[0-9a-f]{64}$/);
     expect(headers["X-Webhook-Timestamp"]).toBeTruthy();
+  });
+
+  // ── Dual-signature grace window (B5: secret rotation grace) ────────────
+
+  it("emits dual signatures (X-Webhook-Signature + X-Webhook-Signature-Previous) during grace window", async () => {
+    const encryption = await createEncryptionAdapter(TEST_ENCRYPTION_KEY);
+    const newEnvelope = await encryption!.encrypt(TEST_SIGNING_SECRET);
+    const PREV_SECRET = "previous-rotation-secret-grace-window";
+    const prevEnvelope = await encryption!.encrypt(PREV_SECRET);
+
+    // Grace window expires 1 hour from now → still active
+    const expiresInFuture = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+
+    const endpoint: EndpointForDelivery = {
+      id: TEST_ENDPOINT_UUID,
+      orgId: TEST_ORG_UUID,
+      url: "https://example.com/webhook",
+      status: "active",
+      secretCiphertext: JSON.stringify(newEnvelope),
+      secretVersion: 2,
+      previousSecretCiphertext: JSON.stringify(prevEnvelope),
+      previousSecretVersion: 1,
+      previousSecretExpiresAt: expiresInFuture,
+    };
+
+    const event = makeStoredEvent();
+    const webhookRepo = createMockWebhookRepo({ endpoint });
+    const eventsRepo = createMockEventsRepo([event]);
+
+    await dispatchNewEvents({ webhookRepo, eventsRepo, encryption });
+
+    expect(fetchCalls).toHaveLength(1);
+    const headers = fetchCalls[0]!.init.headers as Record<string, string>;
+    const primary = headers["X-Webhook-Signature"];
+    const previous = headers["X-Webhook-Signature-Previous"];
+    expect(primary).toMatch(/^sha256=[0-9a-f]{64}$/);
+    expect(previous).toMatch(/^sha256=[0-9a-f]{64}$/);
+    // Different secrets must produce distinct signatures
+    expect(primary).not.toBe(previous);
+    // No raw secret material leaks into headers
+    expect(JSON.stringify(headers)).not.toContain(TEST_SIGNING_SECRET);
+    expect(JSON.stringify(headers)).not.toContain(PREV_SECRET);
+  });
+
+  it("emits only primary signature once grace window has expired", async () => {
+    const encryption = await createEncryptionAdapter(TEST_ENCRYPTION_KEY);
+    const newEnvelope = await encryption!.encrypt(TEST_SIGNING_SECRET);
+    const prevEnvelope = await encryption!.encrypt("previous-rotation-secret-expired");
+
+    // Grace window expired 1 hour ago
+    const expiresInPast = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+
+    const endpoint: EndpointForDelivery = {
+      id: TEST_ENDPOINT_UUID,
+      orgId: TEST_ORG_UUID,
+      url: "https://example.com/webhook",
+      status: "active",
+      secretCiphertext: JSON.stringify(newEnvelope),
+      secretVersion: 3,
+      previousSecretCiphertext: JSON.stringify(prevEnvelope),
+      previousSecretVersion: 2,
+      previousSecretExpiresAt: expiresInPast,
+    };
+
+    const event = makeStoredEvent();
+    const webhookRepo = createMockWebhookRepo({ endpoint });
+    const eventsRepo = createMockEventsRepo([event]);
+
+    await dispatchNewEvents({ webhookRepo, eventsRepo, encryption });
+
+    expect(fetchCalls).toHaveLength(1);
+    const headers = fetchCalls[0]!.init.headers as Record<string, string>;
+    expect(headers["X-Webhook-Signature"]).toMatch(/^sha256=[0-9a-f]{64}$/);
+    expect(headers["X-Webhook-Signature-Previous"]).toBeUndefined();
   });
 
   it("handles non-2xx response with retry scheduling", async () => {
@@ -446,6 +526,9 @@ describe("dispatchNewEvents", () => {
       status: "disabled",
       secretCiphertext: null,
       secretVersion: 1,
+      previousSecretCiphertext: null,
+      previousSecretVersion: null,
+      previousSecretExpiresAt: null,
     };
 
     const event = makeStoredEvent();
@@ -900,6 +983,9 @@ describe("auto-disable endpoint after repeated failures", () => {
         status: "disabled",
         secretCiphertext: null,
         secretVersion: 1,
+        previousSecretCiphertext: null,
+        previousSecretVersion: null,
+        previousSecretExpiresAt: null,
       },
     });
     const eventsRepo = createMockEventsRepo([event]);

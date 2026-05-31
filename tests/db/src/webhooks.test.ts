@@ -265,12 +265,15 @@ describe("WebhookRepository — Endpoints", () => {
     const result = await repo.rotateEndpointSecret("org-001", "ep-001");
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.value.secretVersion).toBe(2);
+      expect(result.value.endpoint.secretVersion).toBe(2);
+      expect(result.value.previousSecretVersion).toBeNull();
+      expect(result.value.previousSecretExpiresAt).toBeNull();
     }
     expect(queries[0]!.text).toContain("secret_version = secret_version + 1");
     expect(queries[0]!.text).toContain("status = 'active'");
-    // Must not return secret_ciphertext
-    expect(queries[0]!.text).not.toMatch(/RETURNING.*secret_ciphertext/);
+    // Must not return secret_ciphertext (current or previous) — public read surface
+    expect(queries[0]!.text).not.toMatch(/RETURNING[\s\S]*?\bsecret_ciphertext\b/);
+    expect(queries[0]!.text).not.toMatch(/RETURNING[\s\S]*?previous_secret_ciphertext/);
   });
 
   it("returns not_found when rotating secret on non-existent endpoint", async () => {
@@ -279,6 +282,69 @@ describe("WebhookRepository — Endpoints", () => {
     const result = await repo.rotateEndpointSecret("org-001", "nope");
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.kind).toBe("not_found");
+  });
+
+  it("rotate with grace window snapshots previous ciphertext, version, and sets expires_at", async () => {
+    const futureExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    const rotatedRow = {
+      ...SAMPLE_ENDPOINT_ROW,
+      secret_version: 5,
+      secret_last_rotated_at: NOW.toISOString(),
+      previous_secret_version: 4,
+      previous_secret_expires_at: futureExpiry,
+    };
+    const { executor, queries } = createFakeExecutor({ rows: [rotatedRow] });
+    const repo = createWebhookRepository(executor);
+    const result = await repo.rotateEndpointSecret("org-001", "ep-001", {
+      secretCiphertext: "new-encrypted-envelope",
+      gracePeriodSeconds: 86400,
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.endpoint.secretVersion).toBe(5);
+      // Previous-secret snapshot must propagate to the result
+      expect(result.value.previousSecretVersion).toBe(4);
+      expect(result.value.previousSecretExpiresAt).toBe(new Date(futureExpiry).toISOString());
+    }
+
+    const sql = queries[0]!.text;
+    // SQL must snapshot current secret_ciphertext + secret_version into previous_*
+    expect(sql).toMatch(/previous_secret_ciphertext\s*=\s*secret_ciphertext/);
+    expect(sql).toMatch(/previous_secret_version\s*=\s*secret_version/);
+    // SQL must compute expires_at = now() + interval scaled by the grace param
+    expect(sql).toContain("previous_secret_expires_at");
+    expect(sql).toContain("interval");
+    // grace seconds and ciphertext both passed as parameters
+    expect(queries[0]!.params).toContain(86400);
+    expect(queries[0]!.params).toContain("new-encrypted-envelope");
+    // Public read surface must NOT expose previous secret material
+    expect(sql).not.toMatch(/RETURNING[\s\S]*?previous_secret_ciphertext/);
+  });
+
+  it("rotate without grace window clears any stale previous-secret snapshot", async () => {
+    const rotatedRow = {
+      ...SAMPLE_ENDPOINT_ROW,
+      secret_version: 6,
+      secret_last_rotated_at: NOW.toISOString(),
+      previous_secret_version: null,
+      previous_secret_expires_at: null,
+    };
+    const { executor, queries } = createFakeExecutor({ rows: [rotatedRow] });
+    const repo = createWebhookRepository(executor);
+    const result = await repo.rotateEndpointSecret("org-001", "ep-001", {
+      secretCiphertext: "new-envelope",
+      // gracePeriodSeconds intentionally omitted
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.previousSecretVersion).toBeNull();
+      expect(result.value.previousSecretExpiresAt).toBeNull();
+    }
+    const sql = queries[0]!.text;
+    expect(sql).toMatch(/previous_secret_ciphertext\s*=\s*NULL/);
+    expect(sql).toMatch(/previous_secret_version\s*=\s*NULL/);
+    expect(sql).toMatch(/previous_secret_expires_at\s*=\s*NULL/);
   });
 });
 
@@ -487,8 +553,36 @@ describe("WebhookRepository — Secret Safety", () => {
     const rotatedRow = { ...SAMPLE_ENDPOINT_ROW, secret_version: 2 };
     const { executor, queries } = createFakeExecutor({ rows: [rotatedRow] });
     const repo = createWebhookRepository(executor);
-    await repo.rotateEndpointSecret("org-001", "ep-001", "encrypted-data");
-    expect(queries[0]!.text).not.toMatch(/RETURNING.*secret_ciphertext/);
+    await repo.rotateEndpointSecret("org-001", "ep-001", { secretCiphertext: "encrypted-data" });
+    // Neither current nor previous ciphertext is exposed via RETURNING
+    expect(queries[0]!.text).not.toMatch(/RETURNING[\s\S]*?\bsecret_ciphertext\b/);
+    expect(queries[0]!.text).not.toMatch(/RETURNING[\s\S]*?previous_secret_ciphertext/);
+  });
+
+  it("getEndpointForDelivery surfaces previous-secret grace fields to the worker", async () => {
+    const expiry = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    const row = {
+      id: "ep-001",
+      org_id: "org-001",
+      url: "https://example.com/webhook",
+      status: "active",
+      secret_ciphertext: "current-envelope",
+      secret_version: 7,
+      previous_secret_ciphertext: "previous-envelope",
+      previous_secret_version: 6,
+      previous_secret_expires_at: expiry,
+    };
+    const { executor } = createFakeExecutor({ rows: [row] });
+    const repo = createWebhookRepository(executor);
+    const result = await repo.getEndpointForDelivery("org-001", "ep-001");
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.secretCiphertext).toBe("current-envelope");
+      expect(result.value.secretVersion).toBe(7);
+      expect(result.value.previousSecretCiphertext).toBe("previous-envelope");
+      expect(result.value.previousSecretVersion).toBe(6);
+      expect(result.value.previousSecretExpiresAt).toBe(new Date(expiry).toISOString());
+    }
   });
 });
 

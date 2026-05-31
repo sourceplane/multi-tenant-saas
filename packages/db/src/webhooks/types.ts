@@ -72,6 +72,35 @@ export interface DisableWebhookEndpointInput {
   reason?: string;
 }
 
+/**
+ * Input for rotateEndpointSecret. The repository copies the current secret
+ * into the previous-secret slot, sets the previous-secret expiry to
+ * `now() + gracePeriodSeconds`, and writes the new secret atomically.
+ */
+export interface RotateEndpointSecretInput {
+  /** New encrypted signing-secret envelope. Required for live rotations. */
+  secretCiphertext?: string;
+  /**
+   * Grace-window duration in seconds. When omitted, the previous secret is
+   * NOT preserved (legacy / first rotation). When provided, the rotation
+   * persists the previous ciphertext + version + an expires_at = now() + N.
+   */
+  gracePeriodSeconds?: number;
+}
+
+/**
+ * Result of rotateEndpointSecret. `endpoint` is the safe public-shape view;
+ * `previousSecretExpiresAt` is the wall-clock the grace window closes at,
+ * needed by the worker handler to populate its reveal-once response.
+ */
+export interface RotateEndpointSecretResult {
+  endpoint: WebhookEndpoint;
+  /** Snapshot of secret_version at the moment of rotate (the previous secret's version). Null when no grace window applied. */
+  previousSecretVersion: number | null;
+  /** ISO timestamp the grace window closes at. Null when no grace window applied. */
+  previousSecretExpiresAt: string | null;
+}
+
 // ── Webhook subscriptions ───────────────────────────────────
 
 export interface WebhookSubscription {
@@ -150,6 +179,12 @@ export interface EndpointForDelivery {
   status: WebhookEndpointStatus;
   secretCiphertext: string | null;
   secretVersion: number;
+  /** Encrypted previous-secret envelope, populated within the rotation grace window. */
+  previousSecretCiphertext: string | null;
+  /** Version number of the previous secret (snapshot of secret_version at the moment of rotate). */
+  previousSecretVersion: number | null;
+  /** ISO timestamp at which the previous-secret grace window closes; null when no previous secret. */
+  previousSecretExpiresAt: string | null;
 }
 
 /** Subscription matched during fanout */
@@ -180,7 +215,7 @@ export interface WebhookRepository {
   updateEndpoint(orgId: string, endpointId: string, input: UpdateWebhookEndpointInput): Promise<WebhookResult<WebhookEndpoint>>;
   disableEndpoint(orgId: string, endpointId: string, input: DisableWebhookEndpointInput): Promise<WebhookResult<WebhookEndpoint>>;
   deleteEndpoint(orgId: string, endpointId: string): Promise<WebhookResult<{ deleted: true }>>;
-  rotateEndpointSecret(orgId: string, endpointId: string, secretCiphertext?: string): Promise<WebhookResult<WebhookEndpoint>>;
+  rotateEndpointSecret(orgId: string, endpointId: string, input?: RotateEndpointSecretInput): Promise<WebhookResult<RotateEndpointSecretResult>>;
 
   // Subscriptions
   createSubscription(input: CreateWebhookSubscriptionInput): Promise<WebhookResult<WebhookSubscription>>;

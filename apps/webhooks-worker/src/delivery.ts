@@ -250,6 +250,27 @@ async function deliverAttempt(
       // If decryption fails, still deliver unsigned but log it
       headers["X-Webhook-Signature-Error"] = "decryption_failed";
     }
+
+    // Dual-signature grace window (B5): if the endpoint was rotated recently
+    // and the previous secret has not yet expired, attach a parallel
+    // X-Webhook-Signature-Previous header so subscribers can keep verifying
+    // with the old key while they roll over. Failures here are best-effort —
+    // they MUST NOT block delivery and MUST NOT leak secret material.
+    if (
+      endpoint.previousSecretCiphertext &&
+      endpoint.previousSecretExpiresAt &&
+      Date.parse(endpoint.previousSecretExpiresAt) > Date.now()
+    ) {
+      try {
+        const prevEnvelope = JSON.parse(endpoint.previousSecretCiphertext) as CiphertextEnvelope;
+        const prevSecret = await ctx.encryption.decrypt(prevEnvelope);
+        const prevSignature = await computeSignature(prevSecret, timestamp, payload);
+        headers["X-Webhook-Signature-Previous"] = prevSignature;
+      } catch {
+        // Previous-secret decryption failure is silent: the primary signature
+        // is still attached, and we never expose the raw failure to the wire.
+      }
+    }
   }
 
   // Deliver
