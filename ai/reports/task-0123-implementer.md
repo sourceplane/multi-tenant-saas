@@ -3,7 +3,7 @@
 **Agent:** Implementer
 **Milestone:** B8 — Admin / support worker (V1: read-only diagnostics + audited support actions)
 **Branch:** `impl/task-0123-admin-worker`
-**PR Number:** TBD (updated post-open)
+**PR Number:** [#178](https://github.com/sourceplane/multi-tenant-saas/pull/178)
 
 ## Summary
 
