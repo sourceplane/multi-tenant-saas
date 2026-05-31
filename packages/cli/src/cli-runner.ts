@@ -27,6 +27,7 @@ import { webhookSecretsRotateCommand } from "./commands/webhook-secrets-rotate.j
 import { webhookEnableCommand } from "./commands/webhook-enable.js";
 import { webhookDisableCommand } from "./commands/webhook-disable.js";
 import { webhookDeliveriesCommand } from "./commands/webhook-deliveries.js";
+import { securityEventsCommand } from "./commands/security-events.js";
 import {
   usageSummaryCommand,
   billingSummaryCommand,
@@ -177,6 +178,8 @@ function buildRouter(opts: RunOptions): Router {
   r.register(["usage", "summary"], "Summarize usage rollups for the active organization", usageSummaryCommand);
   r.register(["billing", "summary"], "Show billing customer/plan/entitlements summary", billingSummaryCommand);
   r.register(["audit", "list"], "List audit log entries for the active organization", auditListCommand);
+  // Account security events (actor-scoped — no --org)
+  r.register(["security", "events"], "List account security events (actor-scoped)", securityEventsCommand);
   return r;
 }
 
@@ -221,6 +224,9 @@ function printHelp(stdout: (line: string) => void): void {
       "                         [--actor=ID] [--actor-type=TYPE] [--subject-kind=KIND]",
       "                         [--subject-id=ID] [--event-type=TYPE] [--from=ISO] [--to=ISO]",
       "                         [--format=ndjson]",
+      "",
+      "SECURITY:",
+      "  sourceplane security events [--limit=N] [--cursor=CURSOR] [--all] [--output=human|json]",
       "",
       "GLOBAL FLAGS:",
       "  --output=human|json   Output format (default: human)",
