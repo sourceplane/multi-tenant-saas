@@ -1,6 +1,6 @@
 # Task Ledger
 
-Last updated: 2026-05-31 (Task 0105 Verifier PASS + MERGED — PR #160 squash `a1436fc`, post-merge main-CI `26701735837` 4/4 SUCCESS, `@saas/webhook-verifier` zero-dep WebCrypto helper now on main; Task 0106 SCOPED — `sourceplane webhook verify` CLI subcommand wiring the new helper, B5 dogfood leg, prompt at `ai/tasks/task-0106.md`, awaiting Implementer dispatch)
+Last updated: 2026-05-31 (Task 0106 Implementer COMPLETE + Verifier SEALED — PR #161 OPEN/MERGEABLE/CLEAN at HEAD `a39c0d6`, PR-CI run `26702180473` 4/4 SUCCESS, +710/-3 across 5 files all under `packages/cli/**` + `pnpm-lock.yaml`; verifier prompt at `ai/tasks/task-0106-verifier.md` carries Phase 0 fix-up requiring implementer report be committed to PR branch before merge; sealed snapshot main `f614fb1`, awaiting Verifier dispatch)
 
 ## Task 0001
 
@@ -2906,3 +2906,67 @@ on the SDK side.
   alerts), B7 audit-log expansion (needs SDK+api-edge+contracts —
   multi-PR), B8 admin-worker scaffold, `kiox.lock` drift,
   `@saas/webhook-verifier` itself.
+
+## Task 0106 — Implementer closure
+
+- **Implementer prompt:** `ai/tasks/task-0106.md`
+- **Branch:** `impl/task-0106-cli-webhook-verify` (HEAD `a39c0d6`)
+- **PR:** [#161](https://github.com/sourceplane/multi-tenant-saas/pull/161) — OPEN, MERGEABLE, CLEAN
+- **PR-CI on `a39c0d6`:** run `26702180473` — 4/4 SUCCESS
+  (plan + cli·{dev,stage,prod}·Verify; turbo-package shape, no deploy lane)
+- **Diff shape:** +710 / -3 across 5 files
+  - `packages/cli/package.json` — added `@saas/webhook-verifier` workspace dep
+  - `packages/cli/src/commands/webhook-verify.ts` (NEW)
+  - `packages/cli/src/cli-runner.ts` — registered `["webhook","verify"]` + help
+  - `packages/cli/src/__tests__/webhook-verify.test.ts` (NEW, ≥ 12 cases)
+  - `pnpm-lock.yaml` — single workspace-edge delta
+- **Status:** Phase-0 gap caught at scope time — implementer
+  commit `a39c0d6` did NOT add `ai/reports/task-0106-implementer.md`
+  to the PR branch. Verifier prompt makes this a mandatory Phase 0
+  fix-up (reconstruct from PR body + diff + e2e smoke transcripts,
+  commit on PR branch, wait for fresh PR-CI 4/4 SUCCESS) before merge.
+
+## Task 0106 — Verifier dispatch
+
+- Agent: Verifier
+- Prompt: `ai/tasks/task-0106-verifier.md` (≈ 17.6 KB,
+  8-phase shape mirroring Task 0105 verifier)
+- Status: SEALED 2026-05-31 (orchestrator) — awaiting Verifier dispatch
+- Sealed snapshot main: `f614fb1`
+- PR under verification: #161 (`impl/task-0106-cli-webhook-verify`)
+  HEAD `a39c0d6a8b5c4d55dee44a1d5700ad3593f44715`
+- Phases:
+  - **Phase 0** — working-dir setup + missing-implementer-report
+    fix-up (commit on PR branch, wait for fresh PR-CI 4/4).
+  - **Phase 1** — PR sanity (file list ≤ 6 incl. report after
+    fix-up, no out-of-scope diff, OPEN/MERGEABLE/CLEAN).
+  - **Phase 2** — hazard + boundary scan: zero new
+    `eslint-disable` / `@ts-ignore` / `@ts-expect-error` /
+    `as unknown as` / `as any` / `node:*` / `Sourceplane` /
+    `fetch(` / `/v1/` / `.trim()` / `JSON.parse` on body input
+    under `packages/cli/**` new paths; lockfile delta limited to
+    the new workspace edge; zero edits to
+    `packages/webhook-verifier/**`.
+  - **Phase 3** — quality gates: `pnpm -r typecheck=0` across 39
+    workspaces, `pnpm -r --no-bail lint` ≤ 45 warnings all in
+    `tests/api-edge/**`, `pnpm --filter @saas/cli build/test`
+    green with ≥ 12 new passing cases, mandatory local e2e smoke
+    3 transcripts (human / json / tampered).
+  - **Phase 4** — `kiox -- orun validate / plan --changed / run
+    --dry-run`; plan must select ONLY `cli·{dev,stage,prod}·Verify`
+    lanes (FAIL if any other component is pulled in).
+  - **Phase 5** — PR-CI 4/4 on post-fix-up HEAD via
+    `gh run view --log` (NOT just summary).
+  - **Phase 6** — squash merge + post-merge main-CI watch (4 lanes:
+    plan + `cli·{dev,stage,prod}·Verify`, no deploy lane —
+    turbo-package shape).
+  - **Phase 7** — verifier report at
+    `ai/reports/task-0106-verifier.md` (PASS / FAIL with full
+    per-phase evidence).
+  - **Phase 8** — PASS bookkeeping commit on `main` (state.json /
+    current.md / ledger), or FAIL bookkeeping (PR comment +
+    report on PR branch, no merge).
+- Recommended-next on PASS: B5 follow-ups (rotate UX / replay UI /
+  failure-budget alerts), B7 audit-log UX expansion (multi-PR), or
+  B8 admin-worker scaffold (greenfield) — orchestrator picks at
+  next pass.
