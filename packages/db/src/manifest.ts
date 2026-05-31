@@ -138,5 +138,14 @@ export const manifest: MigrationManifest = {
       description:
         "Support persistence foundation — append-only audited support-action ledger owned by the admin-support worker",
     },
+    {
+      id: "150_entitlement_decision_observations",
+      context: "billing",
+      path: "150_entitlement_decision_observations/up.sql",
+      checksum:
+        "ba7a1a00ad723752e1bdedc8bcd47c210b24ae18bd3245cb71af84432aefa7f8",
+      description:
+        "Entitlement-decision observability — append-only, counts-only observation table (org × entitlement key × outcome) owned by the billing context",
+    },
   ],
 };

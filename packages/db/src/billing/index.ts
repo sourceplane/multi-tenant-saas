@@ -30,3 +30,14 @@ export type {
 } from "./types.js";
 
 export { createBillingRepository } from "./repository.js";
+
+export type {
+  EntitlementDecisionOutcome,
+  EntitlementDenialReason,
+  RecordDecisionObservationInput,
+  DecisionAggregateQuery,
+  DecisionAggregateBucket,
+  EntitlementDecisionRepository,
+} from "./entitlement-decisions.js";
+
+export { createEntitlementDecisionRepository } from "./entitlement-decisions.js";
