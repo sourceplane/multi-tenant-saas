@@ -1,6 +1,6 @@
 # Task Ledger
 
-Last updated: 2026-05-31 (Task 0103 Verifier PASS + MERGED — PR #158 squash `0909186`, post-merge main-CI `26699966952` 4/4 SUCCESS, SDK clients 12 → 13 with `auth` added, last SDK gap before U10 closed)
+Last updated: 2026-05-31 (Task 0104 Verifier PASS + MERGED — PR #159 squash `c78592f`, post-merge main-CI `26700942407` 4/4 SUCCESS, console fully on `Sourceplane` SDK; Task 0105 SCOPED — `@saas/webhook-verifier` helper package, B5 leg, prompt at `ai/tasks/task-0105.md`, awaiting Implementer dispatch)
 
 ## Task 0001
 
@@ -2679,3 +2679,84 @@ on the SDK side.
   with `tests/api-edge/**`).
 - Unlocks: CLI auth/SDK consumer swap (`packages/cli`) and broader
   U10 console hardening.
+
+
+## Task 0105
+
+- Agent: Implementer
+- Prompt: `ai/tasks/task-0105.md`
+- Status: scoped 2026-05-31 (orchestrator) — awaiting Implementer dispatch
+- Branch: `impl/task-0105-webhook-verifier`
+- Sealed snapshot main: `f01d61f`
+- Roadmap leg: B5 — Webhooks polish (helper-library surface only;
+  rotate UX, replay UI, failure-budget alerts remain open follow-ups)
+- Objective: Add new workspace package `@saas/webhook-verifier` at
+  `packages/webhook-verifier/` — a tiny, dependency-free helper that
+  third-party consumers can use to verify the HMAC-SHA256 signatures
+  Sourceplane attaches to outbound webhook deliveries. Codifies the
+  existing scheme from `apps/webhooks-worker/src/delivery.ts:45-61`
+  (HMAC-SHA256 over `${timestamp}.${body}`, header
+  `X-Webhook-Signature`, prefix `sha256=`) so external customers and
+  future replay tooling don't reinvent it. WebCrypto only — runs
+  verbatim on Workers / Bun / browsers / modern Node.
+- Pivot rationale: original Task 0105 framing ("CLI auth/SDK consumer
+  swap") was retired by orchestrator after code inspection showed
+  `packages/cli/src/auth/{login,whoami,logout}.ts` already construct
+  `Sourceplane` from `@saas/sdk` on main with zero `fetch(`, zero
+  `/v1/`, zero header-building. The only conceivable remaining move
+  (swap CLI's `whoami` validator from `client.organizations.list()`
+  to `client.auth.getSession()`) would regress: CLI bears API keys
+  (`actorType=service_principal`) but `/v1/auth/session` only resolves
+  user-session bearers (`actorType=user`) per
+  `apps/identity-worker/src/services/auth.ts:71,413`. That micro-swap
+  is a backend-design question, not a single-PR consumer migration —
+  defer per orchestrator's "trust code reality over stale docs" rule.
+- PR boundary:
+  - NEW `packages/webhook-verifier/` directory only (`package.json`
+    with empty runtime deps, `tsconfig.json`, `tsconfig.build.json`,
+    `component.yaml` mirroring `packages/notifications-client/component.yaml`
+    — `turbo-package`, `domain: starter-shared`, all three envs
+    `quick-check`, `README.md` ≤1.5 KB, `src/index.ts`,
+    `src/__tests__/verify.test.ts` ≥18 tests).
+  - `src/index.ts` exports: `SIGNATURE_HEADER = "X-Webhook-Signature"`,
+    `TIMESTAMP_HEADER = "X-Webhook-Timestamp"`,
+    `WEBHOOK_ID_HEADER = "X-Webhook-Id"`, `SIGNATURE_PREFIX = "sha256="`,
+    `DEFAULT_TOLERANCE_SECONDS = 300`, async
+    `verifyWebhookSignature(input)` returning a tagged result with
+    enumerated `reason` codes (`missing_signature_header`,
+    `missing_timestamp_header`, `malformed_signature`,
+    `malformed_timestamp`, `timestamp_out_of_tolerance`,
+    `signature_mismatch`, `empty_secret`, `empty_body`),
+    async `signWebhookPayload({secret, body, timestamp})` reciprocal
+    helper, ergonomic `parseSignatureHeader(header)` validator.
+  - Constant-time HMAC byte-comparison (no early-return mid-loop).
+  - Case-insensitive header lookup for both
+    `Record<string, string|string[]|undefined>` and `Headers` inputs.
+- Hard rules:
+  - WebCrypto only — zero `node:` imports anywhere under
+    `packages/webhook-verifier/**`.
+  - Zero runtime `dependencies` (devDependencies only).
+  - `component.yaml` MANDATORY (workspace-package-component-yaml audit
+    pitfall — Task 0094c precedent).
+  - Zero edits to `apps/webhooks-worker/**`, `packages/sdk/**`,
+    `packages/cli/**`, `packages/contracts/**`,
+    `apps/web-console-next/**`, `tooling/**`, `tests/api-edge/**`,
+    or `kiox.lock`.
+  - Vitest fixture must include a reciprocity test: import shape from
+    `apps/webhooks-worker/src/delivery.ts:45-60` (algorithmically; no
+    cross-package import) so a regression in either side breaks CI.
+- Acceptance:
+  - `pnpm -r typecheck` exit 0 (workspace count +1 vs main).
+  - `pnpm -r --no-bail lint` ≤ 45 warnings, all in `tests/api-edge/**`.
+  - `pnpm --filter @saas/webhook-verifier build` exit 0.
+  - `pnpm --filter @saas/webhook-verifier test` ≥ 18 tests passing.
+  - `kiox -- orun validate / plan --changed / run --dry-run` green;
+    plan must select exactly 3 `webhook-verifier` Verify lanes
+    (dev/stage/prod, all `quick-check`).
+  - PR-CI 4/4 green via `gh run view --log` (not just summary).
+  - Real PR number in implementer report (`TBD` = blocked).
+- Parallel-safe with sealed Task 0096f verifier (zero file overlap
+  with `tests/api-edge/**`).
+- Unlocks: rest of B5 cluster polish (rotate UX, replay UI,
+  failure-budget alerts) plus a future `sourceplane webhooks verify`
+  CLI subcommand once the helper is on main.

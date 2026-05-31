@@ -1,113 +1,108 @@
 # Current Context
 
-Last updated: 2026-05-31 — Task 0104 **VERIFIED PASS + MERGED**. PR #159
-squash `c78592f` via `gh pr merge --squash --delete-branch`. Post-merge
-main-CI run `26700942407` 4/4 SUCCESS (plan + web-console-next·{dev,
-stage,prod}·Verify deploy). Live URL smoke: `https://stage.sourceplane.ai`
-and `https://prod.sourceplane.ai` both return HTTP/2 307 → /orgs with
-`x-opennext: 1` and the real Next app-shell HTML. Console U10 SDK
-refactor landed.
+Last updated: 2026-05-31 — Task 0104 closed (PASS+MERGED). Task **0105
+SCOPED** (orchestrator). Pivoted from the originally sketched
+"`packages/cli` auth/SDK consumer swap" — that work is **already on
+main** (login/whoami/logout already construct `Sourceplane`, zero
+`fetch(`, zero `/v1/`, zero header building) and the only remaining
+move (swap validation to `client.auth.getSession()`) would regress
+because CLI uses API-key bearers (`actorType=service_principal`) but
+`/v1/auth/session` only accepts user-session bearers. Per orchestrator
+"trust code reality over stale docs" rule, pivoted Task 0105 to the
+next-highest-leverage human-independent candidate: **B5 webhook-verifier
+helper** (`specs/roadmap.md:81-82`).
 
-## Current Task — 0104 (closed)
+## Current Task — 0105 (scoped, awaiting implementer)
 
-**Agent:** Verifier (PASS + MERGED — task closed)
-**PR:** #159 squash `c78592f` (merged 2026-05-31)
-**Verifier prompt:** `ai/tasks/task-0104-verifier.md`
-**Verifier report:** `ai/reports/task-0104-verifier.md`
-**Implementer report:** `ai/reports/task-0104-implementer.md`
-**Branch:** deleted post-merge
-**Sealed snapshot main (pre-0104):** `1caa08b`
-**Squash commit on main:** `c78592f`
-**Post-merge main-CI run:** `26700942407` (4/4 SUCCESS)
+**Agent:** Implementer
+**Prompt:** `ai/tasks/task-0105.md`
+**Branch:** `impl/task-0105-webhook-verifier`
+**Roadmap leg:** B5 — Webhooks polish (helper-library surface only;
+rotate UX / replay UI / failure-budget alerts remain open for later)
+**Sealed snapshot main:** `f01d61f`
 
-### What landed (Path A — direct call-site migration)
+### Objective
 
-- Hand-rolled `ApiClient` deleted from
-  `apps/web-console-next/src/lib/api.ts`. File shrunk from 297 LOC →
-  ~120 LOC of pure console-side glue (`ApiTarget`, `TARGETS`,
-  `DEPLOY_ENV`, `IS_LOCKED`, `createClient(target, token) →
-  Sourceplane`, `wrap()` helper that adapts `Promise<T>` + thrown
-  `SourceplaneError` into the preserved `ApiResult<T>` shape).
-- Zero `fetch(`, zero `/v1/` route strings, zero header building inside
-  the console anymore — the SDK owns all wire I/O.
-- Multi-target switcher (`ALL_TARGETS`, `DEPLOY_ENV`, `IS_LOCKED`,
-  `NEXT_PUBLIC_DEPLOY_ENV` lock) preserved byte-for-byte.
-  `useMemo([target, token])` rebuilds the `Sourceplane` on every
-  `setTarget` / `setToken` — no auth-header leak across targets.
-- Diff `+200 / -307` across **17 files**, all under
-  `apps/web-console-next/**` plus `pnpm-lock.yaml`. Zero edits to
-  `packages/sdk/**`, `packages/contracts/**`, `packages/cli/**`,
-  `apps/*-worker/**`, `infra/**`, `tooling/**`, `tests/api-edge/**`,
-  or `apps/web-console/**`.
-- Accepted scope-extension: `apps/web-console-next/next.config.mjs`
-  +14 lines (`transpilePackages: ["@saas/sdk"]` + webpack
-  `resolve.extensionAlias` `.js → [.ts, .tsx, .js]`) — build-wiring
-  only, no runtime change.
+Add a new workspace package `@saas/webhook-verifier` at
+`packages/webhook-verifier/`. Tiny, dependency-free helper for
+**third-party consumers** to verify the HMAC-SHA256 signatures
+Sourceplane attaches to outbound webhook deliveries. Codifies the
+existing scheme from `apps/webhooks-worker/src/delivery.ts:45-61`
+(HMAC-SHA256 over `${timestamp}.${body}`, header
+`X-Webhook-Signature`, prefix `sha256=`) so external customers and
+future replay tooling don't reinvent it. WebCrypto only — runs verbatim
+on Workers / Bun / browsers / modern Node.
 
-### Verifier outcome by phase
+### PR Boundary
 
-1. **PR sanity** — PR #159 was BEHIND main (Task 0103 verifier
-   bookkeeping `9b48df4` had landed); resolved with
-   `gh pr update-branch 159` → new HEAD `d2aec28`, MERGEABLE/CLEAN.
-   Diff scope confirmed 17 files all under `apps/web-console-next/**`.
-2. **Hazard + boundary scan** — clean. Zero new `eslint-disable` /
-   `@ts-ignore` / `@ts-expect-error` / `as unknown as` / `as any` /
-   `node:*` under `apps/web-console-next/**`. Zero `fetch(` in
-   `lib/`. Zero `/v1/` strings. SDK/contracts untouched. Multi-target
-   switcher byte-identical. Bearer-token re-construction confirmed via
-   `useMemo([target, token])` in `session.tsx`.
-3. **Quality gates** — `pnpm -r typecheck` exit 0 across **38
-   workspaces**. `pnpm -r --no-bail lint` exactly **45 warnings**, all
-   in `tests/api-edge/**`. `pnpm --filter @saas/web-console-next build`
-   green (Next 15.0.3 + OpenNext 1.0.4). Pre-existing
-   `tests/db/migrations.test.ts` failure tolerated (reproduces
-   byte-identical on `main`).
-4. **Orun** — `kiox -- orun validate` exit 0; `orun plan --changed`
-   produced exactly 3 `web-console-next` Verify lanes; `orun run --plan
-   --dry-run` green.
-5. **PR-CI** — post-rebase run `26700827443` 4/4 SUCCESS via
-   `gh run view --log` (real lanes, not no-op). Stage Verify lane
-   wall-clock 1m13.9s.
-6. **Squash merge + post-merge watch + live-URL smoke** —
-   `gh pr merge 159 --squash --delete-branch` → `c78592f`. Post-merge
-   main-CI run `26700942407` 4/4 SUCCESS. Logs prove stage+prod ran
-   the **deploy** profile (Uploaded `sourceplane-web-console-next-{stage,
-   prod}` + Deployed triggers + smoke); dev kept verify (`--dry-run`).
-   Live curl: stage and prod both `HTTP/2 307` → `/orgs` with
-   `x-opennext: 1` and `<title>Sourceplane Console</title>`.
-7. **Verifier report** — written at
-   `ai/reports/task-0104-verifier.md` (PASS verdict).
-8. **PASS bookkeeping** — this commit.
+1. New `packages/webhook-verifier/` directory: `package.json`
+   (zero runtime deps), `tsconfig.json`, `tsconfig.build.json`,
+   `component.yaml` (mirrors `packages/notifications-client/component.yaml`
+   structurally — `turbo-package`, `starter-shared`, 3-env quick-check),
+   `README.md` (≤1.5 KB), `src/index.ts`,
+   `src/__tests__/verify.test.ts` (≥18 tests).
+2. `src/index.ts` exports: `SIGNATURE_HEADER`, `TIMESTAMP_HEADER`,
+   `WEBHOOK_ID_HEADER`, `SIGNATURE_PREFIX`,
+   `DEFAULT_TOLERANCE_SECONDS=300`, async `verifyWebhookSignature(input)`
+   returning a tagged result with eight enumerated `reason` codes,
+   async `signWebhookPayload({secret, body, timestamp})`. Constant-time
+   comparison; case-insensitive header lookup for both
+   `Record<string, string|string[]|undefined>` and `Headers`.
 
-## Next Task — 0105 (queued, awaiting orchestrator scoping)
+### Hard rules
 
-**Task 0105 — `packages/cli` auth/SDK consumer swap.** Symmetric
-CLI-side migration: drop any direct `fetch` / route-string / header
-building in `packages/cli/src/auth/**` and dispatch through
-`client.auth.*` from `@saas/sdk`. Estimated single PR. Unblocked by
-Task 0103 AuthClient (same trigger as 0104). Now also unblocked by
-the Console U10 SDK refactor pattern proven in 0104.
+- WebCrypto only — zero `node:` imports anywhere under
+  `packages/webhook-verifier/**`.
+- Zero runtime `dependencies` (devDependencies only).
+- `component.yaml` MANDATORY (workspace-package-component-yaml audit).
+- Zero edits to `apps/webhooks-worker/**`, `packages/sdk/**`,
+  `packages/cli/**`, `packages/contracts/**`,
+  `apps/web-console-next/**`, `tooling/**`, `tests/api-edge/**`,
+  `kiox.lock`.
+- Constant-time signature comparison — no early `return` mid byte loop.
+- Real PR number in implementer report (`TBD` = blocked).
 
-## What just landed (recap)
+### Acceptance
 
-**Task 0104 — Console U10 SDK refactor.** PR #159 squash `c78592f`,
-post-merge main-CI run `26700942407` 4/4 SUCCESS, stage+prod live
-URLs serving real Next app shell. Console clients now consume the
-13-resource `@saas/sdk` end-to-end (no hand-rolled `ApiClient`).
+- `pnpm -r typecheck` exit 0 (workspace count +1 vs main).
+- `pnpm -r --no-bail lint` ≤45 warnings, all in `tests/api-edge/**`.
+- `pnpm --filter @saas/webhook-verifier build/test` exit 0,
+  ≥18 tests passing.
+- `kiox -- orun validate/plan --changed/run --dry-run` green;
+  plan selects exactly 3 `webhook-verifier` Verify lanes.
+- PR-CI 4/4 green via `gh run view --log` (not just summary).
 
-**Task 0103 — SDK AuthClient (13th typed resource client).** PR #158
-squash `0909186`, post-merge main-CI run `26699966952` 4/4 SUCCESS.
-SDK clients on main: 12 → 13 (`auth` added).
+### Why this scope, why now
 
-**Track B4 fully closed (Task 0102, prior).** SDK exposes 13 typed
-resource clients; `@saas/cli` ships the full spec-13 required command
-surface and every command dispatches through `@saas/sdk`.
+- Task 0104 closed Console U10; SDK is at 13 clients on main; B4 +
+  U10 fully closed both directions.
+- Originally-sketched CLI consumer swap is already on main (verified
+  by inspecting `packages/cli/src/auth/{login,whoami,logout}.ts` —
+  all three flows construct `Sourceplane` and use it as the wire).
+- Roadmap B5 explicitly lists "ship a small `webhook-verifier`
+  helper" as a leaf candidate (`specs/roadmap.md:81-82`).
+- Pure external-consumer helper, zero coupling to internal workers,
+  parallel-safe with the still-active Task 0096f verifier prompt
+  (zero file overlap with `tests/api-edge/**`).
+- Mirrors the proven `@saas/notifications-client` zero-deps shape.
+
+## Next Task After 0105
+
+After Task 0105 verifier PASS+MERGE, candidates in priority order:
+
+- **B5 follow-ups** — rotate-UX, replay UI, failure-budget alerts
+  (each likely its own task; the helper unblocks none of these
+  directly, but B5 cluster polish is now in-flight).
+- **B7 — Audit-log UX** (events-worker read API surfaces are live;
+  console UI is the gap).
+- **B8 — admin-worker scaffold** (spec 16 has no app yet).
 
 ## Out of scope (deferred, parked, untouched this cycle)
 
 - `tests/api-edge/**` (sealed Task 0096f verifier prompt remains
-  active and orthogonal — zero file overlap with Task 0104)
-- `packages/cli/**` (next-likely task — Task 0105, separate PR)
+  active and orthogonal — zero file overlap with Task 0105)
+- `packages/cli/**` (CLI consumer swap is already on main; auth
+  validation surface change is a backend-decision deferral)
 - `apps/notifications-worker/**` (deferred provider-swap and
   dev-reframe)
 - `infra/terraform/cloudflare-domain/**` and the cloudflare provider
@@ -117,20 +112,23 @@ surface and every command dispatches through `@saas/sdk`.
   create/get`, `deployment get`) — deferred behind P2 backend slice
 - `apps/web-console/**` (Vite-based legacy console — not in U10
   roadmap)
+- `kiox.lock` v2.3.0→v2.9.0 working-tree drift (unrelated to 0105;
+  do NOT bundle into the PR)
 
 ## Repo Checkpoint
 
 | Attribute | Value |
 |-----------|-------|
 | **Branch (local)** | `main` (synced with `origin/main`) |
-| **HEAD** | `c78592f` (squash merge of PR #159, Task 0104) — verifier bookkeeping commit will follow |
+| **HEAD** | `f01d61f` (verifier bookkeeping for Task 0104 PASS+MERGED) |
 | **Repo health** | 🟢 Green |
 | **Open PRs** | none |
 | **Tasks completed** | 118 (through Task 0104) |
-| **Current task** | 0104 closed — 0105 queued (CLI auth/SDK consumer swap) |
+| **Current task** | 0105 (scoped — `@saas/webhook-verifier` helper, B5) |
 | **Deferred** | `0085b`, `notifications-provider-swap`, `notifications-worker-dev-reframe`, `optional-spec-13-commands` |
 | **Last verified main-CI run** | `26700942407` (post-Task-0104 merge, 4/4 SUCCESS) |
 | **Console live URL** | `https://{stage,prod}.sourceplane.ai` (HTTP/2 307 → /orgs, `x-opennext: 1`, real Next app shell) |
 | **`@saas/sdk` clients on main** | 13 (organizations, projects, memberships, apiKeys, webhooks, metering, billing, events, securityEvents, config, notifications, environments, auth) |
-| **`@saas/cli` commands on main** | full spec-13 required surface live |
+| **`@saas/cli` commands on main** | full spec-13 required surface live, dispatched through `@saas/sdk` |
 | **Console SDK adoption** | `apps/web-console-next` consumes `Sourceplane` end-to-end (hand-rolled `ApiClient` deleted) |
+| **Working-tree drift (out of scope)** | `kiox.lock` v2.3.0→v2.9.0 unstaged — do NOT bundle into Task 0105 |
