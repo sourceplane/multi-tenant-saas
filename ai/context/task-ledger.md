@@ -1,6 +1,6 @@
 # Task Ledger
 
-Last updated: 2026-05-31 (Task 0117 Verifier PASS + MERGED — PR #172 `Task 0117: Sync VALID_CONTEXTS with BoundedContext union (notifications)` squash-merged as `7440179` on main; inline 8-phase verifier PASS adapted for a 1-component db-tests turbo PR (no deploy lane): EXACTLY 2 files, single-line `"notifications"` add to the test's local `VALID_CONTEXTS` literal, `@saas/db-tests` 516/516 (was 515/516 — the last standing baseline red test, now cleared), `@saas/db` typecheck 0, Orun changed-plan `43b8f9647c5e` = 1 component (db-tests) × 1 job, PR-CI run `26711405821` 2/2 SUCCESS, post-merge main-CI `26711432243` SUCCESS, zero forbidden-zone hits, no kiox.lock mutation. main is now FULLY GREEN. Task 0118 (`refactor(cli): fold cross-reads resolveOrgId onto shared helper` — closes the Task 0111 deferred org-id-resolution fold gap) SCOPED and ready for implementer.)
+Last updated: 2026-05-31 (Task 0118 Verifier PASS + MERGED — PR #173 `refactor(cli): fold cross-reads resolveOrgId onto shared helper` squash-merged as `eda4a3a` on main; inline 8-phase verifier PASS adapted for a 1-component cli turbo PR (no deploy lane): EXACTLY 2 files (+82/−13), byte-equivalent fold of the private no-override `resolveOrgId` onto shared `helpers.ts`, `@saas/cli` typecheck 0 / lint 0 / test 164/164 (UNCHANGED count — pure refactor), Orun changed-plan `cbd6d4f3025d` = 1 component (cli) × 3 envs = 3 jobs, PR-CI run `26711637285` 4/4 SUCCESS (Verify ran orun run = 4 passed 0 failed), post-merge main-CI `26711737699` 4/4 SUCCESS, zero forbidden-zone hits, no kiox.lock mutation. Closes the Task 0111 deferred org-id-resolution fold gap — `helpers.ts` is now the single source. main remains FULLY GREEN. NOTE: main-CI surfaced the non-blocking Node 20 actions deprecation (hard cutover June 16 2026). Task 0119 (`ci(tooling): bump GitHub Actions off deprecated Node 20 runtimes`) SCOPED and ready for implementer.)
 
 ## Task 0001
 
@@ -4155,11 +4155,14 @@ One PR, one reviewer-holdable outcome (rotate UX backend), one rollback (single 
 
 ## Task 0118
 
-- Agent: Implementer
+- Agent: Implementer + Verifier
 - Prompt: `ai/tasks/task-0118.md`
-- Status: scoped and ready to begin (2026-05-31)
-- Branch: `impl/task-0118-cli-cross-reads-resolveorgid-fold`
-- Sealed snapshot main: `7440179` (Task 0117 squash).
+- Status: **verified and merged (PASS)** — PR #173 squash-merged as `eda4a3a`
+  on main (2026-05-31). Reports: `ai/reports/task-0118-implementer.md`,
+  `ai/reports/task-0118-verifier.md`.
+- Branch: `impl/task-0118-cli-cross-reads-resolveorgid-fold` (deleted post-merge)
+- Sealed snapshot main: `7440179` (Task 0117 squash) → PR base `c9cbb64`
+  (0 behind at merge — no `update-branch` needed).
 - Objective: close the Task 0111 deferred gap — fold the private no-override
   `resolveOrgId(ctx)` in `packages/cli/src/commands/cross-reads.ts` (lines 36–43)
   onto the shared `helpers.ts` variant `resolveOrgId(ctx, /* allowOverride */
@@ -4182,5 +4185,16 @@ One PR, one reviewer-holdable outcome (rotate UX backend), one rollback (single 
 - Selection rationale: now-eligible one-component fold explicitly deferred from
   Task 0111; smallest high-leverage hygiene PR that removes duplication risk;
   human-independent, parallel-safe, touches no deferred decisions.
-- Verifier prompt to be scoped after implementer completes.
+- Verifier outcome: inline 8-phase PASS adapted for a 1-component cli turbo PR
+  (no deploy lane). EXACTLY 2 files (+82/−13): `cross-reads.ts` (+5/−13) and
+  `ai/reports/task-0118-implementer.md` (NEW). Byte-equivalence confirmed —
+  `allowOverride=false` skips the shared `helpers.ts:39-42` override branch, so
+  lines 43-48 are identical to the deleted local fn; `MissingOrgContextError`
+  import dropped (now unused), `UsageError` retained. `@saas/cli` typecheck 0,
+  lint 0 warnings, test 164/164 (UNCHANGED count — pure refactor). Orun
+  changed-plan `cbd6d4f3025d` = 1 component (cli) × 3 envs = 3 jobs; PR-CI run
+  26711637285 4/4 SUCCESS (`cli·dev·Verify` ran orun run = 4 steps passed
+  0 failed, not a no-op); post-merge main-CI 26711737699 4/4 SUCCESS; zero
+  forbidden-zone hits; no kiox.lock mutation. Closes the last byte-equivalent
+  copy of org-id resolution — `helpers.ts` is now the single source.
 

@@ -1,70 +1,71 @@
 # Current Context
 
-Last updated: 2026-05-31 — Task 0117 VERIFIED + MERGED; Task 0118 SCOPED (orchestrator). Awaiting implementer.
+Last updated: 2026-05-31 — Task 0118 VERIFIED + MERGED; Task 0119 SCOPED (orchestrator). Awaiting implementer.
 
-PR #172 (Task 0117 `Sync VALID_CONTEXTS with BoundedContext union
-(notifications)`) squash-merged to main as `7440179`. Inline 8-phase verifier
-PASS adapted for a 1-component `db-tests` turbo PR (no deploy lane): EXACTLY 2
-files on the boundary (`tests/db/src/migrations.test.ts` +1 line single literal
-add of `"notifications"` adjacent to `"metering"`,
-`ai/reports/task-0117-implementer.md` NEW), zero forbidden-zone hits, no
-`kiox.lock` mutation. Quality gates: `@saas/db-tests` 516/516 (15 suites; was
-515/516), `@saas/db` typecheck 0. Orun: validate ok, changed-plan
-`43b8f9647c5e` = 1 component (db-tests) × 1 job, dry-run 1 selected green. PR-CI
-run 26711405821 = 2/2 SUCCESS (plan + db-tests·dev·Verify; `gh run view --log`
-confirms the Verify step ran the orun-run = 4 steps passed, not a no-op).
-Post-merge main-CI run 26711432243 at `7440179` = SUCCESS. 0 behind main at
-merge — no update-branch needed. Reports: `ai/reports/task-0117-implementer.md`,
-`ai/reports/task-0117-verifier.md`.
+PR #173 (Task 0118 `refactor(cli): fold cross-reads resolveOrgId onto shared
+helper`) squash-merged to main as `eda4a3a`. Inline 8-phase verifier PASS adapted
+for a 1-component `cli` turbo PR (no deploy lane): EXACTLY 2 files (+82/−13) on
+the boundary — `packages/cli/src/commands/cross-reads.ts` (+5/−13: deleted the
+private no-override `resolveOrgId`, imported the shared one from `./helpers.js`,
+dropped the now-unused `MissingOrgContextError` import keeping `UsageError`,
+updated the 3 call sites to pass `/* allowOverride */ false`),
+`ai/reports/task-0118-implementer.md` NEW. Byte-equivalence confirmed
+(`allowOverride=false` skips the `helpers.ts:39-42` override branch, leaving
+lines 43-48 identical to the deleted fn). Quality gates: `@saas/cli` typecheck 0,
+lint 0, test 164/164 (UNCHANGED count — proves pure refactor, zero behaviour
+drift). Orun: validate ok, changed-plan `cbd6d4f3025d` = 1 component (cli) × 3
+envs = 3 jobs, dry-run 3 selected green; no `kiox.lock` mutation. PR-CI run
+26711637285 = 4/4 SUCCESS (`gh run view --log` confirms `cli·dev·Verify` ran
+orun run = 4 steps passed 0 failed, not a no-op). 0 behind main at merge — no
+update-branch needed. Post-merge main-CI run 26711737699 at `eda4a3a` = 4/4
+SUCCESS. Reports: `ai/reports/task-0118-implementer.md`,
+`ai/reports/task-0118-verifier.md`.
 
-**main is now FULLY GREEN** — the last standing baseline test failure
-(`migrations.test.ts:66` VALID_CONTEXTS drift) is cleared. No known baseline
-failures remain. The B5 endpoint-CRUD CLI + SDK arc is complete and symmetric.
+The CLI now carries a single source of truth for org-id resolution
+(`helpers.ts`) — the last byte-equivalent copy is gone and the Task 0111
+deferred Remaining Gap is closed. **main remains FULLY GREEN.**
 
-Repo health: green. Working tree clean. main HEAD `7440179`.
+Repo health: green. Working tree clean. main HEAD `eda4a3a`.
 
-## Current task — 0118
+## Current task — 0119
 
-**Close the Task 0111 deferred gap: fold the private no-override `resolveOrgId`
-in `cross-reads.ts` onto the shared `helpers.ts` variant.**
+**Bump the four deprecated Node-20-runtime GitHub Actions in
+`.github/workflows/ci.yml` to Node-24 majors before the June 16 2026 hard
+cutover.**
 
-- Prompt: `ai/tasks/task-0118.md`
+- Prompt: `ai/tasks/task-0119.md`
 - Agent: Implementer
-- Branch: `impl/task-0118-cli-cross-reads-resolveorgid-fold`
-- Sealed snapshot main: `7440179` (Task 0117 squash).
-- The gap: `packages/cli/src/commands/cross-reads.ts` (lines 36–43) still carries
-  a private `resolveOrgId(ctx)` that is byte-equivalent to the shared
-  `helpers.ts` no-override branch (`resolveOrgId(ctx, /* allowOverride */
-  false)`, `helpers.ts:35-49`). Task 0111 extracted the shared helper and folded
-  `writes.ts` + `webhook-secrets-rotate.ts` but explicitly left `cross-reads.ts`
-  as a documented Remaining Gap.
-- PR boundary: 2 files exactly —
-  `packages/cli/src/commands/cross-reads.ts` (delete local fn; import
-  `resolveOrgId` from `./helpers.js`; drop now-unused `MissingOrgContextError`
-  from the `../errors.js` import, keep `UsageError`; update the 3 call sites
-  ~L70/L112/L174 to pass `false`),
-  `ai/reports/task-0118-implementer.md` (NEW, real PR#).
-- Pure internal refactor — ZERO behaviour change.
-- Forbidden zones: `helpers.ts` (already correct), all other CLI commands, all
-  packages outside `cross-reads.ts`, test files (unless a minimal forced
-  typecheck/lint import fix), lockfiles/package.json/component.yaml.
-- **Single-component turbo PR.** Orun changed-plan selects ONLY `cli`
-  (3 envs × Verify = 3 jobs + plan). No deploy/app lanes.
-- Hard rules: byte-equivalent fold; no new eslint-disable/ts-ignore/as any;
-  revert `kiox.lock`; no `plan.json` commit; real PR# (TBD = BLOCKED);
-  BEHIND-main rebase remains verifier responsibility.
-- Title: `refactor(cli): fold cross-reads resolveOrgId onto shared helper`.
+- Branch: `impl/task-0119-ci-actions-node24-bump`
+- Sealed snapshot main: `eda4a3a` (Task 0118 squash).
+- Trigger: every CI run now emits the Node 20 deprecation annotation for
+  `actions/checkout@v4`, `actions/upload-artifact@v4`,
+  `actions/download-artifact@v4`, `docker/login-action@v3`. Actions forced to
+  Node 24 starting **June 16 2026**.
+- PR boundary: 2 files exactly — `.github/workflows/ci.yml` (four single-token
+  ref bumps: both `checkout@v4`→`@v6`, `upload-artifact@v4`→`@v7`,
+  `download-artifact@v4`→`@v8`, `docker/login-action@v3`→`@v4`),
+  `ai/reports/task-0119-implementer.md` (NEW, real PR#).
+- Grounded versions (orchestrator research via `gh api` `action.yml` `using:`):
+  checkout node24 from v5+ (latest v6.0.2), upload-artifact from v7 (latest
+  v7.0.1), download-artifact from v8 (latest v8.0.1), docker/login-action from
+  v4 (v4.2.0).
+- Out of scope: `sourceplane/orun-action@v1.2.0` (org composite, not in the
+  banner); `actions/cache@v4` (named in the banner but injected transitively by
+  orun-action's tooling, not present in `ci.yml`, not addressable here).
+- Behaviour-preserving: both `orun` step bodies + env + permissions + matrix +
+  job names byte-identical. Expected: `orun plan --changed` likely EMPTY (keys
+  off `intent.yaml` paths, not `.github/**`), so PR-CI shows only the `plan`
+  job; that is the verification surface (plan job green on new majors + banner
+  gone).
+- Title: `ci(tooling): bump GitHub Actions off deprecated Node 20 runtimes`.
 
-## Recommended next focus after 0118
+## Recommended next focus after 0119
 
 1. **Delivery-attempts UX** — next B5 leg per `specs/roadmap.md` for a richer
    console or CLI slice now that endpoint-CRUD + SDK symmetry are fully closed.
-2. **Node 20 → 24 CI actions bump** — non-blocking deprecation warning today,
-   but a hard cutover lands June 16 2026; a small infra/tooling PR de-risks it
-   early.
-3. **`VALID_CONTEXTS` drift-proofing (hygiene)** — derive the test array from
+2. **`VALID_CONTEXTS` drift-proofing (hygiene)** — derive the test array from
    the `BoundedContext` union via `as const` so the duplication fixed in Task
    0117 cannot re-break. Low priority; flagged in the Task 0117 implementer
    report as a future improvement.
 
-Repo health: green. main HEAD `7440179`.
+Repo health: green. main HEAD `eda4a3a`.
