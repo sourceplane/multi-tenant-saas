@@ -18,13 +18,29 @@ import type { RequestOptions, Transport } from "./transport.js";
  * import them at the call site.
  */
 
+/**
+ * Independently-combinable filters for the org-scoped audit list. Every field
+ * is optional; supplying several narrows the result set with AND semantics.
+ * `from`/`to` are inclusive bounds on `occurredAt` (ISO-8601 ms Z). None of
+ * these alter the keyset ordering or cursor — they only restrict eligible rows.
+ */
+export interface AuditEntryFilters {
+  actorId?: string;
+  actorType?: string;
+  subjectKind?: string;
+  subjectId?: string;
+  eventType?: string;
+  from?: string;
+  to?: string;
+}
+
 export type ListAuditEntriesQuery =
-  | {
+  | ({
       by: "org";
       category?: string;
       limit?: number;
       cursor?: string;
-    }
+    } & AuditEntryFilters)
   | {
       by: "target";
       subjectKind: string;
@@ -116,6 +132,29 @@ export class EventsClient {
       },
     };
   }
+
+  /**
+   * Stream the (optionally filtered) audit log as NDJSON — one JSON-encoded
+   * `PublicAuditEntry` per line, terminated by a single `\n`. Layered over
+   * `iterAuditEntries`, so every filter, the keyset ordering, and the
+   * `AUDIT_ITERATOR_MAX_PAGES` / `seenCursors` loop guards apply unchanged.
+   *
+   * Yields complete lines (including the trailing newline) so a consumer can
+   * pipe them straight to stdout / a download stream without re-joining:
+   *
+   *   for await (const line of client.events.exportAuditEntriesNdjson(orgId, q)) {
+   *     process.stdout.write(line);
+   *   }
+   */
+  async *exportAuditEntriesNdjson(
+    orgId: string,
+    query: ListAuditEntriesQuery = { by: "org" },
+    opts: RequestOptions = {},
+  ): AsyncGenerator<string, void, unknown> {
+    for await (const entry of this.iterAuditEntries(orgId, query, opts)) {
+      yield `${JSON.stringify(entry)}\n`;
+    }
+  }
 }
 
 interface AuditRequestInput {
@@ -133,6 +172,13 @@ function buildAuditRequest(
   if (query.cursor !== undefined) params.cursor = query.cursor;
   if (query.by === "org") {
     if (query.category !== undefined) params.category = query.category;
+    if (query.actorId !== undefined) params.actorId = query.actorId;
+    if (query.actorType !== undefined) params.actorType = query.actorType;
+    if (query.subjectKind !== undefined) params.subjectKind = query.subjectKind;
+    if (query.subjectId !== undefined) params.subjectId = query.subjectId;
+    if (query.eventType !== undefined) params.eventType = query.eventType;
+    if (query.from !== undefined) params.from = query.from;
+    if (query.to !== undefined) params.to = query.to;
   } else {
     params.subjectKind = query.subjectKind;
     params.subjectId = query.subjectId;
@@ -180,6 +226,27 @@ function createAuditIterator(
                 by: "org",
                 ...(initialQuery.category !== undefined
                   ? { category: initialQuery.category }
+                  : {}),
+                ...(initialQuery.actorId !== undefined
+                  ? { actorId: initialQuery.actorId }
+                  : {}),
+                ...(initialQuery.actorType !== undefined
+                  ? { actorType: initialQuery.actorType }
+                  : {}),
+                ...(initialQuery.subjectKind !== undefined
+                  ? { subjectKind: initialQuery.subjectKind }
+                  : {}),
+                ...(initialQuery.subjectId !== undefined
+                  ? { subjectId: initialQuery.subjectId }
+                  : {}),
+                ...(initialQuery.eventType !== undefined
+                  ? { eventType: initialQuery.eventType }
+                  : {}),
+                ...(initialQuery.from !== undefined
+                  ? { from: initialQuery.from }
+                  : {}),
+                ...(initialQuery.to !== undefined
+                  ? { to: initialQuery.to }
                   : {}),
                 ...(initialQuery.limit !== undefined
                   ? { limit: initialQuery.limit }

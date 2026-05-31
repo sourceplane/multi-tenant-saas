@@ -82,6 +82,7 @@ export { BillingClient } from "./billing.js";
 export {
   EventsClient,
   AUDIT_ITERATOR_MAX_PAGES,
+  type AuditEntryFilters,
   type ListAuditEntriesQuery,
   type ListAuditEntriesResult,
 } from "./events.js";

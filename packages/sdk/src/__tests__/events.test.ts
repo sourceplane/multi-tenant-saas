@@ -204,4 +204,86 @@ describe("EventsClient.iterAuditEntries", () => {
     // Sanity-check: the cap is exported and ≥ 1000 (per Task 0102 contract).
     expect(AUDIT_ITERATOR_MAX_PAGES).toBeGreaterThanOrEqual(1000);
   });
+
+  it("forwards by:org filter params on every page request", async () => {
+    const { fetch, calls } = pageResponder([
+      { entries: [], meta: { cursor: "cur_2" } },
+      { entries: [], meta: { cursor: null } },
+    ]);
+    const it = client(fetch).events.iterAuditEntries("org_1", {
+      by: "org",
+      actorId: "usr_a",
+      actorType: "user",
+      subjectKind: "project",
+      subjectId: "prj_1",
+      eventType: "member.role_changed",
+      from: "2026-01-01T00:00:00.000Z",
+      to: "2026-02-01T00:00:00.000Z",
+    });
+    for await (const _e of it) {
+      void _e;
+    }
+    expect(calls).toHaveLength(2);
+    for (const c of calls) {
+      expect(c.url).toContain("actorId=usr_a");
+      expect(c.url).toContain("actorType=user");
+      expect(c.url).toContain("subjectKind=project");
+      expect(c.url).toContain("subjectId=prj_1");
+      expect(c.url).toContain("eventType=member.role_changed");
+      expect(c.url).toContain("from=2026-01-01T00%3A00%3A00.000Z");
+      expect(c.url).toContain("to=2026-02-01T00%3A00%3A00.000Z");
+    }
+    expect(calls[1]!.url).toContain("cursor=cur_2");
+  });
+});
+
+describe("EventsClient.exportAuditEntriesNdjson", () => {
+  it("yields one NDJSON line per entry across pages", async () => {
+    const { fetch } = pageResponder([
+      {
+        entries: [entry("ae_1", "2025-01-01T00:00:00Z"), entry("ae_2", "2025-01-02T00:00:00Z")],
+        meta: { cursor: "cur_2" },
+      },
+      { entries: [entry("ae_3", "2025-01-03T00:00:00Z")], meta: { cursor: null } },
+    ]);
+    const lines: string[] = [];
+    for await (const line of client(fetch).events.exportAuditEntriesNdjson("org_1")) {
+      lines.push(line);
+    }
+    expect(lines).toHaveLength(3);
+    // Each line is a standalone JSON document terminated by a newline.
+    for (const line of lines) {
+      expect(line.endsWith("\n")).toBe(true);
+      const parsed = JSON.parse(line.trimEnd());
+      expect(typeof parsed.id).toBe("string");
+    }
+    expect(JSON.parse(lines[0]!.trimEnd()).id).toBe("ae_1");
+    expect(JSON.parse(lines[2]!.trimEnd()).id).toBe("ae_3");
+  });
+
+  it("forwards filters into the export stream", async () => {
+    const { fetch, calls } = pageResponder([
+      { entries: [entry("ae_1", "2025-01-01T00:00:00Z")], meta: { cursor: null } },
+    ]);
+    const lines: string[] = [];
+    for await (const line of client(fetch).events.exportAuditEntriesNdjson("org_1", {
+      by: "org",
+      actorType: "service_principal",
+      from: "2026-01-01T00:00:00.000Z",
+    })) {
+      lines.push(line);
+    }
+    expect(lines).toHaveLength(1);
+    expect(calls[0]!.url).toContain("actorType=service_principal");
+    expect(calls[0]!.url).toContain("from=2026-01-01T00%3A00%3A00.000Z");
+  });
+
+  it("yields nothing for an empty result set", async () => {
+    const { fetch } = pageResponder([{ entries: [], meta: { cursor: null } }]);
+    const lines: string[] = [];
+    for await (const line of client(fetch).events.exportAuditEntriesNdjson("org_1")) {
+      lines.push(line);
+    }
+    expect(lines).toEqual([]);
+  });
 });

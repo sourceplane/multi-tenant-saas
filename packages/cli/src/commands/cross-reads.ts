@@ -43,6 +43,54 @@ function parseLimit(flag: string | boolean | undefined): number | undefined {
   return n;
 }
 
+/** Read a string flag, treating empty / boolean / missing as absent. */
+function strFlag(flag: string | boolean | undefined): string | undefined {
+  return typeof flag === "string" && flag.length > 0 ? flag : undefined;
+}
+
+/**
+ * Collect the optional org-audit filter flags into the SDK's `by:"org"` filter
+ * shape. Validation is intentionally minimal here — the worker is the
+ * authoritative validator (charset, actorType set, ISO timestamp). The CLI just
+ * forwards non-empty values; malformed input surfaces as a 400 from the API.
+ */
+function parseAuditFilterFlags(
+  flags: Record<string, string | boolean | undefined>,
+): {
+  actorId?: string;
+  actorType?: string;
+  subjectKind?: string;
+  subjectId?: string;
+  eventType?: string;
+  from?: string;
+  to?: string;
+} {
+  const filters: {
+    actorId?: string;
+    actorType?: string;
+    subjectKind?: string;
+    subjectId?: string;
+    eventType?: string;
+    from?: string;
+    to?: string;
+  } = {};
+  const actorId = strFlag(flags["actor"]);
+  if (actorId !== undefined) filters.actorId = actorId;
+  const actorType = strFlag(flags["actor-type"]);
+  if (actorType !== undefined) filters.actorType = actorType;
+  const subjectKind = strFlag(flags["subject-kind"]);
+  if (subjectKind !== undefined) filters.subjectKind = subjectKind;
+  const subjectId = strFlag(flags["subject-id"]);
+  if (subjectId !== undefined) filters.subjectId = subjectId;
+  const eventType = strFlag(flags["event-type"]);
+  if (eventType !== undefined) filters.eventType = eventType;
+  const from = strFlag(flags["from"]);
+  if (from !== undefined) filters.from = from;
+  const to = strFlag(flags["to"]);
+  if (to !== undefined) filters.to = to;
+  return filters;
+}
+
 // ---------------------------------------------------------------------------
 // usage summary [--metric=METRIC] [--from=ISO] [--to=ISO]
 //
@@ -158,9 +206,26 @@ export async function auditListCommand(ctx: CommandContext): Promise<CommandResu
   const categoryFlag = ctx.flags["category"];
   const category = typeof categoryFlag === "string" && categoryFlag.length > 0 ? categoryFlag : undefined;
   const all = ctx.flags["all"] === true;
+  const filters = parseAuditFilterFlags(ctx.flags);
 
+  // Export mode: `--format=ndjson` streams the entire filtered stream as
+  // newline-delimited JSON (one PublicAuditEntry per line) via the SDK export
+  // helper. It walks every page, so `--cursor` (a single-page seek) is
+  // incompatible with it, just like `--all`.
+  const formatFlag = strFlag(ctx.flags["format"]);
+  if (formatFlag !== undefined && formatFlag !== "ndjson") {
+    throw new UsageError(`--format must be "ndjson" (got ${formatFlag})`);
+  }
+  const exportNdjson = formatFlag === "ndjson";
+
+  if (exportNdjson && cursor !== undefined) {
+    throw new UsageError("--format=ndjson and --cursor are mutually exclusive");
+  }
   if (all && cursor !== undefined) {
     throw new UsageError("--all and --cursor are mutually exclusive");
+  }
+  if (exportNdjson && all) {
+    throw new UsageError("--format=ndjson and --all are mutually exclusive");
   }
 
   const orgId = await resolveOrgId(ctx, /* allowOverride */ false);
@@ -168,14 +233,24 @@ export async function auditListCommand(ctx: CommandContext): Promise<CommandResu
 
   // Build the discriminated `by:"org"` query the SDK accepts. We never
   // pass `cursor` here in --all mode (already validated above); in default
-  // mode we forward it verbatim.
+  // mode we forward it verbatim. Filters are threaded into every mode.
   function buildQuery(forCursor: string | undefined): ListAuditEntriesQuery {
     return {
       by: "org",
       ...(category !== undefined ? { category } : {}),
+      ...filters,
       ...(limit !== undefined ? { limit } : {}),
       ...(forCursor !== undefined ? { cursor: forCursor } : {}),
     };
+  }
+
+  if (exportNdjson) {
+    // Stream NDJSON straight to stdout, one line per entry. The SDK helper
+    // already terminates each line with "\n", so we write verbatim.
+    for await (const line of sdk.events.exportAuditEntriesNdjson(orgId, buildQuery(undefined))) {
+      ctx.stdout(line.endsWith("\n") ? line.slice(0, -1) : line);
+    }
+    return { exitCode: 0 };
   }
 
   if (!all) {

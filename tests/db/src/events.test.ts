@@ -415,6 +415,90 @@ describe("events repository: queryAuditByOrg", () => {
       expect(result.error.kind).toBe("internal");
     }
   });
+
+  it("filters by actor, subject, and event type with parameterized equality", async () => {
+    const { executor, queries } = createFakeExecutor({ rows: [] });
+    const repo = createEventsRepository(executor);
+
+    await repo.queryAuditByOrg("org-001", { limit: 10, cursor: null }, undefined, {
+      actorId: "usr-123",
+      actorType: "user",
+      subjectKind: "project",
+      subjectId: "prj-9",
+      eventType: "member.role_changed",
+    });
+
+    const text = queries[0]!.text;
+    expect(text).toContain("actor_id = $3");
+    expect(text).toContain("actor_type = $4");
+    expect(text).toContain("subject_kind = $5");
+    expect(text).toContain("subject_id = $6");
+    expect(text).toContain("event_type = $7");
+    expect(text).not.toContain("usr-123");
+    expect(text).not.toContain("member.role_changed");
+    expect(queries[0]!.params.slice(2, 7)).toEqual([
+      "usr-123",
+      "user",
+      "project",
+      "prj-9",
+      "member.role_changed",
+    ]);
+    expect(queries[0]!.params[7]).toBe(11);
+  });
+
+  it("applies an inclusive occurred_at time window for from/to", async () => {
+    const { executor, queries } = createFakeExecutor({ rows: [] });
+    const repo = createEventsRepository(executor);
+
+    await repo.queryAuditByOrg("org-001", { limit: 10, cursor: null }, undefined, {
+      from: "2026-01-01T00:00:00.000Z",
+      to: "2026-02-01T00:00:00.000Z",
+    });
+
+    const text = queries[0]!.text;
+    expect(text).toContain("occurred_at >= $3");
+    expect(text).toContain("occurred_at <= $4");
+    expect(queries[0]!.params[2]).toBe("2026-01-01T00:00:00.000Z");
+    expect(queries[0]!.params[3]).toBe("2026-02-01T00:00:00.000Z");
+  });
+
+  it("composes category + filters + cursor without altering ORDER BY", async () => {
+    const { executor, queries } = createFakeExecutor({ rows: [] });
+    const repo = createEventsRepository(executor);
+
+    await repo.queryAuditByOrg(
+      "org-001",
+      { limit: 5, cursor: { occurredAt: "2026-01-15T09:00:00Z", id: "aud-010" } },
+      "membership",
+      { actorType: "service_principal", from: "2026-01-01T00:00:00.000Z" },
+    );
+
+    const text = queries[0]!.text;
+    expect(text).toContain("WHERE org_id IN ($1, $2)");
+    expect(text).toContain("category = $3");
+    expect(text).toContain("actor_type = $4");
+    expect(text).toContain("occurred_at >= $5");
+    expect(text).toContain("ORDER BY occurred_at DESC, id DESC");
+    expect(queries[0]!.params[0]).toBe("org-001");
+    expect(queries[0]!.params[2]).toBe("membership");
+    expect(queries[0]!.params[3]).toBe("service_principal");
+    expect(queries[0]!.params[4]).toBe("2026-01-01T00:00:00.000Z");
+    expect(queries[0]!.params[5]).toBe(6);
+    expect(queries[0]!.params[6]).toBe("2026-01-15T09:00:00Z");
+    expect(queries[0]!.params[7]).toBe("aud-010");
+  });
+
+  it("adds no filter clauses when filters is empty", async () => {
+    const { executor, queries } = createFakeExecutor({ rows: [] });
+    const repo = createEventsRepository(executor);
+
+    await repo.queryAuditByOrg("org-001", { limit: 10, cursor: null }, undefined, {});
+
+    const text = queries[0]!.text;
+    expect(text).not.toContain("actor_id");
+    expect(text).not.toContain("occurred_at >=");
+    expect(queries[0]!.params[2]).toBe(11);
+  });
 });
 
 describe("events repository: queryAuditByTarget", () => {
