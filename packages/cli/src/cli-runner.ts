@@ -23,6 +23,7 @@ import {
 } from "./commands/writes.js";
 import { makeWebhookVerifyCommand, type WebhookVerifyOptions } from "./commands/webhook-verify.js";
 import { makeWebhookSignCommand, type WebhookSignOptions } from "./commands/webhook-sign.js";
+import { webhookSecretsRotateCommand } from "./commands/webhook-secrets-rotate.js";
 import {
   usageSummaryCommand,
   billingSummaryCommand,
@@ -165,6 +166,7 @@ function buildRouter(opts: RunOptions): Router {
   r.register(["webhook", "create"], "Create a webhook endpoint (and optional subscriptions)", webhookCreateCommand);
   r.register(["webhook", "verify"], "Verify a webhook signature locally (no network)", webhookVerifyHandler);
   r.register(["webhook", "sign"], "Sign a webhook payload locally (no network)", webhookSignHandler);
+  r.register(["webhook", "secrets", "rotate"], "Rotate the signing secret for a webhook endpoint (reveal-once)", webhookSecretsRotateCommand);
   // Cross-resource reads
   r.register(["usage", "summary"], "Summarize usage rollups for the active organization", usageSummaryCommand);
   r.register(["billing", "summary"], "Show billing customer/plan/entitlements summary", billingSummaryCommand);
@@ -201,6 +203,7 @@ function printHelp(stdout: (line: string) => void): void {
       "  sourceplane webhook create <url> [--event=EVENT[,EVENT2,...]] [--idempotency-key=KEY]",
       "  sourceplane webhook verify --secret=S --signature=H --timestamp=T [--body=PATH] [--tolerance-seconds=N]",
       "  sourceplane webhook sign --secret=S --timestamp=T [--body=PATH]",
+      "  sourceplane webhook secrets rotate <endpointId> [--idempotency-key=KEY]",
       "",
       "USAGE / BILLING / AUDIT:",
       "  sourceplane usage summary [--metric=METRIC] [--from=ISO] [--to=ISO]",
