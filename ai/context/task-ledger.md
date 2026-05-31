@@ -4257,23 +4257,34 @@ One PR, one reviewer-holdable outcome (rotate UX backend), one rollback (single 
 
 - Agent: Implementer → Verifier
 - Prompt: `ai/tasks/task-0120.md` → `ai/tasks/task-0120-verifier.md`
-- Status: IMPLEMENTER COMPLETE + VERIFIER SCOPED 2026-05-31 (orchestrator).
-  PR #175 OPEN/MERGEABLE/CLEAN at HEAD `60776a0` (base main `180a7ea`, 0
-  behind). One combined PR, 13 files (+1474/-30) across SDK + Console + CLI +
-  test harness + lockfile + report. PR-CI run 26713434492 = 11/11 SUCCESS
-  (plan + cli×3 Verify + sdk×3 Verify + web-console-next×3 Verify deploy +
-  web-console-next-tests·dev·Verify). Implementer gates green: sdk 0/0/113,
-  cli 0/0/178 (+14), web-console-next 0/0, web-console-next-tests 0/0/53;
-  orun plan --changed = 4 components × 3 envs → 10 jobs. Load-bearing fact:
-  worker emits cursor in opaque base64 `meta.cursor` (envelope), NOT body
-  `nextCursor`; consumers read `meta.cursor ?? null` and forward verbatim.
-  5 latitude decisions recorded (one combined PR; pure-helper Console
-  extraction; CLI on `audit list`; dropped optional single-`getDeliveryAttempt`;
-  added `@saas/contracts` to console test project). Verifier prompt is 8-phase
-  ADAPTED for deploy-gated web-console-next leg: Phase 7 MANDATORY post-merge
-  main-CI deploy + smoke + live-URL curl per
-  `references/post-merge-deploy-profile-gap.md`. BEHIND-main rebase =
-  verifier responsibility. Awaiting verifier pickup.
+- Status: VERIFIED PASS + MERGED 2026-05-31. PR #175 squash-merged as
+  `99877e0` on main (mergedAt 2026-05-31T13:29:02Z), branch
+  `impl/task-0120-webhook-delivery-history` deleted. Post-merge main-CI run
+  `26713941496` SUCCESS (12/12 jobs incl. all three web-console-next deploy
+  lanes — dev 1m19s / stage 1m39s / prod 3m4s, each 8/8 steps incl. `07 deploy`
+  wrangler 4.90.0 + `08 smoke`). Live-URL probe: prod Worker
+  `https://sourceplane-web-console-next-prod.rahulvarghesepullely.workers.dev/`
+  → HTTP 307 → `/orgs` → HTTP 200 (healthy); stage Worker `/` → 307. Node 20
+  banner lists ONLY out-of-scope `actions/cache@v4`. Reports:
+  `ai/reports/task-0120-implementer.md`, `ai/reports/task-0120-verifier.md`.
+  Closes the B5-webhook-delivery-history milestone end to end.
+- Verifier (8-phase, Phase 7 deploy-gated): Phase 0 readiness (impl report on
+  PR branch real #175, no fix-up) → Phase 1 EXACTLY 13 files (+1535/-30) all in
+  allowlist → Phase 2 hazard/forbidden scan clean (SDK reads `meta.cursor ??
+  null` verbatim, query type carries ONLY limit+cursor, zero new
+  eslint-disable/ts-ignore/as any, no secret/raw-body/full-payload render —
+  only safe failureReason, zero contracts/worker/api-edge/db touches) → Phase 3
+  cursor seam correct → Phase 4 quality gates (sdk 0/0/113, cli 0/0/178 [+14],
+  web-console-next 0/0, web-console-next-tests 0/0/53) → Phase 5 Orun local
+  (validate ok, plan --changed = 4 components × 3 envs → 10 jobs
+  {cli,sdk,web-console-next,web-console-next-tests}, run --dry-run 10;
+  kiox.lock reverted, plan.json removed) → Phase 6 PR-CI run `26713434492`
+  11/11 SUCCESS confirmed real via `gh run view --log` → Phase 6.5 BEHIND-main
+  (recurring 0103-0119) → `gh pr update-branch 175` → rebased HEAD `dd61a17` →
+  re-poll CI `26713863909` 11/11 → CLEAN → squash-merge → Phase 7 post-merge
+  deploy gate + live-URL probe (above) → Phase 8 PASS bookkeeping.
+- Original HEAD `60776a0` (base main `180a7ea`); rebased HEAD `dd61a17`;
+  squash merge `99877e0`.
 - Milestone: `B5-webhook-delivery-history` — ship the per-endpoint webhook
   delivery-history observability surface end to end (Console + CLI + the SDK
   plumbing they need). Buyer-credible webhook debuggability is the next B5 leg
