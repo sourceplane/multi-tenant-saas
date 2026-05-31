@@ -1,7 +1,7 @@
 # Spec Proposal: Webhook endpoint re-enable surface
 
 **Source task:** Task 0112 (console webhook-endpoint CRUD)
-**Status:** RESOLVED — implemented in Task 0113 (`/ai/tasks/task-0113.md`).
+**Status:** RESOLVED — implemented in Task 0113 (`/ai/tasks/task-0113.md`, PR #168).
 **Carry-forward:** None. The console can now flip a `disabled` endpoint
 back to `active` via `POST /v1/organizations/{orgId}/webhooks/endpoints/{endpointId}/enable`
 through the SDK's `webhooks.enableEndpoint(...)` method. The detail

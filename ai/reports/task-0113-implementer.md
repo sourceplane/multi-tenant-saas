@@ -207,5 +207,4 @@ Spec proposal (1):
 
 ## PR Number
 
-PENDING — see "PR creation" step below; will be filled in after `gh pr
-create` and a final commit pushing the report's PR-number annotation.
+**#168** — https://github.com/sourceplane/multi-tenant-saas/pull/168
