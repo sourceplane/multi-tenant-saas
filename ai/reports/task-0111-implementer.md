@@ -6,7 +6,7 @@ Task: Extract shared `cli-helpers` module (`resolveOrgId` /
 Branch: `impl/task-0111-cli-helpers-extract`
 Base: `main` @ `fcc5340` (Task 0111 scope commit on top of `142d019`
 PR #165 squash)
-PR Number: TBD (set after `gh pr create`)
+PR Number: #166
 
 ## Summary
 
@@ -155,6 +155,8 @@ CLI write/rotate surface.
 
 ## PR Creation
 
-(filled in after `gh pr create` succeeds — branch `impl/task-0111-cli-helpers-extract`,
-title `Task 0111: extract shared cli-helpers module
-(resolveOrgId / readIdempotencyKey)`)
+- Branch: `impl/task-0111-cli-helpers-extract`
+- Title: `Task 0111: extract shared cli-helpers module (resolveOrgId / readIdempotencyKey)`
+- URL: https://github.com/sourceplane/multi-tenant-saas/pull/166
+- PR #166, opened against `main`. CI lanes (plan + cli·{dev,stage,prod}·Verify)
+  watching post-push.
