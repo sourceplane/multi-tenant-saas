@@ -1,6 +1,6 @@
 # Task Ledger
 
-Last updated: 2026-05-30 (Task 0096b Verifier PASS + MERGED — PR #145 squash `6b738c0`, post-merge main-CI `26677189951` 2/2 SUCCESS, `tests/membership-worker` 350 → 0 `@typescript-eslint/no-explicit-any`, global residual lint 627 → 277 all in other `tests/**` workspaces, apps-source still 0)
+Last updated: 2026-05-31 (Task 0102 Verifier PASS + MERGED — PR #157 squash `bced5fa`, post-merge main-CI `26699284529` 7/7 SUCCESS, Track B4 FULLY CLOSED, every CLI command dispatches through `@saas/sdk`)
 
 ## Task 0001
 
@@ -2458,17 +2458,17 @@ on the SDK side.
 
 ## Task 0102
 
-- Agent: Implementer (verifier sealed and pending)
+- Agent: Implementer + Verifier
 - Prompt: `ai/tasks/task-0102.md`
-- Verifier prompt (sealed): `ai/tasks/task-0102-verifier.md`
-- Status: implementer phase complete 2026-05-31; PR #156 OPEN on
-  branch `impl/task-0102-sdk-environments-and-audit-iterator`, head
-  3d234c9, MERGEABLE but UNSTABLE because base =
-  `feat/cli-task-0101-write-and-cross-read-commands` (stacked on PR
-  #155). Plan job currently fails with `no trigger binding matched
-  github event pull_request action opened` — purely a stacked-base
-  artefact; resolves with the verifier's Phase 0 rebase onto `main`
-  after PR #155 merges.
+- Verifier prompt: `ai/tasks/task-0102-verifier.md`
+- Status: verified and merged 2026-05-31. PR #156 was auto-closed
+  by GitHub when its base branch was deleted on the Task 0101
+  squash-merge and could not be reopened after retargeting (GitHub
+  refuses base-change on closed PRs); verifier opened PR #157 on
+  the same head branch (rebased onto `main`). Squash-merged at
+  `bced5fa` via `gh pr merge 157 --squash --delete-branch --admin`.
+  Post-merge main-CI run `26699284529` 7/7 SUCCESS (plan + sdk ×
+  {dev,stage,prod} + cli × {dev,stage,prod}).
 - Objective: close the two SDK-side gaps surfaced by Task 0101 and
   re-wire the CLI so every command dispatches through a typed
   `@saas/sdk` resource client. Ships `EnvironmentsClient`
@@ -2497,6 +2497,16 @@ on the SDK side.
   {dev,stage,prod}); CLI public behaviour byte-identical (URL
   shapes, JSON envelope, NDJSON `--all` output, human columns,
   idempotency-key forwarding).
-- Expected outcome: PR #156 squash-merged, post-merge main-CI 7/7
-  green, Track B4 fully CLOSED, both Task 0101 SDK-gap proposals
-  RESOLVED.
+- Durable outcome: PR #157 squash-merged at `bced5fa`, post-merge
+  main-CI run `26699284529` 7/7 SUCCESS, Track B4 FULLY CLOSED.
+  Every CLI command in the spec-13 surface now dispatches through
+  a typed `@saas/sdk` resource client. SDK clients 11 → 12
+  (added `EnvironmentsClient`); SDK tests 70 → 89 (+19); CLI tests
+  preserved at 95. Both Task 0101 SDK-gap proposals
+  (`task-0101-spec-update-environments-client.md`,
+  `task-0101-spec-update-audit-pagination.md`) RESOLVED. Public
+  APIs preserved additively: `Transport.request<T>` untouched +
+  new `requestWithEnvelope<T>` sibling; `EventsClient.listAuditEntries`
+  untouched + new `listAuditEntriesPage` primitive +
+  `iterAuditEntries` async iterator with `seenCursors` + 1000-page
+  cap. Reports: `ai/reports/task-0102-{implementer,verifier}.md`.
