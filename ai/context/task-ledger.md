@@ -3409,3 +3409,51 @@ One PR, one reviewer-holdable outcome (rotate UX backend), one rollback (single 
   and workers.dev URLs needed for live evidence. The
   no-encryption-key fallback (amber "rotation completed — secret not
   returned" banner) was accepted as graceful legacy handling.
+
+## Task 0110
+
+- Agent: Implementer
+- Prompt: `ai/tasks/task-0110.md`
+- Status: scoped and ready to begin (2026-05-31)
+- Sealed snapshot main: `3cfdeb0` (Task 0109 verifier-PASS bookkeeping)
+- Branch: `impl/task-0110-cli-webhook-secrets-rotate`
+- Objective: ship `sourceplane webhook secrets rotate <endpointId>`
+  CLI subcommand — symmetric counterpart to Task 0109's console
+  reveal-once UX. Pure SDK consumer of the now-locked
+  `client.webhooks.rotateSecret`; reveal-once `whsec_<32hex>`
+  plaintext printed exactly once on stdout, never persisted/logged
+  /stashed; legacy no-encryption-key branch renders amber-toned
+  no-plaintext affordance (no fake placeholder), mirroring the 0109
+  console behaviour. Closes the B5 secret-rotation arc:
+  0108 backend → 0109 console → **0110 CLI**.
+- PR Boundary (≤ 4 paths + report):
+  - `packages/cli/src/commands/webhook-secrets-rotate.ts` — NEW.
+  - `packages/cli/src/cli-runner.ts` — register
+    `["webhook", "secrets", "rotate"]` route + 1 help line.
+  - `packages/cli/src/__tests__/webhook-secrets-rotate.test.ts` —
+    NEW with ≥ 12 cases including reveal-once stdout discipline
+    (`stdout.match(/whsec_/g).length === 1`).
+  - `ai/reports/task-0110-implementer.md` — NEW, committed on PR
+    branch (do NOT repeat 0106 missing-report gap).
+- Forbidden zones: `packages/sdk/**`, `packages/contracts/**`,
+  `packages/webhook-verifier/**`, `apps/**`, `tests/**`,
+  `infra/**`, `tooling/**`, `stack-tectonic/**`, `kiox.lock`,
+  `packages/cli/package.json`, `pnpm-lock.yaml`, and the existing
+  `webhook-{verify,sign}.ts` / `writes.ts` / `cross-reads.ts` /
+  `commands/index.ts`.
+- Architect Brief (Stripe-quality CLI rotate-key ergonomics):
+  surface plaintext loudly + exactly once; failure modes
+  invalidating the PR even with green CI = any persistence beyond
+  the single stdout write, any non-success branch printing the
+  secret, any wider-object stringify capturing it.
+- Acceptance: `pnpm -r typecheck=0` (39 workspaces); `pnpm -r
+  --no-bail lint` ≤ 45 warnings ALL in `tests/api-edge/**`;
+  `@saas/cli` build/test green with ≥ 135 total cases (existing
+  123 + ≥ 12 new); `kiox -- orun plan --changed --base origin/main`
+  selects ONLY `cli·{dev,stage,prod}·Verify` (1 component × 3
+  envs = 3 jobs); PR-CI 4/4 SUCCESS via `gh run view --log`;
+  real PR number recorded (TBD = blocked).
+- Expected outcome: closes B5 secret-rotation arc with a
+  reviewable, parallel-safe CLI slice; durable subcommand path
+  `["webhook","secrets","rotate"]` (three-segment plural) leaves
+  room for future `webhook secrets list/reveal/revoke`.

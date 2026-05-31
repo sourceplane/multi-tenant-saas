@@ -1,8 +1,7 @@
 # Current Context
 
-Last updated: 2026-05-31 — Task 0109 VERIFIED PASS + MERGED. PR #164 squash-merged
-as `84a69c2` on main; post-merge main-CI 5/5 SUCCESS; stage + prod Workers live.
-Next: Task 0110 (CLI `webhook secrets rotate` subcommand).
+Last updated: 2026-05-31 — Task 0110 SCOPED. B5 secret-rotation arc closer:
+0108 (backend) → 0109 (console) → **0110 (CLI)**. Implementer dispatch ready.
 
 ## Just-merged — 0109
 
@@ -23,64 +22,95 @@ Next: Task 0110 (CLI `webhook secrets rotate` subcommand).
 - Implementer: `ai/reports/task-0109-implementer.md`
 - Verifier: `ai/reports/task-0109-verifier.md`
 
-**Durable outcome on main:**
+**Durable outcome on main:** reveal-once console rotate UX with type-system-
+enforced discriminated-union state machine; sidebar "Webhooks" entry under
+`Org · {orgSlug}`; new `tests/web-console-next` workspace (18-test Jest
+suite). Full detail in prior `current.md` revision (preserved in
+`task-ledger.md`).
 
-1. New routes `/orgs/{orgSlug}/webhooks` (list) and
-   `/orgs/{orgSlug}/webhooks/{endpointId}` (detail) — read-only fields plus
-   "Rotate signing secret" action.
-2. Reveal-once rotation flow enforced at the **type-system level**:
-   `RotateState` is a discriminated union where the `secret` field exists
-   only on the `revealing` arm; `closeReveal` returns `{ phase: "idle" }`
-   dropping the secret. Defensive `useEffect` cleanup on unmount.
-3. Confirm dialog → reveal dialog with copy-to-clipboard via
-   `navigator.clipboard.writeText` directly on the discriminated-union
-   local; no `sessionStorage`/`localStorage`/query-cache/global-stash.
-4. Legacy no-encryption-key path renders an amber-toned "rotation
-   completed — secret not returned" affordance (no placeholder).
-5. Sidebar gains exactly one new "Webhooks" entry under `Org · {orgSlug}`,
-   between API keys and Config (`Webhook` icon from `lucide-react`).
-6. New workspace `tests/web-console-next` (mirroring `tests/contracts`
-   shape) with 18-test Jest suite, including
-   `JSON.stringify(state).includes("whsec_")` scrub after `closeReveal`
-   and after `rotateFailed`.
+## Active Task — 0110
+
+**Agent:** Implementer
+**Prompt:** `ai/tasks/task-0110.md`
+**Branch:** `impl/task-0110-cli-webhook-secrets-rotate`
+**Sealed snapshot main:** `3cfdeb0` (Task 0109 verifier-PASS bookkeeping).
+**Status:** scoped and ready to begin (2026-05-31).
+
+### Objective
+
+Add `sourceplane webhook secrets rotate <endpointId>` — symmetric CLI
+counterpart to the 0109 console reveal-once UX. Pure SDK consumer of
+`client.webhooks.rotateSecret`; reveal-once `whsec_<32hex>` plaintext
+printed exactly once on stdout, never persisted/logged/stashed; legacy
+no-encryption-key branch renders amber-toned no-plaintext affordance
+(no fake placeholder), mirroring the 0109 console behaviour.
+
+### PR Boundary (≤ 4 paths + report)
+
+- `packages/cli/src/commands/webhook-secrets-rotate.ts` — NEW.
+- `packages/cli/src/cli-runner.ts` — register
+  `["webhook", "secrets", "rotate"]` route + 1 help line.
+- `packages/cli/src/__tests__/webhook-secrets-rotate.test.ts` — NEW
+  (≥ 12 cases including reveal-once stdout discipline check).
+- `ai/reports/task-0110-implementer.md` — NEW, committed on PR
+  branch.
+
+Forbidden zones (auto-FAIL): `packages/sdk/**`, `packages/contracts/**`,
+`packages/webhook-verifier/**`, `apps/**`, `tests/**`, `infra/**`,
+`tooling/**`, `stack-tectonic/**`, `kiox.lock`,
+`packages/cli/package.json`, `pnpm-lock.yaml`, the existing
+`webhook-{verify,sign}.ts` / `writes.ts` / `cross-reads.ts` /
+`commands/index.ts`.
+
+### Why this is parallel-safe
+
+File-disjoint from every deferred candidate and there are zero open
+PRs at scope time. Only collision risk is another `packages/cli/**`
+task touching `cli-runner.ts` — none in flight.
+
+### Acceptance Snapshot
+
+- `pnpm -r typecheck=0` (39 workspaces).
+- `pnpm -r --no-bail lint` ≤ 45 warnings, ALL in `tests/api-edge/**`.
+- `@saas/cli build/test` green with ≥ 135 total cases (existing 123 +
+  ≥ 12 new).
+- `kiox -- orun plan --changed --base origin/main` selects ONLY
+  `cli·{dev,stage,prod}·Verify` (1 component × 3 envs = 3 jobs).
+- PR-CI 4/4 SUCCESS via `gh run view --log`.
+- Real PR number recorded in implementer report (TBD = blocked).
 
 ## Pipeline status
 
-- **Active task:** none — Task 0109 closed; Task 0110 next.
+- **Active task:** 0110 (Implementer dispatch ready).
 - **Open PRs:** none.
-- **`main` HEAD:** `84a69c2` (Task 0109 squash) + a verifier-PASS bookkeeping
-  commit on top.
+- **`main` HEAD:** `3cfdeb0` (Task 0109 verifier-PASS bookkeeping on top
+  of the 0109 squash `84a69c2`).
 - **B5 webhook-helper dogfood arc:** CLOSED (0105/0106/0107 merged).
-- **B5 secret-rotation arc:** backend (0108) + console (0109) MERGED.
-  CLI rotate (0110) is the remaining symmetric slice.
+- **B5 secret-rotation arc:** backend (0108) + console (0109) MERGED;
+  CLI rotate (0110) is the active in-flight slice that closes the arc.
 
-## Next Tasks
+## Next Tasks (post-0110)
 
-- **Task 0110 — `sourceplane webhook secrets rotate` CLI subcommand.**
-  Symmetric CLI surface to the 0109 console flow; pure SDK consumer of
-  the now-locked `client.webhooks.rotateSecret` shape. Mirrors 0106/0107
-  conventions (turbo-package · cli · {dev,stage,prod} · Verify; no deploy
-  lane; `--output human|json`; reveal-once secret printed to stdout
-  exactly once). File-disjoint from anything else in flight.
 - **B5 — replay UI / failure-budget alerts** (console-side; consumer
-  of existing events-worker read APIs once SDK delivery-history is final).
+  of existing events-worker read APIs once SDK delivery-history is
+  final).
 - **B5 — webhook subscriptions UX / delivery-attempts UX** (console;
   separate B5 follow-ups deferred from 0109).
-- **B5 (record-only) — Cmd-K palette entry for "Rotate signing secret"**;
-  re-evaluate when other "Rotate {x}" actions land.
-- **B5 (record-only) — console-side endpoint creation UX** (was out of
-  scope per 0109 prompt).
+- **B5 (record-only) — Cmd-K palette entry for "Rotate signing
+  secret"**; re-evaluate when other "Rotate {x}" actions land.
+- **B5 (record-only) — console-side endpoint creation UX** (was out
+  of scope per 0109 prompt).
+- **B5 (record-only) — `@saas/webhook-verifier` multi-key extension**
+  to accept an array of secrets and validate against any (out-of-
+  scope per 0108 spec).
 - **B7 — Audit-log UX expansion.**
 - **B8 — admin-worker scaffold** (greenfield single-PR breather).
 
 ## Spec Proposals (non-blocking)
 
-- Webhook docs update for the new `X-Webhook-Signature-Previous` header +
-  grace-window operational guidance for subscribers (verify-either-key
-  during the window) — outstanding from 0108.
-- `@saas/webhook-verifier` multi-key extension (out-of-scope per 0108
-  spec): accept an array of secrets and validate against any. Track as a
-  B5 tail item.
+- Webhook docs update for the new `X-Webhook-Signature-Previous`
+  header + grace-window operational guidance for subscribers
+  (verify-either-key during the window) — outstanding from 0108.
 
 ## Deferred (unchanged)
 
