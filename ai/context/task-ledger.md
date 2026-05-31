@@ -3314,3 +3314,98 @@ One PR, one reviewer-holdable outcome (rotate UX backend), one rollback (single 
   `X-Webhook-Signature-Previous` header + grace-window operational
   guidance for subscribers; `@saas/webhook-verifier` multi-key extension
   (B5 tail item, single-key today by design).
+
+## Task 0109 — Verifier closure
+
+- Agent: Verifier
+- Verifier prompt: `ai/tasks/task-0109-verifier.md`
+- Status: VERIFIED PASS + MERGED 2026-05-31
+- PR: #164 (`impl/task-0109-webhook-console-reveal-once`) → squashed onto
+  `main` at `84a69c2` ("Task 0109: B5 webhook console reveal-once rotate
+  UX (#164)"); branch deleted post-merge; `mergedAt`
+  2026-05-31T06:27:59Z. Full SHA `84a69c22aa1a96e2e7a8fa251bed19660d825b92`.
+- Verifier report: `ai/reports/task-0109-verifier.md`
+- Implementer report: `ai/reports/task-0109-implementer.md` (committed on
+  PR branch by implementer at hand-off — no fix-up required).
+- Diff at merge: 12 files, +1170 / -0 (greenfield UX slice).
+  - Routes: `apps/web-console-next/src/app/(app)/orgs/[orgSlug]/webhooks/page.tsx` (+119, list);
+    `apps/web-console-next/src/app/(app)/orgs/[orgSlug]/webhooks/[endpointId]/page.tsx` (+190, detail).
+  - Components: `apps/web-console-next/src/components/webhooks/rotate-flow.ts` (+137,
+    dependency-free state machine with discriminated-union states `idle`
+    / `confirming` / `rotating` / `revealing` / `error` — `secret` field
+    exists ONLY on the `revealing` arm, type-system enforced reveal-once
+    invariant);
+    `apps/web-console-next/src/components/webhooks/rotate-secret-dialog.tsx`
+    (+309, destructive-confirm dialog + reveal-once dialog with
+    `navigator.clipboard.writeText` copy affordance, `useEffect` unmount
+    scrub, amber legacy-no-encryption-key fallback banner).
+  - Shell: `apps/web-console-next/src/components/shell/sidebar.tsx`
+    (+2 lines — `Webhook` icon import + nav entry under Org · {orgSlug}).
+  - Tests workspace (new): `tests/web-console-next/{component.yaml(20),
+    eslint.config.js(2), package.json(32), tsconfig.json(14),
+    src/rotate-flow.test.ts(156 — 18 Jest cases including
+    `JSON.stringify(state).includes("whsec_")` scrub assertion)}`.
+  - Reports: `ai/reports/task-0109-implementer.md` (+168).
+  - Lockfile: `pnpm-lock.yaml` (+21).
+- Verifier protocol: 8 phases (matches `orun-saas-verifier` skill).
+  - Phase 0 readiness — implementer report present on PR branch. No fix-up.
+  - Phase 1 PR sanity — 12 files +1170/-0, all under prompted scopes
+    (`apps/web-console-next/**`, `tests/web-console-next/**`,
+    `ai/reports/**`, lockfile).
+  - Phase 2 hazard scan — zero new
+    `eslint-disable`/`@ts-ignore`/`@ts-expect-error`/`as any`/
+    `as unknown as`/`node:*` under PR diff. Reveal-once invariant
+    confirmed type-system real (not just runtime convention) by reading
+    `rotate-flow.ts`: `secret` is a property of the `revealing` state
+    arm only; `closeReveal()` returns `idle`, dropping plaintext from
+    React state. Plaintext `whsec_` literal audit — only hits are the
+    docstring at `rotate-secret-dialog.tsx:32` and test
+    fixtures/assertions in `rotate-flow.test.ts`; zero hits in
+    `webhooks/page.tsx`, `webhooks/[endpointId]/page.tsx`, or any
+    toast/error/log path. Console webhook surfaces have zero
+    hand-rolled `fetch(` — all server I/O routes through `@saas/sdk`.
+  - Phase 3 quality gates — `pnpm install --frozen-lockfile` clean
+    (40 workspaces); `pnpm -F @saas/web-console-next typecheck/lint`
+    PASS; `pnpm -F @saas/web-console-next-tests typecheck/lint/test`
+    PASS (18/18 Jest); repo-wide `pnpm -w typecheck` and `pnpm -w lint`
+    PASS.
+  - Phase 4 orun gates — `kiox -- orun validate` valid;
+    `orun plan --changed --base origin/main` selected the
+    `web-console-next` + `web-console-next-tests` components;
+    `orun run --dry-run --runner github-actions` preview-green.
+  - Phase 5 PR-CI — initial PR-CI run `26705011776` on HEAD `f95befa`
+    5/5 SUCCESS. PR was BEHIND main (recurring 0103–0108 pattern); ran
+    `gh pr update-branch 164` → rebased HEAD `5aab758`, PR-CI run
+    `26705302119` 5/5 SUCCESS.
+  - Phase 6 squash merge — `gh pr merge 164 --squash --delete-branch`,
+    `git checkout main && git pull --ff-only` → main HEAD `84a69c2`.
+  - Phase 6.5 post-merge main-CI — run `26705368955` on `84a69c2`
+    5/5 SUCCESS. Jobs: `78705514205` (plan), `78705524700` (tests dev
+    verify), `78705524701` (dev deploy verify-only), `78705524702`
+    (stage deploy + verify), `78705524697` (prod deploy + verify).
+  - Phase 7 live probes — extracted Worker URLs and version IDs from
+    stage + prod deploy job logs, then `curl -sIL` each:
+    - stage: `https://sourceplane-web-console-next-stage.rahulvarghesepullely.workers.dev`
+      Version `37a3e7ff-f0b4-4235-b8fe-c2c38836b331` — HTTP/2 307 → `/orgs`,
+      `x-opennext: 1`, `x-powered-by: Next.js`.
+    - prod:  `https://sourceplane-web-console-next-prod.rahulvarghesepullely.workers.dev`
+      Version `b209ca74-031a-49ae-992e-1753e702fec8` — HTTP/2 307 → `/orgs`,
+      `x-opennext: 1`, `x-powered-by: Next.js`.
+    Dev lane is verify-only by design (per
+    `apps/web-console-next/component.yaml` `profileRules`); only stage
+    and prod produced live URLs.
+  - Phase 8 verifier report — `ai/reports/task-0109-verifier.md`.
+  - Phase 9 PASS bookkeeping — this commit (state.json + current.md +
+    task-ledger.md + verifier report).
+- Outcome: B5 webhook secret-rotation console UX locked on `main`. Both
+  halves of the rotation arc are now live (backend Task 0108 / `28b3ca1`,
+  console Task 0109 / `84a69c2`). Reveal-once is enforced at the
+  type-system level (discriminated union), not just by convention. Task
+  0110 (`sourceplane webhook secrets rotate` CLI subcommand) is the next
+  and final B5 consumer slice — pure SDK-consumer PR.
+- Notes: `wrangler pages deployment list` was unavailable locally (no
+  Cloudflare creds in shell, "Failed to fetch auth token: 400 Bad
+  Request"). Bypassed — CI deploy job logs already provided version IDs
+  and workers.dev URLs needed for live evidence. The
+  no-encryption-key fallback (amber "rotation completed — secret not
+  returned" banner) was accepted as graceful legacy handling.
