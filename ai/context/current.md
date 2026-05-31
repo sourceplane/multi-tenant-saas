@@ -1,8 +1,36 @@
 # Current Context
 
-Last updated: 2026-05-31 — Task 0120 SCOPED (orchestrator). Implementer prompt at `ai/tasks/task-0120.md`. main is FULLY GREEN at `ba274f3` (Task 0119 code) / `269db18` (post-0119 bookkeeping). 0 open PRs.
+Last updated: 2026-05-31 — Task 0120 IMPLEMENTER COMPLETE + VERIFIER SCOPED (orchestrator). Verifier prompt at `ai/tasks/task-0120-verifier.md`. PR #175 OPEN/MERGEABLE/CLEAN at HEAD `60776a0` (base main `180a7ea`, 0 behind), all 11 PR-CI checks green (run 26713434492). main HEAD `180a7ea` (Task 0120 scope) / `269db18` (post-0119 bookkeeping). 1 open PR (#175, awaiting verifier).
 
-## Active task: 0120 — B5 webhook delivery history (milestone)
+## Active task: 0120 — B5 webhook delivery history (VERIFIER scoped)
+
+**Implementer landed PR #175** — one combined PR, 13 files (+1474/-30) across
+SDK + Console + CLI + test harness + lockfile + report. Verifier task emitted
+(`ai/tasks/task-0120-verifier.md`, 8-phase ADAPTED for the deploy-gated
+web-console-next leg: Phase 7 MANDATORY post-merge main-CI deploy + smoke +
+live-URL curl per `references/post-merge-deploy-profile-gap.md`). BEHIND-main
+rebase = verifier responsibility. The milestone scope (below) is what the
+verifier validates the PR against.
+
+What shipped (per implementer report `ai/reports/task-0120-implementer.md`):
+- SDK: `listDeliveryAttemptsPage` threads `limit`/`cursor`, reads opaque
+  base64 `meta.cursor ?? null` (envelope, NOT body `nextCursor` — vestigial),
+  forwards verbatim. +5 tests (sdk 0/0/113).
+- Console: dependency-free pure helper `delivery-history.ts` + `DeliveryHistoryPanel`
+  on endpoint detail page (status badges, attempt#, httpStatusCode, safe
+  failureReason, completed/nextRetry ts, skeleton, EmptyState, cursor Load-more,
+  SDK-only via `wrap()`, zero `fetch`).
+- CLI: `webhook deliveries <endpointId>` (human table + `--output=json` +
+  `--limit`/`--cursor` + `--all` cursor-follow w/ seen-guard, modelled on
+  `audit list`). +14 tests (cli 0/0/178).
+- Harness: web-console-next-tests 0/0/53.
+- 5 latitude decisions: one combined PR; pure-helper Console extraction; CLI on
+  `audit list`; DROPPED optional single-`getDeliveryAttempt`; added
+  `@saas/contracts` to console test project.
+
+---
+
+### Milestone scope (verifier acceptance reference)
 
 Milestone `B5-webhook-delivery-history`: ship the per-endpoint webhook
 delivery-history observability surface **end to end** (Console + CLI + the SDK
@@ -80,4 +108,4 @@ Deferred (Deferred Decision Protocol, human input required, NOT picked):
 `0085b` (cloudflare-domain v4→v5), `notifications-provider-swap`,
 `notifications-worker-dev-reframe`, `optional-spec-13-commands`.
 
-Repo health: green. main HEAD `ba274f3` / `269db18`. 0 open PRs.
+Repo health: green. main HEAD `180a7ea` / `269db18`. 1 open PR (#175, awaiting Task 0120 verifier).

@@ -4255,9 +4255,25 @@ One PR, one reviewer-holdable outcome (rotate UX backend), one rollback (single 
 
 ## Task 0120
 
-- Agent: Implementer
-- Prompt: `ai/tasks/task-0120.md`
-- Status: SCOPED 2026-05-31 (orchestrator). Awaiting implementer pickup.
+- Agent: Implementer → Verifier
+- Prompt: `ai/tasks/task-0120.md` → `ai/tasks/task-0120-verifier.md`
+- Status: IMPLEMENTER COMPLETE + VERIFIER SCOPED 2026-05-31 (orchestrator).
+  PR #175 OPEN/MERGEABLE/CLEAN at HEAD `60776a0` (base main `180a7ea`, 0
+  behind). One combined PR, 13 files (+1474/-30) across SDK + Console + CLI +
+  test harness + lockfile + report. PR-CI run 26713434492 = 11/11 SUCCESS
+  (plan + cli×3 Verify + sdk×3 Verify + web-console-next×3 Verify deploy +
+  web-console-next-tests·dev·Verify). Implementer gates green: sdk 0/0/113,
+  cli 0/0/178 (+14), web-console-next 0/0, web-console-next-tests 0/0/53;
+  orun plan --changed = 4 components × 3 envs → 10 jobs. Load-bearing fact:
+  worker emits cursor in opaque base64 `meta.cursor` (envelope), NOT body
+  `nextCursor`; consumers read `meta.cursor ?? null` and forward verbatim.
+  5 latitude decisions recorded (one combined PR; pure-helper Console
+  extraction; CLI on `audit list`; dropped optional single-`getDeliveryAttempt`;
+  added `@saas/contracts` to console test project). Verifier prompt is 8-phase
+  ADAPTED for deploy-gated web-console-next leg: Phase 7 MANDATORY post-merge
+  main-CI deploy + smoke + live-URL curl per
+  `references/post-merge-deploy-profile-gap.md`. BEHIND-main rebase =
+  verifier responsibility. Awaiting verifier pickup.
 - Milestone: `B5-webhook-delivery-history` — ship the per-endpoint webhook
   delivery-history observability surface end to end (Console + CLI + the SDK
   plumbing they need). Buyer-credible webhook debuggability is the next B5 leg
