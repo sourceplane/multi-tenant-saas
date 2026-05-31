@@ -14,6 +14,18 @@ import {
   orgMembersCommand,
   projectListCommand,
 } from "./commands/index.js";
+import {
+  orgInviteCommand,
+  projectCreateCommand,
+  envCreateCommand,
+  apiKeyCreateCommand,
+  webhookCreateCommand,
+} from "./commands/writes.js";
+import {
+  usageSummaryCommand,
+  billingSummaryCommand,
+  auditListCommand,
+} from "./commands/cross-reads.js";
 import { parseOutputMode, type OutputMode } from "./output/index.js";
 import { ContextStore } from "./context/store.js";
 import { selectTokenStore } from "./token-store/index.js";
@@ -117,13 +129,28 @@ export async function runCli(
 
 function buildRouter(): Router {
   const r = new Router();
+  // Auth
   r.register(["login"], "Authenticate against a Sourceplane API", loginCommand);
   r.register(["logout"], "Clear stored credentials and context", logoutCommand);
   r.register(["whoami"], "Show the active identity and organization", whoamiCommand);
+  // Organizations
   r.register(["org", "list"], "List organizations the actor belongs to", orgListCommand);
   r.register(["org", "use"], "Set the active organization", orgUseCommand);
   r.register(["org", "members"], "List members of the active organization", orgMembersCommand);
+  r.register(["org", "invite"], "Invite a member to an organization", orgInviteCommand);
+  // Projects
   r.register(["project", "list"], "List projects in the active organization", projectListCommand);
+  r.register(["project", "create"], "Create a project in the active organization", projectCreateCommand);
+  // Environments
+  r.register(["env", "create"], "Create an environment under a project", envCreateCommand);
+  // API keys
+  r.register(["api-key", "create"], "Create an org-scoped API key", apiKeyCreateCommand);
+  // Webhooks
+  r.register(["webhook", "create"], "Create a webhook endpoint (and optional subscriptions)", webhookCreateCommand);
+  // Cross-resource reads
+  r.register(["usage", "summary"], "Summarize usage rollups for the active organization", usageSummaryCommand);
+  r.register(["billing", "summary"], "Show billing customer/plan/entitlements summary", billingSummaryCommand);
+  r.register(["audit", "list"], "List audit log entries for the active organization", auditListCommand);
   return r;
 }
 
@@ -144,14 +171,30 @@ function printHelp(stdout: (line: string) => void): void {
       "  sourceplane org list",
       "  sourceplane org use <org-id>",
       "  sourceplane org members",
+      "  sourceplane org invite <email> [--role=ROLE] [--idempotency-key=KEY] [--org=ORG_ID]",
       "",
-      "PROJECTS:",
+      "PROJECTS / ENVIRONMENTS:",
       "  sourceplane project list",
+      "  sourceplane project create <name> [--idempotency-key=KEY]",
+      "  sourceplane env create <project-id> <name> [--idempotency-key=KEY]",
+      "",
+      "API KEYS / WEBHOOKS:",
+      "  sourceplane api-key create <name> [--scope=SCOPE] [--idempotency-key=KEY]",
+      "  sourceplane webhook create <url> [--event=EVENT[,EVENT2,...]] [--idempotency-key=KEY]",
+      "",
+      "USAGE / BILLING / AUDIT:",
+      "  sourceplane usage summary [--metric=METRIC] [--from=ISO] [--to=ISO]",
+      "  sourceplane billing summary",
+      "  sourceplane audit list [--limit=N] [--cursor=CURSOR] [--category=CAT] [--all]",
       "",
       "GLOBAL FLAGS:",
       "  --output=human|json   Output format (default: human)",
       "  --help                Show this help",
       "  --version             Print version",
+      "",
+      "IDEMPOTENCY:",
+      "  --idempotency-key=KEY is forwarded verbatim to the API on every write.",
+      "  The CLI never auto-generates a key (Stripe parity).",
     ].join("\n"),
   );
 }
