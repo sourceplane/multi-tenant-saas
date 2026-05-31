@@ -4,7 +4,7 @@
 latest stable Node 24 majors before the 2026-06-16 cutover.
 
 **Branch:** `impl/task-0119-ci-actions-node24-bump`
-**PR Number:** TBD (updated post `gh pr create`)
+**PR Number:** #174 — https://github.com/sourceplane/multi-tenant-saas/pull/174
 
 ## Summary
 
@@ -91,4 +91,4 @@ None. Self-contained CI hygiene change. Verifier should:
 
 ## PR Number
 
-TBD — to be filled after `gh pr create`.
+#174 — https://github.com/sourceplane/multi-tenant-saas/pull/174
