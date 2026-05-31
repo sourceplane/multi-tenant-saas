@@ -3,7 +3,7 @@
 **Agent:** Implementer
 **Milestone:** B9 — Entitlement-decision observability (counts by caller × entitlement key × outcome)
 **Branch:** `impl/task-0124-entitlement-observability`
-**PR Number:** TBD
+**PR Number:** [#179](https://github.com/sourceplane/multi-tenant-saas/pull/179)
 
 ## Summary
 
@@ -123,4 +123,4 @@ untouched.)
 
 ## PR Number
 
-TBD (updated to the real number after the PR is opened, then committed + pushed on this branch).
+[#179](https://github.com/sourceplane/multi-tenant-saas/pull/179)
