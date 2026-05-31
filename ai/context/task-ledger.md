@@ -1,6 +1,6 @@
 # Task Ledger
 
-Last updated: 2026-05-31 (Task 0104 Verifier PASS + MERGED — PR #159 squash `c78592f`, post-merge main-CI `26700942407` 4/4 SUCCESS, console fully on `Sourceplane` SDK; Task 0105 SCOPED — `@saas/webhook-verifier` helper package, B5 leg, prompt at `ai/tasks/task-0105.md`, awaiting Implementer dispatch)
+Last updated: 2026-05-31 (Task 0105 Verifier PASS + MERGED — PR #160 squash `a1436fc`, post-merge main-CI `26701735837` 4/4 SUCCESS, `@saas/webhook-verifier` zero-dep WebCrypto helper now on main; Task 0106 SCOPED — `sourceplane webhook verify` CLI subcommand wiring the new helper, B5 dogfood leg, prompt at `ai/tasks/task-0106.md`, awaiting Implementer dispatch)
 
 ## Task 0001
 
@@ -2827,3 +2827,82 @@ on the SDK side.
 - **Recommended-next:** B5 follow-ups (rotate UX / replay UI /
   failure-budget alerts) OR B7 audit-log console UX OR B8 admin-worker
   scaffold.
+
+
+
+## Task 0106
+
+- Agent: Implementer
+- Prompt: `ai/tasks/task-0106.md`
+- Status: scoped 2026-05-31 (orchestrator) — awaiting Implementer dispatch
+- Branch: `impl/task-0106-cli-webhook-verify`
+- Sealed snapshot main: `b619e9d` (Task 0105 verifier-PASS bookkeeping)
+- Roadmap leg: B5 — Webhooks polish (CLI consumer of the just-merged
+  `@saas/webhook-verifier` helper; rotate UX, replay UI,
+  failure-budget alerts remain open follow-ups)
+- Objective: Add new CLI subcommand `sourceplane webhook verify` that
+  reads a webhook payload + signature headers (from flags or STDIN)
+  and uses `@saas/webhook-verifier` to verify the HMAC-SHA256
+  signature locally. Pure local-crypto path — no network, no auth,
+  no org context, no SDK call. Exit 0 on valid signature, exit 4 on
+  verifier failure (helper reason codes passed through verbatim),
+  exit 2 on argument errors via existing `UsageError`.
+- Surface: `sourceplane webhook verify --secret=SECRET
+  --signature=HEADER_VALUE --timestamp=HEADER_VALUE [--body=PATH]
+  [--tolerance-seconds=N] [--output=human|json]`. STDIN reads body
+  bytes when `--body` is omitted (mutex). Default tolerance 300s
+  (matches helper). Output goes to stdout; exit code carries the
+  signal.
+- PR boundary (≤ 5 paths):
+  - `packages/cli/package.json` — add `@saas/webhook-verifier`
+    workspace dependency (`workspace:*`).
+  - `packages/cli/src/commands/webhook-verify.ts` — NEW.
+  - `packages/cli/src/cli-runner.ts` — register
+    `["webhook", "verify"]` + update help block.
+  - `packages/cli/src/__tests__/webhook-verify.test.ts` — NEW
+    vitest suite, ≥ 12 cases (happy paths human+json, missing each
+    required flag, tampered body / signature, tolerance boundary,
+    `--body=PATH` binary-safe read, STDIN read path, `--body`+STDIN
+    mutex, JSON failure shape, reason-code passthrough).
+  - `pnpm-lock.yaml` — auto delta from new workspace edge only.
+- Hard rules:
+  - Zero edits anywhere outside `packages/cli/**` (in particular,
+    NO edits to `packages/webhook-verifier/**` — the helper just
+    merged on Task 0105; if a gap surfaces, file a follow-up).
+  - No `Sourceplane`, no `fetch(`, no `/v1/`, no `client.*`. Local
+    crypto only.
+  - No `node:crypto`, no `node:buffer`, no Node-only imports.
+    Verify path runs through the WebCrypto-only helper.
+  - Binary-safe body reading — no JSON-parse, no `.trim()`, no
+    decode-then-re-encode; verifier is byte-exact.
+  - No new `eslint-disable` / `@ts-ignore` / `@ts-expect-error` /
+    `as unknown as` / `as any` under `packages/cli/**`.
+  - Reuse existing `UsageError` and `formatCliError` exit-code
+    semantics (2 = usage, 4 = command failure).
+- Acceptance:
+  - `pnpm install` exit 0; lockfile delta limited to new workspace
+    edge (no version bumps to existing pinned packages).
+  - `pnpm -r typecheck` exit 0 across 39 workspaces.
+  - `pnpm -r --no-bail lint` ≤ 45 warnings, all in
+    `tests/api-edge/**`; zero new under `packages/cli/**` or
+    `packages/webhook-verifier/**`.
+  - `pnpm --filter @saas/cli build` exit 0.
+  - `pnpm --filter @saas/cli test` exit 0; ≥ 12 new passing cases.
+  - Local e2e smoke: sign with `signWebhookPayload` → pipe into
+    built CLI → exit 0 + correct human/json output. Both
+    transcripts pasted in implementer report.
+  - `kiox -- orun validate / plan --changed / run --dry-run` green;
+    plan selects only CLI lanes (no unrelated lane drag-in).
+  - PR-CI 4/4 green at PR HEAD SHA via `gh run view --log`.
+  - Real PR number in implementer report (`TBD` = blocked).
+- Why this scope, why now: dogfoods Task 0105's just-merged
+  `@saas/webhook-verifier` helper inside the monorepo (catches
+  packaging / ESM-resolution issues the helper's own test suite
+  cannot reach). Tightest possible PR boundary, parallel-safe with
+  anything in flight, no backend / contract / SDK / console
+  overlap. Unlocks future internal use of the helper in
+  `apps/admin-worker` (B8) and webhook-replay tooling.
+- Out of scope: B5 follow-ups (rotate UX, replay UI, failure-budget
+  alerts), B7 audit-log expansion (needs SDK+api-edge+contracts —
+  multi-PR), B8 admin-worker scaffold, `kiox.lock` drift,
+  `@saas/webhook-verifier` itself.
