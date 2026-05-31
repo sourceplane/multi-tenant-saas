@@ -151,15 +151,9 @@ export async function projectCreateCommand(ctx: CommandContext): Promise<Command
 // ---------------------------------------------------------------------------
 // env create <project-id> <name> [--idempotency-key=KEY]
 //
-// The SDK does not currently expose an `environments.create` method —
-// see `ai/proposals/task-0101-spec-update.md`. The api-edge route exists
-// at `/v1/organizations/:orgId/projects/:projectId/environments` (see
-// `apps/api-edge/src/project-facade.ts`), so we route the call through
-// the SDK's public `Transport` surface (`client.transport`). This stays
-// inside the public SDK contract — `Transport` is exported from
-// `@saas/sdk` for exactly this kind of advanced use — without touching
-// `packages/sdk/**`. The proposal document recommends adding a typed
-// `client.environments.create()` in a follow-up.
+// Routes through `client.environments.create()` — the SDK's typed
+// EnvironmentsClient surface (added in Task 0102) which wraps the
+// api-edge route `/v1/organizations/:orgId/projects/:projectId/environments`.
 // ---------------------------------------------------------------------------
 
 export async function envCreateCommand(ctx: CommandContext): Promise<CommandResult> {
@@ -172,24 +166,10 @@ export async function envCreateCommand(ctx: CommandContext): Promise<CommandResu
   const idempotencyKey = readIdempotencyKey(ctx);
 
   const sdk = await ctx.sdk();
-  const result = await sdk.transport.request<{
-    environment: {
-      id: string;
-      orgId: string;
-      projectId: string;
-      name: string;
-      slug: string;
-      status: string;
-      createdAt: string;
-      updatedAt: string;
-      archivedAt: string | null;
-    };
-  }>(
-    {
-      method: "POST",
-      path: `/v1/organizations/${encodeURIComponent(orgId)}/projects/${encodeURIComponent(projectId)}/environments`,
-      body: { name },
-    },
+  const result = await sdk.environments.create(
+    orgId,
+    projectId,
+    { name },
     idempotencyKey !== undefined ? { idempotencyKey } : {},
   );
 
