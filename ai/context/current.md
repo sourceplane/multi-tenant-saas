@@ -1,75 +1,83 @@
 # Current Context
 
-Last updated: 2026-05-31 — Task 0115 VERIFIED + MERGED; Task 0116 SCOPED (orchestrator). Awaiting implementer.
+Last updated: 2026-05-31 — Task 0116 VERIFIED + MERGED; Task 0117 SCOPED (orchestrator). Awaiting implementer.
 
-PR #170 (Task 0115 `sourceplane webhook disable <endpointId> [--reason=TEXT]`
-CLI subcommand) squash-merged to main as `558d8d5` (mergedAt
-2026-05-31T10:58:56Z). 8-phase verifier PASS: exactly 4 files (+566/-0), zero
-forbidden-zone touches, pure SDK consumer (single `sdk.webhooks.disableEndpoint`
-call, `resolveOrgId(ctx,false)`, no auth/header/idempotency auto-mint), 4 pnpm
-gates green (164/164 tests across 13 files, +11 over baseline 153), 3 Orun gates
-green (cli·{dev,stage,prod}·Verify, plan `3101ef9487df`), PR-CI 4/4 SUCCESS with
-per-lane `gh run view --log` evidence. The scope commit `ac40edb` was already on
-origin/main, so PR #170 showed the exact 4-file boundary from the start — no
-merge-base recompute needed. `kiox.lock` local Orun-run mutation reverted before
-merge. Post-merge main-CI run 26710731525 = 4/4 SUCCESS at `558d8d5`. Reports:
-`ai/reports/task-0115-implementer.md`, `ai/reports/task-0115-verifier.md`.
+PR #171 (Task 0116 `refactor(sdk): re-export EnableWebhookEndpoint
+request/response types`) squash-merged to main as `c860053` (mergedAt
+2026-05-31T11:15:50Z). Inline 8-phase verifier PASS adapted for a 2-component
+sdk+cli turbo PR: EXACTLY 3 files (+108/-14) on the boundary
+(`packages/sdk/src/index.ts` +2 additive re-export of
+`EnableWebhookEndpointRequest`+`EnableWebhookEndpointResponse` adjacent to the
+Update*/Disable* pairs, `packages/cli/src/__tests__/webhook-enable.test.ts`
+pure type-source swap removing the local `interface EnableResponse` + stale
+"not yet re-exported" comment, `ai/reports/task-0116-implementer.md` NEW), zero
+forbidden-zone hits, re-exported types confirmed live at
+`packages/contracts/src/webhooks.ts:80,85` (source of truth). Quality gates:
+@saas/sdk + @saas/cli typecheck 0, @saas/cli test 164/164 UNCHANGED (pure type
+swap, zero behaviour change), both packages lint 0. Orun: validate ok, plan
+`81a5caa8cc5d` = 2 components × 3 envs = 6 jobs (expected union, not overreach),
+dry-run 6 selected green. PR-CI run 26710989224 = 7/7 SUCCESS. Post-merge
+main-CI run 26711085547 at `c860053` = 7/7 SUCCESS (turbo-package, no deploy
+lane / no live-URL surface). **0 behind main at merge — no update-branch needed,
+the first non-BEHIND merge since the 0103-0115 streak.** `kiox.lock` Orun-run
+mutation reverted. Reports: `ai/reports/task-0116-implementer.md`,
+`ai/reports/task-0116-verifier.md`.
 
-The **B5 endpoint-CRUD CLI arc is now closed end-to-end** — create / disable /
-re-enable + sign / verify / secrets-rotate all have CLI parity with the console.
+The **`@saas/sdk` webhook-endpoint type surface is now fully symmetric** —
+Create/Get/List/Update/Enable/Disable/Delete/Rotate request + response types all
+re-exported from the package index. The B5 endpoint-CRUD CLI + SDK arc is
+complete; no consumer needs to locally reconstruct response shapes.
 
-Repo health: green. Working tree clean. main HEAD `558d8d5`.
+Repo health: green (modulo the one standing baseline test failure that Task 0117
+fixes). Working tree clean. main HEAD `c860053`.
 
-## Current task — 0116
+## Current task — 0117
 
-**Re-export the `EnableWebhookEndpoint` request/response types from `@saas/sdk`
-(close the carry-forward re-export gap).**
+**Stabilize-first: fix the baseline red `migrations.test.ts:66` failure by
+syncing the test's local `VALID_CONTEXTS` array with the `BoundedContext`
+union.**
 
-- Prompt: `ai/tasks/task-0116.md`
+- Prompt: `ai/tasks/task-0117.md`
 - Agent: Implementer
-- Branch: `impl/task-0116-sdk-enable-response-reexport`
-- Sealed snapshot main: `558d8d5` (Task 0115 squash).
-- The gap: `packages/sdk/src/index.ts` (lines 165–186) re-exports the entire
-  webhook-endpoint type surface (Create/Get/List/Update/Disable/Delete/Rotate)
-  but is MISSING `EnableWebhookEndpointRequest` + `EnableWebhookEndpointResponse`
-  — both defined in `packages/contracts/src/webhooks.ts:80,85` and already
-  imported+used in `packages/sdk/src/webhooks.ts:10-11,170-178`. Because the
-  types can't be imported, `webhook-enable.test.ts` reconstructs
-  `interface EnableResponse { endpoint: PublicWebhookEndpoint }` locally (the
-  disable test, by contrast, imports `DisableWebhookEndpointResponse` directly).
-- PR boundary: 3 files exactly —
-  `packages/sdk/src/index.ts` (MODIFIED, additive: add the 2 names to the
-  existing `export type` block adjacent to the Disable pair),
-  `packages/cli/src/__tests__/webhook-enable.test.ts` (MODIFIED: swap the local
-  interface for `import type EnableWebhookEndpointResponse` from `@saas/sdk`,
-  delete the stale "not yet re-exported" comment, keep the `PublicWebhookEndpoint`
-  import for the fixture, ZERO assertion / case-count change),
-  `ai/reports/task-0116-implementer.md` (NEW with real PR#, no TBD).
-- Forbidden zones: `packages/contracts/**` (source of truth — re-export only,
-  never redefine), `packages/sdk/src/webhooks.ts` + all other `packages/sdk/**`,
-  `packages/cli/**` except the named test, apps/infra/tooling/stack-tectonic/
+- Branch: `impl/task-0117-migrations-test-notifications-context`
+- Sealed snapshot main: `c860053` (Task 0116 squash).
+- The failure: `tests/db/src/migrations.test.ts` hard-codes a local
+  `VALID_CONTEXTS: BoundedContext[]` array (lines 52–62) listing 9 contexts, but
+  the canonical `BoundedContext` union in `packages/db/src/types.ts:1-11` has 10
+  — the 10th, `"notifications"`, is declared by a real migration
+  (`packages/db/src/manifest.ts:116`, `context: "notifications"`). The
+  `"each migration declares a valid bounded context"` assertion at
+  `migrations.test.ts:66` therefore fails (`@saas/db-tests` jest = 1 failed /
+  515 passed / 516 total). Reproduces on main; documented as a known baseline
+  gap across Tasks 0113/0115 reports.
+- PR boundary: 2 files exactly —
+  `tests/db/src/migrations.test.ts` (MODIFIED: add `"notifications"` to
+  `VALID_CONTEXTS` adjacent to `"metering"` to mirror the type-union ordering;
+  NO other change, no new cases, no assertion edits),
+  `ai/reports/task-0117-implementer.md` (NEW with real PR#, no TBD).
+- Forbidden zones: `packages/db/src/types.ts` (already correct — source of
+  truth, already includes `"notifications"`), `packages/db/src/manifest.ts` +
+  all migration files, any other `tests/db/**` source,
   lockfiles/package.json/component.yaml.
-- **NOT a single-component turbo PR.** Orun changed-plan selects BOTH `sdk` and
-  `cli` lanes (2 components × 3 envs = 6 jobs + plan) because both packages have a
-  changed file. That union is expected/correct — do NOT try to force it down to
-  one component.
-- Hard rules: additive re-export only (no reorder/removal); the test refactor is
-  a pure type-source swap with zero behaviour change; no new
-  eslint-disable/ts-ignore/as any in the SDK index change; revert `kiox.lock`;
-  real PR# (TBD = BLOCKED); BEHIND-main rebase remains verifier responsibility.
-- Title: `refactor(sdk): re-export EnableWebhookEndpoint request/response types`.
+- **Single-component turbo PR.** Orun changed-plan selects ONLY `db-tests`
+  (subscribes `dev` · `quick-check` only) = 1 component × 1 env = 1 job + plan.
+  Do NOT expect stage/prod lanes.
+- Hard rules: test-only one-line literal add, exact string `"notifications"`
+  byte-for-byte; no new eslint-disable/ts-ignore/as any; no deriving the array
+  from the type; revert `kiox.lock`; real PR# (TBD = BLOCKED); BEHIND-main
+  rebase remains verifier responsibility.
+- Title: `fix(db-tests): add notifications to migration VALID_CONTEXTS`.
 
-## Recommended next focus after 0116
+## Recommended next focus after 0117
 
 1. **CLI helpers fold for `cross-reads.ts:resolveOrgId`** — single-arg
    no-override variant explicitly deferred from Task 0111 as "Remaining Gap";
    now-eligible one-line import swap + delete (≤ 5-file PR).
-2. **Migration bounded-context cleanup** — extend `VALID_CONTEXTS` in
-   `tests/db/src/migrations.test.ts` to include `"notifications"`. Pre-existing
-   baseline failure (reproduces on main), low-risk one-line follow-on.
-3. **Delivery-attempts UX** — next B5 leg per `specs/roadmap.md` if a richer
-   console slice is preferred now that CLI endpoint-CRUD is fully closed.
-4. **Node 20 → 24 CI actions bump** — non-blocking deprecation warning, but a
+2. **Delivery-attempts UX** — next B5 leg per `specs/roadmap.md` if a richer
+   console slice is preferred now that CLI endpoint-CRUD + SDK symmetry are
+   fully closed.
+3. **Node 20 → 24 CI actions bump** — non-blocking deprecation warning, but a
    hard cutover lands June 16 2026; a small infra/tooling PR de-risks it early.
 
-Repo health: green. main HEAD `558d8d5`.
+Repo health: green (Task 0117 closes the last standing baseline test failure).
+main HEAD `c860053`.

@@ -1,6 +1,6 @@
 # Task Ledger
 
-Last updated: 2026-05-31 (Task 0114 Verifier PASS + MERGED — PR #169 `feat(cli): webhook enable subcommand` squash-merged as `227face` on main; 8-phase verifier PASS: exactly 4 files (+494/-0), zero forbidden-zone touches, pure SDK consumer of `client.webhooks.enableEndpoint` (no fetch/header/auth/env, no idempotency auto-mint), 4 pnpm gates green (153/153 tests, 12 files), 3 Orun gates green (plan `4c7dc40ecadb` → cli·{dev,stage,prod}·Verify), PR-CI 4/4 SUCCESS; verifier had to `git push origin main` the local-only scope commit `0bf3b80` to recompute the PR merge-base down to the exact 4-file boundary before merging — lesson folded into 0115 verifier Phase 1; remaining gap: `EnableWebhookEndpointResponse` not re-exported from `@saas/sdk` index. Task 0115 (`sourceplane webhook disable` CLI — final B5 endpoint-CRUD CLI leg) SCOPED and ready for implementer.)
+Last updated: 2026-05-31 (Task 0116 Verifier PASS + MERGED — PR #171 `refactor(sdk): re-export EnableWebhookEndpoint request/response types` squash-merged as `c860053` on main; inline 8-phase verifier PASS adapted for a 2-component sdk+cli turbo PR: EXACTLY 3 files (+108/-14), zero forbidden-zone hits, additive SDK-index re-export + pure type-source swap in webhook-enable.test.ts, 164/164 cli tests UNCHANGED, both packages typecheck+lint 0, Orun plan `81a5caa8cc5d` = 2 components × 3 envs = 6 jobs, PR-CI run `26710989224` 7/7 SUCCESS, post-merge main-CI `26711085547` 7/7 SUCCESS, 0 behind main (first non-BEHIND merge since 0103-0115 streak). `@saas/sdk` webhook-endpoint type surface now fully symmetric. Task 0117 (`fix(db-tests): add notifications to migration VALID_CONTEXTS` — stabilize-first: fix the baseline red `migrations.test.ts:66` failure) SCOPED and ready for implementer.)
 
 ## Task 0001
 
@@ -4042,9 +4042,10 @@ One PR, one reviewer-holdable outcome (rotate UX backend), one rollback (single 
 
 ## Task 0116
 
-- Agent: Implementer
+- Agent: Implementer + Verifier
 - Prompt: `ai/tasks/task-0116.md`
-- Status: scoped and ready to begin (2026-05-31)
+- Verifier: inline single-session verification (8-phase, 2-component turbo)
+- Status: **verified PASS + MERGED** (2026-05-31)
 - Branch: `impl/task-0116-sdk-enable-response-reexport`
 - Sealed snapshot main: `558d8d5` (Task 0115 squash).
 - Objective: Close the `EnableWebhookEndpointRequest` / `EnableWebhookEndpointResponse`
@@ -4081,4 +4082,67 @@ One PR, one reviewer-holdable outcome (rotate UX backend), one rollback (single 
   human-independent gap closure; parallel-safe; touches no deferred decisions.
 - Verifier prompt to be scoped after implementer completes (8-phase adapted for a
   2-component sdk+cli turbo PR, no deploy lane).
+- Implementation: PR **#171** `refactor(sdk): re-export EnableWebhookEndpoint
+  request/response types`, branch `impl/task-0116-sdk-enable-response-reexport`,
+  squash-merged as **`c860053`** on main (mergedAt 2026-05-31T11:15:50Z).
+  Two commits: `104444e` (code) + `15bede6` (report PR# docs).
+- PR-CI run `26710989224` = 7/7 SUCCESS (plan + cli/sdk × dev/stage/prod Verify).
+  Post-merge main-CI run `26711085547` at `c860053` = 7/7 SUCCESS. Turbo-package
+  shape, no deploy lane / no live-URL surface. 0 behind main at merge — no
+  update-branch needed (first non-BEHIND merge since the 0103-0115 streak).
+- Verifier outcome: PASS. Diff was EXACTLY 3 files (+108/-14) on the boundary;
+  forbidden-zone scan zero hits; re-exported types confirmed live at
+  `packages/contracts/src/webhooks.ts:80,85` (source of truth). Quality gates:
+  @saas/sdk + @saas/cli typecheck 0, @saas/cli test 164/164 (count UNCHANGED —
+  pure type-source swap, zero behaviour change), both packages lint 0. Orun:
+  validate ok, plan `81a5caa8cc5d` = 2 components (cli+sdk) × 3 envs = 6 jobs
+  (expected union, not overreach), dry-run 6 selected green.
+- Durable outcome: `@saas/sdk` webhook-endpoint **type surface is now
+  symmetric** — Create/Get/List/Update/Enable/Disable/Delete/Rotate request +
+  response types all re-exported from the package index. Consumers no longer
+  need to locally reconstruct `EnableWebhookEndpointResponse`.
+- Reports: `ai/reports/task-0116-implementer.md`,
+  `ai/reports/task-0116-verifier.md`.
+
+
+## Task 0117
+
+- Agent: Implementer
+- Prompt: `ai/tasks/task-0117.md`
+- Status: scoped and ready to begin (2026-05-31)
+- Branch: `impl/task-0117-migrations-test-notifications-context`
+- Sealed snapshot main: `c860053` (Task 0116 squash).
+- Objective: **Stabilize-first** — fix the long-standing baseline red test in
+  `tests/db/src/migrations.test.ts:66` ("each migration declares a valid bounded
+  context"). The test hard-codes a local `VALID_CONTEXTS: BoundedContext[]`
+  array (lines 52–62) listing 9 contexts, but the canonical `BoundedContext`
+  union in `packages/db/src/types.ts:1-11` has 10 — the 10th, `"notifications"`,
+  is declared by a real migration (`packages/db/src/manifest.ts:116`), so the
+  assertion fails (`@saas/db-tests` jest = 1 failed / 515 passed / 516 total).
+  This reproduces on main and was flagged as a known baseline gap across Tasks
+  0113/0115 reports + recommended-next-focus #2 in `current.md`.
+- Scope boundary: 2 files EXACTLY —
+  `tests/db/src/migrations.test.ts` (MODIFIED: add `"notifications"` to
+  `VALID_CONTEXTS` adjacent to `"metering"` to mirror the type-union ordering;
+  NO other change, no new cases, no assertion edits),
+  `ai/reports/task-0117-implementer.md` (NEW, real PR#).
+- Forbidden zones: `packages/db/src/types.ts` (already correct — source of
+  truth), `packages/db/src/manifest.ts` + all migration files, any other
+  `tests/db/**` source, lockfiles/package.json/component.yaml.
+- Single-component turbo PR: Orun changed-plan selects ONLY `db-tests`
+  (subscribes `dev` · `quick-check` only) = 1 component × 1 env = 1 job + plan.
+  Do NOT expect stage/prod lanes.
+- Hard rules: test-only one-line literal add, exact string `"notifications"`
+  byte-for-byte; no new eslint-disable/ts-ignore/as any; no deriving the array
+  from the type; revert `kiox.lock`; real PR# (TBD = BLOCKED); BEHIND-main
+  rebase remains verifier responsibility.
+- Acceptance: 2-file boundary; `pnpm --filter @saas/db-tests test` 516/516
+  (was 515/516); `@saas/db` typecheck 0; orun validate/plan(db-tests dev
+  only)/run dry-run green; PR-CI green.
+- Title: `fix(db-tests): add notifications to migration VALID_CONTEXTS`.
+- Selection rationale: repo-health stabilization outranks feature work
+  (orchestrator Task Selection Logic); narrow, human-independent, parallel-safe,
+  touches no deferred decisions.
+- Verifier prompt to be scoped after implementer completes (8-phase adapted for
+  a 1-component db-tests turbo PR, no deploy lane).
 
