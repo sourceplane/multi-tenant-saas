@@ -2572,10 +2572,59 @@ on the SDK side.
 
 ## Task 0104
 
-- Agent: Implementer (scoping, awaiting handoff)
+- Agent: Implementer → Verifier (sealed, awaiting handoff)
 - Prompt: `ai/tasks/task-0104.md`
+- Verifier prompt: `ai/tasks/task-0104-verifier.md` (sealed 2026-05-31)
+- Implementer report: `ai/reports/task-0104-implementer.md`
 - Branch: `impl/task-0104-console-u10-sdk-refactor`
-- Status: scoped 2026-05-31 (orchestrator)
+- PR: #159 — OPEN, MERGEABLE/CLEAN, 4/4 PR-CI green
+  (run `26700583663`: plan + web-console-next·{dev,stage,prod}·Verify
+  deploy). Single commit `a05a269`.
+- Status: implementer complete + verifier sealed 2026-05-31
+  (orchestrator), awaiting verifier handoff and post-merge live-URL
+  validation.
+- Implementer outcome: **Path A** chosen — hand-rolled `ApiClient`
+  deleted from `apps/web-console-next/src/lib/api.ts` (297 LOC →
+  ~120 LOC of pure console-side glue: `ApiTarget`, `TARGETS`,
+  `DEPLOY_ENV`, `IS_LOCKED`, `createClient(target, token) →
+  Sourceplane`, `wrap()` helper that adapts `Promise<T>` + thrown
+  `SourceplaneError` into the preserved `ApiResult<T>` shape). Zero
+  `fetch(`, zero `/v1/` route strings, zero header building inside
+  the console anymore. Diff `+200/-307` across 17 files, all under
+  `apps/web-console-next/**` + `pnpm-lock.yaml`. Multi-target
+  switcher (`ALL_TARGETS`, `DEPLOY_ENV`, `IS_LOCKED`,
+  `NEXT_PUBLIC_DEPLOY_ENV`) preserved byte-for-byte; `useMemo([target,
+  token])` rebuilds the `Sourceplane` on `setTarget`/`setToken`.
+- Scope-extension explicitly accepted in verifier prompt:
+  `apps/web-console-next/next.config.mjs` gained 14 lines —
+  `transpilePackages: ["@saas/sdk"]` + webpack
+  `resolve.extensionAlias` mapping `.js → [.ts, .tsx, .js]`. Necessary
+  to resolve SDK NodeNext-style `./auth.js` re-exports against
+  workspace-source `.ts` files; build-wiring only, no runtime/UX
+  behavior change.
+- Verifier 8-phase shape: (1) PR sanity + implementer-report-on-PR-
+  branch fix-up (recurring gap); (2) hazard scan + boundary scan
+  (zero new `eslint-disable`/`@ts-ignore`/`@ts-expect-error`/`as
+  unknown as`/`as any`/`node:*` under `apps/web-console-next/**`,
+  zero `/v1/` strings, zero `fetch(` in `lib/`, no SDK/contracts
+  edits, multi-target switcher byte-identity, bearer-token
+  re-construction); (3) quality gates (`pnpm -r typecheck=0` across
+  38 workspaces, `pnpm -r --no-bail lint` ≤ 45 warnings all in
+  `tests/api-edge/**`, build green, vitest green, tolerate
+  pre-existing `tests/db/migrations.test.ts` failure that reproduces
+  on `main`); (4) orun validate/plan/run dry-run for 1×3
+  `web-console-next` Verify lanes only; (5) PR-CI inspection via
+  `gh run view --log` (not just summary); (6) **squash merge +
+  post-merge main-CI watch + live-URL curl on stage/prod** —
+  DEPLOY-GATED, post-merge-deploy-profile-gap protocol mandatory
+  (Task 0082 white-page regression precedent); (7) verifier report;
+  (8) PASS bookkeeping (state.json/current.md/ledger commit on main)
+  or FAIL bookkeeping (PR comment + report on PR branch, no merge).
+- Sealed snapshot: `main` `1caa08b`.
+- Unlocks (on PASS): Task 0105 — `packages/cli` auth/SDK consumer
+  swap (symmetric CLI-side migration, single PR, unblocked by 0103
+  AuthClient).
+- Original scoping (now superseded): scoped 2026-05-31 (orchestrator)
 - Objective: Console U10 SDK refactor — replace
   `apps/web-console-next/src/lib/api.ts` (297 LOC duplicated `ApiClient`)
   with `Sourceplane` from `@saas/sdk`. Pure consumer-side swap unblocked
