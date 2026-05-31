@@ -1,46 +1,28 @@
 # Orchestrator Brief
 
 ## Snapshot
-- snapshot_at: 2026-05-31T20:00:00Z
-- head_sha: ef38e780 (origin/main, Task 0121 scope commit) | PR #176 head 40d9f43
-- state_json_mtime_marker: post-task-0121-verifier-scope
-- last_task_id: task-0121-verifier (emitted)
-- last_report_id: task-0121-implementer (UNTRACKED — Phase-0 fix-up owed)
+- snapshot_at: 2026-05-31T21:00:00Z
+- head_sha: 2b98507 (origin/main, Task 0121 squash-merge) | 0 open PRs
+- state_json_mtime_marker: post-task-0121-verifier-PASS
+- last_task_id: task-0121-verifier (DONE — PASS)
+- last_report_id: task-0121-verifier
 - cycle_mode: warm
 - repo_health: green
 
 ## Working Hypothesis
-Last cycle the brief said "Task 0121 scoped, awaiting implementer." Reality this
-cycle: the **implementer pass completed** — PR **#176** is OPEN, MERGEABLE/CLEAN,
-**21/21 PR-CI green** at HEAD `40d9f43` (base `ef38e780` = origin/main, 0 behind),
-delivering the full B7 audit-log filtering + export milestone in ONE combined PR
-(17 files, +1218/-55). Per Operating Loop steps 15-16 + the "forgetting verifier
-tasks exist" pitfall, the orchestrator's correct move was to **emit the matching
-verifier task BEFORE any new forward work** — done: `ai/tasks/task-0121-verifier.md`.
+Task **0121 is CLOSED** — verifier PASS, PR **#176** squash-merged as `2b98507`
+on main. The full B7 audit-log filtering + export milestone shipped end to end in
+ONE combined PR (17 files, +1218/-55) across DB → contracts → events-worker → SDK
+→ CLI → Console, with the Console deploy leg proven on post-merge main-CI run
+`26715563040` (21/21) + a live prod-Worker probe (`/`→307→`/orgs`→200,
+`/orgs/test/audit`→200). Both inherited facts resolved: Phase-0 report fix-up done
+(`d70291f`), 400→422 accepted as the canonical worker convention (no spec proposal).
+The orchestrator's next move is to **scope the next forward milestone** — ranked #1
+below is the B7 security-events surface.
 
-Two facts the verifier inherits, both pre-resolved by orchestrator inspection:
-1. **Phase-0 report fix-up** — `ai/reports/task-0121-implementer.md` is UNTRACKED,
-   never committed to the PR branch (recurring 0031-0034/0106 gap). Verifier
-   commits + pushes it, re-polls CI before merge.
-2. **400 → 422 reconciliation** — task prompt acceptance said 400 on malformed
-   from/to + bad actorType; implementer shipped **422 validation_failed**.
-   Confirmed 422 is the canonical events-worker convention
-   (`apps/events-worker/src/http.ts:36` `validationError` → 422). ACCEPT per
-   trust-code-over-docs; NO spec proposal (worker error-envelope detail).
-
-## Ranked Candidate Queue
-1. **Task 0121 verifier** (EMITTED THIS CYCLE) — execute next. Console leg
-   DEPLOY-GATED: PASS gate = post-merge main-CI smoke + live prod-Worker
-   audit-page probe (`/`→307→`/orgs`→200), not PR-CI alone.
-2. **B7 follow-on / security-events surface** — `querySecurityEvents` consumer
-   exposure (explicitly out of scope for 0121). Next forward leg once 0121 closes.
-3. **`VALID_CONTEXTS` drift-proofing (hygiene)** — derive the test array from the
-   `BoundedContext` union via `as const`. Low priority.
-4. **B8 admin-worker scaffold** — greenfield; cross-tenant ops surface. Later.
-
-## In-Flight
-- PR #176 OPEN (`impl/task-0121-audit-filter-export`), 21/21 CI green, 0 behind.
-- Verifier task awaiting pickup. No mid-write implementer worktree.
+Carry-forward nit (non-blocking, no task needed yet): `cross-reads.ts`
+`parseAuditFilterFlags` doc-comment still says malformed input "surfaces as a 400" —
+worker returns 422. Fold into any future cross-reads touch.
 
 ## Hot Files
 - hot_context_sections: `current.md#active-task-0121-verifier`,
@@ -68,30 +50,28 @@ Two facts the verifier inherits, both pre-resolved by orchestrator inspection:
   `/v1/deployments` GET (+ `resource create` POST) on api-edge + contracts.
 
 ## Invalidate When
-- Task 0121 verifier merges PR #176 → orchestrator scopes the next forward
-  milestone (B7 security-events surface is the ranked #2).
-- Verifier reports FAIL → orchestrator re-scopes blockers within the milestone.
+- Orchestrator scopes the next forward milestone (B7 security-events surface,
+  ranked #1) → this brief is superseded.
 - `current.md` rewritten outside the orchestrator's hand.
 - `state.json.goal` changes, or a new spec proposal under `/ai/proposals/` is filed.
 
 ## Next Move
-Verifier agent (next pickup): execute `ai/tasks/task-0121-verifier.md` —
-Phase-0 commit the untracked implementer report to the PR branch + re-poll CI;
-Phase 1 confirm the 17-file boundary; Phase 2 hazard/forbidden-zone scan
-(api-edge UNCHANGED, zero `fetch` in Console, no parked-zone touches); Phase 3
-SQL-safety + cursor-keyset-unchanged + filter-survives-≥2-pages + 422-accept;
-Phase 4-6 quality + Orun + PR-CI log gates; Phase 6.5 BEHIND-main rebase if needed;
-**Phase 7 MANDATORY** squash-merge + post-merge main-CI deploy + live prod-Worker
-audit-page probe; Phase 8 verifier report + PASS/FAIL bookkeeping on main.
+**Orchestrator (next cycle): scope the next forward milestone.** Task 0121 is
+closed (verifier PASS, PR #176 merged `2b98507`). Ranked pick #1 below is the
+B7 security-events surface — a separate leg from 0121's audit filtering.
 
-After Task 0121 verifier closes (PASS + merged), the orchestrator's next forward
-pick is the **B7 security-events (`querySecurityEvents`) consumer surface** — a
-separate leg from 0121's audit filtering.
+## Ranked Candidate Queue
+1. **B7 security-events surface** — `querySecurityEvents` consumer exposure
+   (DB → contracts → events-worker → SDK → CLI → Console), explicitly out of
+   scope for 0121. Next forward leg. Mirror the 0121 keyset/cursor/parameterized
+   -SQL/422 conventions.
+2. **`VALID_CONTEXTS` drift-proofing (hygiene)** — derive the test array from the
+   `BoundedContext` union via `as const`. Low priority.
+3. **B8 admin-worker scaffold** — greenfield; cross-tenant ops surface. Later.
 
 ## Open Questions To Self
-- Confirm the verifier actually inspects the `iterAuditEntries` per-page query
-  reconstruction (events.ts ~L177) and the ≥2-page filter-survival test — the
-  silent drop-after-page-1 bug is the highest-risk seam in this milestone.
-- If post-merge prod-Worker audit-page probe needs a seeded org slug, fall back to
-  `/orgs` 200 + green web-console-next-tests jest as the Console proof (do not
-  invent an org/audit fixture).
+- For the B7 security-events leg: confirm whether `querySecurityEvents` already
+  exists in `packages/db` (read-side) or needs the full DB→Console stack — scope
+  accordingly to avoid over/under-reach.
+- Carry the 0121 cross-reads "400→422" comment nit into the first security-events
+  cross-reads touch (non-blocking, no standalone task).

@@ -1,6 +1,6 @@
 # Task Ledger
 
-Last updated: 2026-05-31 (Task 0120 SCOPED — `ai/tasks/task-0120.md`, milestone `B5-webhook-delivery-history`: ship the per-endpoint webhook delivery-history observability surface end to end. Backend already shipped on main (contracts `PublicWebhookDeliveryAttempt`/`List…`/`Get…`, cursor-paginated webhooks-worker routes, api-edge proxy) — the milestone is the three missing consumer surfaces: SDK `limit`/`cursor` threading on `listDeliveryAttempts`/`getDeliveryAttempt`, a designed Console delivery-history panel on the endpoint detail page, and a `webhook deliveries <endpointId>` CLI command, each with tests. May land as 1 PR or a short SDK→Console→CLI sequence; implementer MUST branch+commit+push+open ≥1 PR. Hard exclusions: no replay/redeliver, no contract/db/worker/api-edge behaviour change, no new server query filters, no secret/raw-payload render, no B2 alert wiring. Chosen over VALID_CONTEXTS drift-proofing, B7 audit-log, and B8 admin-worker as the highest-leverage human-independent B5 leg. — prior: Task 0119 Verifier PASS + MERGED — PR #174 `Task 0119: Bump GitHub Actions to Node 24 runtimes` squash-merged as `ba274f3` on main; inline 8-phase verifier PASS adapted for an infra/tooling-only no-deploy PR (no Orun component, no live-URL surface): EXACTLY 2 files (+99/−5), four action-ref token bumps (`checkout@v4`→`@v6` ×2, `upload-artifact@v4`→`@v7`, `download-artifact@v4`→`@v8`, `docker/login-action@v3`→`@v4`); byte-identity guard confirmed for both `sourceplane/orun-action@v1.2.0` pins and both `orun` step bodies + env/permissions/matrix/job-names/`if:` guard; `orun validate` ok; `orun plan --changed --base origin/main` = 0 components × 3 envs → 0 jobs (expected no-op for `.github/**` diff); PR-CI run `26711979395` SUCCESS at original HEAD + run `26712180399` SUCCESS at rebased HEAD `dc6f9c5` (BEHIND-main `gh pr update-branch` recurring 0103-0118 pattern); `gh run view --log` confirms `plan` job ran on `checkout@v6` + `upload-artifact@v7` and the Node 20 deprecation banner now lists ONLY `actions/cache@v4` (out of scope, transitive via orun-action); post-merge main-CI run `26712209500` at `ba274f3` SUCCESS with same banner shape — bump effective on main. Closes recommended-next-focus #2; CI workflow now runs Node 24 for the four bumped actions ahead of the June 16 2026 forced-default cutover and Sept 16 2026 Node 20 removal. main remains FULLY GREEN.)
+Last updated: 2026-05-31 (Task 0121 VERIFIED PASS + MERGED — PR #176 `feat(audit): combinable filtering + NDJSON export across all layers (Task 0121)` squash-merged as `2b98507` on main. B7 audit-log filtering + export shipped end to end in ONE combined PR (17 files +1218/−55): DB `queryAuditByOrg` + `AuditOrgFilters` parameterized optional WHERE clauses (hardcoded columns, bound `$N`, keyset + legacy `org_id IN ($1,$2)` untouched); contracts `AuditQueryByOrg` +7 optional fields (PublicAuditEntry/envelope byte-stable); events-worker `parseAuditFilters` → 422 `validation_failed`; SDK `AuditEntryFilters` threaded through iterator per-page reconstruction (survives ≥2 pages, test-proven) + `exportAuditEntriesNdjson`; CLI `audit list` +7 filter flags + `--format=ndjson`; Console filter UI + Load-more + Export NDJSON (SDK-only, zero fetch). Phase-0 fix-up: committed untracked implementer report (`d70291f`) + `gh pr update-branch` (`65f7d99`); fresh PR-CI `26715418224` 21/21 SUCCESS. 400→422 reconciled (canonical worker convention). Post-merge main-CI `26715563040` 21/21 SUCCESS; web-console-next prod wrangler upload 20 assets + Version ID `bb7fe3f2` + smoke 2.9s; live prod probe `/` → 307 → `/orgs` 200 + `/orgs/test/audit` 200. main FULLY GREEN. — prior: Task 0120 SCOPED — `ai/tasks/task-0120.md`, milestone `B5-webhook-delivery-history`: ship the per-endpoint webhook delivery-history observability surface end to end. Backend already shipped on main (contracts `PublicWebhookDeliveryAttempt`/`List…`/`Get…`, cursor-paginated webhooks-worker routes, api-edge proxy) — the milestone is the three missing consumer surfaces: SDK `limit`/`cursor` threading on `listDeliveryAttempts`/`getDeliveryAttempt`, a designed Console delivery-history panel on the endpoint detail page, and a `webhook deliveries <endpointId>` CLI command, each with tests. May land as 1 PR or a short SDK→Console→CLI sequence; implementer MUST branch+commit+push+open ≥1 PR. Hard exclusions: no replay/redeliver, no contract/db/worker/api-edge behaviour change, no new server query filters, no secret/raw-payload render, no B2 alert wiring. Chosen over VALID_CONTEXTS drift-proofing, B7 audit-log, and B8 admin-worker as the highest-leverage human-independent B5 leg. — prior: Task 0119 Verifier PASS + MERGED — PR #174 `Task 0119: Bump GitHub Actions to Node 24 runtimes` squash-merged as `ba274f3` on main; inline 8-phase verifier PASS adapted for an infra/tooling-only no-deploy PR (no Orun component, no live-URL surface): EXACTLY 2 files (+99/−5), four action-ref token bumps (`checkout@v4`→`@v6` ×2, `upload-artifact@v4`→`@v7`, `download-artifact@v4`→`@v8`, `docker/login-action@v3`→`@v4`); byte-identity guard confirmed for both `sourceplane/orun-action@v1.2.0` pins and both `orun` step bodies + env/permissions/matrix/job-names/`if:` guard; `orun validate` ok; `orun plan --changed --base origin/main` = 0 components × 3 envs → 0 jobs (expected no-op for `.github/**` diff); PR-CI run `26711979395` SUCCESS at original HEAD + run `26712180399` SUCCESS at rebased HEAD `dc6f9c5` (BEHIND-main `gh pr update-branch` recurring 0103-0118 pattern); `gh run view --log` confirms `plan` job ran on `checkout@v6` + `upload-artifact@v7` and the Node 20 deprecation banner now lists ONLY `actions/cache@v4` (out of scope, transitive via orun-action); post-merge main-CI run `26712209500` at `ba274f3` SUCCESS with same banner shape — bump effective on main. Closes recommended-next-focus #2; CI workflow now runs Node 24 for the four bumped actions ahead of the June 16 2026 forced-default cutover and Sept 16 2026 Node 20 removal. main remains FULLY GREEN.)
 
 ## Task 0001
 
@@ -4334,15 +4334,32 @@ One PR, one reviewer-holdable outcome (rotate UX backend), one rollback (single 
 
 - Agent: Implementer
 - Prompt: `ai/tasks/task-0121.md`
-- Status: IMPLEMENTER COMPLETE + VERIFIER SCOPED 2026-05-31. PR #176 OPEN,
-  MERGEABLE/CLEAN, 21/21 PR-CI green (run 26715065143) at HEAD `40d9f43`, base
-  `ef38e780` = origin/main (0 behind); 17 files +1218/-55, one combined PR.
-  Verifier prompt `ai/tasks/task-0121-verifier.md`. Two carried flags: (1) Phase-0
-  fix-up — implementer report UNTRACKED, not on PR branch (recurring 0031-0034/
-  0106); (2) 400→422 RECONCILED — impl shipped 422 validation_failed (canonical
-  events-worker convention, http.ts:36), prompt's "400" was stale, ACCEPT 422, no
-  spec proposal. Console leg deploy-gated (PASS = post-merge main-CI + live
-  prod-Worker audit-page probe).
+- Verifier prompt: `ai/tasks/task-0121-verifier.md`
+- Status: **VERIFIED PASS + MERGED 2026-05-31**. PR #176 squash-merged as
+  `2b98507` on main (mergedAt 2026-05-31T14:40:14Z); 17 files +1218/-55, one
+  combined PR. 8-phase verifier PASS (Console deploy-gated):
+  - Phase 0: committed untracked `task-0121-implementer.md` to PR branch
+    (`d70291f`); `gh pr update-branch 176` resolved behind-main (`65f7d99`);
+    fresh PR-CI `26715418224` at `d70291f` = 21/21 SUCCESS.
+  - Phases 1–6.5: 17-file boundary EXACT (+report); hazard/forbidden-zone clean
+    (api-edge UNCHANGED, zero `fetch(` in Console, no `querySecurityEvents`/
+    parked-zone/lockfile hits); SQL safety (hardcoded columns, bound `$N`, keyset
+    + legacy `org_id IN ($1,$2)` untouched), filter-survives-≥2-pages (test-proven),
+    `meta.cursor ?? null` envelope read, 422 routing all confirmed by code path;
+    typecheck 0 / lint 0 / db 520 + events-worker 24 + sdk 117 + cli 183 +
+    web-console-next-tests 70; Orun validate ok + plan 8 components → 20 jobs +
+    dry-run 20 selected; PR-CI real via `gh run view --log` (sdk·dev vitest,
+    web-console-next·stage next build, events-worker·stage 7 steps).
+  - Phase 7 (PASS gate): post-merge main-CI run `26715563040` at `2b98507` =
+    21/21 SUCCESS; web-console-next prod wrangler upload 20 assets + Version ID
+    `bb7fe3f2` + `✓ 08 smoke 2.9s`; events-worker prod 10 steps. Live probe: prod
+    Worker `/` → 307 → `/orgs` → HTTP 200 `<title>Sourceplane Console</title>`;
+    `/orgs/test/audit` → HTTP 200 (new filter-UI chunk served).
+  - **400→422 RECONCILED**: impl shipped 422 `validation_failed` (canonical
+    events-worker convention, `http.ts:36`); prompt's "400" was stale, ACCEPTED
+    per trust-code-over-docs, no spec proposal.
+  - Hand-off PR-CI `26715065143` at `40d9f43` also 21/21 SUCCESS.
+- Reports: `ai/reports/task-0121-implementer.md`, `ai/reports/task-0121-verifier.md`
 - Milestone: `B7-audit-log-filtering-export`. Take the org-scoped audit read API
   (`GET /v1/organizations/:orgId/audit`) from category-only to buyer-credible by
   adding actor (actorId/actorType), resource (subjectKind/subjectId), action
