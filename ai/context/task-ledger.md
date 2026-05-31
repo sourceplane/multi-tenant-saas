@@ -2510,3 +2510,37 @@ on the SDK side.
   untouched + new `listAuditEntriesPage` primitive +
   `iterAuditEntries` async iterator with `seenCursors` + 1000-page
   cap. Reports: `ai/reports/task-0102-{implementer,verifier}.md`.
+
+## Task 0103
+
+- Agent: Implementer
+- Prompt: `ai/tasks/task-0103.md`
+- Status: scoped and ready to begin (2026-05-31)
+- Objective: Add a 13th `@saas/sdk` resource client `AuthClient`
+  wrapping the identity-worker public auth surface (`loginStart`,
+  `loginComplete`, `getSession`, `logout`, `getProfile`,
+  `updateProfile`). Closes the last SDK gap before Task 0104 (Console
+  U10 SDK refactor) becomes a pure consumer-side swap. Mirrors
+  `EnvironmentsClient` cadence from Task 0102.
+- Scope boundary: `packages/sdk/src/auth.ts` (new),
+  `packages/sdk/src/index.ts` (wire `client.auth`),
+  `packages/sdk/src/__tests__/auth.test.ts` (new, ≥10 `it()` blocks).
+  Out of scope: `packages/contracts/**` (proposal-then-defer if
+  `UpdateProfileRequest` / `ProfileResponse` missing),
+  `packages/cli/**`, `apps/**`, `packages/sdk/src/transport.ts` public
+  API, other resource clients, `/v1/auth/resolve` (internal),
+  `securityEvents` (already in `SecurityEventsClient`).
+- Acceptance: SDK ≥99 tests (89 + 10); per-workspace
+  typecheck/lint/test/build exit 0; repo-wide `pnpm -r typecheck` exit
+  0; `pnpm -r --no-bail lint` ≤45 residual warnings, all in
+  `tests/api-edge` (Task 0096f territory unchanged); `kiox -- orun
+  validate / plan / run --dry-run` all exit 0;
+  `packages/sdk/component.yaml` byte-identical vs main; PR-CI 4/4
+  green on `plan + sdk × {dev,stage,prod} Verify` (no deploy step);
+  hazard scan clean (zero new `eslint-disable` / `@ts-ignore` /
+  `@ts-expect-error` / `as unknown as` / `as any` under
+  `packages/sdk/**`); no `node:*` imports.
+- Expected outcome: SDK clients 12 → 13 (`auth` added). Unblocks Task
+  0104 (Console U10 SDK refactor) which becomes a pure consumer-side
+  swap of `apps/web-console-next/src/lib/api.ts` (297 LOC, 8 call
+  sites) for `Sourceplane` from `@saas/sdk`.

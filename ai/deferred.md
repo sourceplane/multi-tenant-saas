@@ -35,6 +35,25 @@ selection pass.
   or wrangler edits to these while parked. Task 0089 must not touch
   `infra/terraform/cloudflare-domain/**` or the cloudflare provider pin.
 
+## Optional spec-13 CLI commands (`component list`, `resource create`, `resource get`, `deployment get`)
+- Deferred: 2026-05-31
+- Blocking decision: backend gap, not user input. The api-edge facade
+  surface (audited 2026-05-31) does not expose `/v1/components`,
+  `/v1/resources`, or `/v1/deployments` — only the auth, org, project,
+  webhooks, billing, config, metering, and audit facades exist. These
+  optional spec-13 commands cannot ship as a pure CLI/SDK PR; they
+  require a P2 backend slice (resources + component-manifest) first.
+- Unblock signal: a backend task lands `/v1/components`,
+  `/v1/resources`, and `/v1/deployments` GET (and `resource create`
+  POST) on api-edge with corresponding contracts in
+  `@saas/contracts`. After that, this becomes a pure SDK + CLI fan-out
+  task (estimated single PR, mirrors Task 0099 cadence).
+- Notes: per `specs/components/13-cli-and-sdk.md` lines 72-75, these
+  commands are **explicitly optional** — spec-13 required surface is
+  fully live on main (Task 0101+0102). Roadmap P2 tracks the backend
+  resources slice. Do not emit a CLI-only task for this until backend
+  routes exist.
+
 ## notifications-worker-dev provisioning + dev binding (REFRAMED → `notifications-worker-dev-reframe`)
 - Deferred: 2026-05-30 (originally parked behind Task 0089 as a narrow
   follow-up; reframed during Task 0090 scoping after orchestrator
