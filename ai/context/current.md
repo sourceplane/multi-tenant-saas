@@ -1,10 +1,52 @@
 # Current Context
 
-Last updated: 2026-05-31 — Task 0111 SCOPED. CLI helpers extraction
-recommended by Task 0110 verifier. Implementer prompt at
-`ai/tasks/task-0111.md`.
+Last updated: 2026-05-31 — Task 0111 IMPLEMENTER COMPLETE +
+VERIFIER SCOPED. PR #166 OPEN, MERGEABLE/CLEAN, 4/4 PR-CI green at
+HEAD `ad2964b` (run `26706640065`: plan + cli·{dev,stage,prod}·Verify).
+Verifier prompt at `ai/tasks/task-0111-verifier.md`.
 
-## Active Task — 0111 (Implementer)
+## Active Task — 0111 (Verifier)
+
+**Verifier prompt:** `ai/tasks/task-0111-verifier.md`
+**PR:** #166 — https://github.com/sourceplane/multi-tenant-saas/pull/166
+**Branch:** `impl/task-0111-cli-helpers-extract` (HEAD `ad2964b`)
+**Sealed snapshot main:** `142d019` (scope commit `fcc5340` adds only
+the task prompt + state-file bookkeeping)
+**Component shape:** `turbo-package`, verify-only on dev/stage/prod,
+no deploy lane, no live URL surface.
+**Diff:** 5 files +394/-65 (code-only +232/-65 across helpers.ts NEW,
+writes.ts, webhook-secrets-rotate.ts, helpers.test.ts NEW; the
+remaining +162 is the implementer report `ai/reports/task-0111-implementer.md`).
+**Implementer report committed on PR branch** as `dbb862d` — no
+Task 0106 missing-report fix-up needed.
+
+**Verifier 8-phase shape (turbo-package, no deploy lane):**
+
+- Phase 0: working-dir + readiness (`gh pr checkout 166`)
+- Phase 1: PR sanity, EXACTLY 5 listed paths + forbidden-zone grep
+- Phase 2: hazard scan + behaviour-equivalence diff vs origin/main
+  inline copies + residual-duplicate audit + ≥6 vitest case audit
+- Phase 3: quality gates (`pnpm -r typecheck` / lint / `@saas/cli`
+  build+test ≥144/144 across 11 files)
+- Phase 4: orun gates (validate / plan --changed selects ONLY
+  cli·{dev,stage,prod}·Verify / run --dry-run 3/3 ✓)
+- Phase 5: PR-CI lane log evidence via `gh run view --log`
+- Phase 6: squash-merge + post-merge main-CI watch (4 lanes)
+  (BEHIND-main pattern: `gh pr update-branch 166` if mergeStateStatus
+  flips, recurring 0103–0110)
+- Phase 7: verifier report `ai/reports/task-0111-verifier.md`
+- Phase 8: PASS bookkeeping (state.json/current.md/ledger commit on
+  main) or FAIL bookkeeping (PR comment + no merge)
+
+**Documented Remaining Gap (accept; do not block):**
+`cross-reads.ts` still carries its own single-arg
+`async function resolveOrgId(ctx)` no-override read variant.
+PR-Boundary explicitly forbids touching it. Verifier should risk-note
+this forward as a tiny future housekeeping task (one line of
+deletions + one import). Reads have no idempotency dimension; the
+duplication is byte-equivalent and low-risk.
+
+## Original Implementer scope (now complete)
 
 **Objective:** Extract `resolveOrgId(ctx, allowOverride)` and
 `readIdempotencyKey(ctx)` from `packages/cli/src/commands/writes.ts` and
