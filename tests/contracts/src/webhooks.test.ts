@@ -97,9 +97,39 @@ describe("contracts: webhook endpoint types", () => {
         createdAt: "2026-01-15T10:00:00Z",
         updatedAt: "2026-01-15T10:00:00Z",
       },
+      previousSecretExpiresAt: "2026-01-16T10:00:00Z",
+      gracePeriodSeconds: 86400,
     };
     expect(res.endpoint.secretVersion).toBe(2);
     expect("signingSecret" in res.endpoint).toBe(false);
+    // Grace window expiry is operator-visible but contains no secret material
+    expect(typeof res.previousSecretExpiresAt === "string" || res.previousSecretExpiresAt === null).toBe(true);
+    expect(typeof res.gracePeriodSeconds).toBe("number");
+  });
+
+  it("RotateWebhookSecretResponse can carry reveal-once plaintext `whsec_<32 hex>`", () => {
+    const res: RotateWebhookSecretResponse = {
+      endpoint: {
+        id: "ep-001",
+        orgId: "org-001",
+        projectId: null,
+        url: "https://example.com/webhook",
+        name: null,
+        description: null,
+        status: "active",
+        disabledReason: null,
+        disabledAt: null,
+        secretVersion: 3,
+        secretLastRotatedAt: "2026-01-15T10:00:00Z",
+        createdAt: "2026-01-15T10:00:00Z",
+        updatedAt: "2026-01-15T10:00:00Z",
+      },
+      secret: "whsec_0123456789abcdef0123456789abcdef",
+      previousSecretExpiresAt: null,
+      gracePeriodSeconds: 86400,
+    };
+    // Reveal-once contract: optional plaintext follows the whsec_ + 32 hex shape
+    expect(res.secret).toMatch(/^whsec_[0-9a-f]{32}$/);
   });
 
   it("PublicWebhookEndpoint supports all status values", () => {

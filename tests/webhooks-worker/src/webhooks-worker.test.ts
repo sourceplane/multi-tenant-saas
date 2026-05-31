@@ -387,6 +387,57 @@ describe("router", () => {
     expect(res.status).toBe(405);
   });
 
+  // ── Reveal-once secret + audit/event payload sanitisation (B5) ────────
+  // Static-source guard: the rotate handler must (a) construct a
+  // `whsec_<32 hex>` plaintext for the response, and (b) NEVER include the
+  // plaintext variable in the event/audit payload literal. We verify this
+  // via source inspection because the handler creates its own repo wiring
+  // (no injection), making behavioural mocking heavier than the regression
+  // value warrants. Verifier Phase 2 mirrors this grep.
+
+  it("handleRotateWebhookSecret returns reveal-once `whsec_<32 hex>` plaintext", async () => {
+    const fs = await import("node:fs/promises");
+    const path = await import("node:path");
+    const handlerPath = path.resolve(
+      process.cwd(),
+      "../../apps/webhooks-worker/src/handlers/webhook-endpoints.ts",
+    );
+    const src = await fs.readFile(handlerPath, "utf8");
+    // Reveal-shape: response builder forms `whsec_${plaintext}` exactly.
+    expect(src).toMatch(/secret:\s*`whsec_\$\{plaintextSecret\}`/);
+    // Hex generator: 32 hex chars (consistent with `/^whsec_[0-9a-f]{32}$/`).
+    expect(src).toMatch(/randomHex\(32\)/);
+  });
+
+  it("handleRotateWebhookSecret never leaks plaintext into event/audit payload", async () => {
+    const fs = await import("node:fs/promises");
+    const path = await import("node:path");
+    const handlerPath = path.resolve(
+      process.cwd(),
+      "../../apps/webhooks-worker/src/handlers/webhook-endpoints.ts",
+    );
+    const src = await fs.readFile(handlerPath, "utf8");
+    // Locate the rotate handler and slice up to the closing audit block.
+    const rotateStart = src.indexOf("export async function handleRotateWebhookSecret");
+    expect(rotateStart).toBeGreaterThan(-1);
+    const rotateBlock = src.slice(rotateStart);
+    // The plaintext variable must NOT appear inside any payload: { ... } literal
+    // in the rotate handler. We grep for `plaintextSecret` references and
+    // confirm none sit inside an event/audit payload object.
+    const payloadMatches = [...rotateBlock.matchAll(/payload:\s*\{[^}]*\}/gs)];
+    expect(payloadMatches.length).toBeGreaterThan(0);
+    for (const m of payloadMatches) {
+      expect(m[0]).not.toContain("plaintextSecret");
+      expect(m[0]).not.toContain("whsec_");
+    }
+    // The audit description must be semantic only — no plaintext interpolation.
+    const auditDescriptionMatches = [...rotateBlock.matchAll(/description:\s*`[^`]+`|description:\s*"[^"]+"/g)];
+    for (const m of auditDescriptionMatches) {
+      expect(m[0]).not.toContain("plaintextSecret");
+      expect(m[0]).not.toContain("whsec_");
+    }
+  });
+
   it("returns 405 for POST on subscription item", async () => {
     const env = createFakeEnv();
     const req = makeRequest("POST", `/v1/organizations/${TEST_ORG_PUBLIC}/webhooks/subscriptions/${TEST_SUBSCRIPTION_PUBLIC}`);
