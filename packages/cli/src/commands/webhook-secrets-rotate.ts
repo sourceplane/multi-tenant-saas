@@ -40,33 +40,14 @@
 //     into any error path either — defence in depth.
 
 import type { CommandContext, CommandResult } from "../router.js";
-import { MissingOrgContextError, UsageError } from "../errors.js";
+import { UsageError } from "../errors.js";
+import { resolveOrgId, readIdempotencyKey } from "./helpers.js";
 
-/**
- * Resolve the active org id (no `--org` override). Mirrors the
- * `resolveOrgId(ctx, /*allowOverride*\/ false)` helper in `writes.ts`;
- * we re-implement the no-override branch inline here rather than
- * exporting + importing from `writes.ts` (the task forbids touching
- * `writes.ts` and re-exporting through it).
- */
-async function resolveActiveOrgId(ctx: CommandContext): Promise<string> {
-  const cliCtx = await ctx.contextStore.load();
-  const orgId = cliCtx.activeOrgId;
-  if (orgId === undefined || orgId.length === 0) {
-    throw new MissingOrgContextError();
-  }
-  return orgId;
-}
-
-/**
- * Pull `--idempotency-key=KEY` from flags. Returns `undefined` when the
- * user did not pass the flag — the SDK then omits the header. The CLI
- * deliberately does not auto-generate one (Stripe parity).
- */
-function readIdempotencyKey(ctx: CommandContext): string | undefined {
-  const v = ctx.flags["idempotency-key"];
-  return typeof v === "string" && v.length > 0 ? v : undefined;
-}
+// Org-id resolution and `--idempotency-key=KEY` reading are imported
+// from `./helpers.js` (Task 0111 extraction). Use the no-override
+// variant — `resolveOrgId(ctx, /* allowOverride */ false)` — to mirror
+// `webhook create` semantics: the persisted active-org context is the
+// only source, no `--org` flag plumbing on rotate.
 
 /**
  * Validate `--output=human|json`. The runner already coerces `output`
@@ -100,7 +81,7 @@ export async function webhookSecretsRotateCommand(
     );
   }
 
-  const orgId = await resolveActiveOrgId(ctx);
+  const orgId = await resolveOrgId(ctx, /* allowOverride */ false);
   const idempotencyKey = readIdempotencyKey(ctx);
 
   const sdk = await ctx.sdk();

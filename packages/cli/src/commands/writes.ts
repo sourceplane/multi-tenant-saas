@@ -26,44 +26,8 @@
 
 import type { CommandContext, CommandResult } from "../router.js";
 import { formatOutput } from "../output/index.js";
-import { MissingOrgContextError, UsageError } from "../errors.js";
-
-/**
- * Resolve the org id for a write command. Order:
- *   1. Explicit `--org=ORG_ID` flag (only honoured when `allowOverride` is
- *      true — currently `org invite`).
- *   2. Persisted `activeOrgId` from `~/.config/sourceplane/config.json`.
- *
- * Throws `MissingOrgContextError` when neither is available. The CLI never
- * silently picks a "first" org from the listing — that would let a user run
- * a write against a different tenant than they expected.
- */
-async function resolveOrgId(
-  ctx: CommandContext,
-  allowOverride: boolean,
-): Promise<string> {
-  if (allowOverride) {
-    const flag = ctx.flags["org"];
-    if (typeof flag === "string" && flag.length > 0) return flag;
-  }
-  const cliCtx = await ctx.contextStore.load();
-  const orgId = cliCtx.activeOrgId;
-  if (orgId === undefined || orgId.length === 0) {
-    throw new MissingOrgContextError();
-  }
-  return orgId;
-}
-
-/**
- * Pull `--idempotency-key=KEY` from flags. Returns `undefined` when the user
- * did not pass the flag — the SDK will then omit the `Idempotency-Key`
- * header. The CLI deliberately does not auto-generate one (Stripe parity);
- * tests assert the verbatim passthrough and the no-header path.
- */
-function readIdempotencyKey(ctx: CommandContext): string | undefined {
-  const v = ctx.flags["idempotency-key"];
-  return typeof v === "string" && v.length > 0 ? v : undefined;
-}
+import { UsageError } from "../errors.js";
+import { resolveOrgId, readIdempotencyKey } from "./helpers.js";
 
 /** Format a single-record write result. */
 function emitRecord(
