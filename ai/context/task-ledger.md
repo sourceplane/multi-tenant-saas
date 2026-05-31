@@ -4198,3 +4198,44 @@ One PR, one reviewer-holdable outcome (rotate UX backend), one rollback (single 
   forbidden-zone hits; no kiox.lock mutation. Closes the last byte-equivalent
   copy of org-id resolution — `helpers.ts` is now the single source.
 
+## Task 0119
+
+- Agent: Implementer (COMPLETE) + Verifier (scoped, in flight)
+- Prompt: `ai/tasks/task-0119.md` (implementer) · `ai/tasks/task-0119-verifier.md` (verifier)
+- Status: implementer COMPLETE on PR #174 (OPEN, MERGEABLE, CLEAN); verifier
+  scoped and dispatched (2026-05-31).
+- Branch: `impl/task-0119-ci-actions-node24-bump` (HEAD `f0ac5ce`, base main
+  `eda4a3a`; scope commits `f350bbf` ci bump + `f0ac5ce` report PR# fixup).
+- Objective: bump the four deprecated Node-20-runtime GitHub Actions in
+  `.github/workflows/ci.yml` to the latest Node-24 majors before the June 16
+  2026 forced-Node24 cutover, with zero behaviour change to the plan/run
+  pipeline. Closes recommended-next-focus #2.
+- Scope boundary: 2 files EXACTLY — `.github/workflows/ci.yml` (+5/−5, four
+  action-ref token bumps: `actions/checkout@v4`→`@v6` on lines 19+55,
+  `actions/upload-artifact@v4`→`@v7` line 40, `actions/download-artifact@v4`→
+  `@v8` line 56, `docker/login-action@v3`→`@v4` line 60; nothing else),
+  `ai/reports/task-0119-implementer.md` NEW (real PR #174).
+- Out of scope: `sourceplane/orun-action@v1.2.0` (org composite, not banner-
+  listed); `actions/cache@v4` (banner-named but injected transitively by
+  orun-action tooling, not present in `ci.yml`, not addressable here — noted in
+  the impl report Remaining Gaps).
+- Implementer pin choice: floating major (matches existing `@v4`/`@v3`
+  convention; auto-absorbs first-party patch fixes). Spec proposals: none.
+- INFRA/TOOLING-ONLY PR: not an Orun component, no `component.yaml`, no deploy
+  lane, no live-URL surface. `orun plan --changed` correctly empty (0 components
+  → 0 jobs); `run` job skipped by the `if: job-matrix != '[]'` guard. PR-CI run
+  26711979395 = `plan` SUCCESS (9s) + `matrix.job-name` skipping. `gh run view
+  --log` confirms the `plan` job ran on `actions/checkout@v6` +
+  `actions/upload-artifact@v7` and the Node 20 banner is gone for the four
+  bumped actions.
+- Acceptance: 2-file boundary; exactly four ref tokens changed; `orun-action`
+  pin + both `orun` step bodies + env/permissions/matrix/job-names byte-
+  identical; `orun validate` ok; empty/no-op changed-plan acceptable; PR-CI
+  `plan` green on new majors + banner gone (via `gh run view --log`); CLEAN; no
+  `kiox.lock`/`plan.json`/lockfile drift.
+- Selection rationale: implementer pass already landed clean on PR #174;
+  per Operating Loop steps 15–16 and the "forgetting verifier tasks exist"
+  pitfall, the orchestrator's correct next move is to emit the matching
+  verifier task (8-phase, adapted for a tooling-only no-deploy PR) before
+  scoping any new forward work.
+
