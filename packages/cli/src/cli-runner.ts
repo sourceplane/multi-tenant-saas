@@ -21,6 +21,7 @@ import {
   apiKeyCreateCommand,
   webhookCreateCommand,
 } from "./commands/writes.js";
+import { makeWebhookVerifyCommand, type WebhookVerifyOptions } from "./commands/webhook-verify.js";
 import {
   usageSummaryCommand,
   billingSummaryCommand,
@@ -50,6 +51,12 @@ export interface RunOptions {
   readonly sdkFactory?: (baseUrl: string, token: string) => Sourceplane;
   /** Override config dir for the file token store / context store. */
   readonly configDir?: string;
+  /**
+   * Test injection for the `webhook verify` command — supplies a
+   * synthetic stdin and a fixed `now()` so verification can be exercised
+   * deterministically without poking `process.stdin` or the system clock.
+   */
+  readonly webhookVerify?: WebhookVerifyOptions;
 }
 
 export async function runCli(
@@ -77,7 +84,7 @@ export async function runCli(
     return { exitCode: positional.length === 0 ? 0 : 0 };
   }
 
-  const router = buildRouter();
+  const router = buildRouter(opts);
   const match = router.resolve(positional);
   if (match === null) {
     const formatted = formatCliError({
@@ -127,8 +134,9 @@ export async function runCli(
   }
 }
 
-function buildRouter(): Router {
+function buildRouter(opts: RunOptions): Router {
   const r = new Router();
+  const webhookVerifyHandler = makeWebhookVerifyCommand(opts.webhookVerify ?? {});
   // Auth
   r.register(["login"], "Authenticate against a Sourceplane API", loginCommand);
   r.register(["logout"], "Clear stored credentials and context", logoutCommand);
@@ -147,6 +155,7 @@ function buildRouter(): Router {
   r.register(["api-key", "create"], "Create an org-scoped API key", apiKeyCreateCommand);
   // Webhooks
   r.register(["webhook", "create"], "Create a webhook endpoint (and optional subscriptions)", webhookCreateCommand);
+  r.register(["webhook", "verify"], "Verify a webhook signature locally (no network)", webhookVerifyHandler);
   // Cross-resource reads
   r.register(["usage", "summary"], "Summarize usage rollups for the active organization", usageSummaryCommand);
   r.register(["billing", "summary"], "Show billing customer/plan/entitlements summary", billingSummaryCommand);
@@ -181,6 +190,7 @@ function printHelp(stdout: (line: string) => void): void {
       "API KEYS / WEBHOOKS:",
       "  sourceplane api-key create <name> [--scope=SCOPE] [--idempotency-key=KEY]",
       "  sourceplane webhook create <url> [--event=EVENT[,EVENT2,...]] [--idempotency-key=KEY]",
+      "  sourceplane webhook verify --secret=S --signature=H --timestamp=T [--body=PATH] [--tolerance-seconds=N]",
       "",
       "USAGE / BILLING / AUDIT:",
       "  sourceplane usage summary [--metric=METRIC] [--from=ISO] [--to=ISO]",
