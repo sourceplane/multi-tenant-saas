@@ -2572,17 +2572,44 @@ on the SDK side.
 
 ## Task 0104
 
-- Agent: Implementer → Verifier (sealed, awaiting handoff)
+- Agent: Verifier (PASS + MERGED — closed 2026-05-31)
 - Prompt: `ai/tasks/task-0104.md`
 - Verifier prompt: `ai/tasks/task-0104-verifier.md` (sealed 2026-05-31)
 - Implementer report: `ai/reports/task-0104-implementer.md`
-- Branch: `impl/task-0104-console-u10-sdk-refactor`
-- PR: #159 — OPEN, MERGEABLE/CLEAN, 4/4 PR-CI green
-  (run `26700583663`: plan + web-console-next·{dev,stage,prod}·Verify
-  deploy). Single commit `a05a269`.
-- Status: implementer complete + verifier sealed 2026-05-31
-  (orchestrator), awaiting verifier handoff and post-merge live-URL
-  validation.
+- Verifier report: `ai/reports/task-0104-verifier.md` (PASS verdict)
+- Branch: `impl/task-0104-console-u10-sdk-refactor` (deleted post-merge)
+- PR: #159 — **MERGED** via `gh pr merge --squash --delete-branch`.
+  Squash commit `c78592f303ea3f957aea8928d44543ac4d168820` on `main`.
+  Pre-merge PR-CI run `26700827443` 4/4 SUCCESS post-rebase
+  (`gh pr update-branch 159` brought PR ahead of main after Task 0103
+  verifier bookkeeping `9b48df4` had landed).
+- Post-merge main-CI run: `26700942407` 4/4 SUCCESS (plan +
+  web-console-next·{dev,stage,prod}·Verify deploy). Logs confirm
+  stage+prod ran the **deploy** profile (Uploaded
+  `sourceplane-web-console-next-{stage,prod}` + Deployed triggers +
+  smoke); dev kept verify (`--dry-run: exiting now`).
+- Live URL smoke: `https://stage.sourceplane.ai` and
+  `https://prod.sourceplane.ai` both return HTTP/2 307 → `/orgs` with
+  `x-opennext: 1` and `<title>Sourceplane Console</title>` (real Next
+  app shell, not white page).
+- Verifier 8-phase outcome: (1) PR sanity ✓ after rebase; (2) hazard
+  scan clean (zero new `eslint-disable`/`@ts-ignore`/`@ts-expect-error`
+  /`as unknown as`/`as any`/`node:*` under `apps/web-console-next/**`,
+  zero `/v1/` strings, zero `fetch(` in `lib/`, no SDK/contracts
+  edits, multi-target switcher byte-identical, bearer-token
+  re-construction via `useMemo([target, token])` in `session.tsx`);
+  (3) `pnpm -r typecheck` exit 0 across **38 workspaces**, lint
+  exactly **45 warnings** all in `tests/api-edge/**`, build green,
+  pre-existing `tests/db/migrations.test.ts` failure tolerated
+  (reproduces byte-identical on `main`); (4) `kiox -- orun validate`
+  exit 0, `orun plan --changed` 1×3 web-console-next Verify lanes,
+  `orun run --plan --dry-run` green; (5) PR-CI re-run `26700827443`
+  4/4 SUCCESS via `gh run view --log` (stage Verify lane 1m13.9s
+  wall-clock, real lane); (6) squash merge `c78592f` + post-merge
+  main-CI `26700942407` 4/4 SUCCESS + live-URL curl green on stage
+  and prod; (7) verifier report at `ai/reports/task-0104-verifier.md`;
+  (8) PASS bookkeeping (this entry).
+- Status: **closed PASS + MERGED** 2026-05-31.
 - Implementer outcome: **Path A** chosen — hand-rolled `ApiClient`
   deleted from `apps/web-console-next/src/lib/api.ts` (297 LOC →
   ~120 LOC of pure console-side glue: `ApiTarget`, `TARGETS`,
