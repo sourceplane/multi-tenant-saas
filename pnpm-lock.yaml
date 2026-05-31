@@ -422,6 +422,9 @@ importers:
       '@saas/sdk':
         specifier: workspace:*
         version: link:../sdk
+      '@saas/webhook-verifier':
+        specifier: workspace:*
+        version: link:../webhook-verifier
     devDependencies:
       '@saas/eslint-config':
         specifier: workspace:*

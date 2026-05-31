@@ -24,7 +24,8 @@
     "vitest": "^2.1.9"
   },
   "dependencies": {
-    "@saas/sdk": "workspace:*"
+    "@saas/sdk": "workspace:*",
+    "@saas/webhook-verifier": "workspace:*"
   },
   "optionalDependencies": {
     "keytar": "^7.9.0"
