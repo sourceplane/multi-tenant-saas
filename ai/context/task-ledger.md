@@ -2414,3 +2414,89 @@ on the SDK side.
   commands). Closes Track B4 second half; unlocks U10
   (console-as-SDK-client). Mirrors the Task 0098 → 0099 cadence on
   the CLI side. Same hazard ban + Stripe parity invariants.
+
+
+## Task 0101
+
+- Agent: Implementer (verifier sealed and pending)
+- Prompt: `ai/tasks/task-0101.md`
+- Verifier prompt (sealed): `ai/tasks/task-0101-verifier.md`
+- Status: implementer phase complete 2026-05-31; PR #155 OPEN,
+  MERGEABLE/CLEAN, all 4/4 PR-CI green (run 26698003939). Awaiting
+  verifier execution.
+- Branch (as shipped): `feat/cli-task-0101-write-and-cross-read-commands`
+  (implementer convention; verifier prompt latitude accepts).
+- Objective: B4 second-half closure on the CLI side — ship every spec-13
+  required command (`org invite`, `project create`, `env create`,
+  `api-key create`, `webhook create`, `usage summary`, `billing summary`,
+  `audit list [--all]`) wired through `@saas/sdk`, with caller-owned
+  `--idempotency-key` forwarded verbatim (Stripe parity preserved
+  end-to-end).
+- Scope boundary: source under `packages/cli/src/commands/**` plus the
+  matching `__tests__/**`; `packages/cli/README.md` touch-up; report at
+  `ai/reports/task-0101-implementer.md`. No SDK edits, no apps/**, no
+  contracts/**, no infra/**, no tests/api-edge/**, no `component.yaml`
+  drift.
+- Implementer report: `ai/reports/task-0101-implementer.md` (real PR
+  Number 155). Surfaced TWO SDK-side gaps; shipped CLI workarounds
+  through the public `Transport` (`env create` via `transport.request`,
+  `audit list --all` via `transport.fetchImpl`). Both gaps recorded as
+  orchestrator-accepted spec proposals:
+  `ai/proposals/task-0101-spec-update-environments-client.md` and
+  `ai/proposals/task-0101-spec-update-audit-pagination.md`. Both close
+  with Task 0102.
+- Acceptance: per-workspace typecheck/lint/test/build exit 0; repo-wide
+  `pnpm -r typecheck` exit 0; `pnpm -r --no-bail lint` ≤ 45 residual
+  warnings (all `tests/api-edge`); CLI workspace contributes 0; CLI
+  `it()` count ≥ 81; PR-CI 4/4 (plan + cli × {dev,stage,prod} Verify);
+  `--idempotency-key` verbatim passthrough proof on every write
+  command; webhook multi-call flow uses deterministic `KEY:sub:N`
+  suffix (no random sub-keys); `audit list --all` 1000-page cap +
+  `seenCursors` loop guard.
+- Expected outcome: PR #155 squash-merged, post-merge main-CI 4/4
+  green, both proposals carried forward to Task 0102 implementation.
+
+## Task 0102
+
+- Agent: Implementer (verifier sealed and pending)
+- Prompt: `ai/tasks/task-0102.md`
+- Verifier prompt (sealed): `ai/tasks/task-0102-verifier.md`
+- Status: implementer phase complete 2026-05-31; PR #156 OPEN on
+  branch `impl/task-0102-sdk-environments-and-audit-iterator`, head
+  3d234c9, MERGEABLE but UNSTABLE because base =
+  `feat/cli-task-0101-write-and-cross-read-commands` (stacked on PR
+  #155). Plan job currently fails with `no trigger binding matched
+  github event pull_request action opened` — purely a stacked-base
+  artefact; resolves with the verifier's Phase 0 rebase onto `main`
+  after PR #155 merges.
+- Objective: close the two SDK-side gaps surfaced by Task 0101 and
+  re-wire the CLI so every command dispatches through a typed
+  `@saas/sdk` resource client. Ships `EnvironmentsClient`
+  (`list`/`get`/`create`/`archive` mirroring `ProjectsClient`,
+  `encodeURIComponent` on every dynamic segment, caller-owned
+  idempotency-key on `create`/`archive`), surfaces paginated audit
+  reads as `EventsClient.iterAuditEntries`
+  (`AsyncIterable<PublicAuditEntry>`, 1000-page cap + `seenCursors`
+  loop guard) on top of a `listAuditEntriesPage` primitive, adds
+  `Transport.requestWithEnvelope<T>()` helper preserving back-compat
+  with `Transport.request<T>`. CLI `env create` and `audit list`
+  (single-page + `--all`) now consume the SDK; the two Task 0101
+  `transport.*` workaround sites are gone.
+- Scope boundary: `packages/sdk/**` (additions only — no edits to
+  existing `Transport.request<T>` or `EventsClient.listAuditEntries`
+  signatures), `packages/cli/src/commands/{writes,cross-reads}.ts`
+  re-wiring, matching test files. Report at
+  `ai/reports/task-0102-implementer.md`. No `component.yaml` drift.
+- Acceptance: SDK + CLI per-workspace typecheck/lint/test/build exit
+  0; repo-wide `pnpm -r typecheck` exit 0; `pnpm -r --no-bail lint`
+  ≤ 45 residual warnings (all `tests/api-edge`); SDK `it()` ≥ 89
+  (Task 0099 baseline 70 + ≥ 19 new); CLI `it()` ≥ 81 (Task 0101
+  baseline preserved); `grep -RnE 'transport\.(request|fetchImpl)'
+  packages/cli/src/commands` returns no matches; PR-CI green on the
+  full 7-job rollup (plan + sdk × {dev,stage,prod} + cli ×
+  {dev,stage,prod}); CLI public behaviour byte-identical (URL
+  shapes, JSON envelope, NDJSON `--all` output, human columns,
+  idempotency-key forwarding).
+- Expected outcome: PR #156 squash-merged, post-merge main-CI 7/7
+  green, Track B4 fully CLOSED, both Task 0101 SDK-gap proposals
+  RESOLVED.
