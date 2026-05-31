@@ -3907,3 +3907,30 @@ One PR, one reviewer-holdable outcome (rotate UX backend), one rollback (single 
 - Outcome: webhook endpoint re-enable surface live end-to-end on stage;
   Task 0112 spec proposal RESOLVED on main; B5 endpoint-CRUD arc closed.
 
+
+## Task 0114
+
+- Agent: Implementer
+- Prompt: `ai/tasks/task-0114.md`
+- Status: scoped and ready to begin (2026-05-31)
+- Objective: Ship the symmetric CLI subcommand `sourceplane webhook enable
+  <endpointId>` as a pure consumer of the Task 0113-locked
+  `client.webhooks.enableEndpoint` SDK shape, closing the B5 endpoint-CRUD
+  CLI gap for re-enable.
+- Scope boundary: 4 files exactly —
+  `packages/cli/src/commands/webhook-enable.ts` (NEW),
+  `packages/cli/src/cli-runner.ts` (1 import + 1 register + 1 help line),
+  `packages/cli/src/__tests__/webhook-enable.test.ts` (NEW, ≥ 8 vitest
+  cases), `ai/reports/task-0114-implementer.md` (NEW with real PR#).
+  Forbidden zones cover all other packages, apps, infra, tooling, lockfiles,
+  and sibling cli command files.
+- Acceptance: 4-file allowlist EXACTLY; `pnpm install --frozen-lockfile`
+  clean; `pnpm -r typecheck` 0; `pnpm -r --no-bail lint` no new warnings;
+  `pnpm --filter @saas/cli test` green with ≥ +8 net new passing cases;
+  `kiox -- orun validate/plan/run --dry-run` green selecting only
+  `cli·{dev,stage,prod}·Verify` (3 lanes); PR-CI 4/4 green; real PR# in
+  implementer report (TBD = BLOCKED).
+- Expected outcome: `sourceplane webhook enable <endpointId>
+  [--idempotency-key=KEY] [--output=human|json]` shipped, mirroring the
+  Task 0110 rotate cadence and the Task 0113 console "Re-enable" UX.
+
