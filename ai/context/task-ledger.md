@@ -1,6 +1,6 @@
 # Task Ledger
 
-Last updated: 2026-05-31 (Task 0118 Verifier PASS + MERGED — PR #173 `refactor(cli): fold cross-reads resolveOrgId onto shared helper` squash-merged as `eda4a3a` on main; inline 8-phase verifier PASS adapted for a 1-component cli turbo PR (no deploy lane): EXACTLY 2 files (+82/−13), byte-equivalent fold of the private no-override `resolveOrgId` onto shared `helpers.ts`, `@saas/cli` typecheck 0 / lint 0 / test 164/164 (UNCHANGED count — pure refactor), Orun changed-plan `cbd6d4f3025d` = 1 component (cli) × 3 envs = 3 jobs, PR-CI run `26711637285` 4/4 SUCCESS (Verify ran orun run = 4 passed 0 failed), post-merge main-CI `26711737699` 4/4 SUCCESS, zero forbidden-zone hits, no kiox.lock mutation. Closes the Task 0111 deferred org-id-resolution fold gap — `helpers.ts` is now the single source. main remains FULLY GREEN. NOTE: main-CI surfaced the non-blocking Node 20 actions deprecation (hard cutover June 16 2026). Task 0119 (`ci(tooling): bump GitHub Actions off deprecated Node 20 runtimes`) SCOPED and ready for implementer.)
+Last updated: 2026-05-31 (Task 0119 Verifier PASS + MERGED — PR #174 `Task 0119: Bump GitHub Actions to Node 24 runtimes` squash-merged as `ba274f3` on main; inline 8-phase verifier PASS adapted for an infra/tooling-only no-deploy PR (no Orun component, no live-URL surface): EXACTLY 2 files (+99/−5), four action-ref token bumps (`checkout@v4`→`@v6` ×2, `upload-artifact@v4`→`@v7`, `download-artifact@v4`→`@v8`, `docker/login-action@v3`→`@v4`); byte-identity guard confirmed for both `sourceplane/orun-action@v1.2.0` pins and both `orun` step bodies + env/permissions/matrix/job-names/`if:` guard; `orun validate` ok; `orun plan --changed --base origin/main` = 0 components × 3 envs → 0 jobs (expected no-op for `.github/**` diff); PR-CI run `26711979395` SUCCESS at original HEAD + run `26712180399` SUCCESS at rebased HEAD `dc6f9c5` (BEHIND-main `gh pr update-branch` recurring 0103-0118 pattern); `gh run view --log` confirms `plan` job ran on `checkout@v6` + `upload-artifact@v7` and the Node 20 deprecation banner now lists ONLY `actions/cache@v4` (out of scope, transitive via orun-action); post-merge main-CI run `26712209500` at `ba274f3` SUCCESS with same banner shape — bump effective on main. Closes recommended-next-focus #2; CI workflow now runs Node 24 for the four bumped actions ahead of the June 16 2026 forced-default cutover and Sept 16 2026 Node 20 removal. main remains FULLY GREEN.)
 
 ## Task 0001
 
@@ -4200,12 +4200,26 @@ One PR, one reviewer-holdable outcome (rotate UX backend), one rollback (single 
 
 ## Task 0119
 
-- Agent: Implementer (COMPLETE) + Verifier (scoped, in flight)
+- Agent: Implementer + Verifier
 - Prompt: `ai/tasks/task-0119.md` (implementer) · `ai/tasks/task-0119-verifier.md` (verifier)
-- Status: implementer COMPLETE on PR #174 (OPEN, MERGEABLE, CLEAN); verifier
-  scoped and dispatched (2026-05-31).
-- Branch: `impl/task-0119-ci-actions-node24-bump` (HEAD `f0ac5ce`, base main
-  `eda4a3a`; scope commits `f350bbf` ci bump + `f0ac5ce` report PR# fixup).
+- Status: VERIFIED PASS + MERGED 2026-05-31. PR #174 squash-merged as
+  `ba274f3` on main (mergedAt 2026-05-31T12:09:12Z). Post-merge main-CI run
+  `26712209500` SUCCESS; Node 20 deprecation banner now lists ONLY
+  `actions/cache@v4` (out of scope).
+- Implementation: PR #174 squash `ba274f3`, branch
+  `impl/task-0119-ci-actions-node24-bump` (deleted post-merge). Scope-commit
+  base: `eda4a3a` (Task 0118 squash) → `f350bbf` (ci bump) → `f0ac5ce` (report
+  PR# fixup). PR was BEHIND main at verifier hand-off (recurring 0103-0118
+  pattern); `gh pr update-branch 174` produced rebased HEAD `dc6f9c5`; PR-CI
+  re-poll on rebased HEAD (run `26712180399`) SUCCESS before merge.
+- PR-CI: original HEAD `f0ac5ce` run `26711979395` SUCCESS; rebased HEAD
+  `dc6f9c5` run `26712180399` SUCCESS. Both runs: `plan` job SUCCESS,
+  `matrix.job-name` correctly skipped (empty changed-plan from `.github/**`-
+  only diff — Orun keys off intent paths). `gh run view --log` confirms the
+  `plan` job ran on `actions/checkout@v6` (SHA `de0fac2e…`) +
+  `actions/upload-artifact@v7` (SHA `043fb46d…`); Node 20 banner gone for
+  the four bumped actions.
+- Reports: `ai/reports/task-0119-implementer.md`, `ai/reports/task-0119-verifier.md`.
 - Objective: bump the four deprecated Node-20-runtime GitHub Actions in
   `.github/workflows/ci.yml` to the latest Node-24 majors before the June 16
   2026 forced-Node24 cutover, with zero behaviour change to the plan/run
