@@ -102,3 +102,16 @@ export function parseOrgPublicId(publicId: string): string | null {
   if (!publicId.startsWith("org_")) return null;
   return hexToUuid(publicId.slice(4));
 }
+
+/**
+ * Decode any public subject id (`usr_<hex>`, service-principal subject id, …)
+ * into the bare UUID used by identity UUID columns (`created_by`, `revoked_by`,
+ * `security_events.user_id`). Returns null if there is no `<prefix>_<32 hex>`
+ * shape. TEXT columns (event_log.actor_id, role_assignments.subject_id) keep the
+ * public form, so callers only use this for the UUID-typed fields.
+ */
+export function parseSubjectUuid(publicId: string): string | null {
+  const sep = publicId.indexOf("_");
+  if (sep < 1) return null;
+  return hexToUuid(publicId.slice(sep + 1));
+}

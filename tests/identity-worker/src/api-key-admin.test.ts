@@ -39,6 +39,10 @@ import {
 // before any DB/service call. ORG_PUB decodes to ORG_UUID.
 const ORG_PUB = "org_" + "a".repeat(32);
 const ORG_UUID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+// Actor (user) public id `usr_<32 hex>` decodes to a UUID for the UUID-typed
+// columns created_by / revoked_by / security_events.user_id.
+const ACTOR_PUB = "usr_" + "c".repeat(32);
+const ACTOR_UUID = "cccccccc-cccc-cccc-cccc-cccccccccccc";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -251,7 +255,7 @@ function createApprovingFetchers(): {
 function makeCreateRequest(orgId: string, body: object, actorHeaders = true): Request {
   const headers: Record<string, string> = { "content-type": "application/json" };
   if (actorHeaders) {
-    headers["x-actor-subject-id"] = "usr_actor1";
+    headers["x-actor-subject-id"] = ACTOR_PUB;
     headers["x-actor-subject-type"] = "user";
   }
   return new Request(`https://identity.internal/v1/organizations/${orgId}/api-keys`, {
@@ -264,7 +268,7 @@ function makeCreateRequest(orgId: string, body: object, actorHeaders = true): Re
 function makeListRequest(orgId: string, actorHeaders = true): Request {
   const headers: Record<string, string> = {};
   if (actorHeaders) {
-    headers["x-actor-subject-id"] = "usr_actor1";
+    headers["x-actor-subject-id"] = ACTOR_PUB;
     headers["x-actor-subject-type"] = "user";
   }
   return new Request(`https://identity.internal/v1/organizations/${orgId}/api-keys`, {
@@ -276,7 +280,7 @@ function makeListRequest(orgId: string, actorHeaders = true): Request {
 function makeRevokeRequest(orgId: string, keyId: string, actorHeaders = true): Request {
   const headers: Record<string, string> = {};
   if (actorHeaders) {
-    headers["x-actor-subject-id"] = "usr_actor1";
+    headers["x-actor-subject-id"] = ACTOR_PUB;
     headers["x-actor-subject-type"] = "user";
   }
   return new Request(`https://identity.internal/v1/organizations/${orgId}/api-keys/${keyId}`, {
@@ -490,9 +494,30 @@ describe("handleCreateApiKey", () => {
     const body = JSON.parse(ctxCall!.init.body as string) as { orgId: string };
     expect(body.orgId).toBe(ORG_UUID);
 
-    // The SP + key were persisted under the decoded UUID, not the public id.
-    const sp = [...repo._servicePrincipals.values()][0] as { orgId: string };
+    // The SP + key were persisted under the decoded UUIDs, not the public ids:
+    // org_id and created_by are UUID columns.
+    const sp = [...repo._servicePrincipals.values()][0] as { orgId: string; createdBy: string };
     expect(sp.orgId).toBe(ORG_UUID);
+    expect(sp.createdBy).toBe(ACTOR_UUID);
+  });
+
+  it("returns 422 for a malformed actor id", async () => {
+    const { membershipFetcher, policyFetcher } = createApprovingFetchers();
+    const repo = createFakeRepository();
+    const eventsRepo = createFakeEventsRepo();
+
+    // Valid org id, but the actor header is not a `usr_<32 hex>` form.
+    const req = makeCreateRequest(ORG_PUB, { label: "test", role: "admin" });
+    req.headers.set("x-actor-subject-id", "usr_short");
+
+    const response = await handleCreateApiKey(
+      req,
+      makeEnv(membershipFetcher, policyFetcher),
+      "req_bad_actor",
+      { identityRepo: repo, eventsRepo },
+    );
+    expect(response.status).toBe(422);
+    expect(repo._servicePrincipals.size).toBe(0);
   });
 });
 
@@ -536,7 +561,7 @@ describe("handleListApiKeys", () => {
       orgId: ORG_UUID,
       projectId: null,
       displayName: "API Key: test-key",
-      createdBy: "usr_actor1",
+      createdBy: ACTOR_PUB,
       createdAt: now,
     });
     await repo.createApiKey({
@@ -547,7 +572,7 @@ describe("handleListApiKeys", () => {
       keyHash: "hash_1",
       label: "test-key",
       expiresAt: null,
-      createdBy: "usr_actor1",
+      createdBy: ACTOR_PUB,
       createdAt: now,
     });
 
@@ -605,7 +630,7 @@ describe("handleRevokeApiKey", () => {
       orgId: ORG_UUID,
       projectId: null,
       displayName: "API Key: revoked-key",
-      createdBy: "usr_actor1",
+      createdBy: ACTOR_PUB,
       createdAt: now,
     });
     await repo.createApiKey({
@@ -616,11 +641,11 @@ describe("handleRevokeApiKey", () => {
       keyHash: "hash_r",
       label: "revoked-key",
       expiresAt: null,
-      createdBy: "usr_actor1",
+      createdBy: ACTOR_PUB,
       createdAt: now,
     });
     // Revoke it
-    await repo.revokeApiKey("key_revoked", "usr_actor1", now);
+    await repo.revokeApiKey("key_revoked", ACTOR_PUB, now);
 
     const response = await handleRevokeApiKey(
       makeRevokeRequest(ORG_PUB, "key_revoked"),
@@ -642,7 +667,7 @@ describe("handleRevokeApiKey", () => {
       orgId: ORG_UUID,
       projectId: null,
       displayName: "API Key: active-key",
-      createdBy: "usr_actor1",
+      createdBy: ACTOR_PUB,
       createdAt: now,
     });
     await repo.createApiKey({
@@ -653,7 +678,7 @@ describe("handleRevokeApiKey", () => {
       keyHash: "hash_s",
       label: "active-key",
       expiresAt: null,
-      createdBy: "usr_actor1",
+      createdBy: ACTOR_PUB,
       createdAt: now,
     });
 
