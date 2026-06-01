@@ -635,3 +635,44 @@ describe("handleEnableWebhookEndpoint — atomicity", () => {
     expect(repoSrc).toMatch(/AND status = 'disabled'/);
   });
 });
+
+describe("project-scoped webhook create: project id decode", () => {
+  const orgUuid = "11111111-1111-1111-1111-111111111111";
+  const actor = { subjectId: "usr_" + "ab".repeat(16), subjectType: "user" };
+
+  function postEndpoint(body: unknown): Request {
+    return new Request("https://webhooks-worker/test", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  }
+
+  it("rejects a malformed projectId with 422 before touching the DB", async () => {
+    const { handleCreateWebhookEndpoint } = await import("@webhooks-worker/handlers/webhook-endpoints");
+    // {} as Env is never dereferenced: the projectId guard returns before any
+    // env/DB/auth access. `prj_short` is not a valid `prj_<32 hex>`.
+    const res = await handleCreateWebhookEndpoint(
+      postEndpoint({ url: "https://example.com/hook", projectId: "prj_short" }),
+      {} as never,
+      "req_proj",
+      actor as never,
+      orgUuid,
+    );
+    expect(res.status).toBe(422);
+    const body = (await res.json()) as { error: { details?: { fields?: Record<string, unknown> } } };
+    expect(body.error.details?.fields?.projectId).toBeDefined();
+  });
+
+  it("rejects a bare-UUID projectId (must be the public prj_ form)", async () => {
+    const { handleCreateWebhookEndpoint } = await import("@webhooks-worker/handlers/webhook-endpoints");
+    const res = await handleCreateWebhookEndpoint(
+      postEndpoint({ url: "https://example.com/hook", projectId: "22222222-2222-2222-2222-222222222222" }),
+      {} as never,
+      "req_proj2",
+      actor as never,
+      orgUuid,
+    );
+    expect(res.status).toBe(422);
+  });
+});

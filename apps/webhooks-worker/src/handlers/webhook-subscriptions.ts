@@ -8,7 +8,7 @@ import { authorizeViaPolicy } from "../policy-client.js";
 import { errorResponse, successResponse, listResponse, validationError } from "../http.js";
 import { toPublicWebhookSubscription } from "../mappers.js";
 import { parsePageParams, encodeCursor } from "../pagination.js";
-import { parseWebhookEndpointPublicId } from "../ids.js";
+import { parseWebhookEndpointPublicId, parseProjectPublicId } from "../ids.js";
 import type { PolicyResource } from "@saas/contracts/policy";
 import type { UpdateWebhookSubscriptionInput } from "@saas/db/webhooks";
 
@@ -107,9 +107,13 @@ export async function handleCreateWebhookSubscription(
     return validationError(requestId, { endpointId: ["Invalid endpoint ID format"] });
   }
 
+  // webhook_subscriptions.project_id is a UUID column; decode the public
+  // `prj_<hex>` form and reject invalid ids instead of binding the raw string.
   let resolvedProjectId: string | null = null;
   if (typeof projectId === "string") {
-    resolvedProjectId = projectId;
+    const parsed = parseProjectPublicId(projectId);
+    if (!parsed) return validationError(requestId, { projectId: ["Invalid project id"] });
+    resolvedProjectId = parsed;
   }
 
   const policyAction = resolvedProjectId
