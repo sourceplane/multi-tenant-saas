@@ -17,3 +17,4 @@ spec:
   labels:
     team: platform
     layer: test-utilities
+# ci: trigger full-component verification (orun v2.12.0 upgrade — PR #183)
