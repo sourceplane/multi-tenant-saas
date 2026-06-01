@@ -1,5 +1,7 @@
 import crypto from "node:crypto";
 import { route } from "@notifications-worker/router";
+import { handlePutPreferences } from "@notifications-worker/handlers/put-preferences";
+import { handleCreateSuppression } from "@notifications-worker/handlers/create-suppression";
 import type { Env } from "@notifications-worker/env";
 
 if (!(globalThis as Record<string, unknown>).crypto) {
@@ -102,5 +104,67 @@ describe("router — internal-actor gate", () => {
       env,
     );
     expect(res.status).toBe(404);
+  });
+});
+
+describe("notifications org-id decode (UUID columns)", () => {
+  const ORG_PUB = "org_11111111111111111111111111111111";
+  const ORG_UUID = "11111111-1111-1111-1111-111111111111";
+  const actor = { subjectId: "svc-membership", subjectType: "service" } as never;
+  const noopEmit = (async () => {}) as never;
+
+  function jsonReq(body: unknown): Request {
+    return new Request("http://nf/test", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  }
+
+  it("put-preferences decodes a public org id to the UUID written to the repo", async () => {
+    let captured: { orgId?: string } | undefined;
+    const repo = {
+      upsertPreference: (input: { orgId: string }) => {
+        captured = input;
+        return Promise.resolve({
+          ok: true as const,
+          value: { id: "pref_1", orgId: input.orgId, subjectKind: "user", subjectId: "u1", channel: "email", categories: {}, updatedAt: new Date() },
+        });
+      },
+    } as never;
+    const res = await handlePutPreferences(
+      jsonReq({ orgId: ORG_PUB, subjectKind: "user", subjectId: "u1", channel: "email", categories: {} }),
+      env, "req_pp", actor, { repo, emit: noopEmit, now: () => new Date(), generateUuid: () => "pref_1" },
+    );
+    expect(res.status).toBe(200);
+    expect(captured?.orgId).toBe(ORG_UUID);
+  });
+
+  it("put-preferences rejects a malformed org id with 422", async () => {
+    const res = await handlePutPreferences(
+      jsonReq({ orgId: "org_short", subjectKind: "user", subjectId: "u1", channel: "email", categories: {} }),
+      env, "req_pp2", actor,
+      { repo: { upsertPreference: () => { throw new Error("must not be called"); } } as never, emit: noopEmit },
+    );
+    expect(res.status).toBe(422);
+  });
+
+  it("create-suppression decodes a public org id to the UUID written to the repo", async () => {
+    let captured: { orgId?: string } | undefined;
+    const repo = {
+      createSuppression: (input: { orgId: string }) => {
+        captured = input;
+        return Promise.resolve({
+          ok: true as const,
+          value: { id: "sup_1", orgId: input.orgId, channel: "email", address: "x@y.com", reason: "manual", createdAt: new Date() },
+        });
+      },
+    } as never;
+    const res = await handleCreateSuppression(
+      jsonReq({ orgId: ORG_PUB, channel: "email", reason: "manual" }),
+      env, "req_cs", actor, "x@y.com", { repo, emit: noopEmit, now: () => new Date(), generateUuid: () => "sup_1" },
+    );
+    expect(res.status).toBe(201);
+    expect(captured?.orgId).toBe(ORG_UUID);
   });
 });

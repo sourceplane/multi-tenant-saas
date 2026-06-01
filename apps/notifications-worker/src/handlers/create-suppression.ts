@@ -11,6 +11,7 @@ import {
   type NotificationsRepository,
 } from "@saas/db/notifications";
 import { successResponse, errorResponse, validationError } from "../http.js";
+import { parseOrgIdInput } from "../ids.js";
 import { emitEvent } from "../events-client.js";
 
 const ALLOWED_REASONS = new Set(["bounce", "complaint", "manual", "unsubscribe"]);
@@ -57,6 +58,11 @@ export async function handleCreateSuppression(
   if (!validated.ok) return validationError(requestId, validated.errors);
   const input = validated.value;
 
+  // notification_suppressions.org_id is a UUID column; decode the public
+  // `org_<hex>` form (or accept a bare UUID) before persistence.
+  const orgUuid = parseOrgIdInput(input.orgId);
+  if (!orgUuid) return validationError(requestId, { orgId: ["Invalid org id"] });
+
   if (!deps?.repo && !env.SOURCEPLANE_DB) {
     return errorResponse("internal_error", "Database not configured", 503, requestId);
   }
@@ -69,7 +75,7 @@ export async function handleCreateSuppression(
 
     const created = await repo.createSuppression({
       id: genUuid(),
-      orgId: input.orgId,
+      orgId: orgUuid,
       channel: input.channel,
       address: recipient,
       reason: input.reason,
@@ -82,7 +88,7 @@ export async function handleCreateSuppression(
     await emit(env, {
       type: NOTIFICATION_EVENT_TYPES.SUPPRESSED,
       notificationId: created.value.id,
-      orgId: input.orgId,
+      orgId: orgUuid,
       subjectKind: "suppression",
       subjectId: created.value.id,
       actorType: actor.subjectType,
@@ -91,7 +97,7 @@ export async function handleCreateSuppression(
       category: "notifications",
       description: `Recipient ${created.value.address} suppressed (${input.reason})`,
       payload: {
-        orgId: input.orgId,
+        orgId: orgUuid,
         channel: input.channel,
         recipient: created.value.address,
         reason: input.reason,
