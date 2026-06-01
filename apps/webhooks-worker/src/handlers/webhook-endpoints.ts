@@ -8,7 +8,7 @@ import { authorizeViaPolicy } from "../policy-client.js";
 import { errorResponse, successResponse, listResponse, validationError } from "../http.js";
 import { toPublicWebhookEndpoint } from "../mappers.js";
 import { parsePageParams, encodeCursor } from "../pagination.js";
-import { parseWebhookEndpointPublicId } from "../ids.js";
+import { parseProjectPublicId } from "../ids.js";
 import type { PolicyResource } from "@saas/contracts/policy";
 import type { UpdateWebhookEndpointInput, DisableWebhookEndpointInput, WebhookRepository } from "@saas/db/webhooks";
 import type { EventsRepository } from "@saas/db/events";
@@ -123,11 +123,15 @@ export async function handleCreateWebhookEndpoint(
     return validationError(requestId, fields);
   }
 
-  // Resolve project public ID if provided
+  // Resolve project public ID if provided. webhook_endpoints.project_id is a
+  // UUID column, so decode the public `prj_<hex>` form and reject anything that
+  // isn't a valid project id (previously this used the wrong parser and fell
+  // back to storing the raw public string, which the UUID column rejects).
   let resolvedProjectId: string | null = null;
   if (typeof projectId === "string") {
-    const parsed = parseWebhookEndpointPublicId(projectId);
-    resolvedProjectId = parsed ?? (projectId as string);
+    const parsed = parseProjectPublicId(projectId);
+    if (!parsed) return validationError(requestId, { projectId: ["Invalid project id"] });
+    resolvedProjectId = parsed;
   }
 
   // Authorization
