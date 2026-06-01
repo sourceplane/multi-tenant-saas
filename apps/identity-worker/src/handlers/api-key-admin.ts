@@ -8,7 +8,7 @@ import { servicePrincipalSubjectId } from "@saas/contracts/service-principal";
 import { fetchAuthorizationContext } from "../membership-client.js";
 import { authorizeViaPolicy } from "../policy-client.js";
 import { successResponse, errorResponse, validationError } from "../http.js";
-import { parseOrgPublicId } from "../ids.js";
+import { parseOrgPublicId, parseSubjectUuid } from "../ids.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -178,6 +178,11 @@ export async function handleCreateApiKey(
   // public TEXT form, so `orgId` is still used for event payloads below).
   const orgUuid = parseOrgPublicId(orgId);
   if (!orgUuid) return errorResponse("validation_failed", "Invalid org ID", 422, requestId);
+  // created_by (service_principals/api_keys) and security_events.user_id are UUID
+  // columns; the actor id arrives as the public `usr_<hex>` form and must be
+  // decoded. (event_log.actor_id is TEXT, so `actor.subjectId` is kept for events.)
+  const actorUuid = parseSubjectUuid(actor.subjectId);
+  if (!actorUuid) return errorResponse("validation_failed", "Invalid actor id", 422, requestId);
 
   // Parse body
   let body: unknown;
@@ -250,7 +255,7 @@ export async function handleCreateApiKey(
         orgId: orgUuid,
         projectId: projectId,
         displayName: `API Key: ${label}`,
-        createdBy: actor.subjectId,
+        createdBy: actorUuid,
         createdAt: now,
       });
       if (!spResult.ok) throw new Error("sp_create_failed");
@@ -264,7 +269,7 @@ export async function handleCreateApiKey(
         keyHash: hash,
         label,
         expiresAt: expiresAt,
-        createdBy: actor.subjectId,
+        createdBy: actorUuid,
         createdAt: now,
       });
       if (!keyResult.ok) throw new Error("api_key_create_failed");
@@ -274,7 +279,7 @@ export async function handleCreateApiKey(
       id: crypto.randomUUID(),
       eventType: "api_key.created",
       outcome: "success",
-      userId: actor.subjectType === "user" ? actor.subjectId : null,
+      userId: actor.subjectType === "user" ? actorUuid : null,
         sessionId: null,
         challengeId: null,
         requestId,
@@ -528,6 +533,10 @@ export async function handleRevokeApiKey(
   // Decode public `org_<hex>` id to the bare UUID used by identity/membership stores.
   const orgUuid = parseOrgPublicId(orgId);
   if (!orgUuid) return errorResponse("validation_failed", "Invalid org ID", 422, requestId);
+  // revoked_by and security_events.user_id are UUID columns; decode the public
+  // actor id (event_log.actor_id is TEXT and keeps the public form).
+  const actorUuid = parseSubjectUuid(actor.subjectId);
+  if (!actorUuid) return errorResponse("validation_failed", "Invalid actor id", 422, requestId);
 
   // Authorization: need to know the key's scope to authorize correctly
   const executor = deps?.identityRepo && deps?.eventsRepo ? null : createSqlExecutor(env.SOURCEPLANE_DB);
@@ -566,7 +575,7 @@ export async function handleRevokeApiKey(
     const now = new Date();
 
     const doRevoke = async (idRepo: IdentityRepository, evRepo: EventsRepository) => {
-      const revokeResult = await idRepo.revokeApiKey(apiKeyId, actor.subjectId, now);
+      const revokeResult = await idRepo.revokeApiKey(apiKeyId, actorUuid, now);
       if (!revokeResult.ok) throw new Error("revoke_failed");
 
       // Record identity security event
@@ -574,7 +583,7 @@ export async function handleRevokeApiKey(
         id: crypto.randomUUID(),
         eventType: "api_key.revoked",
         outcome: "success",
-        userId: actor.subjectType === "user" ? actor.subjectId : null,
+        userId: actor.subjectType === "user" ? actorUuid : null,
         sessionId: null,
         challengeId: null,
         requestId,
