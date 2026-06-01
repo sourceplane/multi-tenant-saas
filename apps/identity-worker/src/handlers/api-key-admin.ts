@@ -8,6 +8,7 @@ import { servicePrincipalSubjectId } from "@saas/contracts/service-principal";
 import { fetchAuthorizationContext } from "../membership-client.js";
 import { authorizeViaPolicy } from "../policy-client.js";
 import { successResponse, errorResponse, validationError } from "../http.js";
+import { parseOrgPublicId } from "../ids.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -172,6 +173,11 @@ export async function handleCreateApiKey(
   const url = new URL(request.url);
   const orgId = extractOrgIdFromPath(url.pathname);
   if (!orgId) return errorResponse("validation_failed", "Invalid org ID", 422, requestId);
+  // Membership/identity persistence keys org_id as UUID; the public id is
+  // `org_<hex>`. Decode it before any DB/service call (the events tables use the
+  // public TEXT form, so `orgId` is still used for event payloads below).
+  const orgUuid = parseOrgPublicId(orgId);
+  if (!orgUuid) return errorResponse("validation_failed", "Invalid org ID", 422, requestId);
 
   // Parse body
   let body: unknown;
@@ -209,12 +215,12 @@ export async function handleCreateApiKey(
   const expiresAt = typeof b.expiresAt === "string" ? new Date(b.expiresAt) : null;
 
   // Authorization
-  const contextResult = await fetchAuthorizationContext(env.MEMBERSHIP_WORKER, actor.subjectId, actor.subjectType, orgId, requestId);
+  const contextResult = await fetchAuthorizationContext(env.MEMBERSHIP_WORKER, actor.subjectId, actor.subjectType, orgUuid, requestId);
   if (!contextResult.ok) return errorResponse("not_found", "Not found", 404, requestId);
 
   const policyResource = projectId
-    ? { kind: "api_key", orgId, projectId }
-    : { kind: "api_key", orgId };
+    ? { kind: "api_key", orgId: orgUuid, projectId }
+    : { kind: "api_key", orgId: orgUuid };
 
   const policyResult = await authorizeViaPolicy(env.POLICY_WORKER, actor.subjectId, actor.subjectType, "organization.api_key.create", policyResource, contextResult.memberships, requestId);
   if (!policyResult.allow) return errorResponse("not_found", "Not found", 404, requestId);
@@ -231,7 +237,7 @@ export async function handleCreateApiKey(
   const scopeKind = projectId ? "project" : "organization";
 
   // Create membership binding first (SP role assignment)
-  const bindResult = await createSpBinding(env.MEMBERSHIP_WORKER, orgId, spSubjectId, role, scopeKind, projectId, requestId);
+  const bindResult = await createSpBinding(env.MEMBERSHIP_WORKER, orgUuid, spSubjectId, role, scopeKind, projectId, requestId);
   if (!bindResult.ok) return errorResponse("internal_error", "Failed to create service principal binding", 500, requestId);
 
   // Persist identity-side state in a transaction
@@ -241,7 +247,7 @@ export async function handleCreateApiKey(
       // Create service principal
       const spResult = await identityRepo.createServicePrincipal({
         id: spId,
-        orgId,
+        orgId: orgUuid,
         projectId: projectId,
         displayName: `API Key: ${label}`,
         createdBy: actor.subjectId,
@@ -253,7 +259,7 @@ export async function handleCreateApiKey(
       const keyResult = await identityRepo.createApiKey({
         id: apiKeyId,
         servicePrincipalId: spId,
-        orgId,
+        orgId: orgUuid,
         keyPrefix: prefix,
         keyHash: hash,
         label,
@@ -298,7 +304,9 @@ export async function handleCreateApiKey(
           occurredAt: now,
           actorType: actor.subjectType,
           actorId: actor.subjectId,
-          orgId,
+          // event_log/audit_entries.org_id stores the bare UUID (the read path
+          // re-encodes to public); keep the public form only in `payload`.
+          orgId: orgUuid,
           projectId,
           subjectKind: "api_key",
           subjectId: apiKeyId,
@@ -356,7 +364,7 @@ export async function handleCreateApiKey(
   } catch {
     // Compensate: best-effort revoke the binding if identity persistence failed
     if (bindResult.bindingId) {
-      await revokeSpBinding(env.MEMBERSHIP_WORKER, orgId, bindResult.bindingId, requestId);
+      await revokeSpBinding(env.MEMBERSHIP_WORKER, orgUuid, bindResult.bindingId, requestId);
     }
     return errorResponse("internal_error", "Service unavailable", 503, requestId);
   } finally {
@@ -384,16 +392,19 @@ export async function handleListApiKeys(
   const url = new URL(request.url);
   const orgId = extractOrgIdFromPath(url.pathname);
   if (!orgId) return errorResponse("validation_failed", "Invalid org ID", 422, requestId);
+  // Decode public `org_<hex>` id to the bare UUID used by identity/membership stores.
+  const orgUuid = parseOrgPublicId(orgId);
+  if (!orgUuid) return errorResponse("validation_failed", "Invalid org ID", 422, requestId);
 
   const projectIdFilter = url.searchParams.get("projectId") || undefined;
 
   // Authorization
-  const contextResult = await fetchAuthorizationContext(env.MEMBERSHIP_WORKER, actor.subjectId, actor.subjectType, orgId, requestId);
+  const contextResult = await fetchAuthorizationContext(env.MEMBERSHIP_WORKER, actor.subjectId, actor.subjectType, orgUuid, requestId);
   if (!contextResult.ok) return errorResponse("not_found", "Not found", 404, requestId);
 
   const policyResource = projectIdFilter
-    ? { kind: "api_key", orgId, projectId: projectIdFilter }
-    : { kind: "api_key", orgId };
+    ? { kind: "api_key", orgId: orgUuid, projectId: projectIdFilter }
+    : { kind: "api_key", orgId: orgUuid };
 
   const policyResult = await authorizeViaPolicy(env.POLICY_WORKER, actor.subjectId, actor.subjectType, "organization.api_key.list", policyResource, contextResult.memberships, requestId);
   if (!policyResult.allow) return errorResponse("not_found", "Not found", 404, requestId);
@@ -408,7 +419,7 @@ export async function handleListApiKeys(
     const identityRepo = deps?.identityRepo ?? createIdentityRepository(executor!);
 
     const cursor = cursorParam ? JSON.parse(decodeURIComponent(cursorParam)) as import("@saas/db/identity").ApiKeyCursorPosition : null;
-    const result = await identityRepo.listApiKeysByOrg({ orgId, limit, cursor });
+    const result = await identityRepo.listApiKeysByOrg({ orgId: orgUuid, limit, cursor });
     if (!result.ok) return errorResponse("internal_error", "Service unavailable", 503, requestId);
 
     // Enrich with SP binding info
@@ -449,7 +460,7 @@ export async function handleListApiKeys(
 
       // Get binding info for role
       if (env.MEMBERSHIP_WORKER) {
-        const bindResult = await listSpBindings(env.MEMBERSHIP_WORKER, orgId, spSubjId, requestId);
+        const bindResult = await listSpBindings(env.MEMBERSHIP_WORKER, orgUuid, spSubjId, requestId);
         if (bindResult.ok && bindResult.bindings && bindResult.bindings.length > 0) {
           spInfo.role = bindResult.bindings[0]!.role;
           if (bindResult.bindings[0]!.scopeRef) {
@@ -514,6 +525,9 @@ export async function handleRevokeApiKey(
   const orgId = extractOrgIdFromPath(url.pathname);
   const apiKeyId = extractApiKeyIdFromPath(url.pathname);
   if (!orgId || !apiKeyId) return errorResponse("validation_failed", "Invalid path", 422, requestId);
+  // Decode public `org_<hex>` id to the bare UUID used by identity/membership stores.
+  const orgUuid = parseOrgPublicId(orgId);
+  if (!orgUuid) return errorResponse("validation_failed", "Invalid org ID", 422, requestId);
 
   // Authorization: need to know the key's scope to authorize correctly
   const executor = deps?.identityRepo && deps?.eventsRepo ? null : createSqlExecutor(env.SOURCEPLANE_DB);
@@ -525,7 +539,7 @@ export async function handleRevokeApiKey(
     // Use listApiKeysByOrg and filter - we need the key to verify orgId match.
     // Actually, let's just use the SP to find it.
     // For safety: list org keys and find by ID.
-    const listResult = await identityRepo.listApiKeysByOrg({ orgId, limit: 1000, cursor: null });
+    const listResult = await identityRepo.listApiKeysByOrg({ orgId: orgUuid, limit: 1000, cursor: null });
     if (!listResult.ok) return errorResponse("internal_error", "Service unavailable", 503, requestId);
 
     const apiKey = listResult.value.items.find(k => k.id === apiKeyId);
@@ -538,12 +552,12 @@ export async function handleRevokeApiKey(
     const projectId = spResult.ok ? (spResult.value.projectId ?? null) : null;
 
     // Fetch authorization context
-    const contextResult = await fetchAuthorizationContext(env.MEMBERSHIP_WORKER, actor.subjectId, actor.subjectType, orgId, requestId);
+    const contextResult = await fetchAuthorizationContext(env.MEMBERSHIP_WORKER, actor.subjectId, actor.subjectType, orgUuid, requestId);
     if (!contextResult.ok) return errorResponse("not_found", "Not found", 404, requestId);
 
     const policyResource = projectId
-      ? { kind: "api_key", orgId, projectId }
-      : { kind: "api_key", orgId };
+      ? { kind: "api_key", orgId: orgUuid, projectId }
+      : { kind: "api_key", orgId: orgUuid };
 
     const policyResult = await authorizeViaPolicy(env.POLICY_WORKER, actor.subjectId, actor.subjectType, "organization.api_key.revoke", policyResource, contextResult.memberships, requestId);
     if (!policyResult.allow) return errorResponse("not_found", "Not found", 404, requestId);
@@ -588,7 +602,9 @@ export async function handleRevokeApiKey(
           occurredAt: now,
           actorType: actor.subjectType,
           actorId: actor.subjectId,
-          orgId,
+          // event_log/audit_entries.org_id stores the bare UUID (read path
+          // re-encodes to public); keep the public form only in `payload`.
+          orgId: orgUuid,
           projectId,
           subjectKind: "api_key",
           subjectId: apiKeyId,

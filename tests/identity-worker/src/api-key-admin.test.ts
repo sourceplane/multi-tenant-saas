@@ -34,6 +34,12 @@ import {
   handleRevokeApiKey,
 } from "../../../apps/identity-worker/src/handlers/api-key-admin";
 
+// Public org ids are `org_<32 hex>`; identity/membership persistence keys
+// org_id as a bare UUID. The handler must decode the former into the latter
+// before any DB/service call. ORG_PUB decodes to ORG_UUID.
+const ORG_PUB = "org_" + "a".repeat(32);
+const ORG_UUID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -224,7 +230,7 @@ function createApprovingFetchers(): {
       return Response.json({
         data: {
           memberships: [
-            { kind: "role_assignment", role: "owner", scope: { kind: "organization", orgId: "org_1" } },
+            { kind: "role_assignment", role: "owner", scope: { kind: "organization", orgId: ORG_UUID } },
           ],
         },
       });
@@ -290,7 +296,7 @@ describe("handleCreateApiKey", () => {
     const eventsRepo = createFakeEventsRepo();
 
     const response = await handleCreateApiKey(
-      makeCreateRequest("org_1", { label: "test", role: "admin" }, false),
+      makeCreateRequest(ORG_PUB, { label: "test", role: "admin" }, false),
       makeEnv(membershipFetcher, policyFetcher),
       "req_1",
       { identityRepo: repo, eventsRepo },
@@ -304,7 +310,7 @@ describe("handleCreateApiKey", () => {
     const eventsRepo = createFakeEventsRepo();
 
     const response = await handleCreateApiKey(
-      makeCreateRequest("org_1", { role: "admin" }),
+      makeCreateRequest(ORG_PUB, { role: "admin" }),
       makeEnv(membershipFetcher, policyFetcher),
       "req_2",
       { identityRepo: repo, eventsRepo },
@@ -320,7 +326,7 @@ describe("handleCreateApiKey", () => {
     const eventsRepo = createFakeEventsRepo();
 
     const response = await handleCreateApiKey(
-      makeCreateRequest("org_1", { label: "x".repeat(129), role: "admin" }),
+      makeCreateRequest(ORG_PUB, { label: "x".repeat(129), role: "admin" }),
       makeEnv(membershipFetcher, policyFetcher),
       "req_2b",
       { identityRepo: repo, eventsRepo },
@@ -334,7 +340,7 @@ describe("handleCreateApiKey", () => {
     const eventsRepo = createFakeEventsRepo();
 
     const response = await handleCreateApiKey(
-      makeCreateRequest("org_1", { label: "test", role: "superadmin" }),
+      makeCreateRequest(ORG_PUB, { label: "test", role: "superadmin" }),
       makeEnv(membershipFetcher, policyFetcher),
       "req_3",
       { identityRepo: repo, eventsRepo },
@@ -350,7 +356,7 @@ describe("handleCreateApiKey", () => {
     const eventsRepo = createFakeEventsRepo();
 
     const response = await handleCreateApiKey(
-      makeCreateRequest("org_1", { label: "test", role: "project_admin" }),
+      makeCreateRequest(ORG_PUB, { label: "test", role: "project_admin" }),
       makeEnv(membershipFetcher, policyFetcher),
       "req_4",
       { identityRepo: repo, eventsRepo },
@@ -374,7 +380,7 @@ describe("handleCreateApiKey", () => {
     const eventsRepo = createFakeEventsRepo();
 
     const response = await handleCreateApiKey(
-      makeCreateRequest("org_1", { label: "test", role: "admin" }),
+      makeCreateRequest(ORG_PUB, { label: "test", role: "admin" }),
       makeEnv(membershipFetcher, policyFetcher),
       "req_5",
       { identityRepo: repo, eventsRepo },
@@ -388,7 +394,7 @@ describe("handleCreateApiKey", () => {
         return Response.json({
           data: {
             memberships: [
-              { kind: "role_assignment", role: "viewer", scope: { kind: "organization", orgId: "org_1" } },
+              { kind: "role_assignment", role: "viewer", scope: { kind: "organization", orgId: ORG_UUID } },
             ],
           },
         });
@@ -402,7 +408,7 @@ describe("handleCreateApiKey", () => {
     const eventsRepo = createFakeEventsRepo();
 
     const response = await handleCreateApiKey(
-      makeCreateRequest("org_1", { label: "test", role: "admin" }),
+      makeCreateRequest(ORG_PUB, { label: "test", role: "admin" }),
       makeEnv(membershipFetcher, policyFetcher),
       "req_6",
       { identityRepo: repo, eventsRepo },
@@ -419,7 +425,7 @@ describe("handleCreateApiKey", () => {
     const eventsRepo = createFakeEventsRepo();
 
     const response = await handleCreateApiKey(
-      makeCreateRequest("org_1", { label: "My Key", role: "admin" }),
+      makeCreateRequest(ORG_PUB, { label: "My Key", role: "admin" }),
       makeEnv(membershipFetcher, policyFetcher),
       "req_7",
       { identityRepo: repo, eventsRepo },
@@ -443,6 +449,51 @@ describe("handleCreateApiKey", () => {
     // Org event was appended
     expect(eventsRepo.events.length).toBeGreaterThanOrEqual(1);
   });
+
+  it("returns 422 for a malformed (non-UUID) org id", async () => {
+    const { membershipFetcher, policyFetcher } = createApprovingFetchers();
+    const repo = createFakeRepository();
+    const eventsRepo = createFakeEventsRepo();
+
+    // `org_1` is a valid prefix but not `org_<32 hex>` — it must be rejected
+    // before any downstream membership/DB call (regression for the UUID-cast
+    // crash that surfaced as a generic "Create failed").
+    const response = await handleCreateApiKey(
+      makeCreateRequest("org_1", { label: "test", role: "admin" }),
+      makeEnv(membershipFetcher, policyFetcher),
+      "req_bad_org",
+      { identityRepo: repo, eventsRepo },
+    );
+    expect(response.status).toBe(422);
+    expect(repo._servicePrincipals.size).toBe(0);
+    expect(eventsRepo.events.length).toBe(0);
+  });
+
+  it("forwards the decoded UUID (not the public org id) to authorization-context", async () => {
+    const { membershipFetcher, membershipCalls } = createApprovingFetchers();
+    const { fetcher: policyFetcher } = createMockFetcher(async () =>
+      Response.json({ data: { allow: true, reason: "org_owner", policyVersion: 1 } }),
+    );
+    const repo = createFakeRepository();
+    const eventsRepo = createFakeEventsRepo();
+
+    const response = await handleCreateApiKey(
+      makeCreateRequest(ORG_PUB, { label: "My Key", role: "admin" }),
+      makeEnv(membershipFetcher, policyFetcher),
+      "req_decode",
+      { identityRepo: repo, eventsRepo },
+    );
+    expect(response.status).toBe(201);
+
+    const ctxCall = membershipCalls.find((c) => c.url.includes("/authorization-context"));
+    expect(ctxCall).toBeDefined();
+    const body = JSON.parse(ctxCall!.init.body as string) as { orgId: string };
+    expect(body.orgId).toBe(ORG_UUID);
+
+    // The SP + key were persisted under the decoded UUID, not the public id.
+    const sp = [...repo._servicePrincipals.values()][0] as { orgId: string };
+    expect(sp.orgId).toBe(ORG_UUID);
+  });
 });
 
 describe("handleListApiKeys", () => {
@@ -451,7 +502,7 @@ describe("handleListApiKeys", () => {
     const repo = createFakeRepository();
 
     const response = await handleListApiKeys(
-      makeListRequest("org_1", false),
+      makeListRequest(ORG_PUB, false),
       makeEnv(membershipFetcher, policyFetcher),
       "req_l1",
       { identityRepo: repo },
@@ -464,7 +515,7 @@ describe("handleListApiKeys", () => {
     const repo = createFakeRepository();
 
     const response = await handleListApiKeys(
-      makeListRequest("org_1"),
+      makeListRequest(ORG_PUB),
       makeEnv(membershipFetcher, policyFetcher),
       "req_l2",
       { identityRepo: repo },
@@ -482,7 +533,7 @@ describe("handleListApiKeys", () => {
     // Add a SP and API key directly to the repo
     await repo.createServicePrincipal({
       id: "sp_1",
-      orgId: "org_1",
+      orgId: ORG_UUID,
       projectId: null,
       displayName: "API Key: test-key",
       createdBy: "usr_actor1",
@@ -491,7 +542,7 @@ describe("handleListApiKeys", () => {
     await repo.createApiKey({
       id: "key_1",
       servicePrincipalId: "sp_1",
-      orgId: "org_1",
+      orgId: ORG_UUID,
       keyPrefix: "***",
       keyHash: "hash_1",
       label: "test-key",
@@ -501,7 +552,7 @@ describe("handleListApiKeys", () => {
     });
 
     const response = await handleListApiKeys(
-      makeListRequest("org_1"),
+      makeListRequest(ORG_PUB),
       makeEnv(membershipFetcher, policyFetcher),
       "req_l3",
       { identityRepo: repo },
@@ -521,7 +572,7 @@ describe("handleRevokeApiKey", () => {
     const eventsRepo = createFakeEventsRepo();
 
     const response = await handleRevokeApiKey(
-      makeRevokeRequest("org_1", "key_1", false),
+      makeRevokeRequest(ORG_PUB, "key_1", false),
       makeEnv(membershipFetcher, policyFetcher),
       "req_r1",
       { identityRepo: repo, eventsRepo },
@@ -535,7 +586,7 @@ describe("handleRevokeApiKey", () => {
     const eventsRepo = createFakeEventsRepo();
 
     const response = await handleRevokeApiKey(
-      makeRevokeRequest("org_1", "key_nonexistent"),
+      makeRevokeRequest(ORG_PUB, "key_nonexistent"),
       makeEnv(membershipFetcher, policyFetcher),
       "req_r2",
       { identityRepo: repo, eventsRepo },
@@ -551,7 +602,7 @@ describe("handleRevokeApiKey", () => {
 
     await repo.createServicePrincipal({
       id: "sp_r",
-      orgId: "org_1",
+      orgId: ORG_UUID,
       projectId: null,
       displayName: "API Key: revoked-key",
       createdBy: "usr_actor1",
@@ -560,7 +611,7 @@ describe("handleRevokeApiKey", () => {
     await repo.createApiKey({
       id: "key_revoked",
       servicePrincipalId: "sp_r",
-      orgId: "org_1",
+      orgId: ORG_UUID,
       keyPrefix: "***",
       keyHash: "hash_r",
       label: "revoked-key",
@@ -572,7 +623,7 @@ describe("handleRevokeApiKey", () => {
     await repo.revokeApiKey("key_revoked", "usr_actor1", now);
 
     const response = await handleRevokeApiKey(
-      makeRevokeRequest("org_1", "key_revoked"),
+      makeRevokeRequest(ORG_PUB, "key_revoked"),
       makeEnv(membershipFetcher, policyFetcher),
       "req_r3",
       { identityRepo: repo, eventsRepo },
@@ -588,7 +639,7 @@ describe("handleRevokeApiKey", () => {
 
     await repo.createServicePrincipal({
       id: "sp_s",
-      orgId: "org_1",
+      orgId: ORG_UUID,
       projectId: null,
       displayName: "API Key: active-key",
       createdBy: "usr_actor1",
@@ -597,7 +648,7 @@ describe("handleRevokeApiKey", () => {
     await repo.createApiKey({
       id: "key_active",
       servicePrincipalId: "sp_s",
-      orgId: "org_1",
+      orgId: ORG_UUID,
       keyPrefix: "***",
       keyHash: "hash_s",
       label: "active-key",
@@ -607,7 +658,7 @@ describe("handleRevokeApiKey", () => {
     });
 
     const response = await handleRevokeApiKey(
-      makeRevokeRequest("org_1", "key_active"),
+      makeRevokeRequest(ORG_PUB, "key_active"),
       makeEnv(membershipFetcher, policyFetcher),
       "req_r4",
       { identityRepo: repo, eventsRepo },
