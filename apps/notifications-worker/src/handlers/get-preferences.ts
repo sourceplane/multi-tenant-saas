@@ -10,6 +10,7 @@ import {
   type StoredNotificationPreference,
 } from "@saas/db/notifications";
 import { successResponse, errorResponse, validationError } from "../http.js";
+import { parseOrgIdInput } from "../ids.js";
 
 function toPreference(p: StoredNotificationPreference): NotificationPreference {
   return {
@@ -46,13 +47,18 @@ export async function handleGetPreferences(
   if (channel && channel !== "email") errors.channel = ['Only "email" is supported in V1'];
   if (Object.keys(errors).length > 0) return validationError(requestId, errors);
 
+  // notification_preferences.org_id is a UUID column; accept the public
+  // `org_<hex>` form (or a bare UUID) and decode before querying.
+  const orgUuid = parseOrgIdInput(orgId!);
+  if (!orgUuid) return validationError(requestId, { orgId: ["Invalid org id"] });
+
   if (!deps?.repo && !env.SOURCEPLANE_DB) {
     return errorResponse("internal_error", "Database not configured", 503, requestId);
   }
   const executor = deps?.repo ? null : createSqlExecutor(env.SOURCEPLANE_DB!);
   try {
     const repo = deps?.repo ?? createNotificationsRepository(executor!);
-    const list = await repo.listPreferences(orgId!, subjectKind!, subjectId!, channel);
+    const list = await repo.listPreferences(orgUuid, subjectKind!, subjectId!, channel);
     if (!list.ok) {
       return errorResponse("internal_error", "Failed to list preferences", 500, requestId);
     }

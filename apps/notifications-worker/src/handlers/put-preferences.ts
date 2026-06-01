@@ -13,6 +13,7 @@ import {
   type StoredNotificationPreference,
 } from "@saas/db/notifications";
 import { successResponse, errorResponse, validationError } from "../http.js";
+import { parseOrgIdInput } from "../ids.js";
 import { emitEvent } from "../events-client.js";
 
 const ALLOWED_KIND = new Set(["user", "organization"]);
@@ -73,6 +74,11 @@ export async function handlePutPreferences(
   if (!validated.ok) return validationError(requestId, validated.errors);
   const input = validated.value;
 
+  // notification_preferences.org_id is a UUID column; decode the public
+  // `org_<hex>` form (or accept a bare UUID) before persistence.
+  const orgUuid = parseOrgIdInput(input.orgId);
+  if (!orgUuid) return validationError(requestId, { orgId: ["Invalid org id"] });
+
   if (!deps?.repo && !env.SOURCEPLANE_DB) {
     return errorResponse("internal_error", "Database not configured", 503, requestId);
   }
@@ -85,7 +91,7 @@ export async function handlePutPreferences(
 
     const upsert = await repo.upsertPreference({
       id: genUuid(),
-      orgId: input.orgId,
+      orgId: orgUuid,
       subjectKind: input.subjectKind,
       subjectId: input.subjectId,
       channel: input.channel,
@@ -99,7 +105,7 @@ export async function handlePutPreferences(
     await emit(env, {
       type: NOTIFICATION_EVENT_TYPES.PREFERENCE_UPDATED,
       notificationId: upsert.value.id,
-      orgId: input.orgId,
+      orgId: orgUuid,
       subjectKind: input.subjectKind,
       subjectId: input.subjectId,
       actorType: actor.subjectType,
@@ -108,7 +114,7 @@ export async function handlePutPreferences(
       category: "notifications",
       description: `Notification preferences updated for ${input.subjectKind}:${input.subjectId}`,
       payload: {
-        orgId: input.orgId,
+        orgId: orgUuid,
         subjectKind: input.subjectKind,
         subjectId: input.subjectId,
         channel: input.channel,
