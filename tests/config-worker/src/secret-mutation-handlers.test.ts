@@ -5,7 +5,7 @@ import { parseSecretMetadataPublicId, secretMetadataPublicId } from "@config-wor
 import { route } from "@config-worker/router";
 import type { Env } from "@config-worker/env";
 import type { ActorContext } from "@config-worker/router";
-import type { Scope, SecretMetadata, ConfigResult } from "@saas/db/config";
+import type { Scope, SecretMetadata, ConfigResult, CreateSecretMetadataInput } from "@saas/db/config";
 import type {
   AppendEventWithAuditInput,
   EventsResult,
@@ -101,7 +101,10 @@ const PLACEHOLDER_AUDIT: StoredAuditEntry = {
 const TEST_ORG_UUID = "11111111-1111-1111-1111-111111111111";
 const TEST_PROJECT_UUID = "22222222-2222-2222-2222-222222222222";
 const TEST_ENV_UUID = "44444444-4444-4444-4444-444444444444";
-const TEST_USER_ID = "usr_aabbccdd";
+// Public actor id `usr_<32 hex>` decodes to TEST_USER_UUID for the
+// created_by UUID column.
+const TEST_USER_ID = "usr_" + "ab".repeat(16);
+const TEST_USER_UUID = "abababab-abab-abab-abab-abababababab";
 const FIXED_NOW = new Date("2026-05-01T00:00:00Z");
 const FIXED_ID = "deadbeef01234567";
 const SECRET_UUID = "cccccccc-cccc-cccc-cccc-cccccccccccc";
@@ -257,6 +260,42 @@ describe("handleCreateSecret", () => {
     expect(body.data.secret.id).toMatch(/^sec_/);
     expect(body.data.secret.status).toBe("active");
     expect(eventsRepo.calls).toHaveLength(1);
+  });
+
+  it("decodes the public actor id to a UUID for created_by", async () => {
+    let captured: CreateSecretMetadataInput | undefined;
+    const res = await handleCreateSecret(
+      makeJsonRequest({ secretKey: "API_KEY" }),
+      FAKE_ENV, "req1", ACTOR, ORG_SCOPE,
+      {
+        repo: {
+          createSecretMetadata: (input: CreateSecretMetadataInput) => {
+            captured = input;
+            return Promise.resolve({ ok: true as const, value: fakeSecret() });
+          },
+        },
+        eventsRepo: fakeEventsRepo(),
+        generateId: () => FIXED_ID,
+        now: () => FIXED_NOW,
+      },
+    );
+    expect(res.status).toBe(201);
+    // created_by is a UUID column — must be the decoded form, not `usr_...`.
+    expect(captured?.createdBy).toBe(TEST_USER_UUID);
+  });
+
+  it("returns 422 for a malformed actor id", async () => {
+    const res = await handleCreateSecret(
+      makeJsonRequest({ secretKey: "API_KEY" }),
+      FAKE_ENV, "req1", { subjectId: "usr_short", subjectType: "user" }, ORG_SCOPE,
+      {
+        repo: { createSecretMetadata: () => unusedConfigFailure<SecretMetadata>() },
+        eventsRepo: fakeEventsRepo(),
+        generateId: () => FIXED_ID,
+        now: () => FIXED_NOW,
+      },
+    );
+    expect(res.status).toBe(422);
   });
 
   it("returns 409 on conflict", async () => {

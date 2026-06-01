@@ -53,7 +53,7 @@ const unusedConfigFailure = <T>(): Promise<ConfigResult<T>> =>
 
 // ── Constants ──────────────────────────────────────────────
 const TEST_ORG_UUID = "11111111-1111-1111-1111-111111111111";
-const TEST_USER_ID = "usr_aabbccdd";
+const TEST_USER_ID = "usr_" + "ab".repeat(16);
 const FIXED_NOW = new Date("2026-05-01T00:00:00Z");
 const FIXED_ID = "deadbeef01234567";
 const SECRET_UUID = "cccccccc-cccc-cccc-cccc-cccccccccccc";

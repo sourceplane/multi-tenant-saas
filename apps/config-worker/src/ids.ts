@@ -32,6 +32,17 @@ export function parseEnvironmentPublicId(publicId: string): string | null {
   return hexToUuid(publicId.slice(4));
 }
 
+/**
+ * Decode a public subject id (`usr_<hex>`, service-principal subject id, …) to
+ * the bare UUID used by UUID columns such as `config.secret_metadata.created_by`.
+ * Returns null if there is no `<prefix>_<32 hex>` shape.
+ */
+export function parseSubjectUuid(publicId: string): string | null {
+  const sep = publicId.indexOf("_");
+  if (sep < 1) return null;
+  return hexToUuid(publicId.slice(sep + 1));
+}
+
 export function orgPublicId(uuid: string): string {
   return `org_${uuidToHex(uuid)}`;
 }

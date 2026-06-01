@@ -9,6 +9,7 @@ import { createSqlExecutor } from "@saas/db/hyperdrive";
 import { fetchAuthorizationContext } from "../membership-client.js";
 import { authorizeViaPolicy } from "../policy-client.js";
 import { errorResponse, successResponse, validationError } from "../http.js";
+import { parseSubjectUuid } from "../ids.js";
 import { toPublicSecretMetadata } from "../mappers.js";
 import type { PolicyResource } from "@saas/contracts/policy";
 import type { EncryptionAdapter } from "../encryption.js";
@@ -192,13 +193,18 @@ export async function handleCreateSecret(
   const genId = deps?.generateId ?? (() => randomHex(16));
   const now = deps?.now ? deps.now() : new Date();
 
+  // config.secret_metadata.created_by is a UUID column; the actor id arrives as
+  // the public `usr_<hex>` form and must be decoded before persistence.
+  const createdByUuid = parseSubjectUuid(actor.subjectId);
+  if (!createdByUuid) return errorResponse("validation_failed", "Invalid actor id", 422, requestId);
+
   const baseInput = {
     id: secretId,
     scope,
     secretKey: secretKey as string,
     displayName: (displayName as string) ?? undefined,
     rotationPolicy: (rotationPolicy as string) ?? undefined,
-    createdBy: actor.subjectId,
+    createdBy: createdByUuid,
   };
   const input: CreateSecretMetadataInput = parsedExpiresAt !== undefined
     ? { ...baseInput, expiresAt: parsedExpiresAt }
