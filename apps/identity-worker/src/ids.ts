@@ -90,3 +90,15 @@ export function parseUserPublicId(publicId: string): string | null {
   if (!publicId.startsWith("usr_")) return null;
   return hexToUuid(publicId.slice(4));
 }
+
+/**
+ * Decode a public organization id (`org_<32 hex>`) into the bare UUID that
+ * membership/identity persistence uses (their `org_id` columns are typed UUID).
+ * Returns null for any non-`org_`-prefixed or malformed value. The events/audit
+ * tables store the public form (TEXT), so callers keep the original public id
+ * for event payloads and only use this decoded UUID for DB/service calls.
+ */
+export function parseOrgPublicId(publicId: string): string | null {
+  if (!publicId.startsWith("org_")) return null;
+  return hexToUuid(publicId.slice(4));
+}
