@@ -18,6 +18,7 @@ import {
   toPublicWebhookSubscription,
   toPublicDeliveryAttempt,
 } from "@webhooks-worker/mappers";
+import { asUuid } from "@saas/db/ids";
 import type { WebhookEndpoint, WebhookSubscription, WebhookDeliveryAttempt } from "@saas/db/webhooks";
 import type { AppendEventWithAuditInput, EventsResult, StoredEvent, StoredAuditEntry } from "@saas/db/events";
 
@@ -637,7 +638,7 @@ describe("handleEnableWebhookEndpoint — atomicity", () => {
 });
 
 describe("project-scoped webhook create: project id decode", () => {
-  const orgUuid = "11111111-1111-1111-1111-111111111111";
+  const orgUuid = asUuid("11111111-1111-1111-1111-111111111111");
   const actor = { subjectId: "usr_" + "ab".repeat(16), subjectType: "user" };
 
   function postEndpoint(body: unknown): Request {

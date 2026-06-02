@@ -1,3 +1,5 @@
+import type { Uuid } from "../ids/index.js";
+
 export type { SqlExecutor, SqlExecutorResult, SqlRow } from "../hyperdrive/executor.js";
 
 // ── Result type ─────────────────────────────────────────────
@@ -53,8 +55,8 @@ export interface WebhookEndpoint {
 
 export interface CreateWebhookEndpointInput {
   id: string;
-  orgId: string;
-  projectId?: string | null;
+  orgId: Uuid;
+  projectId?: Uuid | null;
   url: string;
   name?: string | null;
   description?: string | null;
@@ -116,9 +118,9 @@ export interface WebhookSubscription {
 
 export interface CreateWebhookSubscriptionInput {
   id: string;
-  orgId: string;
+  orgId: Uuid;
   endpointId: string;
-  projectId?: string | null;
+  projectId?: Uuid | null;
   eventType: string;
   enabled?: boolean;
 }

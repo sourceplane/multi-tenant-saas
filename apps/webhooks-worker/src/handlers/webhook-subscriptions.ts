@@ -9,6 +9,7 @@ import { errorResponse, successResponse, listResponse, validationError } from ".
 import { toPublicWebhookSubscription } from "../mappers.js";
 import { parsePageParams, encodeCursor } from "../pagination.js";
 import { parseWebhookEndpointPublicId, parseProjectPublicId } from "../ids.js";
+import type { Uuid } from "@saas/db/ids";
 import type { PolicyResource } from "@saas/contracts/policy";
 import type { UpdateWebhookSubscriptionInput } from "@saas/db/webhooks";
 
@@ -68,7 +69,7 @@ export async function handleCreateWebhookSubscription(
   env: Env,
   requestId: string,
   actor: ActorContext,
-  orgId: string,
+  orgId: Uuid,
 ): Promise<Response> {
   let body: unknown;
   try {
@@ -109,7 +110,7 @@ export async function handleCreateWebhookSubscription(
 
   // webhook_subscriptions.project_id is a UUID column; decode the public
   // `prj_<hex>` form and reject invalid ids instead of binding the raw string.
-  let resolvedProjectId: string | null = null;
+  let resolvedProjectId: Uuid | null = null;
   if (typeof projectId === "string") {
     const parsed = parseProjectPublicId(projectId);
     if (!parsed) return validationError(requestId, { projectId: ["Invalid project id"] });

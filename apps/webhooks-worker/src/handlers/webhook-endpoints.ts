@@ -9,6 +9,7 @@ import { errorResponse, successResponse, listResponse, validationError } from ".
 import { toPublicWebhookEndpoint } from "../mappers.js";
 import { parsePageParams, encodeCursor } from "../pagination.js";
 import { parseProjectPublicId } from "../ids.js";
+import type { Uuid } from "@saas/db/ids";
 import type { PolicyResource } from "@saas/contracts/policy";
 import type { UpdateWebhookEndpointInput, DisableWebhookEndpointInput, WebhookRepository } from "@saas/db/webhooks";
 import type { EventsRepository } from "@saas/db/events";
@@ -89,7 +90,7 @@ export async function handleCreateWebhookEndpoint(
   env: Env,
   requestId: string,
   actor: ActorContext,
-  orgId: string,
+  orgId: Uuid,
 ): Promise<Response> {
   let body: unknown;
   try {
@@ -127,7 +128,7 @@ export async function handleCreateWebhookEndpoint(
   // UUID column, so decode the public `prj_<hex>` form and reject anything that
   // isn't a valid project id (previously this used the wrong parser and fell
   // back to storing the raw public string, which the UUID column rejects).
-  let resolvedProjectId: string | null = null;
+  let resolvedProjectId: Uuid | null = null;
   if (typeof projectId === "string") {
     const parsed = parseProjectPublicId(projectId);
     if (!parsed) return validationError(requestId, { projectId: ["Invalid project id"] });
