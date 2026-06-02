@@ -34,7 +34,7 @@
       "vars": {
         "ENVIRONMENT": "stage",
         "DEBUG_DELIVERY": "true",
-        "GITHUB_OAUTH_CLIENT_ID": "",
+        "GITHUB_OAUTH_CLIENT_ID": "Ov23liKBsjAqJJsmBavV",
         "OAUTH_REDIRECT_BASE_URL": "https://api-edge-stage.rahulvarghesepullely.workers.dev",
         "OAUTH_ALLOWED_CONSOLE_ORIGINS": "https://sourceplane-web-console-next-stage.rahulvarghesepullely.workers.dev"
       },
