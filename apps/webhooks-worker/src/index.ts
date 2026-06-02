@@ -37,3 +37,5 @@ export default {
     }
   },
 } satisfies ExportedHandler<Env>;
+
+// perf(db): rebuilt to adopt module-scoped connection reuse (task 0134).
