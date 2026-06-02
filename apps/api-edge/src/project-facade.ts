@@ -1,7 +1,8 @@
 import type { Env } from "./env.js";
-import { errorResponse } from "./http.js";
+import { errorResponse, withEdgeTimings } from "./http.js";
 import { replayOrExecute } from "./idempotency.js";
 import { resolveActor } from "./resolve-actor.js";
+import { createTimings } from "@saas/contracts/timing";
 
 const ORG_PROJECTS_RE = /^\/v1\/organizations\/[^/]+\/projects$/;
 const ORG_PROJECT_ID_RE = /^\/v1\/organizations\/[^/]+\/projects\/[^/]+$/;
@@ -56,7 +57,9 @@ export async function handleProjectRoute(
       return errorResponse("internal_error", "Projects service unavailable", 503, requestId);
     }
 
-    const sessionResult = await resolveActor(request, env, requestId);
+    const timings = createTimings();
+    const endTotal = timings.start("edge_total");
+    const sessionResult = await timings.measure("edge_auth", () => resolveActor(request, env, requestId));
     if ("error" in sessionResult) {
       return sessionResult.error;
     }
@@ -87,11 +90,13 @@ export async function handleProjectRoute(
     }
 
     try {
-      const downstream = await env.PROJECTS_WORKER.fetch(target.toString(), init);
-      return new Response(downstream.body, {
+      const downstream = await timings.measure("edge_downstream", () => env.PROJECTS_WORKER!.fetch(target.toString(), init));
+      const res = new Response(downstream.body, {
         status: downstream.status,
         headers: downstream.headers,
       });
+      endTotal();
+      return withEdgeTimings(res, requestId, "edge.project", timings);
     } catch {
       return errorResponse("internal_error", "Projects service unavailable", 503, requestId);
     }

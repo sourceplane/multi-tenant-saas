@@ -1,7 +1,8 @@
 import type { Env } from "./env.js";
-import { errorResponse } from "./http.js";
+import { errorResponse, withEdgeTimings } from "./http.js";
 import { replayOrExecute } from "./idempotency.js";
 import { resolveActor } from "./resolve-actor.js";
+import { createTimings } from "@saas/contracts/timing";
 
 const ORG_BILLING_PLANS_RE = /^\/v1\/organizations\/[^/]+\/billing\/plans$/;
 const ORG_BILLING_CUSTOMER_RE = /^\/v1\/organizations\/[^/]+\/billing\/customer$/;
@@ -46,7 +47,9 @@ export async function handleBillingRoute(
       return errorResponse("internal_error", "Billing service unavailable", 503, requestId);
     }
 
-    const sessionResult = await resolveActor(request, env, requestId);
+    const timings = createTimings();
+    const endTotal = timings.start("edge_total");
+    const sessionResult = await timings.measure("edge_auth", () => resolveActor(request, env, requestId));
     if ("error" in sessionResult) {
       return sessionResult.error;
     }
@@ -68,14 +71,16 @@ export async function handleBillingRoute(
     const target = new URL(pathname + url.search, "https://billing.internal");
 
     try {
-      const downstream = await env.BILLING_WORKER.fetch(target.toString(), {
+      const downstream = await timings.measure("edge_downstream", () => env.BILLING_WORKER!.fetch(target.toString(), {
         method: "GET",
         headers,
-      });
-      return new Response(downstream.body, {
+      }));
+      const res = new Response(downstream.body, {
         status: downstream.status,
         headers: downstream.headers,
       });
+      endTotal();
+      return withEdgeTimings(res, requestId, "edge.billing", timings);
     } catch {
       return errorResponse("internal_error", "Billing service unavailable", 503, requestId);
     }

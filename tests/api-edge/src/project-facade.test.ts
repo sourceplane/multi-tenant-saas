@@ -195,6 +195,36 @@ describe("api-edge project facade", () => {
       expect(forwarded.get("x-actor-subject-type")).toBe("user");
     });
 
+    it("PERF4: appends edge phases to the downstream Server-Timing header", async () => {
+      const { fetcher: identityFetcher } = createSessionFetcher("usr_abc123");
+      // Downstream worker already emits its own Server-Timing.
+      const downstream = Response.json(
+        { data: { projects: [] }, meta: { requestId: "req_test", cursor: null } },
+        { headers: { "Server-Timing": "authctx;dur=12, db;dur=34, policy;dur=2, total;dur=40" } },
+      );
+      const { fetcher: projectsFetcher } = createFakeFetcher(downstream);
+
+      const request = new Request("https://api.example.com/v1/organizations/org_abc123/projects", {
+        method: "GET",
+        headers: { authorization: "Bearer sps_ses_abc.secret" },
+      });
+
+      const response = await handleProjectRoute(
+        request,
+        { IDENTITY_WORKER: identityFetcher, PROJECTS_WORKER: projectsFetcher, ENVIRONMENT: "test" },
+        "req_test",
+        "/v1/organizations/org_abc123/projects",
+      );
+
+      expect(response.status).toBe(200);
+      const timing = response.headers.get("Server-Timing");
+      expect(timing).toBeTruthy();
+      // Preserves the worker phases AND adds the edge phases.
+      for (const phase of ["authctx", "db", "policy", "total", "edge_auth", "edge_downstream", "edge_total"]) {
+        expect(timing).toContain(phase);
+      }
+    });
+
     it("does not forward bearer token to PROJECTS_WORKER for GET", async () => {
       const { fetcher: identityFetcher } = createSessionFetcher("usr_abc123");
       const { fetcher: projectsFetcher, calls: projectsCalls } = createFakeFetcher();

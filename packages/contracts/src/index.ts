@@ -1,4 +1,5 @@
 export * from "./health.js";
+export * from "./timing.js";
 export * from "./errors.js";
 export * from "./idempotency.js";
 export * from "./tenancy.js";

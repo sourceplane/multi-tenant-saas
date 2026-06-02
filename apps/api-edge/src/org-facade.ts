@@ -1,7 +1,8 @@
 import type { Env } from "./env.js";
-import { errorResponse } from "./http.js";
+import { errorResponse, withEdgeTimings } from "./http.js";
 import { replayOrExecute } from "./idempotency.js";
 import { resolveActor } from "./resolve-actor.js";
+import { createTimings } from "@saas/contracts/timing";
 
 const ORG_ROUTES: Record<string, string> = {
   "/v1/organizations": "POST|GET",
@@ -90,7 +91,9 @@ export async function handleOrgRoute(
       );
     }
 
-    const sessionResult = await resolveActor(request, env, requestId);
+    const timings = createTimings();
+    const endTotal = timings.start("edge_total");
+    const sessionResult = await timings.measure("edge_auth", () => resolveActor(request, env, requestId));
     if ("error" in sessionResult) {
       return sessionResult.error;
     }
@@ -124,11 +127,13 @@ export async function handleOrgRoute(
     }
 
     try {
-      const downstream = await targetWorker.fetch(target.toString(), init);
-      return new Response(downstream.body, {
+      const downstream = await timings.measure("edge_downstream", () => targetWorker.fetch(target.toString(), init));
+      const res = new Response(downstream.body, {
         status: downstream.status,
         headers: downstream.headers,
       });
+      endTotal();
+      return withEdgeTimings(res, requestId, "edge.org", timings);
     } catch {
       return errorResponse(
         "internal_error",

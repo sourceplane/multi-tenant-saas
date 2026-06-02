@@ -1,6 +1,21 @@
 import type { ErrorCode } from "@saas/contracts/errors";
+import type { Timings } from "@saas/contracts/timing";
+import { appendServerTiming } from "@saas/contracts/timing";
 
 const REQUEST_ID_RE = /^[\w-]{1,128}$/;
+
+/** Append the edge's own phases to the downstream worker's `Server-Timing`
+ *  header so a single response carries the end-to-end breakdown, and emit a
+ *  structured timing log line. Returns the same response for chaining. */
+export function withEdgeTimings(response: Response, requestId: string, route: string, timings: Timings): Response {
+  const addition = timings.header();
+  if (addition) {
+    response.headers.set("Server-Timing", appendServerTiming(response.headers.get("Server-Timing"), addition));
+  }
+  // eslint-disable-next-line no-console -- structured timing line for prod observability
+  console.log(JSON.stringify({ level: "info", msg: "timing", route, requestId, phases: timings.toJSON() }));
+  return response;
+}
 
 export function resolveRequestId(request: Request): string {
   const header = request.headers.get("x-request-id");

@@ -368,13 +368,25 @@ missing membership/subject index; verify Hyperdrive query caching is actually
 effective (reads stay non-transactional + parameterized). Owner: packages/db +
 the worker handlers. Scoped as Task 0132.
 
-### PERF4 — Hot-path hop reduction, parallelization & latency observability
+### PERF4 — Hot-path hop reduction, parallelization & latency observability ✅
 Collapse/parallelize the sequential authorization fan-out on hot reads (run the
 membership-roles fetch in parallel with the resource query; evaluate policy
 inline from passed facts) to cut a 4-hop serial chain toward 2. Add
 `Server-Timing` headers + structured per-hop/per-query timing so prod latency is
 measurable and the other PERF tasks are verifiable. Owner: api-edge + resource
 workers. Scoped as Task 0133.
+
+**Done (PR #229).** Shipped a dependency-free `@saas/contracts/timing` helper
+(`createTimings` / `Server-Timing` render / parse / append). On the four hot
+reads (projects-list, audit-list, billing-summary, members-list) the
+authorization-context fetch now runs **concurrently** with the resource read via
+`Promise.all`, with the policy decision applied afterward and the
+speculatively-read data discarded on deny (deny-by-default preserved + tested).
+Each worker emits a `Server-Timing` header (`authctx`/`db`/`policy`/`total`,
+plus `enrich` for members) and a structured timing log; api-edge appends its own
+`edge_auth`/`edge_downstream`/`edge_total` phases so one response carries the
+end-to-end breakdown. Wiring the Server-Timing metrics into Analytics Engine for
+p50/p95 dashboards is left as a follow-up.
 
 ### Additional resources worth adding (suggested)
 - **Workers KV** — bearer-resolution cache (PERF2) and hot read caching.

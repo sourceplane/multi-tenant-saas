@@ -1,7 +1,8 @@
 import type { Env } from "./env.js";
-import { errorResponse } from "./http.js";
+import { errorResponse, withEdgeTimings } from "./http.js";
 import { enforceRateLimit, mergeRateLimitHeaders } from "./rate-limit.js";
 import { resolveActor } from "./resolve-actor.js";
+import { createTimings } from "@saas/contracts/timing";
 
 const ORG_AUDIT_RE = /^\/v1\/organizations\/[^/]+\/audit$/;
 
@@ -46,7 +47,9 @@ export async function handleAuditRoute(
     );
   }
 
-  const sessionResult = await resolveActor(request, env, requestId);
+  const timings = createTimings();
+  const endTotal = timings.start("edge_total");
+  const sessionResult = await timings.measure("edge_auth", () => resolveActor(request, env, requestId));
   if ("error" in sessionResult) {
     return mergeRateLimitHeaders(sessionResult.error, rateHeaders);
   }
@@ -68,15 +71,21 @@ export async function handleAuditRoute(
   const target = new URL(pathname + url.search, "https://events.internal");
 
   try {
-    const downstream = await env.EVENTS_WORKER.fetch(target.toString(), {
+    const downstream = await timings.measure("edge_downstream", () => env.EVENTS_WORKER!.fetch(target.toString(), {
       method: "GET",
       headers,
-    });
+    }));
+    endTotal();
     return mergeRateLimitHeaders(
-      new Response(downstream.body, {
-        status: downstream.status,
-        headers: downstream.headers,
-      }),
+      withEdgeTimings(
+        new Response(downstream.body, {
+          status: downstream.status,
+          headers: downstream.headers,
+        }),
+        requestId,
+        "edge.audit",
+        timings,
+      ),
       rateHeaders,
     );
   } catch {

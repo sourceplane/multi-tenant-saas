@@ -4,9 +4,10 @@ import type { MembershipRepository, PageQueryParams } from "@saas/db/membership"
 import { createSqlExecutor } from "@saas/db/hyperdrive";
 import { createMembershipRepository } from "@saas/db/membership";
 import { authorizeViaPolicy } from "../policy-client.js";
-import { successResponse, errorResponse, validationError } from "../http.js";
+import { successResponse, errorResponse, validationError, withTimings } from "../http.js";
 import { parseOrgPublicId, memberPublicId } from "../ids.js";
 import { parsePageParams, encodeCursor } from "../pagination.js";
+import { createTimings } from "@saas/contracts/timing";
 
 export interface ListMembersDeps {
   repo: Pick<
@@ -47,31 +48,44 @@ export async function handleListMembers(
   }
 
   const policyWorker = env.POLICY_WORKER;
+  const timings = createTimings();
+  const endTotal = timings.start("total");
   const executor = deps ? null : createSqlExecutor(env.SOURCEPLANE_DB!);
   try {
     const repo = deps ? deps.repo : createMembershipRepository(executor!);
 
-    const rolesResult = await repo.listRoleAssignments(orgUuid, actor.subjectId);
+    // PERF4 (task 0133): the actor's role-assignment read (input to authz) and
+    // the members page read are independent DB queries. Run them concurrently,
+    // then apply the policy decision and discard the page on deny (deny-by-default).
+    const [rolesResult, membersResult] = await Promise.all([
+      timings.measure("authctx", () => repo.listRoleAssignments(orgUuid, actor.subjectId)),
+      timings.measure("db", () => repo.listMembersPaged(orgUuid, pageParams)),
+    ]);
     if (!rolesResult.ok) {
-      return errorResponse("not_found", "Organization not found", 404, requestId);
+      endTotal();
+      return withTimings(errorResponse("not_found", "Organization not found", 404, requestId), requestId, "members.list", timings);
     }
 
-    const authResult = await authorizeViaPolicy(policyWorker, {
-      actor,
-      action: "organization.member.list",
-      resource: { kind: "organization", id: orgUuid, orgId: orgUuid },
-      orgId: orgUuid,
-      roleAssignments: rolesResult.value,
-      requestId,
-    });
+    const authResult = await timings.measure("policy", () =>
+      authorizeViaPolicy(policyWorker, {
+        actor,
+        action: "organization.member.list",
+        resource: { kind: "organization", id: orgUuid, orgId: orgUuid },
+        orgId: orgUuid,
+        roleAssignments: rolesResult.value,
+        requestId,
+      }),
+    );
 
     if (!authResult.allow) {
-      return errorResponse("not_found", "Organization not found", 404, requestId);
+      // Deny-by-default: never return the speculatively-read members page.
+      endTotal();
+      return withTimings(errorResponse("not_found", "Organization not found", 404, requestId), requestId, "members.list", timings);
     }
 
-    const membersResult = await repo.listMembersPaged(orgUuid, pageParams);
     if (!membersResult.ok) {
-      return errorResponse("internal_error", "An unexpected error occurred", 500, requestId);
+      endTotal();
+      return withTimings(errorResponse("internal_error", "An unexpected error occurred", 500, requestId), requestId, "members.list", timings);
     }
 
     const { items, nextCursor } = membersResult.value;
@@ -80,13 +94,15 @@ export async function handleListMembers(
     // instead of one query per member (N+1). Falls back to the per-subject path
     // when the batched repo method is unavailable (e.g. older fakes).
     const rolesBySubject = new Map<string, { role: string; scopeKind: string }[]>();
+    const endEnrich = timings.start("enrich");
     if (repo.listRoleAssignmentsForSubjects) {
       const pageRolesResult = await repo.listRoleAssignmentsForSubjects(
         orgUuid,
         items.map((m) => m.subjectId),
       );
       if (!pageRolesResult.ok) {
-        return errorResponse("internal_error", "An unexpected error occurred", 500, requestId);
+        endTotal();
+        return withTimings(errorResponse("internal_error", "An unexpected error occurred", 500, requestId), requestId, "members.list", timings);
       }
       for (const [subjectId, ras] of pageRolesResult.value) {
         rolesBySubject.set(subjectId, ras.map((ra) => ({ role: ra.role, scopeKind: ra.scopeKind })));
@@ -95,7 +111,8 @@ export async function handleListMembers(
       for (const member of items) {
         const r = await repo.listRoleAssignments(orgUuid, member.subjectId);
         if (!r.ok) {
-          return errorResponse("internal_error", "An unexpected error occurred", 500, requestId);
+          endTotal();
+          return withTimings(errorResponse("internal_error", "An unexpected error occurred", 500, requestId), requestId, "members.list", timings);
         }
         rolesBySubject.set(
           member.subjectId,
@@ -103,6 +120,7 @@ export async function handleListMembers(
         );
       }
     }
+    endEnrich();
 
     const enriched = items.map((member) => ({
       id: memberPublicId(member.id),
@@ -114,9 +132,11 @@ export async function handleListMembers(
     }));
 
     const cursorToken = nextCursor ? encodeCursor(nextCursor.createdAt, nextCursor.id) : null;
-    return successResponse({ members: enriched }, requestId, 200, cursorToken);
+    endTotal();
+    return withTimings(successResponse({ members: enriched }, requestId, 200, cursorToken), requestId, "members.list", timings);
   } catch {
-    return errorResponse("internal_error", "An unexpected error occurred", 500, requestId);
+    endTotal();
+    return withTimings(errorResponse("internal_error", "An unexpected error occurred", 500, requestId), requestId, "members.list", timings);
   } finally {
     if (executor) await executor.dispose();
   }

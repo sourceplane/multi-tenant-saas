@@ -564,4 +564,88 @@ describe("events-worker list-audit handler", () => {
     expect(res.status).toBe(200);
     expect(capturedFilters).toEqual({});
   });
+
+  it("PERF4: deny never leaks audit data even though read runs in parallel with authz", async () => {
+    const { handleListAudit } = await import("@events-worker/handlers/list-audit");
+
+    // The read is started concurrently with the authz fetch; on deny it must be
+    // discarded. Assert the denied response carries neither the audit data nor
+    // the raw org UUID.
+    const mockEntry = {
+      id: "aud-leak-check",
+      eventId: "evt-leak-check",
+      orgId: TEST_ORG_UUID,
+      projectId: null,
+      environmentId: null,
+      actorType: "user",
+      actorId: TEST_ACTOR_ID,
+      eventType: "invite.created",
+      eventVersion: 1,
+      source: "membership-worker",
+      subjectKind: "invitation",
+      subjectId: "c1d2e3f4-a5b6-7890-cdef-123456789012",
+      subjectName: "leaked-subject-name",
+      category: "membership",
+      description: "SHOULD-NOT-LEAK-description",
+      occurredAt: new Date("2026-05-26T10:00:00.000Z"),
+      requestId: TEST_REQUEST_ID,
+      correlationId: null,
+      payload: {},
+      redactPaths: [],
+      createdAt: new Date("2026-05-26T10:00:00.000Z"),
+    };
+
+    const mockRepo: EventsRepository = {
+      appendEvent: async () => ({ ok: false as const, error: { kind: "internal" as const, message: "" } }),
+      appendEventWithAudit: async () => ({ ok: false as const, error: { kind: "internal" as const, message: "" } }),
+      queryAuditByOrg: async () => ({
+        ok: true as const,
+        value: { items: [mockEntry], nextCursor: null },
+      }),
+      queryAuditByTarget: async () => ({ ok: true as const, value: { items: [], nextCursor: null } }),
+      queryEventsByOrg: async () => ({ ok: false as const, error: { kind: "internal" as const, message: "" } }),
+      getEventById: async () => ({ ok: true as const, value: null }),
+    };
+
+    const env = createEnv({
+      POLICY_WORKER: createMockFetcher(async () =>
+        Response.json({ data: { allow: false, reason: "no_matching_role", policyVersion: 1, derivedScope: { orgId: TEST_ORG_UUID } } }),
+      ),
+    });
+    const req = makeRequest(`/v1/organizations/${TEST_ORG_PUBLIC_ID}/audit`);
+
+    const res = await handleListAudit(req, env, TEST_REQUEST_ID, { subjectId: TEST_ACTOR_ID, subjectType: "user" }, TEST_ORG_UUID, { eventsRepo: mockRepo });
+
+    expect(res.status).toBe(404);
+    const raw = await res.text();
+    expect(raw).not.toContain("SHOULD-NOT-LEAK-description");
+    expect(raw).not.toContain("leaked-subject-name");
+    expect(raw).not.toContain("auditEntries");
+    expect(raw).not.toContain(TEST_ORG_UUID);
+  });
+
+  it("PERF4: emits a Server-Timing header with authctx/db/policy/total phases", async () => {
+    const { handleListAudit } = await import("@events-worker/handlers/list-audit");
+
+    const mockRepo: EventsRepository = {
+      appendEvent: async () => ({ ok: false as const, error: { kind: "internal" as const, message: "" } }),
+      appendEventWithAudit: async () => ({ ok: false as const, error: { kind: "internal" as const, message: "" } }),
+      queryAuditByOrg: async () => ({ ok: true as const, value: { items: [], nextCursor: null } }),
+      queryAuditByTarget: async () => ({ ok: true as const, value: { items: [], nextCursor: null } }),
+      queryEventsByOrg: async () => ({ ok: false as const, error: { kind: "internal" as const, message: "" } }),
+      getEventById: async () => ({ ok: true as const, value: null }),
+    };
+
+    const env = createEnv();
+    const req = makeRequest(`/v1/organizations/${TEST_ORG_PUBLIC_ID}/audit`);
+
+    const res = await handleListAudit(req, env, TEST_REQUEST_ID, { subjectId: TEST_ACTOR_ID, subjectType: "user" }, TEST_ORG_UUID, { eventsRepo: mockRepo });
+
+    expect(res.status).toBe(200);
+    const timing = res.headers.get("Server-Timing");
+    expect(timing).toBeTruthy();
+    for (const phase of ["authctx", "db", "policy", "total"]) {
+      expect(timing).toContain(phase);
+    }
+  });
 });
