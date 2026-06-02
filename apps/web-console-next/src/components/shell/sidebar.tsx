@@ -6,6 +6,7 @@ import { useParams, usePathname } from "next/navigation";
 import {
   Building2,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   FolderKanban,
   Boxes,
@@ -25,6 +26,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { buildNavSections, isLinkActive } from "./nav-items";
+import { buildSettingsNav, flattenSettingsNav, isSettingsLinkActive } from "./settings-nav";
 
 const ICONS: Record<string, LucideIcon> = {
   Building2,
@@ -51,8 +53,18 @@ const ICONS: Record<string, LucideIcon> = {
 export function NavContent({ onNavigate }: { onNavigate?: (() => void) | undefined }) {
   const params = useParams<{ orgSlug?: string; projectSlug?: string }>();
   const pathname = usePathname();
+  const orgSlug = params?.orgSlug ?? null;
+
+  // Within `/settings`, the sidebar swaps from the product nav to a dedicated
+  // settings nav (a flat list under a back-to-app header), mirroring how Vercel
+  // turns the whole left rail into a settings menu.
+  const inSettings = !!orgSlug && !!pathname && pathname.startsWith(`/orgs/${orgSlug}/settings`);
+  if (inSettings) {
+    return <SettingsNavContent orgSlug={orgSlug} pathname={pathname} onNavigate={onNavigate} />;
+  }
+
   const sections = buildNavSections({
-    orgSlug: params?.orgSlug ?? null,
+    orgSlug,
     projectSlug: params?.projectSlug ?? null,
   });
 
@@ -76,6 +88,56 @@ export function NavContent({ onNavigate }: { onNavigate?: (() => void) | undefin
           })}
         </Section>
       ))}
+    </nav>
+  );
+}
+
+/**
+ * Settings-scoped sidebar: a "‹ Settings" back row that returns to the product
+ * area, followed by the flat settings link list (text-only, no icons), with the
+ * active item highlighted.
+ */
+function SettingsNavContent({
+  orgSlug,
+  pathname,
+  onNavigate,
+}: {
+  orgSlug: string;
+  pathname: string;
+  onNavigate?: (() => void) | undefined;
+}) {
+  const links = flattenSettingsNav(buildSettingsNav(orgSlug));
+  return (
+    <nav className="px-2 pb-4 overflow-y-auto scrollbar-thin">
+      <Link
+        href={`/orgs/${orgSlug}/projects`}
+        {...(onNavigate ? { onClick: onNavigate } : {})}
+        className="mb-2 flex items-center gap-1 rounded-md px-2 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+      >
+        <ChevronLeft className="h-4 w-4" />
+        Settings
+      </Link>
+      <div className="space-y-0.5">
+        {links.map((link) => {
+          const active = isSettingsLinkActive(link, pathname);
+          return (
+            <Link
+              key={link.href}
+              href={link.href}
+              {...(onNavigate ? { onClick: onNavigate } : {})}
+              aria-current={active ? "page" : undefined}
+              className={cn(
+                "block rounded-md px-2 py-1.5 text-sm transition-colors",
+                active
+                  ? "bg-accent text-accent-foreground font-medium"
+                  : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
+              )}
+            >
+              {link.label}
+            </Link>
+          );
+        })}
+      </div>
     </nav>
   );
 }
