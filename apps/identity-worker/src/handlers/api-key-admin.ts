@@ -8,7 +8,7 @@ import { servicePrincipalSubjectId } from "@saas/contracts/service-principal";
 import { fetchAuthorizationContext } from "../membership-client.js";
 import { authorizeViaPolicy } from "../policy-client.js";
 import { successResponse, errorResponse, validationError } from "../http.js";
-import { parseOrgPublicId, parseSubjectUuid } from "../ids.js";
+import { parseOrgPublicId, parseSubjectUuid, parseProjectPublicId } from "../ids.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -219,12 +219,17 @@ export async function handleCreateApiKey(
   const projectId = typeof b.projectId === "string" && b.projectId.length > 0 ? b.projectId : null;
   const expiresAt = typeof b.expiresAt === "string" ? new Date(b.expiresAt) : null;
 
+  // service_principals.project_id is a UUID column; decode the public `prj_<hex>`
+  // form for project-scoped keys (was previously passed raw → uuid-cast crash).
+  const projectUuid = projectId ? parseProjectPublicId(projectId) : null;
+  if (projectId && !projectUuid) return errorResponse("validation_failed", "Invalid project id", 422, requestId);
+
   // Authorization
   const contextResult = await fetchAuthorizationContext(env.MEMBERSHIP_WORKER, actor.subjectId, actor.subjectType, orgUuid, requestId);
   if (!contextResult.ok) return errorResponse("not_found", "Not found", 404, requestId);
 
-  const policyResource = projectId
-    ? { kind: "api_key", orgId: orgUuid, projectId }
+  const policyResource = projectUuid
+    ? { kind: "api_key", orgId: orgUuid, projectId: projectUuid }
     : { kind: "api_key", orgId: orgUuid };
 
   const policyResult = await authorizeViaPolicy(env.POLICY_WORKER, actor.subjectId, actor.subjectType, "organization.api_key.create", policyResource, contextResult.memberships, requestId);
@@ -239,10 +244,10 @@ export async function handleCreateApiKey(
   const now = new Date();
 
   // Determine scope for membership binding
-  const scopeKind = projectId ? "project" : "organization";
+  const scopeKind = projectUuid ? "project" : "organization";
 
   // Create membership binding first (SP role assignment)
-  const bindResult = await createSpBinding(env.MEMBERSHIP_WORKER, orgUuid, spSubjectId, role, scopeKind, projectId, requestId);
+  const bindResult = await createSpBinding(env.MEMBERSHIP_WORKER, orgUuid, spSubjectId, role, scopeKind, projectUuid, requestId);
   if (!bindResult.ok) return errorResponse("internal_error", "Failed to create service principal binding", 500, requestId);
 
   // Persist identity-side state in a transaction
@@ -253,7 +258,7 @@ export async function handleCreateApiKey(
       const spResult = await identityRepo.createServicePrincipal({
         id: spId,
         orgId: orgUuid,
-        projectId: projectId,
+        projectId: projectUuid,
         displayName: `API Key: ${label}`,
         createdBy: actorUuid,
         createdAt: now,
@@ -309,10 +314,10 @@ export async function handleCreateApiKey(
           occurredAt: now,
           actorType: actor.subjectType,
           actorId: actor.subjectId,
-          // event_log/audit_entries.org_id stores the bare UUID (the read path
-          // re-encodes to public); keep the public form only in `payload`.
+          // event_log/audit_entries.{org_id,project_id} store the bare UUID (the
+          // read path re-encodes to public); keep the public form only in `payload`.
           orgId: orgUuid,
-          projectId,
+          projectId: projectUuid,
           subjectKind: "api_key",
           subjectId: apiKeyId,
           subjectName: label,

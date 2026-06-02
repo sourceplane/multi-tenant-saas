@@ -519,6 +519,40 @@ describe("handleCreateApiKey", () => {
     expect(response.status).toBe(422);
     expect(repo._servicePrincipals.size).toBe(0);
   });
+
+  it("decodes a project-scoped key's public projectId to a UUID", async () => {
+    const PRJ_PUB = "prj_" + "d".repeat(32);
+    const PRJ_UUID = "dddddddd-dddd-dddd-dddd-dddddddddddd";
+    const { membershipFetcher, policyFetcher } = createApprovingFetchers();
+    const repo = createFakeRepository();
+    const eventsRepo = createFakeEventsRepo();
+
+    const response = await handleCreateApiKey(
+      makeCreateRequest(ORG_PUB, { label: "ci", role: "project_admin", projectId: PRJ_PUB }),
+      makeEnv(membershipFetcher, policyFetcher),
+      "req_prj",
+      { identityRepo: repo, eventsRepo },
+    );
+    expect(response.status).toBe(201);
+    // service_principals.project_id is a UUID column — must be the decoded form.
+    const sp = [...repo._servicePrincipals.values()][0] as { projectId: string | null };
+    expect(sp.projectId).toBe(PRJ_UUID);
+  });
+
+  it("returns 422 for a malformed project id", async () => {
+    const { membershipFetcher, policyFetcher } = createApprovingFetchers();
+    const repo = createFakeRepository();
+    const eventsRepo = createFakeEventsRepo();
+
+    const response = await handleCreateApiKey(
+      makeCreateRequest(ORG_PUB, { label: "ci", role: "project_admin", projectId: "prj_bad" }),
+      makeEnv(membershipFetcher, policyFetcher),
+      "req_prj_bad",
+      { identityRepo: repo, eventsRepo },
+    );
+    expect(response.status).toBe(422);
+    expect(repo._servicePrincipals.size).toBe(0);
+  });
 });
 
 describe("handleListApiKeys", () => {
@@ -561,7 +595,7 @@ describe("handleListApiKeys", () => {
       orgId: ORG_UUID,
       projectId: null,
       displayName: "API Key: test-key",
-      createdBy: ACTOR_PUB,
+      createdBy: ACTOR_UUID,
       createdAt: now,
     });
     await repo.createApiKey({
@@ -572,7 +606,7 @@ describe("handleListApiKeys", () => {
       keyHash: "hash_1",
       label: "test-key",
       expiresAt: null,
-      createdBy: ACTOR_PUB,
+      createdBy: ACTOR_UUID,
       createdAt: now,
     });
 
@@ -630,7 +664,7 @@ describe("handleRevokeApiKey", () => {
       orgId: ORG_UUID,
       projectId: null,
       displayName: "API Key: revoked-key",
-      createdBy: ACTOR_PUB,
+      createdBy: ACTOR_UUID,
       createdAt: now,
     });
     await repo.createApiKey({
@@ -641,11 +675,11 @@ describe("handleRevokeApiKey", () => {
       keyHash: "hash_r",
       label: "revoked-key",
       expiresAt: null,
-      createdBy: ACTOR_PUB,
+      createdBy: ACTOR_UUID,
       createdAt: now,
     });
     // Revoke it
-    await repo.revokeApiKey("key_revoked", ACTOR_PUB, now);
+    await repo.revokeApiKey("key_revoked", ACTOR_UUID, now);
 
     const response = await handleRevokeApiKey(
       makeRevokeRequest(ORG_PUB, "key_revoked"),
@@ -667,7 +701,7 @@ describe("handleRevokeApiKey", () => {
       orgId: ORG_UUID,
       projectId: null,
       displayName: "API Key: active-key",
-      createdBy: ACTOR_PUB,
+      createdBy: ACTOR_UUID,
       createdAt: now,
     });
     await repo.createApiKey({
@@ -678,7 +712,7 @@ describe("handleRevokeApiKey", () => {
       keyHash: "hash_s",
       label: "active-key",
       expiresAt: null,
-      createdBy: ACTOR_PUB,
+      createdBy: ACTOR_UUID,
       createdAt: now,
     });
 
