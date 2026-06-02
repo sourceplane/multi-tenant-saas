@@ -1,4 +1,5 @@
 import { createFakeRepository } from "./helpers/fake-repository";
+import { asUuid } from "@saas/db";
 import crypto from "node:crypto";
 
 if (!globalThis.crypto?.subtle) {
@@ -29,15 +30,15 @@ describe("resolveBearer", () => {
     revokedAt?: Date | null;
   }) {
     const spId = crypto.randomUUID();
-    const orgId = crypto.randomUUID();
-    const createdBy = crypto.randomUUID();
+    const orgId = asUuid(crypto.randomUUID());
+    const createdBy = asUuid(crypto.randomUUID());
     const rawKey = "sps_key_" + crypto.randomBytes(32).toString("hex");
     const keyHash = await hashSha256(rawKey);
 
     await repo.createServicePrincipal({
       id: spId,
       orgId,
-      projectId: "00000000-0000-0000-0000-0000000000aa",
+      projectId: asUuid("00000000-0000-0000-0000-0000000000aa"),
       displayName: "CI Bot",
       createdBy,
       createdAt: fixedNow,

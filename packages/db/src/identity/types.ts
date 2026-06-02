@@ -1,4 +1,5 @@
 export type { SqlExecutor, SqlExecutorResult, SqlRow } from "../hyperdrive/executor.js";
+import type { Uuid } from "../ids/index.js";
 
 export type IdentityRepositoryError =
   | { kind: "not_found" }
@@ -132,11 +133,11 @@ export interface ServicePrincipal {
 
 export interface CreateServicePrincipalInput {
   id: string;
-  orgId: string;
-  projectId?: string | null;
+  orgId: Uuid;
+  projectId?: Uuid | null;
   displayName: string;
   description?: string | null;
-  createdBy: string;
+  createdBy: Uuid;
   createdAt: Date;
 }
 
@@ -161,12 +162,12 @@ export interface ApiKey {
 export interface CreateApiKeyInput {
   id: string;
   servicePrincipalId: string;
-  orgId: string;
+  orgId: Uuid;
   keyPrefix: string;
   keyHash: string;
   label?: string;
   expiresAt?: Date | null;
-  createdBy: string;
+  createdBy: Uuid;
   createdAt: Date;
 }
 
@@ -236,5 +237,5 @@ export interface IdentityRepository {
   createApiKey(input: CreateApiKeyInput): Promise<IdentityResult<ApiKey>>;
   getApiKeyByKeyHash(keyHash: string): Promise<IdentityResult<ApiKey>>;
   listApiKeysByOrg(params: ApiKeyPageQueryParams): Promise<IdentityResult<ApiKeyPagedResult>>;
-  revokeApiKey(id: string, revokedBy: string, revokedAt: Date): Promise<IdentityResult<ApiKey>>;
+  revokeApiKey(id: string, revokedBy: Uuid, revokedAt: Date): Promise<IdentityResult<ApiKey>>;
 }
