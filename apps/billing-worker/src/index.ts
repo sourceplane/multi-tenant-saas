@@ -6,3 +6,5 @@ export default {
     return route(request, env);
   },
 } satisfies ExportedHandler<Env>;
+
+// perf(db): rebuilt to adopt module-scoped connection reuse (task 0134).
