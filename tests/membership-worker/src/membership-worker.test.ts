@@ -974,6 +974,43 @@ describe("pagination", () => {
     expect(json.meta.cursor).toBeNull();
   });
 
+  it("PERF3: uses the batched role lookup (no per-member N+1) when available", async () => {
+    let batched = 0;
+    let perMember = 0;
+    let batchedIds: string[] = [];
+    const member = (subjectId: string): OrganizationMember => ({
+      id: subjectId, orgId: orgUuid, subjectId, subjectType: "user", status: "active", createdAt: fixedNow, updatedAt: fixedNow,
+    });
+    const repo = {
+      listRoleAssignments: async () => {
+        perMember += 1; // only the actor authz check should hit this
+        return { ok: true as const, value: [] as RoleAssignment[] };
+      },
+      listMembersPaged: async () => ({
+        ok: true as const,
+        value: { items: [member("usr_owner"), member("usr_two")], nextCursor: null },
+      }),
+      listRoleAssignmentsForSubjects: async (_id: string, subjectIds: string[]) => {
+        batched += 1;
+        batchedIds = subjectIds;
+        const m = new Map<string, RoleAssignment[]>();
+        m.set("usr_owner", [{ id: "ra1", orgId: orgUuid, subjectId: "usr_owner", subjectType: "user", role: "owner", scopeKind: "organization", scopeRef: null, createdAt: fixedNow, revokedAt: null }]);
+        m.set("usr_two", []);
+        return { ok: true as const, value: m };
+      },
+    };
+    const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+    const response = await handleListMembers(env, "req_test", actor, orgPublicIdStr, undefined, { repo });
+    expect(response.status).toBe(200);
+    const json = (await response.json()) as { data: { members: { roles: unknown[] }[] } };
+    expect(batched).toBe(1); // one batched query for the whole page
+    expect(batchedIds).toEqual(["usr_owner", "usr_two"]);
+    expect(perMember).toBe(1); // ONLY the actor authz check — no per-member N+1
+    expect(json.data.members).toHaveLength(2);
+    expect(json.data.members[0]!.roles).toHaveLength(1);
+    expect(json.data.members[1]!.roles).toHaveLength(0);
+  });
+
   it("uses explicit limit when provided", async () => {
     const repo = createPagedRepo();
     const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };

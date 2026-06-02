@@ -9,7 +9,10 @@ import { parseOrgPublicId, memberPublicId } from "../ids.js";
 import { parsePageParams, encodeCursor } from "../pagination.js";
 
 export interface ListMembersDeps {
-  repo: Pick<MembershipRepository, "listRoleAssignments" | "listMembersPaged">;
+  repo: Pick<
+    MembershipRepository,
+    "listRoleAssignments" | "listRoleAssignmentsForSubjects" | "listMembersPaged"
+  >;
 }
 
 export async function handleListMembers(
@@ -72,24 +75,43 @@ export async function handleListMembers(
     }
 
     const { items, nextCursor } = membersResult.value;
-    const enriched = [];
-    for (const member of items) {
-      const memberRolesResult = await repo.listRoleAssignments(orgUuid, member.subjectId);
-      if (!memberRolesResult.ok) {
+
+    // PERF3 (task 0132): one batched role-assignment query for the whole page
+    // instead of one query per member (N+1). Falls back to the per-subject path
+    // when the batched repo method is unavailable (e.g. older fakes).
+    const rolesBySubject = new Map<string, { role: string; scopeKind: string }[]>();
+    if (repo.listRoleAssignmentsForSubjects) {
+      const pageRolesResult = await repo.listRoleAssignmentsForSubjects(
+        orgUuid,
+        items.map((m) => m.subjectId),
+      );
+      if (!pageRolesResult.ok) {
         return errorResponse("internal_error", "An unexpected error occurred", 500, requestId);
       }
-      enriched.push({
-        id: memberPublicId(member.id),
-        subjectType: member.subjectType,
-        subjectId: member.subjectId,
-        status: member.status,
-        joinedAt: member.createdAt.toISOString(),
-        roles: memberRolesResult.value.map((ra) => ({
-          role: ra.role,
-          scopeKind: ra.scopeKind,
-        })),
-      });
+      for (const [subjectId, ras] of pageRolesResult.value) {
+        rolesBySubject.set(subjectId, ras.map((ra) => ({ role: ra.role, scopeKind: ra.scopeKind })));
+      }
+    } else {
+      for (const member of items) {
+        const r = await repo.listRoleAssignments(orgUuid, member.subjectId);
+        if (!r.ok) {
+          return errorResponse("internal_error", "An unexpected error occurred", 500, requestId);
+        }
+        rolesBySubject.set(
+          member.subjectId,
+          r.value.map((ra) => ({ role: ra.role, scopeKind: ra.scopeKind })),
+        );
+      }
     }
+
+    const enriched = items.map((member) => ({
+      id: memberPublicId(member.id),
+      subjectType: member.subjectType,
+      subjectId: member.subjectId,
+      status: member.status,
+      joinedAt: member.createdAt.toISOString(),
+      roles: rolesBySubject.get(member.subjectId) ?? [],
+    }));
 
     const cursorToken = nextCursor ? encodeCursor(nextCursor.createdAt, nextCursor.id) : null;
     return successResponse({ members: enriched }, requestId, 200, cursorToken);
