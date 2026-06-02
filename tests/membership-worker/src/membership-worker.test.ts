@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { asUuid } from "@saas/db";
 import { createOrganizationService } from "@membership-worker/services/organization";
 import type { PolicyAuthorizer } from "@membership-worker/services/organization";
 import { orgPublicId, parseOrgPublicId, memberPublicId, invitationPublicId, parseInvitationPublicId } from "@membership-worker/ids";
@@ -182,7 +183,7 @@ const denyAuthorizer: PolicyAuthorizer = async () => ({ allow: false });
 
 describe("membership-worker organization service", () => {
   function bootstrapOrg(repo: ReturnType<typeof createFakeRepository>, subjectId: string, name: string, slug: string) {
-    const orgId = crypto.randomUUID();
+    const orgId = asUuid(crypto.randomUUID());
     const memberId = crypto.randomUUID();
     const roleAssignmentId = crypto.randomUUID();
     return repo.bootstrapOrganization({
@@ -201,7 +202,7 @@ describe("membership-worker organization service", () => {
       expect(createResult.ok).toBe(true);
       if (!createResult.ok) return;
 
-      const orgUuid = createResult.value.org.id;
+      const orgUuid = asUuid(createResult.value.org.id);
       const result = await service.getOrganization({ subjectId: "usr_owner", subjectType: "user" }, orgUuid, allowAuthorizer);
 
       expect(result.ok).toBe(true);
@@ -218,7 +219,7 @@ describe("membership-worker organization service", () => {
       expect(createResult.ok).toBe(true);
       if (!createResult.ok) return;
 
-      const orgUuid = createResult.value.org.id;
+      const orgUuid = asUuid(createResult.value.org.id);
       const result = await service.getOrganization({ subjectId: "usr_outsider", subjectType: "user" }, orgUuid, denyAuthorizer);
 
       expect(result.ok).toBe(false);
@@ -234,7 +235,7 @@ describe("membership-worker organization service", () => {
 
       const result = await service.getOrganization(
         { subjectId: "usr_owner", subjectType: "user" },
-        "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+        asUuid("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"),
         allowAuthorizer,
       );
 
@@ -251,7 +252,7 @@ describe("membership-worker organization service", () => {
       expect(createResult.ok).toBe(true);
       if (!createResult.ok) return;
 
-      const orgUuid = createResult.value.org.id;
+      const orgUuid = asUuid(createResult.value.org.id);
       const result = await service.getOrganization({ subjectId: "usr_owner", subjectType: "user" }, orgUuid);
 
       expect(result.ok).toBe(false);
@@ -267,7 +268,7 @@ describe("membership-worker organization service", () => {
       expect(createResult.ok).toBe(true);
       if (!createResult.ok) return;
 
-      const orgUuid = createResult.value.org.id;
+      const orgUuid = asUuid(createResult.value.org.id);
       let capturedAction: string | undefined;
       let capturedRoles: RoleAssignment[] | undefined;
 
@@ -293,7 +294,7 @@ describe("membership-worker organization service", () => {
       expect(createResult.ok).toBe(true);
       if (!createResult.ok) return;
 
-      const orgUuid = createResult.value.org.id;
+      const orgUuid = asUuid(createResult.value.org.id);
 
       // Override listRoleAssignments to simulate DB failure
       repo.listRoleAssignments = async () => ({ ok: false, error: { kind: "internal" as const, message: "db timeout" } });
@@ -656,7 +657,7 @@ describe("member-list endpoint", () => {
     repo.listRoleAssignments = async () => ({ ok: false, error: { kind: "internal" as const, message: "db timeout" } });
 
     // The handler would call listRoleAssignments first, and if it fails, return not_found
-    const rolesResult = await repo.listRoleAssignments("org-id", "usr_test");
+    const rolesResult = await repo.listRoleAssignments(asUuid("00000000-0000-0000-0000-000000000000"), "usr_test");
     expect(rolesResult.ok).toBe(false);
     // Handler maps this to 404 not_found
   });
@@ -668,17 +669,17 @@ describe("member-list endpoint", () => {
     repo.listRoleAssignments = async (orgId: string, subjectId: string) => {
       callCount++;
       if (callCount === 1) {
-        return original(orgId, subjectId);
+        return original(asUuid(orgId), subjectId);
       }
       return { ok: false, error: { kind: "internal" as const, message: "db timeout" } };
     };
 
     // First call succeeds (actor's own role lookup)
-    const actorRoles = await repo.listRoleAssignments("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", "usr_owner");
+    const actorRoles = await repo.listRoleAssignments(asUuid("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"), "usr_owner");
     expect(actorRoles.ok).toBe(true);
 
     // Second call fails (member role lookup for another user)
-    const memberRolesResult = await repo.listRoleAssignments("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", "usr_viewer");
+    const memberRolesResult = await repo.listRoleAssignments(asUuid("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"), "usr_viewer");
     expect(memberRolesResult.ok).toBe(false);
     // Handler maps this to 500 internal_error without partial data
   });

@@ -3,6 +3,7 @@ import type { AuthorizationContextRequest, AuthorizationContextResponse } from "
 import type { MembershipRepository } from "@saas/db/membership";
 import { createMembershipRepository } from "@saas/db/membership";
 import { createSqlExecutor } from "@saas/db/hyperdrive";
+import { asUuid } from "@saas/db/ids";
 import { mapRoleAssignmentsToFacts } from "../membership-facts.js";
 import { errorResponse, successResponse, validationError } from "../http.js";
 
@@ -59,7 +60,7 @@ export async function handleAuthorizationContext(
   const repo = deps?.repo ?? createMembershipRepository(executor!);
 
   try {
-    const rolesResult = await repo.listRoleAssignments(typedReq.orgId, typedReq.subject.id);
+    const rolesResult = await repo.listRoleAssignments(asUuid(typedReq.orgId), typedReq.subject.id);
     if (!rolesResult.ok) {
       return errorResponse("internal_error", "Failed to retrieve authorization context", 500, requestId);
     }

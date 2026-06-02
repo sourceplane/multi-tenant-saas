@@ -2,6 +2,7 @@ import type { Env } from "../env.js";
 import type { MembershipRepository, CreateRoleAssignmentInput, RoleAssignment } from "@saas/db/membership";
 import { createMembershipRepository } from "@saas/db/membership";
 import { createSqlExecutor } from "@saas/db/hyperdrive";
+import { asUuid, isUuid } from "@saas/db/ids";
 import { isServicePrincipalSubjectId } from "@saas/contracts/service-principal";
 import { errorResponse, successResponse, validationError } from "../http.js";
 
@@ -46,6 +47,8 @@ export async function handleCreateServicePrincipalBinding(
 
   if (typeof b.orgId !== "string" || b.orgId.length === 0) {
     errors.orgId = ["Required"];
+  } else if (!isUuid(b.orgId)) {
+    errors.orgId = ["Must be a valid UUID"];
   }
   if (typeof b.subjectId !== "string" || !isServicePrincipalSubjectId(b.subjectId)) {
     errors.subjectId = ["Must be a valid service_principal subject ID (sp_<hex32>)"];
@@ -64,7 +67,7 @@ export async function handleCreateServicePrincipalBinding(
     return validationError(requestId, errors);
   }
 
-  const orgId = b.orgId as string;
+  const orgId = asUuid(b.orgId as string);
   const subjectId = b.subjectId as string;
   const role = b.role as string;
   const scopeKind = b.scopeKind as string;
@@ -131,7 +134,7 @@ export async function handleListServicePrincipalBindings(
   const repo = deps?.repo ?? createMembershipRepository(executor!);
 
   try {
-    const result = await repo.listRoleAssignments(orgId, subjectId);
+    const result = await repo.listRoleAssignments(asUuid(orgId), subjectId);
     if (!result.ok) {
       return errorResponse("internal_error", "Failed to list role assignments", 500, requestId);
     }
@@ -170,7 +173,7 @@ export async function handleRevokeServicePrincipalBinding(
   const repo = deps?.repo ?? createMembershipRepository(executor!);
 
   try {
-    const result = await repo.revokeRoleAssignment(orgId, bindingId, new Date());
+    const result = await repo.revokeRoleAssignment(asUuid(orgId), bindingId, new Date());
     if (!result.ok) {
       if (result.error.kind === "not_found") {
         return errorResponse("not_found", "Role assignment not found", 404, requestId);

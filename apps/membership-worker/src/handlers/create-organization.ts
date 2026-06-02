@@ -7,6 +7,7 @@ import { createMembershipRepository } from "@saas/db/membership";
 import { createEventsRepository } from "@saas/db/events";
 import { successResponse, errorResponse, validationError } from "../http.js";
 import { orgPublicId, memberPublicId } from "../ids.js";
+import { asUuid } from "@saas/db/ids";
 
 const NAME_MIN = 1;
 const NAME_MAX = 100;
@@ -92,7 +93,7 @@ export async function handleCreateOrganization(
 
   const now = deps?.now ? deps.now() : new Date();
   const genId = deps?.generateId ?? (() => randomHex(16));
-  const orgId = crypto.randomUUID();
+  const orgId = asUuid(crypto.randomUUID());
   const memberId = crypto.randomUUID();
   const roleAssignmentId = crypto.randomUUID();
   const orgName = body.name as string;

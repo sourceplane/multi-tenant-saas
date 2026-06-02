@@ -1,4 +1,4 @@
-import { hexToUuid, uuidToHex } from "@saas/db/ids";
+import { hexToUuid, uuidToHex, uuidFromPublicId, type Uuid } from "@saas/db/ids";
 function randomHex(bytes: number): string {
   const buf = new Uint8Array(bytes);
   crypto.getRandomValues(buf);
@@ -19,9 +19,8 @@ export function orgPublicId(uuid: string): string {
   return `org_${uuidToHex(uuid)}`;
 }
 
-export function parseOrgPublicId(publicId: string): string | null {
-  if (!publicId.startsWith("org_")) return null;
-  return hexToUuid(publicId.slice(4));
+export function parseOrgPublicId(id: string): Uuid | null {
+  return uuidFromPublicId(id, "org");
 }
 
 export function memberPublicId(uuid: string): string {

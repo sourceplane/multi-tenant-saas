@@ -1,4 +1,5 @@
 import type { MembershipRepository, RoleAssignment } from "@saas/db/membership";
+import type { Uuid } from "@saas/db/ids";
 import { orgPublicId } from "../ids.js";
 
 export type PolicyAuthorizer = (
@@ -26,7 +27,7 @@ export function createOrganizationService(deps: OrganizationServiceDeps) {
   const { repo } = deps;
 
   return {
-    async getOrganization(actor: ActorContext, orgUuid: string, authorize?: PolicyAuthorizer): Promise<GetOrgResult> {
+    async getOrganization(actor: ActorContext, orgUuid: Uuid, authorize?: PolicyAuthorizer): Promise<GetOrgResult> {
       const rolesResult = await repo.listRoleAssignments(orgUuid, actor.subjectId);
       if (!rolesResult.ok) {
         return { ok: false, code: "not_found", message: "Organization not found", status: 404 };

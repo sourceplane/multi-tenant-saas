@@ -1,3 +1,5 @@
+import type { Uuid } from "../ids/index.js";
+
 export type { SqlExecutor, SqlExecutorResult, SqlRow } from "../hyperdrive/executor.js";
 
 export type MembershipRepositoryError =
@@ -69,7 +71,7 @@ export interface CreateOrganizationInput {
 
 export interface CreateOrganizationMemberInput {
   id: string;
-  orgId: string;
+  orgId: Uuid;
   subjectId: string;
   subjectType: string;
   createdAt: Date;
@@ -77,7 +79,7 @@ export interface CreateOrganizationMemberInput {
 
 export interface CreateInvitationInput {
   id: string;
-  orgId: string;
+  orgId: Uuid;
   email: string;
   emailLower: string;
   role: string;
@@ -89,7 +91,7 @@ export interface CreateInvitationInput {
 
 export interface CreateRoleAssignmentInput {
   id: string;
-  orgId: string;
+  orgId: Uuid;
   subjectId: string;
   subjectType: string;
   role: string;
@@ -121,7 +123,7 @@ export interface PagedResult<T> {
 
 export interface AcceptInvitationInput {
   tokenHash: string;
-  orgId: string;
+  orgId: Uuid;
   emailLower: string;
   memberId: string;
   roleAssignmentId: string;
@@ -140,24 +142,24 @@ export interface MembershipRepository {
   bootstrapOrganization(input: BootstrapOrganizationInput): Promise<MembershipResult<{ org: Organization; member: OrganizationMember; roleAssignment: RoleAssignment }>>;
 
   createMember(input: CreateOrganizationMemberInput): Promise<MembershipResult<OrganizationMember>>;
-  getMemberById(orgId: string, memberId: string): Promise<MembershipResult<OrganizationMember>>;
-  listMembers(orgId: string): Promise<MembershipResult<OrganizationMember[]>>;
-  listMembersPaged(orgId: string, params: PageQueryParams): Promise<MembershipResult<PagedResult<OrganizationMember>>>;
-  removeMember(orgId: string, memberId: string, updatedAt: Date): Promise<MembershipResult<OrganizationMember>>;
+  getMemberById(orgId: Uuid, memberId: string): Promise<MembershipResult<OrganizationMember>>;
+  listMembers(orgId: Uuid): Promise<MembershipResult<OrganizationMember[]>>;
+  listMembersPaged(orgId: Uuid, params: PageQueryParams): Promise<MembershipResult<PagedResult<OrganizationMember>>>;
+  removeMember(orgId: Uuid, memberId: string, updatedAt: Date): Promise<MembershipResult<OrganizationMember>>;
 
   createInvitation(input: CreateInvitationInput): Promise<MembershipResult<OrganizationInvitation>>;
-  getInvitationById(orgId: string, invitationId: string): Promise<MembershipResult<OrganizationInvitation>>;
+  getInvitationById(orgId: Uuid, invitationId: string): Promise<MembershipResult<OrganizationInvitation>>;
   getInvitationByTokenHash(tokenHash: string): Promise<MembershipResult<OrganizationInvitation>>;
-  listInvitations(orgId: string): Promise<MembershipResult<OrganizationInvitation[]>>;
-  listInvitationsPaged(orgId: string, params: PageQueryParams): Promise<MembershipResult<PagedResult<OrganizationInvitation>>>;
-  revokeInvitation(orgId: string, invitationId: string, revokedAt: Date): Promise<MembershipResult<OrganizationInvitation>>;
+  listInvitations(orgId: Uuid): Promise<MembershipResult<OrganizationInvitation[]>>;
+  listInvitationsPaged(orgId: Uuid, params: PageQueryParams): Promise<MembershipResult<PagedResult<OrganizationInvitation>>>;
+  revokeInvitation(orgId: Uuid, invitationId: string, revokedAt: Date): Promise<MembershipResult<OrganizationInvitation>>;
   acceptInvitation(input: AcceptInvitationInput): Promise<MembershipResult<{ invitation: OrganizationInvitation; member: OrganizationMember; roleAssignment: RoleAssignment }>>;
 
   createRoleAssignment(input: CreateRoleAssignmentInput): Promise<MembershipResult<RoleAssignment>>;
-  listRoleAssignments(orgId: string, subjectId: string): Promise<MembershipResult<RoleAssignment[]>>;
-  revokeRoleAssignment(orgId: string, assignmentId: string, revokedAt: Date): Promise<MembershipResult<RoleAssignment>>;
-  revokeAllRoleAssignments(orgId: string, subjectId: string, revokedAt: Date): Promise<MembershipResult<RoleAssignment[]>>;
-  countActiveOwners(orgId: string): Promise<MembershipResult<number>>;
+  listRoleAssignments(orgId: Uuid, subjectId: string): Promise<MembershipResult<RoleAssignment[]>>;
+  revokeRoleAssignment(orgId: Uuid, assignmentId: string, revokedAt: Date): Promise<MembershipResult<RoleAssignment>>;
+  revokeAllRoleAssignments(orgId: Uuid, subjectId: string, revokedAt: Date): Promise<MembershipResult<RoleAssignment[]>>;
+  countActiveOwners(orgId: Uuid): Promise<MembershipResult<number>>;
 
   /**
    * Counts billable members for an organization for the purposes of the
@@ -177,5 +179,5 @@ export interface MembershipRepository {
    * The helper performs the count in a single parameterized SQL statement
    * to avoid paging entire tables for billing decisions.
    */
-  countBillableMembers(orgId: string, now: Date): Promise<MembershipResult<number>>;
+  countBillableMembers(orgId: Uuid, now: Date): Promise<MembershipResult<number>>;
 }
