@@ -157,6 +157,14 @@ export interface MembershipRepository {
 
   createRoleAssignment(input: CreateRoleAssignmentInput): Promise<MembershipResult<RoleAssignment>>;
   listRoleAssignments(orgId: Uuid, subjectId: string): Promise<MembershipResult<RoleAssignment[]>>;
+  /**
+   * Batched reverse lookup: all active role assignments for a set of subjects in
+   * one query, returned as a `subjectId -> RoleAssignment[]` map (every queried
+   * subject is present, possibly empty). Avoids the per-member N+1 in member
+   * listing (PERF3 / task 0132). Optional so callers/fakes degrade gracefully to
+   * per-subject `listRoleAssignments`; the live repository always implements it.
+   */
+  listRoleAssignmentsForSubjects?(orgId: Uuid, subjectIds: string[]): Promise<MembershipResult<Map<string, RoleAssignment[]>>>;
   revokeRoleAssignment(orgId: Uuid, assignmentId: string, revokedAt: Date): Promise<MembershipResult<RoleAssignment>>;
   revokeAllRoleAssignments(orgId: Uuid, subjectId: string, revokedAt: Date): Promise<MembershipResult<RoleAssignment[]>>;
   countActiveOwners(orgId: Uuid): Promise<MembershipResult<number>>;

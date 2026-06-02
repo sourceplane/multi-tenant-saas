@@ -178,19 +178,6 @@ export interface CheckEntitlementDeps {
   generateId?: () => string;
 }
 
-function defaultRepoFactory(
-  env: Env,
-): Pick<BillingRepository, "getEntitlement"> {
-  const executor = createSqlExecutor(env.SOURCEPLANE_DB!);
-  return createBillingRepository(executor);
-}
-
-function defaultRecorderFactory(
-  env: Env,
-): Pick<EntitlementDecisionRepository, "recordDecisionObservation"> {
-  const executor = createSqlExecutor(env.SOURCEPLANE_DB!);
-  return createEntitlementDecisionRepository(executor);
-}
 
 /**
  * Emit a counts-only observation for a produced entitlement decision.
@@ -260,7 +247,18 @@ export async function handleCheckEntitlement(
     return validationError(requestId, parsed.error);
   }
 
-  const repo = (deps.repoFactory ?? defaultRepoFactory)(env);
+  // PERF3 (task 0132): when not injected, the repo and the decision-observation
+  // recorder share ONE executor (connection) per request instead of opening two
+  // separate Hyperdrive clients.
+  let sharedExecutor: ReturnType<typeof createSqlExecutor> | null = null;
+  const getSharedExecutor = () => {
+    if (!sharedExecutor) sharedExecutor = createSqlExecutor(env.SOURCEPLANE_DB!);
+    return sharedExecutor;
+  };
+
+  const repo = deps.repoFactory
+    ? deps.repoFactory(env)
+    : createBillingRepository(getSharedExecutor());
   const outcome = await decideEntitlement(repo, parsed);
 
   if (outcome.kind === "repo_error") {
@@ -269,7 +267,9 @@ export async function handleCheckEntitlement(
 
   // Best-effort, non-blocking decision observation. A recording failure must
   // NOT change the response — recordDecisionObservation swallows all errors.
-  const recorder = (deps.recorderFactory ?? defaultRecorderFactory)(env);
+  const recorder = deps.recorderFactory
+    ? deps.recorderFactory(env)
+    : createEntitlementDecisionRepository(getSharedExecutor());
   const now = deps.now ? deps.now() : new Date();
   const genId = deps.generateId ?? generateUuid;
   await recordDecisionObservation(recorder, parsed, outcome.body, now, genId);
