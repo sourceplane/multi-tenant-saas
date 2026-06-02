@@ -1,4 +1,5 @@
 export type { SqlExecutor, SqlExecutorResult, SqlRow } from "../hyperdrive/executor.js";
+import type { Uuid } from "../ids/index.js";
 
 // ── Shared scope types ──────────────────────────────────────
 
@@ -141,7 +142,9 @@ export interface CreateSecretMetadataInput {
   displayName?: string;
   rotationPolicy?: string;
   expiresAt?: Date;
-  createdBy: string;
+  /** UUID column `config.secret_metadata.created_by` — must be a decoded `Uuid`,
+   * not a public `usr_<hex>` id. Branding makes a missing decode a compile error. */
+  createdBy: Uuid;
   /** JSON-serialized ciphertext envelope. Write-only — never returned. */
   ciphertextEnvelope?: string;
 }

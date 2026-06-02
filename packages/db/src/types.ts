@@ -1,3 +1,7 @@
+// Branded UUID identifier + decode helpers live in `./ids` (`@saas/db/ids`).
+export { isUuid, asUuid, uuidFromPublicId } from "./ids/index.js";
+export type { Uuid } from "./ids/index.js";
+
 export const BOUNDED_CONTEXTS = [
   "control",
   "identity",
