@@ -35,7 +35,21 @@ describe("buildBaseCommands", () => {
     expect(byId.has("nav.billing")).toBe(true);
     const billing = byId.get("nav.billing")!;
     expect(billing.kind).toBe("navigate");
-    if (billing.kind === "navigate") expect(billing.to).toBe("/orgs/acme/billing");
+    // Billing now lives under the dedicated Settings surface.
+    if (billing.kind === "navigate") expect(billing.to).toBe("/orgs/acme/settings/billing");
+  });
+
+  it("points org-administration commands at the Settings surface", () => {
+    const cmds = buildBaseCommands({ ...baseCtx, orgSlug: "acme" });
+    const byId = new Map(cmds.map((c) => [c.id, c]));
+    for (const id of ["nav.members", "nav.webhooks", "nav.api-keys", "nav.audit", "nav.config"]) {
+      const cmd = byId.get(id)!;
+      expect(cmd.kind).toBe("navigate");
+      if (cmd.kind === "navigate") expect(cmd.to).toMatch(/^\/orgs\/acme\/settings\//);
+    }
+    // Create flows for moved resources target the Settings paths too.
+    const invite = byId.get("create.invitation")!;
+    if (invite.kind === "navigate") expect(invite.to).toBe("/orgs/acme/settings/invitations?new=1");
   });
 
   it("adds project-scoped commands only when both org and project slugs are present", () => {

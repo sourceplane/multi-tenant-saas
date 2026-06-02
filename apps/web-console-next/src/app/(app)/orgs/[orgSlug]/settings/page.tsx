@@ -27,7 +27,7 @@ function Inner({ org }: { org: { id: string; name: string; slug: string } }) {
   return (
     <div className="space-y-5">
       <header>
-        <h1 className="text-xl font-semibold tracking-tight">Organization settings</h1>
+        <h1 className="text-xl font-semibold tracking-tight">General</h1>
         <p className="text-sm text-muted-foreground">Identity and lifecycle for this organization.</p>
       </header>
 
