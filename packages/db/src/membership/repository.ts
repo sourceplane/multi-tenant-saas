@@ -76,7 +76,19 @@ function parseJsonColumn(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
-function safeError(message: string): MembershipResult<never> {
+function safeError(message: string, cause?: unknown): MembershipResult<never> {
+  // Surface the underlying DB error so failures are diagnosable in `wrangler
+  // tail` instead of silently collapsing into an opaque internal error. Only
+  // the error's name/message/code are logged — never query parameters — so no
+  // ids, tokens, or secret material leak into logs.
+  if (cause !== undefined) {
+    const e = cause as { name?: unknown; message?: unknown; code?: unknown };
+    console.error(`[membership-repo] ${message}`, {
+      name: typeof e?.name === "string" ? e.name : undefined,
+      message: typeof e?.message === "string" ? e.message : undefined,
+      code: typeof e?.code === "string" ? e.code : undefined,
+    });
+  }
   return { ok: false, error: { kind: "internal", message } };
 }
 
@@ -108,7 +120,7 @@ export function createMembershipRepository(executor: SqlExecutor): MembershipRep
         if (isUniqueViolation(err)) {
           return { ok: false, error: { kind: "conflict", entity: "organization" } };
         }
-        return safeError("Failed to create organization");
+        return safeError("Failed to create organization", err);
       }
     },
 
@@ -122,8 +134,8 @@ export function createMembershipRepository(executor: SqlExecutor): MembershipRep
           return { ok: false, error: { kind: "not_found" } };
         }
         return { ok: true, value: mapOrganization(result.rows[0]!) };
-      } catch {
-        return safeError("Failed to get organization");
+      } catch (err) {
+        return safeError("Failed to get organization", err);
       }
     },
 
@@ -137,8 +149,8 @@ export function createMembershipRepository(executor: SqlExecutor): MembershipRep
           return { ok: false, error: { kind: "not_found" } };
         }
         return { ok: true, value: mapOrganization(result.rows[0]!) };
-      } catch {
-        return safeError("Failed to get organization by slug");
+      } catch (err) {
+        return safeError("Failed to get organization by slug", err);
       }
     },
 
@@ -151,8 +163,8 @@ export function createMembershipRepository(executor: SqlExecutor): MembershipRep
           [subjectId],
         );
         return { ok: true, value: result.rows.map(mapOrganization) };
-      } catch {
-        return safeError("Failed to list organizations for subject");
+      } catch (err) {
+        return safeError("Failed to list organizations for subject", err);
       }
     },
 
@@ -186,8 +198,8 @@ export function createMembershipRepository(executor: SqlExecutor): MembershipRep
           nextCursor = { createdAt: last.createdAt.toISOString(), id: last.id };
         }
         return { ok: true, value: { items: rows, nextCursor } };
-      } catch {
-        return safeError("Failed to list organizations for subject");
+      } catch (err) {
+        return safeError("Failed to list organizations for subject", err);
       }
     },
 
@@ -243,7 +255,7 @@ export function createMembershipRepository(executor: SqlExecutor): MembershipRep
         if (isUniqueViolation(err)) {
           return { ok: false, error: { kind: "conflict", entity: "organization" } };
         }
-        return safeError("Failed to bootstrap organization");
+        return safeError("Failed to bootstrap organization", err);
       }
     },
 
@@ -264,7 +276,7 @@ export function createMembershipRepository(executor: SqlExecutor): MembershipRep
         if (isUniqueViolation(err)) {
           return { ok: false, error: { kind: "conflict", entity: "organization_member" } };
         }
-        return safeError("Failed to create member");
+        return safeError("Failed to create member", err);
       }
     },
 
@@ -282,8 +294,8 @@ export function createMembershipRepository(executor: SqlExecutor): MembershipRep
           return { ok: false, error: { kind: "removed" } };
         }
         return { ok: true, value: member };
-      } catch {
-        return safeError("Failed to get member");
+      } catch (err) {
+        return safeError("Failed to get member", err);
       }
     },
 
@@ -294,8 +306,8 @@ export function createMembershipRepository(executor: SqlExecutor): MembershipRep
           [orgId],
         );
         return { ok: true, value: result.rows.map(mapMember) };
-      } catch {
-        return safeError("Failed to list members");
+      } catch (err) {
+        return safeError("Failed to list members", err);
       }
     },
 
@@ -327,8 +339,8 @@ export function createMembershipRepository(executor: SqlExecutor): MembershipRep
           nextCursor = { createdAt: last.createdAt.toISOString(), id: last.id };
         }
         return { ok: true, value: { items: rows, nextCursor } };
-      } catch {
-        return safeError("Failed to list members");
+      } catch (err) {
+        return safeError("Failed to list members", err);
       }
     },
 
@@ -345,8 +357,8 @@ export function createMembershipRepository(executor: SqlExecutor): MembershipRep
           return { ok: false, error: { kind: "not_found" } };
         }
         return { ok: true, value: mapMember(result.rows[0]!) };
-      } catch {
-        return safeError("Failed to remove member");
+      } catch (err) {
+        return safeError("Failed to remove member", err);
       }
     },
 
@@ -367,7 +379,7 @@ export function createMembershipRepository(executor: SqlExecutor): MembershipRep
         if (isUniqueViolation(err)) {
           return { ok: false, error: { kind: "conflict", entity: "invitation" } };
         }
-        return safeError("Failed to create invitation");
+        return safeError("Failed to create invitation", err);
       }
     },
 
@@ -392,8 +404,8 @@ export function createMembershipRepository(executor: SqlExecutor): MembershipRep
           return { ok: false, error: { kind: "expired" } };
         }
         return { ok: true, value: inv };
-      } catch {
-        return safeError("Failed to get invitation");
+      } catch (err) {
+        return safeError("Failed to get invitation", err);
       }
     },
 
@@ -418,8 +430,8 @@ export function createMembershipRepository(executor: SqlExecutor): MembershipRep
           return { ok: false, error: { kind: "expired" } };
         }
         return { ok: true, value: inv };
-      } catch {
-        return safeError("Failed to get invitation by token");
+      } catch (err) {
+        return safeError("Failed to get invitation by token", err);
       }
     },
 
@@ -431,8 +443,8 @@ export function createMembershipRepository(executor: SqlExecutor): MembershipRep
           [orgId],
         );
         return { ok: true, value: result.rows.map(mapInvitation) };
-      } catch {
-        return safeError("Failed to list invitations");
+      } catch (err) {
+        return safeError("Failed to list invitations", err);
       }
     },
 
@@ -466,8 +478,8 @@ export function createMembershipRepository(executor: SqlExecutor): MembershipRep
           nextCursor = { createdAt: last.createdAt.toISOString(), id: last.id };
         }
         return { ok: true, value: { items: rows, nextCursor } };
-      } catch {
-        return safeError("Failed to list invitations");
+      } catch (err) {
+        return safeError("Failed to list invitations", err);
       }
     },
 
@@ -484,8 +496,8 @@ export function createMembershipRepository(executor: SqlExecutor): MembershipRep
           return { ok: false, error: { kind: "not_found" } };
         }
         return { ok: true, value: mapInvitation(result.rows[0]!) };
-      } catch {
-        return safeError("Failed to revoke invitation");
+      } catch (err) {
+        return safeError("Failed to revoke invitation", err);
       }
     },
 
@@ -565,7 +577,7 @@ export function createMembershipRepository(executor: SqlExecutor): MembershipRep
         if (isUniqueViolation(err)) {
           return { ok: false, error: { kind: "conflict", entity: "organization_member" } };
         }
-        return safeError("Failed to accept invitation");
+        return safeError("Failed to accept invitation", err);
       }
     },
 
@@ -586,7 +598,7 @@ export function createMembershipRepository(executor: SqlExecutor): MembershipRep
         if (isUniqueViolation(err)) {
           return { ok: false, error: { kind: "conflict", entity: "role_assignment" } };
         }
-        return safeError("Failed to create role assignment");
+        return safeError("Failed to create role assignment", err);
       }
     },
 
@@ -597,8 +609,8 @@ export function createMembershipRepository(executor: SqlExecutor): MembershipRep
           [orgId, subjectId],
         );
         return { ok: true, value: result.rows.map(mapRoleAssignment) };
-      } catch {
-        return safeError("Failed to list role assignments");
+      } catch (err) {
+        return safeError("Failed to list role assignments", err);
       }
     },
 
@@ -615,8 +627,8 @@ export function createMembershipRepository(executor: SqlExecutor): MembershipRep
           return { ok: false, error: { kind: "not_found" } };
         }
         return { ok: true, value: mapRoleAssignment(result.rows[0]!) };
-      } catch {
-        return safeError("Failed to revoke role assignment");
+      } catch (err) {
+        return safeError("Failed to revoke role assignment", err);
       }
     },
 
@@ -630,8 +642,8 @@ export function createMembershipRepository(executor: SqlExecutor): MembershipRep
           [orgId, subjectId, revokedAt.toISOString()],
         );
         return { ok: true, value: result.rows.map(mapRoleAssignment) };
-      } catch {
-        return safeError("Failed to revoke all role assignments");
+      } catch (err) {
+        return safeError("Failed to revoke all role assignments", err);
       }
     },
 
@@ -651,8 +663,8 @@ export function createMembershipRepository(executor: SqlExecutor): MembershipRep
         );
         const cnt = Number(result.rows[0]?.cnt ?? 0);
         return { ok: true, value: cnt };
-      } catch {
-        return safeError("Failed to count active owners");
+      } catch (err) {
+        return safeError("Failed to count active owners", err);
       }
     },
 
@@ -683,8 +695,8 @@ export function createMembershipRepository(executor: SqlExecutor): MembershipRep
         );
         const cnt = Number(result.rows[0]?.cnt ?? 0);
         return { ok: true, value: cnt };
-      } catch {
-        return safeError("Failed to count billable members");
+      } catch (err) {
+        return safeError("Failed to count billable members", err);
       }
     },
   };
