@@ -30,15 +30,16 @@ describe("resolveBearer", () => {
   }) {
     const spId = crypto.randomUUID();
     const orgId = crypto.randomUUID();
+    const createdBy = crypto.randomUUID();
     const rawKey = "sps_key_" + crypto.randomBytes(32).toString("hex");
     const keyHash = await hashSha256(rawKey);
 
     await repo.createServicePrincipal({
       id: spId,
       orgId,
-      projectId: "proj-123",
+      projectId: "00000000-0000-0000-0000-0000000000aa",
       displayName: "CI Bot",
-      createdBy: "test",
+      createdBy,
       createdAt: fixedNow,
     });
 
@@ -50,7 +51,7 @@ describe("resolveBearer", () => {
       keyPrefix: rawKey.slice(0, 12),
       keyHash,
       label: "test-key",
-      createdBy: "test",
+      createdBy,
       createdAt: fixedNow,
     };
     await repo.createApiKey(key);
@@ -120,7 +121,7 @@ describe("resolveBearer", () => {
       expect(result.actorType).toBe("service_principal");
       expect(result.actorId).toBe(`sp_${spId.replace(/-/g, "")}`);
       expect(result.orgId).toBe(orgId);
-      expect(result.projectId).toBe("proj-123");
+      expect(result.projectId).toBe("00000000-0000-0000-0000-0000000000aa");
       expect(result.displayName).toBe("CI Bot");
       expect(result.session).toBeUndefined();
       expect(result.user).toBeUndefined();
