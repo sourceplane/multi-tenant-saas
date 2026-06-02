@@ -21,6 +21,7 @@ import type {
   UpsertNotificationPreferenceInput,
 } from "@saas/db/notifications";
 import type { NotificationProvider, ProviderSendContext, ProviderSendResult } from "@saas/contracts/notifications";
+import { asUuid } from "@saas/db";
 
 if (!(globalThis as Record<string, unknown>).crypto) {
   (globalThis as Record<string, unknown>).crypto = crypto;
@@ -189,8 +190,9 @@ function createFailingProvider(reason = "smtp_unreachable"): NotificationProvide
 
 const fixedNow = new Date("2026-03-01T12:00:00.000Z");
 const fakeEnv: Env = { ENVIRONMENT: "test", NOTIFICATIONS_PROVIDER: "local-debug" };
+const ORG_UUID = asUuid("11111111-1111-1111-1111-111111111111");
 const baseRequest = {
-  orgId: "11111111-1111-1111-1111-111111111111",
+  orgId: ORG_UUID,
   category: "invitation" as const,
   templateKey: "invitation.created",
   templateData: { inviteeName: "Ada" },

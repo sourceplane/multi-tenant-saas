@@ -1,4 +1,5 @@
 export type { SqlExecutor, SqlExecutorResult, SqlRow } from "../hyperdrive/executor.js";
+import type { Uuid } from "../ids/index.js";
 
 // ---------------------------------------------------------------------------
 // Errors
@@ -76,7 +77,7 @@ export interface StoredNotificationSuppression {
 
 export interface CreateNotificationInput {
   id: string;
-  orgId: string;
+  orgId: Uuid;
   category: string;
   templateKey: string;
   templateData: Record<string, unknown>;
@@ -114,7 +115,7 @@ export interface MarkNotificationStatusInput {
 
 export interface UpsertNotificationPreferenceInput {
   id: string;
-  orgId: string;
+  orgId: Uuid;
   subjectKind: string;
   subjectId: string;
   channel: string;
@@ -124,7 +125,7 @@ export interface UpsertNotificationPreferenceInput {
 
 export interface CreateNotificationSuppressionInput {
   id: string;
-  orgId: string;
+  orgId: Uuid;
   channel: string;
   address: string;
   reason: string;
@@ -143,7 +144,7 @@ export interface NotificationsRepository {
     id: string,
   ): Promise<NotificationsResult<StoredNotification>>;
   findNotificationByIdempotencyKey(
-    orgId: string,
+    orgId: Uuid,
     idempotencyKey: string,
   ): Promise<NotificationsResult<StoredNotification>>;
   markNotificationStatus(
@@ -158,7 +159,7 @@ export interface NotificationsRepository {
   ): Promise<NotificationsResult<StoredNotificationAttempt[]>>;
 
   listPreferences(
-    orgId: string,
+    orgId: Uuid,
     subjectKind: string,
     subjectId: string,
     channel: string | null,
@@ -168,7 +169,7 @@ export interface NotificationsRepository {
   ): Promise<NotificationsResult<StoredNotificationPreference>>;
 
   isSuppressed(
-    orgId: string,
+    orgId: Uuid,
     channel: string,
     address: string,
   ): Promise<NotificationsResult<boolean>>;
