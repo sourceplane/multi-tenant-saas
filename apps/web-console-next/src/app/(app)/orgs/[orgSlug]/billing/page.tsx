@@ -12,7 +12,7 @@ import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@
 import { PreconditionInsight } from "@/components/precondition/insight";
 import { wrap } from "@/lib/api";
 import { useSession } from "@/lib/session";
-import { useAsync } from "@/lib/use-async";
+import { useApiQuery, qk } from "@/lib/query";
 
 export default function BillingPage() {
   const params = useParams<{ orgSlug: string }>();
@@ -22,9 +22,9 @@ export default function BillingPage() {
 
 function Inner({ orgId }: { orgId: string }) {
   const { client } = useSession();
-  const summary = useAsync(() => wrap(() => client.billing.getSummary(orgId)), [client, orgId]);
-  const ents = useAsync(() => wrap(() => client.billing.getEntitlements(orgId)), [client, orgId]);
-  const inv = useAsync(() => wrap(() => client.billing.listInvoices(orgId)), [client, orgId]);
+  const summary = useApiQuery(qk.billingSummary(orgId), () => wrap(() => client.billing.getSummary(orgId)));
+  const ents = useApiQuery(qk.entitlements(orgId), () => wrap(() => client.billing.getEntitlements(orgId)));
+  const inv = useApiQuery(qk.invoices(orgId), () => wrap(() => client.billing.listInvoices(orgId)));
 
   return (
     <div className="space-y-6">

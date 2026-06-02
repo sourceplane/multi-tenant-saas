@@ -12,7 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { wrap } from "@/lib/api";
 import { useSession } from "@/lib/session";
-import { useAsync } from "@/lib/use-async";
+import { useApiQuery, qk } from "@/lib/query";
 import { useToast } from "@/components/ui/toast";
 
 export default function MembersPage() {
@@ -24,9 +24,8 @@ export default function MembersPage() {
 function Inner({ orgId }: { orgId: string }) {
   const { client } = useSession();
   const { toast } = useToast();
-  const members = useAsync(
-    () => wrap(async () => (await client.memberships.listMembers(orgId)).members),
-    [client, orgId],
+  const members = useApiQuery(qk.members(orgId), () =>
+    wrap(async () => (await client.memberships.listMembers(orgId)).members),
   );
 
   return (

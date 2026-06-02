@@ -16,8 +16,9 @@ import { ZodForm } from "@/components/ui/zod-form";
 import { PreconditionInsight } from "@/components/precondition/insight";
 import { ArchiveMenu } from "@/components/settings/archive-menu";
 import { removeById } from "@/components/settings/archive";
+import { useQueryClient } from "@tanstack/react-query";
 import { useSession } from "@/lib/session";
-import { useAsync } from "@/lib/use-async";
+import { useApiQuery, qk, usePrefetch } from "@/lib/query";
 import { useToast } from "@/components/ui/toast";
 import { wrap, type ApiErrorBody } from "@/lib/api";
 import type { PublicProject } from "@saas/contracts/projects";
@@ -36,25 +37,24 @@ export default function ProjectsPage() {
 function Inner({ orgId, orgSlug }: { orgId: string; orgSlug: string }) {
   const { client } = useSession();
   const { toast } = useToast();
-  const projects = useAsync(
-    () => wrap(async () => (await client.projects.list(orgId)).projects),
-    [client, orgId],
+  const qc = useQueryClient();
+  const prefetch = usePrefetch();
+  const key = qk.projects(orgId);
+  const projects = useApiQuery(key, () =>
+    wrap(async () => (await client.projects.list(orgId)).projects),
   );
   const [open, setOpen] = React.useState(false);
   const [precondition, setPrecondition] = React.useState<ApiErrorBody | null>(null);
 
-  // Local mirror of the fetched list so archive can mutate optimistically.
-  const [items, setItems] = React.useState<PublicProject[]>([]);
-  React.useEffect(() => {
-    if (projects.data) setItems(projects.data);
-  }, [projects.data]);
+  // The query cache is the source of truth; archive mutates it optimistically.
+  const items = projects.data ?? [];
 
   const archive = async (project: PublicProject) => {
-    const previous = items;
-    setItems((cur) => removeById(cur, project.id)); // optimistic
+    const previous = qc.getQueryData<PublicProject[]>(key);
+    qc.setQueryData<PublicProject[]>(key, (cur) => removeById(cur ?? [], project.id)); // optimistic
     const r = await wrap(() => client.projects.archive(orgId, project.id));
     if (!r.ok) {
-      setItems(previous); // rollback
+      qc.setQueryData<PublicProject[]>(key, previous); // rollback
       toast({ kind: "error", title: "Archive failed", description: r.error.message });
       return;
     }
@@ -152,7 +152,15 @@ function Inner({ orgId, orgSlug }: { orgId: string; orgSlug: string }) {
                   onConfirm={() => archive(p)}
                 />
               </div>
-              <Link href={`/orgs/${orgSlug}/projects/${p.slug}/environments`} className="group block">
+              <Link
+                href={`/orgs/${orgSlug}/projects/${p.slug}/environments`}
+                className="group block"
+                onMouseEnter={() =>
+                  prefetch(qk.environments(orgId, p.id), () =>
+                    wrap(async () => (await client.environments.list(orgId, p.id)).environments),
+                  )
+                }
+              >
                 <Card className="h-full transition-shadow group-hover:shadow-md group-hover:border-primary/40">
                   <CardHeader>
                     <div className="flex items-center justify-between gap-2 pr-8">

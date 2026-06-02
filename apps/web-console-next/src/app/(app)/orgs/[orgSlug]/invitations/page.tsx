@@ -15,7 +15,7 @@ import { ZodForm } from "@/components/ui/zod-form";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { PreconditionInsight } from "@/components/precondition/insight";
 import { useSession } from "@/lib/session";
-import { useAsync } from "@/lib/use-async";
+import { useApiQuery, qk } from "@/lib/query";
 import { useToast } from "@/components/ui/toast";
 import { ORGANIZATION_ROLES } from "@saas/contracts/membership";
 import { wrap, type ApiErrorBody } from "@/lib/api";
@@ -34,9 +34,8 @@ export default function InvitationsPage() {
 function Inner({ orgId }: { orgId: string }) {
   const { client } = useSession();
   const { toast } = useToast();
-  const invs = useAsync(
-    () => wrap(async () => (await client.memberships.listInvitations(orgId)).invitations),
-    [client, orgId],
+  const invs = useApiQuery(qk.invitations(orgId), () =>
+    wrap(async () => (await client.memberships.listInvitations(orgId)).invitations),
   );
   const [open, setOpen] = React.useState(false);
   const [precondition, setPrecondition] = React.useState<ApiErrorBody | null>(null);

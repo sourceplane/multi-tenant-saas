@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/table";
 import { useSession } from "@/lib/session";
 import { useAsync } from "@/lib/use-async";
+import { useApiQuery, qk } from "@/lib/query";
 import { wrap } from "@/lib/api";
 import { RotateSecretDialog } from "@/components/webhooks/rotate-secret-dialog";
 import { EditEndpointDialog } from "@/components/webhooks/edit-endpoint-dialog";
@@ -66,9 +67,8 @@ function Inner({
 }) {
   const { client } = useSession();
   const router = useRouter();
-  const endpoints = useAsync(
-    () => wrap(async () => (await client.webhooks.listEndpoints(orgId)).endpoints),
-    [client, orgId],
+  const endpoints = useApiQuery(qk.webhooks(orgId), () =>
+    wrap(async () => (await client.webhooks.listEndpoints(orgId)).endpoints),
   );
   const [rotateOpen, setRotateOpen] = React.useState(false);
   const [editOpen, setEditOpen] = React.useState(false);

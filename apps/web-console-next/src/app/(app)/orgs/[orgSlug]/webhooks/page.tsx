@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { useSession } from "@/lib/session";
-import { useAsync } from "@/lib/use-async";
+import { useApiQuery, qk } from "@/lib/query";
 import { wrap } from "@/lib/api";
 import { CreateEndpointDialog } from "@/components/webhooks/create-endpoint-dialog";
 
@@ -29,9 +29,8 @@ export default function WebhooksListPage() {
 function Inner({ orgId, orgSlug }: { orgId: string; orgSlug: string }) {
   const { client } = useSession();
   const router = useRouter();
-  const endpoints = useAsync(
-    () => wrap(async () => (await client.webhooks.listEndpoints(orgId)).endpoints),
-    [client, orgId],
+  const endpoints = useApiQuery(qk.webhooks(orgId), () =>
+    wrap(async () => (await client.webhooks.listEndpoints(orgId)).endpoints),
   );
   const [createOpen, setCreateOpen] = React.useState(false);
 

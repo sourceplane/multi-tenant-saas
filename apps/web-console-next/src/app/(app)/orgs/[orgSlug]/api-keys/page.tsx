@@ -23,7 +23,7 @@ import { ZodForm } from "@/components/ui/zod-form";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { PreconditionInsight } from "@/components/precondition/insight";
 import { useSession } from "@/lib/session";
-import { useAsync } from "@/lib/use-async";
+import { useApiQuery, qk } from "@/lib/query";
 import { useToast } from "@/components/ui/toast";
 import { wrap, type ApiErrorBody } from "@/lib/api";
 import { ORGANIZATION_ROLES } from "@saas/contracts/membership";
@@ -42,9 +42,8 @@ export default function ApiKeysPage() {
 function Inner({ orgId }: { orgId: string }) {
   const { client } = useSession();
   const { toast } = useToast();
-  const keys = useAsync(
-    () => wrap(async () => (await client.apiKeys.list(orgId)).apiKeys),
-    [client, orgId],
+  const keys = useApiQuery(qk.apiKeys(orgId), () =>
+    wrap(async () => (await client.apiKeys.list(orgId)).apiKeys),
   );
   const [open, setOpen] = React.useState(false);
   const [reveal, setReveal] = React.useState<{ label: string; secret: string } | null>(null);

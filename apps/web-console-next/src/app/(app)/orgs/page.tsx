@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { ZodForm } from "@/components/ui/zod-form";
 import { PreconditionInsight } from "@/components/precondition/insight";
 import { useSession } from "@/lib/session";
-import { useAsync } from "@/lib/use-async";
+import { useApiQuery, qk, usePrefetch } from "@/lib/query";
 import { useToast } from "@/components/ui/toast";
 import { wrap, type ApiErrorBody } from "@/lib/api";
 
@@ -28,9 +28,9 @@ const schema = z.object({
 export default function OrgsPage() {
   const { client } = useSession();
   const { toast } = useToast();
-  const orgs = useAsync(
-    () => wrap(async () => (await client.organizations.list()).organizations),
-    [client],
+  const prefetch = usePrefetch();
+  const orgs = useApiQuery(qk.orgs(), () =>
+    wrap(async () => (await client.organizations.list()).organizations),
   );
   const [open, setOpen] = React.useState(false);
   const [precondition, setPrecondition] = React.useState<ApiErrorBody | null>(null);
@@ -131,7 +131,16 @@ export default function OrgsPage() {
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {orgs.data.map((o) => (
-            <Link key={o.id} href={`/orgs/${o.slug}/projects`} className="group">
+            <Link
+              key={o.id}
+              href={`/orgs/${o.slug}/projects`}
+              className="group"
+              onMouseEnter={() =>
+                prefetch(qk.projects(o.id), () =>
+                  wrap(async () => (await client.projects.list(o.id)).projects),
+                )
+              }
+            >
               <Card className="h-full transition-shadow group-hover:shadow-md group-hover:border-primary/40">
                 <CardHeader>
                   <div className="flex items-center gap-2">
