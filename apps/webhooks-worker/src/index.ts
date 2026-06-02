@@ -38,4 +38,4 @@ export default {
   },
 } satisfies ExportedHandler<Env>;
 
-// perf(db): rebuilt to adopt module-scoped connection reuse (task 0134).
+// perf(db): reverted to per-request DB client (task 0134 connection reuse rolled back).
