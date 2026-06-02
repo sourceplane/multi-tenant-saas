@@ -1,6 +1,9 @@
 import type { Env } from "./env";
 import { errorResponse } from "./http";
 import { replayOrExecute } from "./idempotency";
+import { cacheApiStore, bearerToken } from "./actor-cache";
+
+const LOGOUT_PATH = "/v1/auth/logout";
 
 const AUTH_ROUTES: Record<string, string> = {
   "/v1/auth/login/start": "POST",
@@ -106,6 +109,12 @@ export async function handleAuthRoute(
 
     try {
       const downstream = await env.IDENTITY_WORKER.fetch(target.toString(), init);
+      // On a successful logout, evict the cached actor so the (now-revoked)
+      // session can't be served from the edge cache for the rest of its TTL.
+      if (pathname === LOGOUT_PATH && downstream.ok) {
+        const token = bearerToken(request.headers.get("authorization"));
+        if (token) await cacheApiStore().evict(token);
+      }
       return new Response(downstream.body, {
         status: downstream.status,
         headers: downstream.headers,

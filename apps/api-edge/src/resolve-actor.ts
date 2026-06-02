@@ -1,5 +1,6 @@
 import type { Env } from "./env";
 import { errorResponse } from "./http";
+import { cacheApiStore, bearerToken, type ActorCacheStore } from "./actor-cache";
 
 export interface ActorInfo {
   subjectId: string;
@@ -12,17 +13,28 @@ export interface ActorFailure {
   error: Response;
 }
 
+export interface ResolveActorDeps {
+  /** Injectable cache store (tests). Defaults to the Cache-API store. */
+  cache?: ActorCacheStore;
+}
+
 /**
  * Resolves bearer token to actor context via IDENTITY_WORKER /v1/auth/resolve.
  * Supports both user sessions (sps_ses_ tokens) and API keys (service_principal).
+ *
+ * Hot-path cache (Task 0131 / PERF2): a successful resolution is cached by a
+ * hash of the token for a short TTL, so repeat requests skip the identity-worker
+ * hop + its DB queries. Misses and failures fall through to a live resolve.
  */
 export async function resolveActor(
   request: Request,
   env: Env,
   requestId: string,
+  deps?: ResolveActorDeps,
 ): Promise<ActorInfo | ActorFailure> {
   const authorization = request.headers.get("authorization");
-  if (!authorization || !authorization.startsWith("Bearer ")) {
+  const token = bearerToken(authorization);
+  if (!authorization || !token) {
     return {
       error: errorResponse("unauthenticated", "Missing or invalid Authorization header", 401, requestId),
     };
@@ -33,6 +45,10 @@ export async function resolveActor(
       error: errorResponse("internal_error", "Authentication service unavailable", 503, requestId),
     };
   }
+
+  const cache = deps?.cache ?? cacheApiStore();
+  const cached = await cache.get(token);
+  if (cached) return cached;
 
   const headers = new Headers();
   headers.set("authorization", authorization);
@@ -74,12 +90,15 @@ export async function resolveActor(
     // For user actors, prefer user-level email; for service_principal, use actor email or empty
     const email = json?.data?.user?.email ?? actor.email ?? "";
 
-    return {
+    const info: ActorInfo = {
       subjectId: actor.actorId,
       subjectType: actor.actorType,
       email,
       ...(actor.orgId && { orgId: actor.orgId }),
     };
+    // Cache only successful resolutions (best-effort; never cache a denial).
+    await cache.set(token, info);
+    return info;
   } catch {
     return {
       error: errorResponse("internal_error", "Authentication service unavailable", 503, requestId),
