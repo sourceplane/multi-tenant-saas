@@ -16,8 +16,9 @@ import { ZodForm } from "@/components/ui/zod-form";
 import { PreconditionInsight } from "@/components/precondition/insight";
 import { ArchiveMenu } from "@/components/settings/archive-menu";
 import { removeById } from "@/components/settings/archive";
+import { useQueryClient } from "@tanstack/react-query";
 import { useSession } from "@/lib/session";
-import { useAsync } from "@/lib/use-async";
+import { useApiQuery, qk } from "@/lib/query";
 import { useToast } from "@/components/ui/toast";
 import { wrap, type ApiErrorBody } from "@/lib/api";
 import type { PublicEnvironment } from "@saas/contracts/projects";
@@ -41,44 +42,38 @@ export default function EnvironmentsPage() {
 function Inner({ orgId, orgSlug, projectSlug }: { orgId: string; orgSlug: string; projectSlug: string }) {
   const { client } = useSession();
   const { toast } = useToast();
+  const qc = useQueryClient();
 
-  const projectsList = useAsync(
-    () => wrap(async () => (await client.projects.list(orgId)).projects),
-    [client, orgId],
+  // Shares the `projects` cache key with the projects list page, so navigating
+  // project-list → environments resolves the project synchronously from cache.
+  const projectsList = useApiQuery(qk.projects(orgId), () =>
+    wrap(async () => (await client.projects.list(orgId)).projects),
   );
   const project = React.useMemo(
     () => projectsList.data?.find((p) => p.slug === projectSlug) ?? null,
     [projectsList.data, projectSlug],
   );
 
-  const envs = useAsync(
-    () =>
-      project
-        ? wrap(async () => (await client.environments.list(orgId, project.id)).environments)
-        : Promise.resolve({
-            ok: false as const,
-            status: 0,
-            error: { code: "pending", message: "loading project" },
-          }),
-    [client, orgId, project?.id],
+  const envKey = qk.environments(orgId, project?.id ?? "pending");
+  const envs = useApiQuery(
+    envKey,
+    () => wrap(async () => (await client.environments.list(orgId, project!.id)).environments),
+    { enabled: !!project },
   );
 
   const [open, setOpen] = React.useState(false);
   const [precondition, setPrecondition] = React.useState<ApiErrorBody | null>(null);
 
-  // Local mirror so archive can mutate optimistically.
-  const [items, setItems] = React.useState<PublicEnvironment[]>([]);
-  React.useEffect(() => {
-    if (envs.data) setItems(envs.data);
-  }, [envs.data]);
+  // The query cache is the source of truth; archive mutates it optimistically.
+  const items = envs.data ?? [];
 
   const archive = async (env: PublicEnvironment) => {
     if (!project) return;
-    const previous = items;
-    setItems((cur) => removeById(cur, env.id)); // optimistic
+    const previous = qc.getQueryData<PublicEnvironment[]>(envKey);
+    qc.setQueryData<PublicEnvironment[]>(envKey, (cur) => removeById(cur ?? [], env.id)); // optimistic
     const r = await wrap(() => client.environments.archive(orgId, project.id, env.id));
     if (!r.ok) {
-      setItems(previous); // rollback
+      qc.setQueryData<PublicEnvironment[]>(envKey, previous); // rollback
       toast({ kind: "error", title: "Archive failed", description: r.error.message });
       return;
     }

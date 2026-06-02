@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { wrap } from "@/lib/api";
 import { useSession } from "@/lib/session";
-import { useAsync } from "@/lib/use-async";
+import { useApiQuery, qk } from "@/lib/query";
 
 export default function EnvironmentDetail() {
   const params = useParams<{ orgSlug: string; projectSlug: string; envSlug: string }>();
@@ -33,21 +33,14 @@ function Inner({
   envSlug: string;
 }) {
   const { client } = useSession();
-  const projects = useAsync(
-    () => wrap(async () => (await client.projects.list(orgId)).projects),
-    [client, orgId],
+  const projects = useApiQuery(qk.projects(orgId), () =>
+    wrap(async () => (await client.projects.list(orgId)).projects),
   );
   const project = projects.data?.find((p) => p.slug === projectSlug) ?? null;
-  const envs = useAsync(
-    () =>
-      project
-        ? wrap(async () => (await client.environments.list(orgId, project.id)).environments)
-        : Promise.resolve({
-            ok: false as const,
-            status: 0,
-            error: { code: "pending", message: "loading project" },
-          }),
-    [client, orgId, project?.id],
+  const envs = useApiQuery(
+    qk.environments(orgId, project?.id ?? "pending"),
+    () => wrap(async () => (await client.environments.list(orgId, project!.id)).environments),
+    { enabled: !!project },
   );
   const env = envs.data?.find((e) => e.slug === envSlug) ?? null;
 
