@@ -7,11 +7,16 @@ import { handleResolveBearer } from "./handlers/resolve-bearer.js";
 import { handleLogout } from "./handlers/logout.js";
 import { handleSecurityEvents } from "./handlers/security-events.js";
 import { handleProfile } from "./handlers/profile.js";
+import { handleOAuthProviders } from "./handlers/oauth-providers.js";
+import { handleOAuthStart } from "./handlers/oauth-start.js";
+import { handleOAuthCallback } from "./handlers/oauth-callback.js";
 import { handleCreateApiKey, handleListApiKeys, handleRevokeApiKey } from "./handlers/api-key-admin.js";
 import { errorResponse, notFound, methodNotAllowed } from "./http.js";
 
 const ORG_API_KEYS_RE = /^\/v1\/organizations\/[^/]+\/api-keys$/;
 const ORG_API_KEY_ID_RE = /^\/v1\/organizations\/[^/]+\/api-keys\/[^/]+$/;
+const OAUTH_START_RE = /^\/v1\/auth\/oauth\/[^/]+\/start$/;
+const OAUTH_CALLBACK_RE = /^\/v1\/auth\/oauth\/[^/]+\/callback$/;
 import { generateRequestId } from "./ids.js";
 
 const REQUEST_ID_RE = /^[\w-]{1,128}$/;
@@ -64,6 +69,22 @@ export async function route(request: Request, env: Env): Promise<Response> {
     if (url.pathname === "/v1/auth/profile") {
       if (request.method !== "GET" && request.method !== "PATCH") return methodNotAllowed(requestId);
       return handleProfile(request, env, requestId);
+    }
+
+    // OAuth sign-in (pre-organization, identity-owned). Browser-redirect flow.
+    if (url.pathname === "/v1/auth/oauth/providers") {
+      if (request.method !== "GET") return methodNotAllowed(requestId);
+      return handleOAuthProviders(env, requestId);
+    }
+
+    if (OAUTH_START_RE.test(url.pathname)) {
+      if (request.method !== "GET") return methodNotAllowed(requestId);
+      return handleOAuthStart(request, env, requestId);
+    }
+
+    if (OAUTH_CALLBACK_RE.test(url.pathname)) {
+      if (request.method !== "GET") return methodNotAllowed(requestId);
+      return handleOAuthCallback(request, env, requestId);
     }
 
     // API-key admin routes (forwarded from api-edge)

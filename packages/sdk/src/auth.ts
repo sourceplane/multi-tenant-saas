@@ -4,6 +4,7 @@ import type {
   LoginStartRequest,
   LoginStartResponse,
   LogoutResponse,
+  OAuthProvidersResponse,
   ProfileResponse,
   SessionResponse,
   UpdateProfileRequest,
@@ -63,6 +64,34 @@ export class AuthClient {
       },
       opts,
     );
+  }
+
+  /** GET /v1/auth/oauth/providers — the configured OAuth sign-in providers. */
+  listOAuthProviders(opts: RequestOptions = {}): Promise<OAuthProvidersResponse> {
+    return this.transport.request<OAuthProvidersResponse>(
+      {
+        method: "GET",
+        path: "/v1/auth/oauth/providers",
+      },
+      opts,
+    );
+  }
+
+  /**
+   * Build the absolute URL that begins an OAuth login. This is NOT an XHR
+   * endpoint — assign it to `window.location` so the provider redirect and the
+   * state-cookie handshake run as top-level browser navigations.
+   *
+   * @param providerId provider id from {@link listOAuthProviders} (e.g. "github")
+   * @param returnTo   absolute URL the user is returned to after sign-in
+   *                   (must be an allow-listed console origin server-side)
+   */
+  oauthStartUrl(providerId: string, returnTo: string): string {
+    const url = new URL(
+      `${this.transport.baseUrl}/v1/auth/oauth/${encodeURIComponent(providerId)}/start`,
+    );
+    url.searchParams.set("return_to", returnTo);
+    return url.toString();
   }
 
   /** GET /v1/auth/session */

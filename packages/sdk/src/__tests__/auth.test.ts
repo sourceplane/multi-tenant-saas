@@ -288,6 +288,24 @@ describe("AuthClient", () => {
     expect(headers.get("x-request-id")).toBe("req_caller_1");
   });
 
+  it("listOAuthProviders GETs /v1/auth/oauth/providers", async () => {
+    const { fetch, calls } = captureFetch(
+      jsonResponse(envelope({ providers: [{ id: "github", displayName: "GitHub" }] })),
+    );
+    const out = await client(fetch).auth.listOAuthProviders();
+    expect(calls[0]!.url).toBe("https://api.test/v1/auth/oauth/providers");
+    expect(calls[0]!.init.method).toBe("GET");
+    expect(out.providers[0]!.id).toBe("github");
+  });
+
+  it("oauthStartUrl builds an absolute start URL carrying return_to", () => {
+    const { fetch } = captureFetch(jsonResponse(envelope({ providers: [] })));
+    const url = client(fetch).auth.oauthStartUrl("github", "https://console.test/auth/callback");
+    const parsed = new URL(url);
+    expect(`${parsed.origin}${parsed.pathname}`).toBe("https://api.test/v1/auth/oauth/github/start");
+    expect(parsed.searchParams.get("return_to")).toBe("https://console.test/auth/callback");
+  });
+
   it("client.auth is wired onto the Sourceplane class", () => {
     const { fetch } = captureFetch(jsonResponse(envelope({ success: true })));
     const c = client(fetch);
@@ -297,5 +315,7 @@ describe("AuthClient", () => {
     expect(typeof c.auth.logout).toBe("function");
     expect(typeof c.auth.getProfile).toBe("function");
     expect(typeof c.auth.updateProfile).toBe("function");
+    expect(typeof c.auth.listOAuthProviders).toBe("function");
+    expect(typeof c.auth.oauthStartUrl).toBe("function");
   });
 });

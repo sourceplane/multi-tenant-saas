@@ -15,16 +15,34 @@ const AUTH_MULTI_METHOD_ROUTES: Record<string, Set<string>> = {
   "/v1/auth/profile": new Set(["GET", "PATCH"]),
 };
 
+// OAuth sign-in routes (all GET). `start` and `callback` are browser-redirect
+// navigations; `providers` is a JSON read. The `:provider` segment is dynamic,
+// so these are matched by pattern rather than the static route map.
+const OAUTH_PROVIDERS_PATH = "/v1/auth/oauth/providers";
+const OAUTH_START_RE = /^\/v1\/auth\/oauth\/[^/]+\/start$/;
+const OAUTH_CALLBACK_RE = /^\/v1\/auth\/oauth\/[^/]+\/callback$/;
+
+function isOAuthRoute(pathname: string): boolean {
+  return (
+    pathname === OAUTH_PROVIDERS_PATH ||
+    OAUTH_START_RE.test(pathname) ||
+    OAUTH_CALLBACK_RE.test(pathname)
+  );
+}
+
 const FORWARDED_HEADERS = [
   "authorization",
   "content-type",
   "x-request-id",
   "traceparent",
   "idempotency-key",
+  // Forwarded so the OAuth callback can read the state cookie set by `start`
+  // (double-submit CSRF defense). Cookies are first-party to api-edge.
+  "cookie",
 ];
 
 export function isAuthRoute(pathname: string): boolean {
-  return pathname in AUTH_ROUTES || pathname in AUTH_MULTI_METHOD_ROUTES;
+  return pathname in AUTH_ROUTES || pathname in AUTH_MULTI_METHOD_ROUTES || isOAuthRoute(pathname);
 }
 
 export async function handleAuthRoute(
@@ -35,16 +53,19 @@ export async function handleAuthRoute(
 ): Promise<Response> {
   const expectedMethod = AUTH_ROUTES[pathname];
   const allowedMethods = AUTH_MULTI_METHOD_ROUTES[pathname];
+  const oauth = isOAuthRoute(pathname);
 
-  if (!expectedMethod && !allowedMethods) {
+  if (!expectedMethod && !allowedMethods && !oauth) {
     return errorResponse("not_found", `Route not found: ${pathname}`, 404, requestId);
   }
 
-  if (expectedMethod && request.method !== expectedMethod) {
+  if (oauth) {
+    if (request.method !== "GET") {
+      return errorResponse("unsupported", "Method not allowed", 405, requestId);
+    }
+  } else if (expectedMethod && request.method !== expectedMethod) {
     return errorResponse("unsupported", "Method not allowed", 405, requestId);
-  }
-
-  if (allowedMethods && !allowedMethods.has(request.method)) {
+  } else if (allowedMethods && !allowedMethods.has(request.method)) {
     return errorResponse("unsupported", "Method not allowed", 405, requestId);
   }
 
@@ -72,6 +93,11 @@ export async function handleAuthRoute(
     const init: RequestInit = {
       method: request.method,
       headers,
+      // OAuth `start`/`callback` return 302s (to the provider, then back to the
+      // console). Without manual mode the service-binding fetch would FOLLOW
+      // them server-side instead of handing the redirect to the browser.
+      // Other auth routes never redirect, so this is inert for them.
+      redirect: "manual",
     };
 
     if (request.method === "POST" || request.method === "PATCH") {

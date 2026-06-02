@@ -4,21 +4,39 @@
   "compatibility_flags": ["nodejs_compat"],
   "main": "src/index.ts",
   "minify": false,
+  // OAuth (B1) configuration:
+  //   - Non-secret vars are declared per-env below. Replace the empty
+  //     GITHUB_OAUTH_CLIENT_ID placeholders with the client id of the GitHub
+  //     OAuth App registered for that environment.
+  //   - Secrets are NEVER stored here. Set them with:
+  //       wrangler secret put GITHUB_OAUTH_CLIENT_SECRET --env <env>
+  //       wrangler secret put OAUTH_STATE_SECRET         --env <env>
+  //   - The GitHub OAuth App's Authorization callback URL must be:
+  //       {OAUTH_REDIRECT_BASE_URL}/v1/auth/oauth/github/callback
   "vars": {
     "ENVIRONMENT": "local",
-    "DEBUG_DELIVERY": "true"
+    "DEBUG_DELIVERY": "true",
+    "GITHUB_OAUTH_CLIENT_ID": "",
+    "OAUTH_REDIRECT_BASE_URL": "http://localhost:8787",
+    "OAUTH_ALLOWED_CONSOLE_ORIGINS": "http://localhost:3000"
   },
   "env": {
     "dev": {
       "vars": {
         "ENVIRONMENT": "dev",
-        "DEBUG_DELIVERY": "true"
+        "DEBUG_DELIVERY": "true",
+        "GITHUB_OAUTH_CLIENT_ID": "",
+        "OAUTH_REDIRECT_BASE_URL": "",
+        "OAUTH_ALLOWED_CONSOLE_ORIGINS": "https://sourceplane-web-console-next-dev.rahulvarghesepullely.workers.dev"
       }
     },
     "stage": {
       "vars": {
         "ENVIRONMENT": "stage",
-        "DEBUG_DELIVERY": "true"
+        "DEBUG_DELIVERY": "true",
+        "GITHUB_OAUTH_CLIENT_ID": "Ov23liKBsjAqJJsmBavV",
+        "OAUTH_REDIRECT_BASE_URL": "https://api-edge-stage.rahulvarghesepullely.workers.dev",
+        "OAUTH_ALLOWED_CONSOLE_ORIGINS": "https://sourceplane-web-console-next-stage.rahulvarghesepullely.workers.dev"
       },
       "hyperdrive": [
         {
@@ -44,7 +62,10 @@
     "prod": {
       "vars": {
         "ENVIRONMENT": "prod",
-        "DEBUG_DELIVERY": "false"
+        "DEBUG_DELIVERY": "false",
+        "GITHUB_OAUTH_CLIENT_ID": "",
+        "OAUTH_REDIRECT_BASE_URL": "https://api-edge-prod.rahulvarghesepullely.workers.dev",
+        "OAUTH_ALLOWED_CONSOLE_ORIGINS": "https://sourceplane-web-console-next-prod.rahulvarghesepullely.workers.dev"
       },
       "hyperdrive": [
         {
