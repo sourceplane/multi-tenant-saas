@@ -52,22 +52,18 @@ export function buildNavSections(scope: NavScope): NavSection[] {
   });
 
   if (orgBase) {
-    // Org-scoped links for routes that exist today. `usage` and `settings`
-    // links are added by their respective U11 slices alongside their routes.
+    // The primary sidebar is product-focused: the day-to-day surfaces an
+    // operator works in. Organization administration (members, billing, API
+    // keys, webhooks, config, audit, identity) lives behind a single Settings
+    // entry, which opens the dedicated `/settings` surface with its own
+    // secondary navigation (see `settings-nav.ts`).
     sections.push({
       id: "org",
       label: orgSlug ? `Org · ${orgSlug}` : "Organization",
       links: [
         { href: `${orgBase}/projects`, label: "Projects", icon: "FolderKanban" },
-        { href: `${orgBase}/members`, label: "Members", icon: "Users" },
-        { href: `${orgBase}/invitations`, label: "Invitations", icon: "Mail" },
         { href: `${orgBase}/usage`, label: "Usage & quota", icon: "Gauge" },
-        { href: `${orgBase}/api-keys`, label: "API keys", icon: "KeyRound" },
-        { href: `${orgBase}/webhooks`, label: "Webhooks", icon: "Webhook" },
-        { href: `${orgBase}/config`, label: "Config", icon: "Settings" },
-        { href: `${orgBase}/audit`, label: "Audit log", icon: "ScrollText" },
-        { href: `${orgBase}/billing`, label: "Billing", icon: "Receipt" },
-        { href: `${orgBase}/settings`, label: "Settings", icon: "SlidersHorizontal" },
+        { href: `${orgBase}/settings`, label: "Settings", icon: "Settings" },
       ],
     });
   }

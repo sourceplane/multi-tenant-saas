@@ -112,10 +112,9 @@ export function buildBaseCommands(ctx: CommandContext): CommandDescriptor[] {
   });
 
   if (orgBase) {
+    const settingsBase = `${orgBase}/settings`;
     out.push(
       navItem("nav.projects", "Projects", `${orgBase}/projects`, "FolderKanban", ["project"]),
-      navItem("nav.members", "Members", `${orgBase}/members`, "Users", ["member", "people", "team"]),
-      navItem("nav.invitations", "Invitations", `${orgBase}/invitations`, "Mail", ["invite"]),
       navItem("nav.usage", "Usage & quota", `${orgBase}/usage`, "Gauge", [
         "usage",
         "quota",
@@ -123,15 +122,49 @@ export function buildBaseCommands(ctx: CommandContext): CommandDescriptor[] {
         "limit",
         "consumption",
       ]),
-      navItem("nav.api-keys", "API keys", `${orgBase}/api-keys`, "KeyRound", ["key", "token", "api"]),
-      navItem("nav.webhooks", "Webhooks", `${orgBase}/webhooks`, "Webhook", ["webhook", "endpoint"]),
-      navItem("nav.config", "Config", `${orgBase}/config`, "Settings", ["config", "settings", "flags"]),
-      navItem("nav.audit", "Audit log", `${orgBase}/audit`, "ScrollText", ["audit", "history", "events"]),
-      navItem("nav.billing", "Billing", `${orgBase}/billing`, "Receipt", ["billing", "plan", "invoice"]),
-      navItem("nav.org-settings", "Organization settings", `${orgBase}/settings`, "SlidersHorizontal", [
+      navItem("nav.org-settings", "Organization settings", settingsBase, "SlidersHorizontal", [
         "settings",
         "org",
+        "general",
         "danger",
+      ]),
+      navItem("nav.members", "Members", `${settingsBase}/members`, "Users", [
+        "member",
+        "people",
+        "team",
+        "settings",
+      ]),
+      navItem("nav.invitations", "Invitations", `${settingsBase}/invitations`, "Mail", [
+        "invite",
+        "settings",
+      ]),
+      navItem("nav.billing", "Billing", `${settingsBase}/billing`, "Receipt", [
+        "billing",
+        "plan",
+        "invoice",
+        "settings",
+      ]),
+      navItem("nav.api-keys", "API keys", `${settingsBase}/api-keys`, "KeyRound", [
+        "key",
+        "token",
+        "api",
+        "settings",
+      ]),
+      navItem("nav.webhooks", "Webhooks", `${settingsBase}/webhooks`, "Webhook", [
+        "webhook",
+        "endpoint",
+        "settings",
+      ]),
+      navItem("nav.config", "Config", `${settingsBase}/config`, "Settings", [
+        "config",
+        "settings",
+        "flags",
+      ]),
+      navItem("nav.audit", "Audit log", `${settingsBase}/audit`, "ScrollText", [
+        "audit",
+        "history",
+        "events",
+        "settings",
       ]),
     );
   }
@@ -154,8 +187,8 @@ export function buildBaseCommands(ctx: CommandContext): CommandDescriptor[] {
   if (orgBase) {
     out.push(
       navItem("create.project", "Create project", `${orgBase}/projects?new=1`, "PlusCircle", ["new", "project"], "Create"),
-      navItem("create.invitation", "Create invitation", `${orgBase}/invitations?new=1`, "UserPlus", ["invite", "new"], "Create"),
-      navItem("create.api-key", "Create API key", `${orgBase}/api-keys?new=1`, "KeyRound", ["key", "new"], "Create"),
+      navItem("create.invitation", "Create invitation", `${orgBase}/settings/invitations?new=1`, "UserPlus", ["invite", "new"], "Create"),
+      navItem("create.api-key", "Create API key", `${orgBase}/settings/api-keys?new=1`, "KeyRound", ["key", "new"], "Create"),
     );
   }
   if (projectBase) {

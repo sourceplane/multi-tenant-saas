@@ -19,12 +19,28 @@ describe("buildNavSections", () => {
     expect(ids).not.toContain("project");
   });
 
-  it("adds the org section when orgSlug is present", () => {
+  it("adds a product-focused org section when orgSlug is present", () => {
     const org = buildNavSections({ orgSlug: "acme" }).find((s) => s.id === "org")!;
     const hrefs = org.links.map((l) => l.href);
     expect(hrefs).toContain("/orgs/acme/projects");
-    expect(hrefs).toContain("/orgs/acme/billing");
+    expect(hrefs).toContain("/orgs/acme/usage");
+    expect(hrefs).toContain("/orgs/acme/settings");
     expect(org.label).toBe("Org · acme");
+  });
+
+  it("keeps org administration out of the primary sidebar (moved under Settings)", () => {
+    const org = buildNavSections({ orgSlug: "acme" }).find((s) => s.id === "org")!;
+    const hrefs = org.links.map((l) => l.href);
+    // These now live behind the dedicated Settings surface.
+    expect(hrefs).not.toContain("/orgs/acme/members");
+    expect(hrefs).not.toContain("/orgs/acme/billing");
+    expect(hrefs).not.toContain("/orgs/acme/webhooks");
+  });
+
+  it("keeps the Settings link active across nested settings pages", () => {
+    expect(isLinkActive("/orgs/acme/settings", "/orgs/acme/settings")).toBe(true);
+    expect(isLinkActive("/orgs/acme/settings", "/orgs/acme/settings/webhooks")).toBe(true);
+    expect(isLinkActive("/orgs/acme/settings", "/orgs/acme/settings/members")).toBe(true);
   });
 
   it("adds the project section only when both slugs are present", () => {
