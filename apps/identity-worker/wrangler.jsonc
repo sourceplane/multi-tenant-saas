@@ -6,17 +6,19 @@
   "minify": false,
   // OAuth (B1) configuration:
   //   - Non-secret vars are declared per-env below. Replace the empty
-  //     GITHUB_OAUTH_CLIENT_ID placeholders with the client id of the GitHub
-  //     OAuth App registered for that environment.
+  //     {GITHUB,GOOGLE}_OAUTH_CLIENT_ID placeholders with the client id of the
+  //     OAuth app registered for that provider + environment.
   //   - Secrets are NEVER stored here. Set them with:
   //       wrangler secret put GITHUB_OAUTH_CLIENT_SECRET --env <env>
+  //       wrangler secret put GOOGLE_OAUTH_CLIENT_SECRET --env <env>
   //       wrangler secret put OAUTH_STATE_SECRET         --env <env>
-  //   - The GitHub OAuth App's Authorization callback URL must be:
-  //       {OAUTH_REDIRECT_BASE_URL}/v1/auth/oauth/github/callback
+  //   - Each OAuth app's authorized redirect/callback URL must be:
+  //       {OAUTH_REDIRECT_BASE_URL}/v1/auth/oauth/{github|google}/callback
   "vars": {
     "ENVIRONMENT": "local",
     "DEBUG_DELIVERY": "true",
     "GITHUB_OAUTH_CLIENT_ID": "",
+    "GOOGLE_OAUTH_CLIENT_ID": "",
     "OAUTH_REDIRECT_BASE_URL": "http://localhost:8787",
     "OAUTH_ALLOWED_CONSOLE_ORIGINS": "http://localhost:3000"
   },
@@ -26,6 +28,7 @@
         "ENVIRONMENT": "dev",
         "DEBUG_DELIVERY": "true",
         "GITHUB_OAUTH_CLIENT_ID": "",
+        "GOOGLE_OAUTH_CLIENT_ID": "",
         "OAUTH_REDIRECT_BASE_URL": "",
         "OAUTH_ALLOWED_CONSOLE_ORIGINS": "https://sourceplane-web-console-next-dev.rahulvarghesepullely.workers.dev"
       }
@@ -35,6 +38,7 @@
         "ENVIRONMENT": "stage",
         "DEBUG_DELIVERY": "true",
         "GITHUB_OAUTH_CLIENT_ID": "Ov23liKBsjAqJJsmBavV",
+        "GOOGLE_OAUTH_CLIENT_ID": "",
         "OAUTH_REDIRECT_BASE_URL": "https://api-edge-stage.rahulvarghesepullely.workers.dev",
         "OAUTH_ALLOWED_CONSOLE_ORIGINS": "https://stage.sourceplane.ai,https://sourceplane-web-console-next-stage.rahulvarghesepullely.workers.dev"
       },
@@ -64,6 +68,7 @@
         "ENVIRONMENT": "prod",
         "DEBUG_DELIVERY": "false",
         "GITHUB_OAUTH_CLIENT_ID": "Ov23lilp2aoyeBDVU8Vc",
+        "GOOGLE_OAUTH_CLIENT_ID": "",
         "OAUTH_REDIRECT_BASE_URL": "https://api-edge-prod.rahulvarghesepullely.workers.dev",
         "OAUTH_ALLOWED_CONSOLE_ORIGINS": "https://prod.sourceplane.ai,https://sourceplane-web-console-next-prod.rahulvarghesepullely.workers.dev"
       },
