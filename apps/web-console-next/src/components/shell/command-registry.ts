@@ -110,6 +110,13 @@ export function buildBaseCommands(ctx: CommandContext): CommandDescriptor[] {
       navItem("nav.projects", "Projects", `${orgBase}/projects`, "FolderKanban", ["project"]),
       navItem("nav.members", "Members", `${orgBase}/members`, "Users", ["member", "people", "team"]),
       navItem("nav.invitations", "Invitations", `${orgBase}/invitations`, "Mail", ["invite"]),
+      navItem("nav.usage", "Usage & quota", `${orgBase}/usage`, "Gauge", [
+        "usage",
+        "quota",
+        "metering",
+        "limit",
+        "consumption",
+      ]),
       navItem("nav.api-keys", "API keys", `${orgBase}/api-keys`, "KeyRound", ["key", "token", "api"]),
       navItem("nav.webhooks", "Webhooks", `${orgBase}/webhooks`, "Webhook", ["webhook", "endpoint"]),
       navItem("nav.config", "Config", `${orgBase}/config`, "Settings", ["config", "settings", "flags"]),

@@ -72,3 +72,39 @@ alongside the routes they point at.
 - Browser: login page, orgs list, global + org-scoped command palette
   (registry-driven, correct scope gating), desktop sidebar, and the mobile Sheet
   drawer all render correctly with **zero console errors**.
+
+Merged: PR #204 (squash `d165578`).
+
+---
+
+## Slice B — Usage & quota surface
+
+PR: `claude/u11-b-usage`.
+
+### What shipped
+- **New route** `app/(app)/orgs/[orgSlug]/usage/page.tsx` (org-scoped via
+  `OrgScope`), with two sections:
+  - **Consumption** — metric input (with `datalist` suggestions; no
+    list-metrics API exists), `bucketType` + range `Select`s, over
+    `metering.getUsageSummary`. Totals + a dependency-free CSS bar chart of
+    per-bucket quantity. Prompts to choose a metric before fetching (metric is
+    a required API param), and shows a designed empty state when no usage was
+    recorded.
+  - **Quota violations** — over `metering.listQuotaViolations` with an optional
+    metric filter and cursor "Load more"; open/resolved + enforcement badges,
+    overage %. Loads immediately (no metric required).
+- **Nav + Cmd-K** — added the "Usage & quota" sidebar link and `nav.usage`
+  command alongside the route (so the entries that were intentionally deferred
+  in Slice A now point at a real page).
+- Pure helper `components/usage/usage.ts`: preset→ISO window math (injectable
+  `now`), bar normalization, compact number formatting, violations pagination
+  accumulation, and view shapers.
+
+### Tests & gates
+- `usage.test.ts` (17 cases: query window math, bar normalization incl.
+  divide-by-zero guard, compact formatting, violations append/de-dupe/cursor,
+  overage guard). Full suite **121 passing**.
+- typecheck ✓, lint ✓, `next build` ✓.
+- Browser: Consumption + Quota-violations render; Select primitives work; a
+  metric query resolves to the designed "No usage recorded" / "No quota
+  violations" empty states against live stage; **zero console errors**.

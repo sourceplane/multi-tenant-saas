@@ -60,6 +60,7 @@ export function buildNavSections(scope: NavScope): NavSection[] {
         { href: `${orgBase}/projects`, label: "Projects", icon: "FolderKanban" },
         { href: `${orgBase}/members`, label: "Members", icon: "Users" },
         { href: `${orgBase}/invitations`, label: "Invitations", icon: "Mail" },
+        { href: `${orgBase}/usage`, label: "Usage & quota", icon: "Gauge" },
         { href: `${orgBase}/api-keys`, label: "API keys", icon: "KeyRound" },
         { href: `${orgBase}/webhooks`, label: "Webhooks", icon: "Webhook" },
         { href: `${orgBase}/config`, label: "Config", icon: "Settings" },
