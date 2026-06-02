@@ -178,26 +178,40 @@ describe("MembershipRepository", () => {
       }
     });
 
-    it("maps generic errors to safe internal error", async () => {
+    it("maps generic errors to safe internal error (and logs the cause for diagnosis)", async () => {
       const { executor } = createFakeExecutor({
-        error: new Error("connection to host 10.0.0.1:5432 refused"),
+        error: Object.assign(new Error("connection to host 10.0.0.1:5432 refused"), { code: "ECONNREFUSED" }),
       });
       const repo = createMembershipRepository(executor);
+      const originalError = console.error;
+      const logged: unknown[][] = [];
+      console.error = (...args: unknown[]) => { logged.push(args); };
 
-      const result = await repo.createOrganization({
-        id: "org-001",
-        name: "Test",
-        slug: "test",
-        slugLower: "test",
-        createdAt: NOW,
-      });
+      let result;
+      try {
+        result = await repo.createOrganization({
+          id: "org-001",
+          name: "Test",
+          slug: "test",
+          slugLower: "test",
+          createdAt: NOW,
+        });
+      } finally {
+        console.error = originalError;
+      }
 
       expect(result.ok).toBe(false);
       if (!result.ok) {
         expect(result.error.kind).toBe("internal");
+        // The user-facing error message must stay opaque (no host/port leak).
         expect((result.error as { kind: "internal"; message: string }).message).not.toContain("10.0.0.1");
         expect((result.error as { kind: "internal"; message: string }).message).not.toContain("5432");
       }
+      // ...but the underlying cause is logged for ops diagnosis (name/message/code only).
+      const hit = logged.find(
+        (a) => typeof a[0] === "string" && a[0].includes("[membership-repo]") && (a[1] as { code?: string })?.code === "ECONNREFUSED",
+      );
+      expect(hit).toBeDefined();
     });
   });
 

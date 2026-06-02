@@ -68,7 +68,14 @@ export async function handleAuthorizationContext(
     const responseBody: AuthorizationContextResponse = { memberships };
 
     return successResponse(responseBody, requestId);
-  } catch {
+  } catch (err) {
+    const e = err as { name?: unknown; message?: unknown; code?: unknown };
+    console.error("[membership] authorization-context failed", {
+      requestId,
+      name: typeof e?.name === "string" ? e.name : undefined,
+      message: typeof e?.message === "string" ? e.message : undefined,
+      code: typeof e?.code === "string" ? e.code : undefined,
+    });
     return errorResponse("internal_error", "An unexpected error occurred", 500, requestId);
   } finally {
     if (executor) await executor.dispose();
