@@ -1,6 +1,7 @@
 import type { Env } from "../env.js";
 import type { ActorContext } from "../router.js";
 import type { ProjectsRepository } from "@saas/db/projects";
+import type { Uuid } from "@saas/db/ids";
 import { createProjectsRepository } from "@saas/db/projects";
 import { createSqlExecutor } from "@saas/db/hyperdrive";
 import { fetchAuthorizationContext } from "../membership-client.js";
@@ -16,8 +17,8 @@ export async function handleGetEnvironment(
   env: Env,
   requestId: string,
   actor: ActorContext,
-  orgId: string,
-  projectId: string,
+  orgId: Uuid,
+  projectId: Uuid,
   environmentId: string,
   deps?: HandleGetEnvironmentDeps,
 ): Promise<Response> {

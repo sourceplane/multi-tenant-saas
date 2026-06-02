@@ -10,10 +10,11 @@ import { route } from "@projects-worker/router";
 import type { Env } from "@projects-worker/env";
 import type { ProjectsRepository, ProjectsResult, Project, CreateProjectInput, Environment, CreateEnvironmentInput } from "@saas/db/projects";
 import type { EventsRepository, StoredEvent, StoredAuditEntry, AppendEventWithAuditInput } from "@saas/db/events";
+import { asUuid } from "@saas/db/ids";
 
-const TEST_ORG_UUID = "11111111-1111-1111-1111-111111111111";
+const TEST_ORG_UUID = asUuid("11111111-1111-1111-1111-111111111111");
 const TEST_ORG_PUBLIC = "org_11111111111111111111111111111111";
-const TEST_PROJECT_UUID = "22222222-2222-2222-2222-222222222222";
+const TEST_PROJECT_UUID = asUuid("22222222-2222-2222-2222-222222222222");
 const TEST_PROJECT_PUBLIC = "prj_22222222222222222222222222222222";
 const TEST_ENVIRONMENT_UUID = "33333333-3333-3333-3333-333333333333";
 const TEST_ENVIRONMENT_PUBLIC = "env_33333333333333333333333333333333";

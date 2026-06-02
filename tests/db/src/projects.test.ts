@@ -1,7 +1,11 @@
 import {
   createProjectsRepository,
 } from "@saas/db/projects";
+import { asUuid } from "@saas/db";
 import type { SqlExecutor, SqlExecutorResult, SqlRow } from "@saas/db/hyperdrive";
+
+const ORG_ID = asUuid("aaaaaaaa-0001-0001-0001-000000000001");
+const PRJ_ID = asUuid("bbbbbbbb-0001-0001-0001-000000000001");
 
 type QueryRecord = { text: string; params: unknown[] };
 
@@ -31,7 +35,7 @@ const NOW = new Date("2026-01-15T10:00:00Z");
 
 const SAMPLE_PROJECT_ROW = {
   id: "prj-001",
-  org_id: "org-001",
+  org_id: ORG_ID,
   name: "My Project",
   slug: "my-project",
   slug_lower: "my-project",
@@ -43,7 +47,7 @@ const SAMPLE_PROJECT_ROW = {
 
 const SAMPLE_ENVIRONMENT_ROW = {
   id: "env-001",
-  org_id: "org-001",
+  org_id: ORG_ID,
   project_id: "prj-001",
   name: "Production",
   slug: "production",
@@ -62,7 +66,7 @@ describe("ProjectsRepository", () => {
 
       await repo.createProject({
         id: "prj-001",
-        orgId: "org-001",
+        orgId: ORG_ID,
         name: "My Project",
         slug: "my-project",
         slugLower: "my-project",
@@ -78,7 +82,7 @@ describe("ProjectsRepository", () => {
       expect(queries[0]!.text).toContain("$6");
       expect(queries[0]!.params).toEqual([
         "prj-001",
-        "org-001",
+        ORG_ID,
         "My Project",
         "my-project",
         "my-project",
@@ -92,7 +96,7 @@ describe("ProjectsRepository", () => {
 
       const result = await repo.createProject({
         id: "prj-001",
-        orgId: "org-001",
+        orgId: ORG_ID,
         name: "My Project",
         slug: "my-project",
         slugLower: "my-project",
@@ -102,7 +106,7 @@ describe("ProjectsRepository", () => {
       expect(result.ok).toBe(true);
       if (result.ok) {
         expect(result.value.id).toBe("prj-001");
-        expect(result.value.orgId).toBe("org-001");
+        expect(result.value.orgId).toBe(ORG_ID);
         expect(result.value.name).toBe("My Project");
         expect(result.value.slugLower).toBe("my-project");
         expect(result.value.status).toBe("active");
@@ -117,7 +121,7 @@ describe("ProjectsRepository", () => {
 
       const result = await repo.createProject({
         id: "prj-001",
-        orgId: "org-001",
+        orgId: ORG_ID,
         name: "My Project",
         slug: "my-project",
         slugLower: "my-project",
@@ -138,7 +142,7 @@ describe("ProjectsRepository", () => {
 
       const result = await repo.createProject({
         id: "prj-002",
-        orgId: "org-001",
+        orgId: ORG_ID,
         name: "My Project",
         slug: "my-project",
         slugLower: "my-project",
@@ -159,7 +163,7 @@ describe("ProjectsRepository", () => {
 
       const result = await repo.createProject({
         id: "prj-001",
-        orgId: "org-001",
+        orgId: ORG_ID,
         name: "Test",
         slug: "test",
         slugLower: "test",
@@ -179,21 +183,21 @@ describe("ProjectsRepository", () => {
       const { executor, queries } = createFakeExecutor({ rows: [{ count: 3 }] });
       const repo = createProjectsRepository(executor);
 
-      await repo.countActiveProjects("org-001");
+      await repo.countActiveProjects(ORG_ID);
 
       expect(queries).toHaveLength(1);
       expect(queries[0]!.text).toContain("COUNT(*)");
       expect(queries[0]!.text).toContain("projects.projects");
       expect(queries[0]!.text).toContain("org_id = $1");
       expect(queries[0]!.text).toContain("status = 'active'");
-      expect(queries[0]!.params).toEqual(["org-001"]);
+      expect(queries[0]!.params).toEqual([ORG_ID]);
     });
 
     it("returns numeric count when pg returns a number", async () => {
       const { executor } = createFakeExecutor({ rows: [{ count: 7 }] });
       const repo = createProjectsRepository(executor);
 
-      const result = await repo.countActiveProjects("org-001");
+      const result = await repo.countActiveProjects(ORG_ID);
 
       expect(result.ok).toBe(true);
       if (result.ok) expect(result.value).toBe(7);
@@ -203,7 +207,7 @@ describe("ProjectsRepository", () => {
       const { executor } = createFakeExecutor({ rows: [{ count: BigInt(42) }] });
       const repo = createProjectsRepository(executor);
 
-      const result = await repo.countActiveProjects("org-001");
+      const result = await repo.countActiveProjects(ORG_ID);
 
       expect(result.ok).toBe(true);
       if (result.ok) expect(result.value).toBe(42);
@@ -213,7 +217,7 @@ describe("ProjectsRepository", () => {
       const { executor } = createFakeExecutor({ rows: [{ count: "12" }] });
       const repo = createProjectsRepository(executor);
 
-      const result = await repo.countActiveProjects("org-001");
+      const result = await repo.countActiveProjects(ORG_ID);
 
       expect(result.ok).toBe(true);
       if (result.ok) expect(result.value).toBe(12);
@@ -223,7 +227,7 @@ describe("ProjectsRepository", () => {
       const { executor } = createFakeExecutor({ rows: [] });
       const repo = createProjectsRepository(executor);
 
-      const result = await repo.countActiveProjects("org-001");
+      const result = await repo.countActiveProjects(ORG_ID);
 
       expect(result.ok).toBe(true);
       if (result.ok) expect(result.value).toBe(0);
@@ -235,7 +239,7 @@ describe("ProjectsRepository", () => {
       });
       const repo = createProjectsRepository(executor);
 
-      const result = await repo.countActiveProjects("org-001");
+      const result = await repo.countActiveProjects(ORG_ID);
 
       expect(result.ok).toBe(false);
       if (!result.ok) {
@@ -250,7 +254,7 @@ describe("ProjectsRepository", () => {
       const { executor } = createFakeExecutor({ rows: [{ count: "not-a-number" }] });
       const repo = createProjectsRepository(executor);
 
-      const result = await repo.countActiveProjects("org-001");
+      const result = await repo.countActiveProjects(ORG_ID);
 
       expect(result.ok).toBe(false);
       if (!result.ok) expect(result.error.kind).toBe("internal");
@@ -262,7 +266,7 @@ describe("ProjectsRepository", () => {
       const { executor, queries } = createFakeExecutor({ rows: [{ count: 3 }] });
       const repo = createProjectsRepository(executor);
 
-      await repo.countActiveEnvironments("org-001", "prj-001");
+      await repo.countActiveEnvironments(ORG_ID, PRJ_ID);
 
       expect(queries).toHaveLength(1);
       expect(queries[0]!.text).toContain("COUNT(*)");
@@ -270,14 +274,14 @@ describe("ProjectsRepository", () => {
       expect(queries[0]!.text).toContain("org_id = $1");
       expect(queries[0]!.text).toContain("project_id = $2");
       expect(queries[0]!.text).toContain("status = 'active'");
-      expect(queries[0]!.params).toEqual(["org-001", "prj-001"]);
+      expect(queries[0]!.params).toEqual([ORG_ID, PRJ_ID]);
     });
 
     it("returns numeric count when pg returns a number", async () => {
       const { executor } = createFakeExecutor({ rows: [{ count: 7 }] });
       const repo = createProjectsRepository(executor);
 
-      const result = await repo.countActiveEnvironments("org-001", "prj-001");
+      const result = await repo.countActiveEnvironments(ORG_ID, PRJ_ID);
 
       expect(result.ok).toBe(true);
       if (result.ok) expect(result.value).toBe(7);
@@ -287,7 +291,7 @@ describe("ProjectsRepository", () => {
       const { executor } = createFakeExecutor({ rows: [{ count: BigInt(42) }] });
       const repo = createProjectsRepository(executor);
 
-      const result = await repo.countActiveEnvironments("org-001", "prj-001");
+      const result = await repo.countActiveEnvironments(ORG_ID, PRJ_ID);
 
       expect(result.ok).toBe(true);
       if (result.ok) expect(result.value).toBe(42);
@@ -297,7 +301,7 @@ describe("ProjectsRepository", () => {
       const { executor } = createFakeExecutor({ rows: [{ count: "12" }] });
       const repo = createProjectsRepository(executor);
 
-      const result = await repo.countActiveEnvironments("org-001", "prj-001");
+      const result = await repo.countActiveEnvironments(ORG_ID, PRJ_ID);
 
       expect(result.ok).toBe(true);
       if (result.ok) expect(result.value).toBe(12);
@@ -307,7 +311,7 @@ describe("ProjectsRepository", () => {
       const { executor } = createFakeExecutor({ rows: [] });
       const repo = createProjectsRepository(executor);
 
-      const result = await repo.countActiveEnvironments("org-001", "prj-001");
+      const result = await repo.countActiveEnvironments(ORG_ID, PRJ_ID);
 
       expect(result.ok).toBe(true);
       if (result.ok) expect(result.value).toBe(0);
@@ -319,7 +323,7 @@ describe("ProjectsRepository", () => {
       });
       const repo = createProjectsRepository(executor);
 
-      const result = await repo.countActiveEnvironments("org-001", "prj-001");
+      const result = await repo.countActiveEnvironments(ORG_ID, PRJ_ID);
 
       expect(result.ok).toBe(false);
       if (!result.ok) {
@@ -334,7 +338,7 @@ describe("ProjectsRepository", () => {
       const { executor } = createFakeExecutor({ rows: [{ count: "not-a-number" }] });
       const repo = createProjectsRepository(executor);
 
-      const result = await repo.countActiveEnvironments("org-001", "prj-001");
+      const result = await repo.countActiveEnvironments(ORG_ID, PRJ_ID);
 
       expect(result.ok).toBe(false);
       if (!result.ok) expect(result.error.kind).toBe("internal");
@@ -346,9 +350,9 @@ describe("ProjectsRepository", () => {
       const { executor, queries } = createFakeExecutor({ rows: [SAMPLE_PROJECT_ROW] });
       const repo = createProjectsRepository(executor);
 
-      await repo.getProjectById("org-001", "prj-001");
+      await repo.getProjectById(ORG_ID, PRJ_ID);
 
-      expect(queries[0]!.params).toEqual(["org-001", "prj-001"]);
+      expect(queries[0]!.params).toEqual([ORG_ID, PRJ_ID]);
       expect(queries[0]!.text).toContain("org_id = $1");
       expect(queries[0]!.text).toContain("id = $2");
     });
@@ -357,7 +361,7 @@ describe("ProjectsRepository", () => {
       const { executor } = createFakeExecutor({ rows: [] });
       const repo = createProjectsRepository(executor);
 
-      const result = await repo.getProjectById("org-001", "prj-missing");
+      const result = await repo.getProjectById(ORG_ID, asUuid("bbbbbbbb-0001-0001-0001-000000000099"));
 
       expect(result.ok).toBe(false);
       if (!result.ok) expect(result.error.kind).toBe("not_found");
@@ -369,9 +373,9 @@ describe("ProjectsRepository", () => {
       const { executor, queries } = createFakeExecutor({ rows: [SAMPLE_PROJECT_ROW] });
       const repo = createProjectsRepository(executor);
 
-      await repo.getProjectBySlug("org-001", "my-project");
+      await repo.getProjectBySlug(ORG_ID, "my-project");
 
-      expect(queries[0]!.params).toEqual(["org-001", "my-project"]);
+      expect(queries[0]!.params).toEqual([ORG_ID, "my-project"]);
       expect(queries[0]!.text).toContain("org_id = $1");
       expect(queries[0]!.text).toContain("slug_lower = $2");
     });
@@ -380,7 +384,7 @@ describe("ProjectsRepository", () => {
       const { executor } = createFakeExecutor({ rows: [] });
       const repo = createProjectsRepository(executor);
 
-      const result = await repo.getProjectBySlug("org-001", "unknown-slug");
+      const result = await repo.getProjectBySlug(ORG_ID, "unknown-slug");
 
       expect(result.ok).toBe(false);
       if (!result.ok) expect(result.error.kind).toBe("not_found");
@@ -392,27 +396,27 @@ describe("ProjectsRepository", () => {
       const { executor, queries } = createFakeExecutor({ rows: [SAMPLE_PROJECT_ROW] });
       const repo = createProjectsRepository(executor);
 
-      await repo.listProjectsPaged("org-001", { limit: 10, cursor: null });
+      await repo.listProjectsPaged(ORG_ID, { limit: 10, cursor: null });
 
       expect(queries).toHaveLength(1);
       expect(queries[0]!.text).toContain("org_id = $1");
       expect(queries[0]!.text).toContain("ORDER BY");
       expect(queries[0]!.text).toContain("LIMIT");
-      expect(queries[0]!.params).toEqual(["org-001", 11]);
+      expect(queries[0]!.params).toEqual([ORG_ID, 11]);
     });
 
     it("applies cursor filtering with timestamp and id tie-breaker", async () => {
       const { executor, queries } = createFakeExecutor({ rows: [] });
       const repo = createProjectsRepository(executor);
 
-      await repo.listProjectsPaged("org-001", {
+      await repo.listProjectsPaged(ORG_ID, {
         limit: 5,
         cursor: { createdAt: "2026-01-15T10:00:00.000Z", id: "prj-001" },
       });
 
       expect(queries[0]!.text).toContain("$3");
       expect(queries[0]!.text).toContain("$4");
-      expect(queries[0]!.params).toEqual(["org-001", 6, "2026-01-15T10:00:00.000Z", "prj-001"]);
+      expect(queries[0]!.params).toEqual([ORG_ID, 6, "2026-01-15T10:00:00.000Z", "prj-001"]);
     });
 
     it("returns nextCursor when more rows exist", async () => {
@@ -425,7 +429,7 @@ describe("ProjectsRepository", () => {
       const { executor } = createFakeExecutor({ rows });
       const repo = createProjectsRepository(executor);
 
-      const result = await repo.listProjectsPaged("org-001", { limit: 2, cursor: null });
+      const result = await repo.listProjectsPaged(ORG_ID, { limit: 2, cursor: null });
 
       expect(result.ok).toBe(true);
       if (result.ok) {
@@ -439,7 +443,7 @@ describe("ProjectsRepository", () => {
       const { executor } = createFakeExecutor({ rows: [SAMPLE_PROJECT_ROW] });
       const repo = createProjectsRepository(executor);
 
-      const result = await repo.listProjectsPaged("org-001", { limit: 10, cursor: null });
+      const result = await repo.listProjectsPaged(ORG_ID, { limit: 10, cursor: null });
 
       expect(result.ok).toBe(true);
       if (result.ok) {
@@ -452,7 +456,7 @@ describe("ProjectsRepository", () => {
       const { executor } = createFakeExecutor({ rows: [] });
       const repo = createProjectsRepository(executor);
 
-      const result = await repo.listProjectsPaged("org-001", { limit: 50, cursor: null });
+      const result = await repo.listProjectsPaged(ORG_ID, { limit: 50, cursor: null });
 
       expect(result.ok).toBe(true);
       if (result.ok) {
@@ -468,19 +472,19 @@ describe("ProjectsRepository", () => {
       const { executor, queries } = createFakeExecutor({ rows: [archivedRow] });
       const repo = createProjectsRepository(executor);
 
-      await repo.archiveProject("org-001", "prj-001", NOW);
+      await repo.archiveProject(ORG_ID, PRJ_ID, NOW);
 
       expect(queries[0]!.text).toContain("org_id = $1");
       expect(queries[0]!.text).toContain("id = $2");
       expect(queries[0]!.text).toContain("status = 'active'");
-      expect(queries[0]!.params).toEqual(["org-001", "prj-001", NOW.toISOString()]);
+      expect(queries[0]!.params).toEqual([ORG_ID, PRJ_ID, NOW.toISOString()]);
     });
 
     it("returns not_found when project already archived or does not exist", async () => {
       const { executor } = createFakeExecutor({ rows: [], rowCount: 0 });
       const repo = createProjectsRepository(executor);
 
-      const result = await repo.archiveProject("org-001", "prj-001", NOW);
+      const result = await repo.archiveProject(ORG_ID, PRJ_ID, NOW);
 
       expect(result.ok).toBe(false);
       if (!result.ok) expect(result.error.kind).toBe("not_found");
@@ -490,7 +494,7 @@ describe("ProjectsRepository", () => {
       const { executor } = createFakeExecutor({ error: new Error("timeout") });
       const repo = createProjectsRepository(executor);
 
-      const result = await repo.archiveProject("org-001", "prj-001", NOW);
+      const result = await repo.archiveProject(ORG_ID, PRJ_ID, NOW);
 
       expect(result.ok).toBe(false);
       if (!result.ok) {
@@ -506,8 +510,8 @@ describe("ProjectsRepository", () => {
 
       await repo.createEnvironment({
         id: "env-001",
-        orgId: "org-001",
-        projectId: "prj-001",
+        orgId: ORG_ID,
+        projectId: PRJ_ID,
         name: "Production",
         slug: "production",
         slugLower: "production",
@@ -519,8 +523,8 @@ describe("ProjectsRepository", () => {
       expect(queries[0]!.text).toContain("$7");
       expect(queries[0]!.params).toEqual([
         "env-001",
-        "org-001",
-        "prj-001",
+        ORG_ID,
+        PRJ_ID,
         "Production",
         "production",
         "production",
@@ -534,8 +538,8 @@ describe("ProjectsRepository", () => {
 
       const result = await repo.createEnvironment({
         id: "env-001",
-        orgId: "org-001",
-        projectId: "prj-001",
+        orgId: ORG_ID,
+        projectId: PRJ_ID,
         name: "Production",
         slug: "production",
         slugLower: "production",
@@ -545,7 +549,7 @@ describe("ProjectsRepository", () => {
       expect(result.ok).toBe(true);
       if (result.ok) {
         expect(result.value.id).toBe("env-001");
-        expect(result.value.orgId).toBe("org-001");
+        expect(result.value.orgId).toBe(ORG_ID);
         expect(result.value.projectId).toBe("prj-001");
         expect(result.value.name).toBe("Production");
         expect(result.value.archivedAt).toBeNull();
@@ -560,8 +564,8 @@ describe("ProjectsRepository", () => {
 
       const result = await repo.createEnvironment({
         id: "env-002",
-        orgId: "org-001",
-        projectId: "prj-001",
+        orgId: ORG_ID,
+        projectId: PRJ_ID,
         name: "Production",
         slug: "production",
         slugLower: "production",
@@ -578,9 +582,9 @@ describe("ProjectsRepository", () => {
       const { executor, queries } = createFakeExecutor({ rows: [SAMPLE_ENVIRONMENT_ROW] });
       const repo = createProjectsRepository(executor);
 
-      await repo.getEnvironmentById("org-001", "prj-001", "env-001");
+      await repo.getEnvironmentById(ORG_ID, PRJ_ID, "env-001");
 
-      expect(queries[0]!.params).toEqual(["org-001", "prj-001", "env-001"]);
+      expect(queries[0]!.params).toEqual([ORG_ID, PRJ_ID, "env-001"]);
       expect(queries[0]!.text).toContain("org_id = $1");
       expect(queries[0]!.text).toContain("project_id = $2");
       expect(queries[0]!.text).toContain("id = $3");
@@ -590,7 +594,7 @@ describe("ProjectsRepository", () => {
       const { executor } = createFakeExecutor({ rows: [] });
       const repo = createProjectsRepository(executor);
 
-      const result = await repo.getEnvironmentById("org-001", "prj-001", "env-missing");
+      const result = await repo.getEnvironmentById(ORG_ID, PRJ_ID, "env-missing");
 
       expect(result.ok).toBe(false);
       if (!result.ok) expect(result.error.kind).toBe("not_found");
@@ -602,9 +606,9 @@ describe("ProjectsRepository", () => {
       const { executor, queries } = createFakeExecutor({ rows: [SAMPLE_ENVIRONMENT_ROW] });
       const repo = createProjectsRepository(executor);
 
-      await repo.getEnvironmentBySlug("org-001", "prj-001", "production");
+      await repo.getEnvironmentBySlug(ORG_ID, PRJ_ID, "production");
 
-      expect(queries[0]!.params).toEqual(["org-001", "prj-001", "production"]);
+      expect(queries[0]!.params).toEqual([ORG_ID, PRJ_ID, "production"]);
       expect(queries[0]!.text).toContain("org_id = $1");
       expect(queries[0]!.text).toContain("project_id = $2");
       expect(queries[0]!.text).toContain("slug_lower = $3");
@@ -614,7 +618,7 @@ describe("ProjectsRepository", () => {
       const { executor } = createFakeExecutor({ rows: [] });
       const repo = createProjectsRepository(executor);
 
-      const result = await repo.getEnvironmentBySlug("org-001", "prj-001", "unknown");
+      const result = await repo.getEnvironmentBySlug(ORG_ID, PRJ_ID, "unknown");
 
       expect(result.ok).toBe(false);
       if (!result.ok) expect(result.error.kind).toBe("not_found");
@@ -626,28 +630,28 @@ describe("ProjectsRepository", () => {
       const { executor, queries } = createFakeExecutor({ rows: [SAMPLE_ENVIRONMENT_ROW] });
       const repo = createProjectsRepository(executor);
 
-      await repo.listEnvironmentsPaged("org-001", "prj-001", { limit: 10, cursor: null });
+      await repo.listEnvironmentsPaged(ORG_ID, PRJ_ID, { limit: 10, cursor: null });
 
       expect(queries).toHaveLength(1);
       expect(queries[0]!.text).toContain("org_id = $1");
       expect(queries[0]!.text).toContain("project_id = $2");
       expect(queries[0]!.text).toContain("ORDER BY");
       expect(queries[0]!.text).toContain("LIMIT");
-      expect(queries[0]!.params).toEqual(["org-001", "prj-001", 11]);
+      expect(queries[0]!.params).toEqual([ORG_ID, PRJ_ID, 11]);
     });
 
     it("applies cursor filtering with timestamp and id tie-breaker", async () => {
       const { executor, queries } = createFakeExecutor({ rows: [] });
       const repo = createProjectsRepository(executor);
 
-      await repo.listEnvironmentsPaged("org-001", "prj-001", {
+      await repo.listEnvironmentsPaged(ORG_ID, PRJ_ID, {
         limit: 5,
         cursor: { createdAt: "2026-01-15T10:00:00.000Z", id: "env-001" },
       });
 
       expect(queries[0]!.text).toContain("$4");
       expect(queries[0]!.text).toContain("$5");
-      expect(queries[0]!.params).toEqual(["org-001", "prj-001", 6, "2026-01-15T10:00:00.000Z", "env-001"]);
+      expect(queries[0]!.params).toEqual([ORG_ID, PRJ_ID, 6, "2026-01-15T10:00:00.000Z", "env-001"]);
     });
 
     it("returns nextCursor when more rows exist", async () => {
@@ -660,7 +664,7 @@ describe("ProjectsRepository", () => {
       const { executor } = createFakeExecutor({ rows });
       const repo = createProjectsRepository(executor);
 
-      const result = await repo.listEnvironmentsPaged("org-001", "prj-001", { limit: 2, cursor: null });
+      const result = await repo.listEnvironmentsPaged(ORG_ID, PRJ_ID, { limit: 2, cursor: null });
 
       expect(result.ok).toBe(true);
       if (result.ok) {
@@ -674,7 +678,7 @@ describe("ProjectsRepository", () => {
       const { executor } = createFakeExecutor({ rows: [SAMPLE_ENVIRONMENT_ROW] });
       const repo = createProjectsRepository(executor);
 
-      const result = await repo.listEnvironmentsPaged("org-001", "prj-001", { limit: 10, cursor: null });
+      const result = await repo.listEnvironmentsPaged(ORG_ID, PRJ_ID, { limit: 10, cursor: null });
 
       expect(result.ok).toBe(true);
       if (result.ok) {
@@ -687,7 +691,7 @@ describe("ProjectsRepository", () => {
       const { executor } = createFakeExecutor({ rows: [] });
       const repo = createProjectsRepository(executor);
 
-      const result = await repo.listEnvironmentsPaged("org-001", "prj-001", { limit: 50, cursor: null });
+      const result = await repo.listEnvironmentsPaged(ORG_ID, PRJ_ID, { limit: 50, cursor: null });
 
       expect(result.ok).toBe(true);
       if (result.ok) {
@@ -703,20 +707,20 @@ describe("ProjectsRepository", () => {
       const { executor, queries } = createFakeExecutor({ rows: [archivedRow] });
       const repo = createProjectsRepository(executor);
 
-      await repo.archiveEnvironment("org-001", "prj-001", "env-001", NOW);
+      await repo.archiveEnvironment(ORG_ID, PRJ_ID, "env-001", NOW);
 
       expect(queries[0]!.text).toContain("org_id = $1");
       expect(queries[0]!.text).toContain("project_id = $2");
       expect(queries[0]!.text).toContain("id = $3");
       expect(queries[0]!.text).toContain("status = 'active'");
-      expect(queries[0]!.params).toEqual(["org-001", "prj-001", "env-001", NOW.toISOString()]);
+      expect(queries[0]!.params).toEqual([ORG_ID, PRJ_ID, "env-001", NOW.toISOString()]);
     });
 
     it("returns not_found when environment already archived", async () => {
       const { executor } = createFakeExecutor({ rows: [], rowCount: 0 });
       const repo = createProjectsRepository(executor);
 
-      const result = await repo.archiveEnvironment("org-001", "prj-001", "env-001", NOW);
+      const result = await repo.archiveEnvironment(ORG_ID, PRJ_ID, "env-001", NOW);
 
       expect(result.ok).toBe(false);
       if (!result.ok) expect(result.error.kind).toBe("not_found");
@@ -726,7 +730,7 @@ describe("ProjectsRepository", () => {
       const { executor } = createFakeExecutor({ error: new Error("connection refused") });
       const repo = createProjectsRepository(executor);
 
-      const result = await repo.archiveEnvironment("org-001", "prj-001", "env-001", NOW);
+      const result = await repo.archiveEnvironment(ORG_ID, PRJ_ID, "env-001", NOW);
 
       expect(result.ok).toBe(false);
       if (!result.ok) {
@@ -744,7 +748,7 @@ describe("ProjectsRepository", () => {
       const { executor } = createFakeExecutor({ error: pgError });
       const repo = createProjectsRepository(executor);
 
-      const result = await repo.getProjectById("org-001", "prj-001");
+      const result = await repo.getProjectById(ORG_ID, PRJ_ID);
 
       expect(result.ok).toBe(false);
       if (!result.ok && result.error.kind === "internal") {
@@ -762,7 +766,7 @@ describe("ProjectsRepository", () => {
 
       const result = await repo.createProject({
         id: "prj-001",
-        orgId: "org-001",
+        orgId: ORG_ID,
         name: "Test",
         slug: "test",
         slugLower: "test",

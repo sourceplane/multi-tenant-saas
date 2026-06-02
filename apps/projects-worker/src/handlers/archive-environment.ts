@@ -2,6 +2,7 @@ import type { Env } from "../env.js";
 import type { ActorContext } from "../router.js";
 import type { ProjectsRepository, ProjectsResult, Environment } from "@saas/db/projects";
 import type { EventsRepository } from "@saas/db/events";
+import type { Uuid } from "@saas/db/ids";
 import { createProjectsRepository } from "@saas/db/projects";
 import { createEventsRepository } from "@saas/db/events";
 import { createSqlExecutor } from "@saas/db/hyperdrive";
@@ -20,8 +21,8 @@ export async function handleArchiveEnvironment(
   env: Env,
   requestId: string,
   actor: ActorContext,
-  orgId: string,
-  projectId: string,
+  orgId: Uuid,
+  projectId: Uuid,
   environmentId: string,
   deps?: HandleArchiveEnvironmentDeps,
 ): Promise<Response> {
