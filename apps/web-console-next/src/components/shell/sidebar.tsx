@@ -11,43 +11,76 @@ import {
   Boxes,
   KeyRound,
   Settings,
+  SlidersHorizontal,
   ScrollText,
   Receipt,
   Users,
   Mail,
   Webhook,
   ShieldCheck,
+  Bell,
+  Gauge,
+  User2,
+  type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { buildNavSections, isLinkActive } from "./nav-items";
 
-interface NavItem {
-  href: string;
-  label: string;
-  icon: React.ComponentType<{ className?: string }>;
+const ICONS: Record<string, LucideIcon> = {
+  Building2,
+  FolderKanban,
+  Boxes,
+  KeyRound,
+  Settings,
+  SlidersHorizontal,
+  ScrollText,
+  Receipt,
+  Users,
+  Mail,
+  Webhook,
+  ShieldCheck,
+  Bell,
+  Gauge,
+  User2,
+};
+
+/**
+ * Shared nav body (sections + links), rendered by both the desktop sidebar and
+ * the mobile Sheet drawer. `onNavigate` lets the drawer close itself on click.
+ */
+export function NavContent({ onNavigate }: { onNavigate?: (() => void) | undefined }) {
+  const params = useParams<{ orgSlug?: string; projectSlug?: string }>();
+  const pathname = usePathname();
+  const sections = buildNavSections({
+    orgSlug: params?.orgSlug ?? null,
+    projectSlug: params?.projectSlug ?? null,
+  });
+
+  return (
+    <nav className="px-2 pb-4 space-y-6 overflow-y-auto scrollbar-thin">
+      {sections.map((section) => (
+        <Section key={section.id} label={section.label}>
+          {section.links.map((link) => {
+            const Icon = ICONS[link.icon] ?? Settings;
+            return (
+              <SidebarLink
+                key={link.href}
+                href={link.href}
+                icon={Icon}
+                active={isLinkActive(link.href, pathname)}
+                onClick={onNavigate}
+              >
+                {link.label}
+              </SidebarLink>
+            );
+          })}
+        </Section>
+      ))}
+    </nav>
+  );
 }
 
 export function Sidebar() {
-  const params = useParams<{ orgSlug?: string; projectSlug?: string }>();
-  const pathname = usePathname();
-  const orgSlug = params?.orgSlug;
-  const projectSlug = params?.projectSlug;
-
-  const orgBase = orgSlug ? `/orgs/${orgSlug}` : null;
-  const projectBase = orgSlug && projectSlug ? `/orgs/${orgSlug}/projects/${projectSlug}` : null;
-
-  const orgItems: NavItem[] = orgBase
-    ? [
-        { href: `${orgBase}/projects`, label: "Projects", icon: FolderKanban },
-        { href: `${orgBase}/members`, label: "Members", icon: Users },
-        { href: `${orgBase}/invitations`, label: "Invitations", icon: Mail },
-        { href: `${orgBase}/api-keys`, label: "API keys", icon: KeyRound },
-        { href: `${orgBase}/webhooks`, label: "Webhooks", icon: Webhook },
-        { href: `${orgBase}/config`, label: "Config", icon: Settings },
-        { href: `${orgBase}/audit`, label: "Audit log", icon: ScrollText },
-        { href: `${orgBase}/billing`, label: "Billing", icon: Receipt },
-      ]
-    : [];
-
   return (
     <aside className="hidden md:flex w-60 shrink-0 flex-col border-r bg-card/40">
       <div className="px-4 py-4 flex items-center gap-2">
@@ -57,50 +90,7 @@ export function Sidebar() {
         <div className="text-sm font-semibold tracking-tight">Sourceplane</div>
       </div>
 
-      <nav className="px-2 pb-4 space-y-6 overflow-y-auto scrollbar-thin">
-        <Section label="Workspace">
-          <SidebarLink href="/orgs" icon={Building2} active={pathname === "/orgs"}>
-            Organizations
-          </SidebarLink>
-        </Section>
-
-        <Section label="Account">
-          <SidebarLink
-            href="/account/security"
-            icon={ShieldCheck}
-            active={pathname?.startsWith("/account/security") ?? false}
-          >
-            Security activity
-          </SidebarLink>
-        </Section>
-
-        {orgBase && (
-          <Section label={`Org · ${orgSlug}`}>
-            {orgItems.map((it) => (
-              <SidebarLink
-                key={it.href}
-                href={it.href}
-                icon={it.icon}
-                active={pathname?.startsWith(it.href) ?? false}
-              >
-                {it.label}
-              </SidebarLink>
-            ))}
-          </Section>
-        )}
-
-        {projectBase && (
-          <Section label={`Project · ${projectSlug}`}>
-            <SidebarLink
-              href={`${projectBase}/environments`}
-              icon={Boxes}
-              active={pathname?.startsWith(`${projectBase}/environments`) ?? false}
-            >
-              Environments
-            </SidebarLink>
-          </Section>
-        )}
-      </nav>
+      <NavContent />
 
       <div className="mt-auto p-3 text-[10px] text-muted-foreground border-t">
         <div className="flex items-center justify-between">
@@ -133,19 +123,24 @@ function SidebarLink({
   href,
   icon: Icon,
   active,
+  onClick,
   children,
 }: {
   href: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: LucideIcon;
   active: boolean;
+  onClick?: (() => void) | undefined;
   children: React.ReactNode;
 }) {
   return (
     <Link
       href={href}
+      {...(onClick ? { onClick } : {})}
       className={cn(
         "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors",
-        active ? "bg-accent text-accent-foreground font-medium" : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
+        active
+          ? "bg-accent text-accent-foreground font-medium"
+          : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
       )}
     >
       <Icon className="h-4 w-4 opacity-80" />
