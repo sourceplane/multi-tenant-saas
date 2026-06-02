@@ -317,6 +317,78 @@ webhook filter. Treat as separate sub-tasks once P3 and B9 give us the data.
   is reached. The platform's defining bet is in P2, but a customer cannot reach
   P2 without B1–B4 being credible.
 
+## Performance & Caching (PERF) — make responses super-fast
+
+Measured 2026-06-02 against live stage (server TTFB, warm, no cold start):
+`/auth/profile` ≈ 1.0s, `/organizations` ≈ 1.6s, `/organizations/:org/projects`
+≈ 2.1s, `/organizations/:org/billing/summary` ≈ 3.1s. Network/TLS is ~40ms; the
+time is **server-side**, and **repeat calls never get faster → no caching at any
+layer.** Unauthenticated 401 ≈ 0.25s (the worker floor); bad-token 401 ≈ 0.7s
+(so bearer→actor resolution adds ~0.45s on every request).
+
+Root causes (code-confirmed): (a) every worker in a request opens a **fresh
+postgres client over Hyperdrive and `sql.end()`s it per request** — the
+TLS/auth handshake dominates and recurs in each hop; (b) **no bearer-resolution
+cache** — api-edge calls identity-worker (+2 DB queries) on every request; (c)
+multi-hop sequential fan-out (api-edge → identity → membership → policy →
+resource), all awaited serially; (d) `getBillingSummary` runs **4 sequential
+queries**; (e) member-list is **N+1** (a role query per member); (f) the console
+has **zero client cache** — `useAsync` refetches on every mount and `OrgScope`
+re-fetches the full org list on every page; (g) no `Cache-Control`/edge caching.
+
+This cluster's end-state: p50 authed read < ~300ms server-side, and the console
+feels instant on navigation (cached + stale-while-revalidate). Tasks are
+ordered by impact ÷ effort.
+
+### PERF1 — Console client cache, SWR & prefetch (highest perceived win)
+Adopt a client query cache (`@tanstack/react-query` or equivalent) with
+stale-while-revalidate; render cached data instantly on navigation and
+revalidate in background; dedupe in-flight requests. Cache the org list in
+session/query so `OrgScope` stops refetching it per page. Prefetch on
+hover/intent. Move the auth gate so the shell paints from cache immediately.
+Convert the existing optimistic flows to cache mutations. Frontend-only,
+human-independent. Owner: web-console-next. Scoped as Task 0130.
+
+### PERF2 — Edge bearer-resolution cache
+Cache the bearer→actor resolution at api-edge (Workers KV or the Workers Cache
+API, keyed by a token hash, short TTL ~30–60s, invalidated on logout) so the
+identity-worker hop + its 2 DB queries are skipped on the hot path. Owner:
+api-edge (+ identity-worker logout invalidation). Scoped as Task 0131.
+(Was numbered after the existing Task 0129 = B1 GitHub OAuth.)
+New resource: a Workers KV namespace (or use the built-in Cache API — no new
+resource).
+
+### PERF3 — DB connection reuse & query efficiency
+Eliminate the per-request connection-setup tax: stop `create+dispose` of a
+postgres client per request where a warm-isolate module-scoped client (or
+Hyperdrive-pooled reuse) is safe; never open two executors for one request
+(billing `check-entitlement`); parallelize `getBillingSummary` (`Promise.all`
+or a single JOIN); fix the member-list N+1 with a batched role query; add the
+missing membership/subject index; verify Hyperdrive query caching is actually
+effective (reads stay non-transactional + parameterized). Owner: packages/db +
+the worker handlers. Scoped as Task 0132.
+
+### PERF4 — Hot-path hop reduction, parallelization & latency observability
+Collapse/parallelize the sequential authorization fan-out on hot reads (run the
+membership-roles fetch in parallel with the resource query; evaluate policy
+inline from passed facts) to cut a 4-hop serial chain toward 2. Add
+`Server-Timing` headers + structured per-hop/per-query timing so prod latency is
+measurable and the other PERF tasks are verifiable. Owner: api-edge + resource
+workers. Scoped as Task 0133.
+
+### Additional resources worth adding (suggested)
+- **Workers KV** — bearer-resolution cache (PERF2) and hot read caching.
+- **Cloudflare Cache API / Tiered Cache** — cache safe GETs at the edge with
+  `s-maxage` + `stale-while-revalidate`.
+- **Hyperdrive caching** — already available; ensure enabled and that the read
+  path is cache-eligible (PERF3).
+- **Analytics Engine** (already a platform baseline) — sink for the PERF4
+  Server-Timing metrics; per-route p50/p95 dashboards.
+- **Durable Objects** (later) — per-org hot in-memory state / counters
+  (rate-limit, entitlement decisions) to avoid DB on the hot path.
+- **Supabase read replica + Hyperdrive read routing** (at scale) — offload
+  read traffic from the primary.
+
 ## What This Document Is Not
 
 - Not a delivery date list.
