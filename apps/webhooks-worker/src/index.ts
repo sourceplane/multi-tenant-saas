@@ -37,3 +37,5 @@ export default {
     }
   },
 } satisfies ExportedHandler<Env>;
+
+// perf(db): reverted to per-request DB client (task 0134 connection reuse rolled back).

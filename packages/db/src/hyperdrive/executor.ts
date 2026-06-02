@@ -24,6 +24,12 @@ export interface SqlExecutorFactory {
   create(binding: { connectionString: string }): SqlExecutor & { dispose(): Promise<void> };
 }
 
+// NOTE: Per-request client. A module-scoped reuse pool was attempted (task 0134)
+// but the Cloudflare Workers runtime rejects reusing a postgres client/socket
+// opened in one request from another ("Cannot perform I/O on behalf of a
+// different request"), which broke membership/billing on stage and the
+// self-heal retry did not reliably recover. Reverted to per-request creation.
+// Any future reuse attempt MUST be canary-verified on stage before rollout.
 export function createSqlExecutor(
   binding: { connectionString: string },
   clientFactory?: (connectionString: string) => postgres.Sql,

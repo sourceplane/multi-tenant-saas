@@ -97,8 +97,11 @@ describe("no placeholder Hyperdrive IDs in any Worker config", () => {
     if (!fs.existsSync(fullPath)) continue;
 
     test(`${wranglerPath} has no PLACEHOLDER IDs`, () => {
-      const raw = fs.readFileSync(fullPath, "utf-8");
-      expect(raw).not.toMatch(PLACEHOLDER_RE);
+      // Scan config values only — strip `//` comments so benign prose (e.g. the
+      // identity-worker OAuth setup notes that mention "placeholders") doesn't
+      // false-positive. The intent is to catch placeholder Hyperdrive *IDs*.
+      const stripped = fs.readFileSync(fullPath, "utf-8").replace(/\/\/.*$/gm, "");
+      expect(stripped).not.toMatch(PLACEHOLDER_RE);
     });
   }
 });
