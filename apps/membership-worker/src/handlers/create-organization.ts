@@ -8,6 +8,11 @@ import { createEventsRepository } from "@saas/db/events";
 import { successResponse, errorResponse, validationError } from "../http.js";
 import { orgPublicId, memberPublicId } from "../ids.js";
 import { asUuid } from "@saas/db/ids";
+import { assignPlan, type AssignPlanResult } from "../billing-client.js";
+
+/** Plan code assigned to every organization at bootstrap. Stable contract with
+ * billing-worker's plan catalog (plan-catalog.ts DEFAULT_PLAN_CODE). */
+const BOOTSTRAP_PLAN_CODE = "free";
 
 const NAME_MIN = 1;
 const NAME_MAX = 100;
@@ -25,6 +30,33 @@ export interface CreateOrganizationDeps {
   eventsRepo?: Pick<EventsRepository, "appendEventWithAudit">;
   now?: () => Date;
   generateId?: () => string;
+  /** Injected best-effort plan-assignment seam for unit tests. When omitted in
+   * the deps path, bootstrap skips the billing call entirely. */
+  assignPlan?: (orgPublicId: string) => Promise<AssignPlanResult>;
+}
+
+/**
+ * Best-effort: grant the free plan so the new org gets real entitlement rows
+ * (Task 0128). NEVER fails the bootstrap — a transient billing failure falls
+ * back to the check-entitlement free-tier safety net until a later assignment
+ * succeeds.
+ */
+async function tryAssignFreePlan(
+  env: Env,
+  orgUuid: string,
+  actor: ActorContext,
+  requestId: string,
+): Promise<void> {
+  const binding = env.BILLING_WORKER;
+  if (!binding) return;
+  try {
+    await assignPlan(binding as Fetcher, orgPublicId(orgUuid), BOOTSTRAP_PLAN_CODE, requestId, {
+      id: actor.subjectId,
+      type: actor.subjectType,
+    });
+  } catch {
+    /* best-effort */
+  }
 }
 
 function generateSlugFromName(name: string): string {
@@ -181,6 +213,7 @@ export async function handleCreateOrganization(
       }
 
       const { org, roleAssignment } = result.bootstrapResult.value;
+      await tryAssignFreePlan(env, org.id, actor, requestId);
       return successResponse(
         {
           organization: { id: orgPublicId(org.id), name: org.name, slug: org.slug, createdAt: org.createdAt.toISOString() },
@@ -257,6 +290,13 @@ export async function handleCreateOrganization(
     }
 
     const { org, member, roleAssignment } = bootstrapResult.value;
+    if (deps?.assignPlan) {
+      try {
+        await deps.assignPlan(orgPublicId(org.id));
+      } catch {
+        /* best-effort */
+      }
+    }
     return successResponse(
       {
         organization: { id: orgPublicId(org.id), name: org.name, slug: org.slug, createdAt: org.createdAt.toISOString() },

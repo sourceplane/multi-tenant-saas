@@ -6,6 +6,7 @@ import { handleGetBillingSummary } from "./handlers/get-summary.js";
 import { handleListInvoices } from "./handlers/list-invoices.js";
 import { handleListEntitlements } from "./handlers/list-entitlements.js";
 import { handleCheckEntitlement } from "./handlers/check-entitlement.js";
+import { handleAssignPlan } from "./handlers/assign-plan.js";
 import { errorResponse, notFound, methodNotAllowed } from "./http.js";
 import { generateRequestId, parseOrgPublicId } from "./ids.js";
 
@@ -113,6 +114,18 @@ export async function route(request: Request, env: Env): Promise<Response> {
         );
       }
       return handleCheckEntitlement(request, env, requestId);
+    }
+
+    // Internal plan-assignment seam (service-binding only). Idempotent create
+    // or change of an org's subscription + entitlement materialization. Called
+    // by membership-worker on org bootstrap (free plan); admin/upgrade callers
+    // can reuse it once added to the allow-list.
+    if (url.pathname === "/v1/internal/billing/plan/assign") {
+      const caller = request.headers.get(INTERNAL_CALLER_HEADER);
+      if (!isAllowedInternalCaller(caller)) {
+        return errorResponse("unauthorized", "Unauthorized", 403, requestId);
+      }
+      return handleAssignPlan(request, env, requestId);
     }
 
     const matched = matchRoute(url.pathname);
