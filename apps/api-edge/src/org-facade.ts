@@ -101,7 +101,6 @@ export async function handleOrgRoute(
     headers.set("x-actor-subject-type", sessionResult.subjectType);
     headers.set("x-actor-email", sessionResult.email);
     if (sessionResult.orgId) {
-      headers.set("x-actor-org-id", sessionResult.orgId);
     }
     for (const name of FORWARDED_HEADERS) {
       if (name === "x-request-id") continue;
