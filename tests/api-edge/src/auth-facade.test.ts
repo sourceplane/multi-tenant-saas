@@ -622,4 +622,88 @@ describe("api-edge auth facade", () => {
       }
     });
   });
+
+  describe("oauth routes", () => {
+    it("recognises the oauth routes via isAuthRoute", () => {
+      expect(isAuthRoute("/v1/auth/oauth/providers")).toBe(true);
+      expect(isAuthRoute("/v1/auth/oauth/github/start")).toBe(true);
+      expect(isAuthRoute("/v1/auth/oauth/github/callback")).toBe(true);
+      expect(isAuthRoute("/v1/auth/oauth/github")).toBe(false);
+    });
+
+    it("forwards GET /v1/auth/oauth/providers to IDENTITY_WORKER", async () => {
+      const { fetcher, calls } = createFakeFetcher();
+      const request = new Request("https://api.example.com/v1/auth/oauth/providers", { method: "GET" });
+
+      const response = await handleAuthRoute(
+        request,
+        { IDENTITY_WORKER: fetcher, ENVIRONMENT: "test" },
+        "req_p",
+        "/v1/auth/oauth/providers",
+      );
+
+      expect(response.status).toBe(200);
+      expect(calls[0]!.url).toContain("/v1/auth/oauth/providers");
+      expect(calls[0]!.init.method).toBe("GET");
+    });
+
+    it("returns 405 for POST to an oauth route", async () => {
+      const { fetcher } = createFakeFetcher();
+      const request = new Request("https://api.example.com/v1/auth/oauth/github/start", { method: "POST" });
+
+      const response = await handleAuthRoute(
+        request,
+        { IDENTITY_WORKER: fetcher, ENVIRONMENT: "test" },
+        "req_p",
+        "/v1/auth/oauth/github/start",
+      );
+
+      expect(response.status).toBe(405);
+    });
+
+    it("forwards the cookie header and uses manual redirect on callback", async () => {
+      const { fetcher, calls } = createFakeFetcher();
+      const request = new Request(
+        "https://api.example.com/v1/auth/oauth/github/callback?code=abc&state=xyz",
+        { method: "GET", headers: { cookie: "sp_oauth_state=nonce123" } },
+      );
+
+      await handleAuthRoute(
+        request,
+        { IDENTITY_WORKER: fetcher, ENVIRONMENT: "test" },
+        "req_cb",
+        "/v1/auth/oauth/github/callback",
+      );
+
+      const forwarded = new Headers(calls[0]!.init.headers as HeadersInit);
+      expect(forwarded.get("cookie")).toBe("sp_oauth_state=nonce123");
+      expect(calls[0]!.init.redirect).toBe("manual");
+      expect(calls[0]!.url).toContain("?code=abc&state=xyz");
+    });
+
+    it("passes a 302 redirect (Location + Set-Cookie) back to the caller", async () => {
+      const downstream = new Response(null, {
+        status: 302,
+        headers: {
+          location: "https://github.com/login/oauth/authorize?x=1",
+          "set-cookie": "sp_oauth_state=abc; Path=/v1/auth/oauth; HttpOnly",
+        },
+      });
+      const { fetcher } = createFakeFetcher(downstream);
+      const request = new Request("https://api.example.com/v1/auth/oauth/github/start?return_to=x", {
+        method: "GET",
+      });
+
+      const response = await handleAuthRoute(
+        request,
+        { IDENTITY_WORKER: fetcher, ENVIRONMENT: "test" },
+        "req_s",
+        "/v1/auth/oauth/github/start",
+      );
+
+      expect(response.status).toBe(302);
+      expect(response.headers.get("location")).toContain("github.com/login/oauth/authorize");
+      expect(response.headers.get("set-cookie")).toContain("sp_oauth_state=abc");
+    });
+  });
 });

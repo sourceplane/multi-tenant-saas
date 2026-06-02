@@ -70,6 +70,24 @@ export interface BearerResolutionResponse {
   user?: AuthUser;
 }
 
+// OAuth sign-in contracts.
+//
+// The `start` and `callback` routes are browser-redirect flows (not JSON
+// endpoints), so they have no request/response body contract. The only JSON
+// surface is the provider list, which lets the console render a sign-in button
+// only for providers that are fully configured server-side.
+
+export interface OAuthProviderInfo {
+  /** Stable provider id used in the route path, e.g. "github". */
+  id: string;
+  /** Human-readable label for the sign-in button, e.g. "GitHub". */
+  displayName: string;
+}
+
+export interface OAuthProvidersResponse {
+  providers: OAuthProviderInfo[];
+}
+
 // Profile route contracts (self-scoped, user-session only)
 
 export interface ProfileResponse {

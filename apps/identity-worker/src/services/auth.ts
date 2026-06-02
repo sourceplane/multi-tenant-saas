@@ -52,6 +52,30 @@ export interface CompleteLoginError {
   message: string;
 }
 
+export interface LoginWithOAuthInput {
+  /** Provider id (e.g. "github"). */
+  provider: string;
+  /** Stable, provider-scoped subject id. */
+  subject: string;
+  /** Email reported by the provider, if any. */
+  email: string | null;
+  /** Whether the provider asserts the email is verified (gates account linking). */
+  emailVerified: boolean;
+  /** Display name reported by the provider, if any. */
+  displayName: string | null;
+}
+
+export interface LoginWithOAuthResult {
+  token: string;
+  expiresAt: Date;
+  user: { id: string; email: string; displayName: string | null };
+}
+
+export interface LoginWithOAuthError {
+  error: "email_required" | "email_unverified" | "internal_error";
+  message: string;
+}
+
 export interface GetSessionResult {
   session: { id: string; expiresAt: Date; createdAt: Date };
   user: { id: string; email: string; displayName: string | null };
@@ -300,6 +324,131 @@ export function createAuthService(deps: AuthServiceDeps) {
         metadata: { method: "email_code" },
       });
 
+      if (!eventResult.ok) {
+        return { error: "internal_error", message: "Failed to record security event" };
+      }
+
+      const user = userResult.value;
+      return {
+        token: buildSessionToken(sessionUuid, secret),
+        expiresAt,
+        user: { id: userPublicId(user.id), email: user.email, displayName: user.displayName },
+      };
+    },
+
+    async loginWithOAuth(
+      input: LoginWithOAuthInput,
+    ): Promise<LoginWithOAuthResult | LoginWithOAuthError> {
+      const { provider, subject } = input;
+
+      let userId: string;
+
+      // 1. Returning identity: a prior login already linked this provider subject.
+      const existing = await repo.getAuthIdentityByProviderSubject(provider, subject);
+      if (existing.ok) {
+        userId = existing.value.userId;
+      } else {
+        // First time we've seen this provider subject. We require a VERIFIED
+        // email to safely link to (or create) an account. An unverified
+        // provider email must never attach to, hijack, or seed an account —
+        // and because `email_lower` is unique, we cannot create a parallel
+        // account for an email an existing user already owns. So: verified or
+        // bust.
+        const email = (input.email ?? "").trim();
+        const emailLower = email.toLowerCase();
+        if (!email) {
+          return { error: "email_required", message: "No email available from provider" };
+        }
+        if (!input.emailVerified) {
+          return { error: "email_unverified", message: "Provider email is not verified" };
+        }
+
+        // Account-linking policy: link by verified email when an account
+        // already exists; otherwise create a fresh one.
+        let resolvedUser: User | null = null;
+        let createdUser = false;
+        const byEmail = await repo.getUserByEmail(emailLower);
+        if (byEmail.ok) {
+          resolvedUser = byEmail.value;
+        } else {
+          const newUserId = generateUserId();
+          const created = await repo.createUser({
+            id: newUserId,
+            email,
+            emailLower,
+            displayName: input.displayName ?? null,
+            createdAt: now(),
+          });
+          if (created.ok) {
+            resolvedUser = created.value;
+            createdUser = true;
+          } else if (created.error.kind === "conflict") {
+            // Lost a create race on the email — resolve to the winner.
+            const refetch = await repo.getUserByEmail(emailLower);
+            if (!refetch.ok) return { error: "internal_error", message: "Failed to resolve user" };
+            resolvedUser = refetch.value;
+          } else {
+            return { error: "internal_error", message: "Failed to create user" };
+          }
+        }
+
+        userId = resolvedUser.id;
+
+        const link = await repo.createAuthIdentity({
+          id: generateAuthIdentityId(),
+          userId,
+          provider,
+          subject,
+          metadata: { emailVerified: input.emailVerified },
+          createdAt: now(),
+        });
+        if (!link.ok && link.error.kind === "conflict") {
+          // A concurrent callback linked the same subject — defer to the winner.
+          const resolved = await repo.getAuthIdentityByProviderSubject(provider, subject);
+          if (resolved.ok) userId = resolved.value.userId;
+        }
+
+        await repo.recordSecurityEvent({
+          ...eventBase(),
+          eventType: createdUser ? "user.created" : "auth_identity.linked",
+          outcome: "success",
+          userId,
+          metadata: { provider, method: "oauth", linkedExistingUser: !createdUser },
+        });
+      }
+
+      // 2. Resolve the user record for the response payload.
+      const userResult = await repo.getUserById(userId);
+      if (!userResult.ok) {
+        return { error: "internal_error", message: "Failed to resolve user" };
+      }
+
+      // 3. Issue a session (same opaque-token model as email login).
+      const sessionUuid = generateSessionId();
+      const secret = generateTokenSecret();
+      const tokenHash = await hashSha256(secret);
+      const currentTime = now();
+      const expiresAt = new Date(currentTime.getTime() + SESSION_TTL_MS);
+
+      const sessionResult = await repo.createSession({
+        id: sessionUuid,
+        userId,
+        tokenHash,
+        expiresAt,
+        createdAt: currentTime,
+      });
+      if (!sessionResult.ok) {
+        return { error: "internal_error", message: "Failed to create session" };
+      }
+
+      const eventResult = await repo.recordSecurityEvent({
+        ...eventBase(),
+        eventType: "session.created",
+        outcome: "success",
+        userId,
+        sessionId: sessionUuid,
+        metadata: { method: "oauth", provider },
+      });
       if (!eventResult.ok) {
         return { error: "internal_error", message: "Failed to record security event" };
       }
