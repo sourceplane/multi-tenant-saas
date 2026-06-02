@@ -1,6 +1,7 @@
 import type { Env } from "../env.js";
 import type { ActorContext } from "../router.js";
 import type { ProjectsRepository } from "@saas/db/projects";
+import type { Uuid } from "@saas/db/ids";
 import { createProjectsRepository } from "@saas/db/projects";
 import { createSqlExecutor } from "@saas/db/hyperdrive";
 import { fetchAuthorizationContext } from "../membership-client.js";
@@ -18,7 +19,7 @@ export async function handleListProjects(
   env: Env,
   requestId: string,
   actor: ActorContext,
-  orgId: string,
+  orgId: Uuid,
   deps?: HandleListProjectsDeps,
 ): Promise<Response> {
   if (!env.SOURCEPLANE_DB) {

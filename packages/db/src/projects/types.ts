@@ -1,4 +1,5 @@
 export type { SqlExecutor, SqlExecutorResult, SqlRow } from "../hyperdrive/executor.js";
+import type { Uuid } from "../ids/index.js";
 
 export type ProjectsRepositoryError =
   | { kind: "not_found" }
@@ -36,7 +37,7 @@ export interface Environment {
 
 export interface CreateProjectInput {
   id: string;
-  orgId: string;
+  orgId: Uuid;
   name: string;
   slug: string;
   slugLower: string;
@@ -45,8 +46,8 @@ export interface CreateProjectInput {
 
 export interface CreateEnvironmentInput {
   id: string;
-  orgId: string;
-  projectId: string;
+  orgId: Uuid;
+  projectId: Uuid;
   name: string;
   slug: string;
   slugLower: string;
@@ -70,16 +71,16 @@ export interface PagedResult<T> {
 
 export interface ProjectsRepository {
   createProject(input: CreateProjectInput): Promise<ProjectsResult<Project>>;
-  getProjectById(orgId: string, projectId: string): Promise<ProjectsResult<Project>>;
-  getProjectBySlug(orgId: string, slugLower: string): Promise<ProjectsResult<Project>>;
-  listProjectsPaged(orgId: string, params: PageQueryParams): Promise<ProjectsResult<PagedResult<Project>>>;
-  archiveProject(orgId: string, projectId: string, archivedAt: Date): Promise<ProjectsResult<Project>>;
+  getProjectById(orgId: Uuid, projectId: Uuid): Promise<ProjectsResult<Project>>;
+  getProjectBySlug(orgId: Uuid, slugLower: string): Promise<ProjectsResult<Project>>;
+  listProjectsPaged(orgId: Uuid, params: PageQueryParams): Promise<ProjectsResult<PagedResult<Project>>>;
+  archiveProject(orgId: Uuid, projectId: Uuid, archivedAt: Date): Promise<ProjectsResult<Project>>;
   /**
    * Count of active (non-archived) projects for an organization. Used by
    * domain callers (e.g. projects-worker) to compare against entitlement
    * limits without loading a full page of projects.
    */
-  countActiveProjects(orgId: string): Promise<ProjectsResult<number>>;
+  countActiveProjects(orgId: Uuid): Promise<ProjectsResult<number>>;
 
   createEnvironment(input: CreateEnvironmentInput): Promise<ProjectsResult<Environment>>;
   /**
@@ -89,9 +90,9 @@ export interface ProjectsRepository {
    * new environment row. The count is intentionally scoped to
    * `org_id + project_id` because environment APIs are project-scoped.
    */
-  countActiveEnvironments(orgId: string, projectId: string): Promise<ProjectsResult<number>>;
-  getEnvironmentById(orgId: string, projectId: string, environmentId: string): Promise<ProjectsResult<Environment>>;
-  getEnvironmentBySlug(orgId: string, projectId: string, slugLower: string): Promise<ProjectsResult<Environment>>;
-  listEnvironmentsPaged(orgId: string, projectId: string, params: PageQueryParams): Promise<ProjectsResult<PagedResult<Environment>>>;
-  archiveEnvironment(orgId: string, projectId: string, environmentId: string, archivedAt: Date): Promise<ProjectsResult<Environment>>;
+  countActiveEnvironments(orgId: Uuid, projectId: Uuid): Promise<ProjectsResult<number>>;
+  getEnvironmentById(orgId: Uuid, projectId: Uuid, environmentId: string): Promise<ProjectsResult<Environment>>;
+  getEnvironmentBySlug(orgId: Uuid, projectId: Uuid, slugLower: string): Promise<ProjectsResult<Environment>>;
+  listEnvironmentsPaged(orgId: Uuid, projectId: Uuid, params: PageQueryParams): Promise<ProjectsResult<PagedResult<Environment>>>;
+  archiveEnvironment(orgId: Uuid, projectId: Uuid, environmentId: string, archivedAt: Date): Promise<ProjectsResult<Environment>>;
 }

@@ -1,4 +1,4 @@
-import { hexToUuid, uuidToHex } from "@saas/db/ids";
+import { hexToUuid, uuidFromPublicId, uuidToHex, type Uuid } from "@saas/db/ids";
 
 
 export function generateRequestId(): string {
@@ -15,18 +15,16 @@ export function orgPublicId(uuid: string): string {
   return `org_${uuidToHex(uuid)}`;
 }
 
-export function parseOrgPublicId(publicId: string): string | null {
-  if (!publicId.startsWith("org_")) return null;
-  return hexToUuid(publicId.slice(4));
+export function parseOrgPublicId(publicId: string): Uuid | null {
+  return uuidFromPublicId(publicId, "org");
 }
 
 export function projectPublicId(uuid: string): string {
   return `prj_${uuidToHex(uuid)}`;
 }
 
-export function parseProjectPublicId(publicId: string): string | null {
-  if (!publicId.startsWith("prj_")) return null;
-  return hexToUuid(publicId.slice(4));
+export function parseProjectPublicId(publicId: string): Uuid | null {
+  return uuidFromPublicId(publicId, "prj");
 }
 
 export function environmentPublicId(uuid: string): string {
