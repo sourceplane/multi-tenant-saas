@@ -1,6 +1,7 @@
 import {
   createConfigRepository,
 } from "@saas/db/config";
+import { asUuid } from "@saas/db";
 import type {
   Scope,
   SecretMetadata,
@@ -351,7 +352,7 @@ describe("ConfigRepository — Secret Metadata", () => {
       scope: ORG_SCOPE,
       secretKey: "DB_PASSWORD",
       displayName: "Database Password",
-      createdBy: "user-001",
+      createdBy: asUuid("00000000-0000-0000-0000-000000000001"),
     });
     expect(result.ok).toBe(true);
     if (result.ok) {
@@ -454,7 +455,7 @@ describe("ConfigRepository — Secret Metadata", () => {
       id: "sec-002",
       scope: PROJECT_SCOPE,
       secretKey: "API_TOKEN",
-      createdBy: "user-001",
+      createdBy: asUuid("00000000-0000-0000-0000-000000000001"),
     });
     expect(queries[0]!.params[1]).toBe("org-001");
     expect(queries[0]!.params[2]).toBe("prj-001");
@@ -468,7 +469,7 @@ describe("ConfigRepository — Secret Metadata", () => {
       id: "sec-001",
       scope: ORG_SCOPE,
       secretKey: "DB_PASSWORD",
-      createdBy: "user-001",
+      createdBy: asUuid("00000000-0000-0000-0000-000000000001"),
     });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.kind).toBe("conflict");
@@ -510,7 +511,7 @@ describe("ConfigRepository — Scope Validation", () => {
       id: "sec-bad",
       scope: ORG_SCOPE,
       secretKey: "x",
-      createdBy: "user-001",
+      createdBy: asUuid("00000000-0000-0000-0000-000000000001"),
     });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.kind).toBe("internal");
@@ -535,7 +536,7 @@ describe("Secret Safety Invariants", () => {
       rotationPolicy: null,
       lastRotatedAt: null,
       expiresAt: null,
-      createdBy: "u",
+      createdBy: asUuid("00000000-0000-0000-0000-000000000002"),
       createdAt: NOW,
       updatedAt: NOW,
     };
