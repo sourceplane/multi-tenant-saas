@@ -210,7 +210,39 @@ be follow-up.
 After B4 lands, the new console consumes the generated SDK rather than a
 bespoke `api.ts`. Single client surface, single retry/auth/idempotency story.
 
-Depends on: B4.
+Depends on: B4. (Landed — console consumes `@saas/sdk` via `src/lib/api.ts`.)
+
+### U11 — Vercel-standard console completion
+
+U1–U10 made the console structurally credible (App Router on Workers, URL-driven
+3-level scope switcher, Cmd-K, designed empty/skeleton states, `412` upgrade UX,
+dark-mode tokens, SDK client). U11 closes the remaining buyer-visible gaps that
+keep it short of the Vercel / Linear / Stripe Dashboard bar, scoped strictly to
+surfaces the public API/SDK already backs:
+
+- **Usage & quota dashboard** — a dedicated surface over `metering.getUsageSummary`
+  / `checkQuota` / `listQuotaViolations` (today usage is only implied by billing
+  entitlement limits; there is no consumption view).
+- **Notification preferences** — per-channel/per-category preferences over
+  `notifications.getPreferences` / `updatePreferences` (no UI exists today).
+- **Account profile/general settings** — name/email + sign-out over
+  `auth.getProfile` / `updateProfile` / `logout` (only `/account/security` exists).
+- **Org & project "settings" surfaces** — scoped to API-backed actions only:
+  read-only metadata + danger-zone archive (`projects.archive`,
+  `environments.archive`). No rename/update — neither orgs, projects, nor
+  environments expose an `update` route, so rename is explicitly OUT until a
+  backend slice adds it.
+- **Design-system completion** — add the spec-12 primitives still missing
+  (`Select`, `Sheet`, `Tooltip`, `Popover`, `Checkbox`) and a mobile nav drawer
+  (the sidebar is `hidden md:flex` with no small-screen replacement).
+- **Interaction polish** — make the Cmd-K command set an extensible registry and
+  introduce optimistic mutations with rollback where safe (archive, role change).
+
+Owner: web-console-next (+ packages/contracts/sdk only if a genuinely additive
+read type is missing; no schema/migration change). Depends on: nothing hard —
+all listed reads/writes are already on api-edge + `@saas/sdk`. Out: rename/update
+of org/project/env (no API), real auth (B1, human-blocked), in-app notification
+inbox with read-state (P4).
 
 ## Product Areas (P) — differentiation
 
