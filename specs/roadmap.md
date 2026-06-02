@@ -376,7 +376,7 @@ inline from passed facts) to cut a 4-hop serial chain toward 2. Add
 measurable and the other PERF tasks are verifiable. Owner: api-edge + resource
 workers. Scoped as Task 0133.
 
-**Done (PR #229).** Shipped a dependency-free `@saas/contracts/timing` helper
+**Done (PR #230).** Shipped a dependency-free `@saas/contracts/timing` helper
 (`createTimings` / `Server-Timing` render / parse / append). On the four hot
 reads (projects-list, audit-list, billing-summary, members-list) the
 authorization-context fetch now runs **concurrently** with the resource read via
