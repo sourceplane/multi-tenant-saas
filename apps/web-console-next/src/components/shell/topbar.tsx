@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Search, Sun, Moon, LogOut, User2, Command as CommandIcon } from "lucide-react";
 import { useTheme } from "next-themes";
 import { ScopeSwitcher } from "./scope-switcher";
+import { MobileNav } from "./mobile-nav";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useSession } from "@/lib/session";
@@ -26,6 +27,7 @@ export function Topbar() {
 
   return (
     <header className="sticky top-0 z-30 flex h-12 items-center gap-3 border-b bg-background/80 px-4 backdrop-blur-md">
+      <MobileNav />
       <ScopeSwitcher />
 
       <div className="ml-auto flex items-center gap-2">

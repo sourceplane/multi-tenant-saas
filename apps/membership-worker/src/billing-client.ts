@@ -86,6 +86,46 @@ export async function checkBillingEntitlement(
   };
 }
 
+export type AssignPlanResult = { kind: "ok" } | { kind: "service_error" };
+
+/**
+ * Assign a plan to an org via billing-worker's internal plan-assignment seam
+ * (Task 0128 / B11). Used at org bootstrap to grant the free plan so the org
+ * gets real entitlement rows. BEST-EFFORT by contract: any failure surfaces as
+ * `service_error` and the caller proceeds without failing the bootstrap — the
+ * billing-worker `check-entitlement` free-tier safety net keeps the REQUIRED
+ * create flows working until a later assignment succeeds.
+ *
+ * Forwards the bootstrapping actor (x-actor-*) so the subscription/entitlement
+ * events attribute to the user who created the org.
+ */
+export async function assignPlan(
+  billingWorker: Fetcher,
+  orgPublicId: string,
+  planCode: string,
+  requestId: string,
+  actor?: { id: string; type: string },
+): Promise<AssignPlanResult> {
+  try {
+    const headers: Record<string, string> = {
+      "content-type": "application/json",
+      "x-request-id": requestId,
+      [INTERNAL_CALLER_HEADER]: INTERNAL_CALLER,
+    };
+    if (actor) {
+      headers["x-actor-subject-id"] = actor.id;
+      headers["x-actor-subject-type"] = actor.type;
+    }
+    const response = await billingWorker.fetch(
+      "http://billing-worker/v1/internal/billing/plan/assign",
+      { method: "POST", headers, body: JSON.stringify({ orgId: orgPublicId, planCode }) },
+    );
+    return response.ok ? { kind: "ok" } : { kind: "service_error" };
+  } catch {
+    return { kind: "service_error" };
+  }
+}
+
 export type MembersEntitlementGate =
   | { kind: "allow" }
   | { kind: "deny"; reason: string; message: string }

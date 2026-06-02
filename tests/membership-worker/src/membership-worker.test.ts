@@ -3500,6 +3500,56 @@ describe("member administration", () => {
       expect(appendedInputs[1]!.event.type).toBe("membership.added");
     });
 
+    it("assigns the free plan (best-effort) with the org public id on bootstrap", async () => {
+      const repo = createFakeRepository();
+      const eventsRepo = {
+        appendEventWithAudit: async () => ({ ok: true as const, value: { event: {} as StoredEvent, audit: {} as StoredAuditEntry } }),
+      };
+      const assigned: string[] = [];
+      const response = await handleCreateOrganization(
+        createRequest({ name: "Plan Co", slug: "plan-co" }),
+        {} as Env,
+        "req_plan_1",
+        actor,
+        {
+          repo,
+          eventsRepo,
+          now: () => fixedNowLocal,
+          generateId: () => "gen_id_p",
+          assignPlan: async (orgPublic: string) => {
+            assigned.push(orgPublic);
+            return { kind: "ok" as const };
+          },
+        },
+      );
+      expect(response.status).toBe(201);
+      expect(assigned).toHaveLength(1);
+      expect(assigned[0]).toMatch(/^org_[0-9a-f]{32}$/);
+    });
+
+    it("still returns 201 when plan assignment throws (best-effort, non-blocking)", async () => {
+      const repo = createFakeRepository();
+      const eventsRepo = {
+        appendEventWithAudit: async () => ({ ok: true as const, value: { event: {} as StoredEvent, audit: {} as StoredAuditEntry } }),
+      };
+      const response = await handleCreateOrganization(
+        createRequest({ name: "Resilient Co", slug: "resilient-co" }),
+        {} as Env,
+        "req_plan_2",
+        actor,
+        {
+          repo,
+          eventsRepo,
+          now: () => fixedNowLocal,
+          generateId: () => "gen_id_q",
+          assignPlan: async () => {
+            throw new Error("billing down");
+          },
+        },
+      );
+      expect(response.status).toBe(201);
+    });
+
     it("stores raw UUIDs in canonical event fields", async () => {
       const repo = createFakeRepository();
       const appendedInputs: AppendEventWithAuditInput[] = [];

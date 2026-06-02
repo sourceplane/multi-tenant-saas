@@ -224,7 +224,11 @@ surfaces the public API/SDK already backs:
   / `checkQuota` / `listQuotaViolations` (today usage is only implied by billing
   entitlement limits; there is no consumption view).
 - **Notification preferences** — per-channel/per-category preferences over
-  `notifications.getPreferences` / `updatePreferences` (no UI exists today).
+  `notifications.getPreferences` / `updatePreferences`. **Backend-blocked:**
+  api-edge exposes no notifications facade (only audit/auth/billing/config/
+  metering/org/project/webhooks), so the console cannot consume it yet. Deferred
+  pending a `/v1/notifications/*` edge slice (see `ai/deferred.md`). The
+  dependency-free `Switch` primitive is in place for when it lands.
 - **Account profile/general settings** — name/email + sign-out over
   `auth.getProfile` / `updateProfile` / `logout` (only `/account/security` exists).
 - **Org & project "settings" surfaces** — scoped to API-backed actions only:
