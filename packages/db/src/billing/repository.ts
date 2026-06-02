@@ -642,37 +642,37 @@ export function createBillingRepository(executor: SqlExecutor): BillingRepositor
 
     // ── Billing summary ────────────────────────────────────
     async getBillingSummary(orgId: string): Promise<BillingResult<BillingSummary>> {
-      const customerRes = await this.getBillingCustomer(orgId);
-      const customer =
-        customerRes.ok
-          ? customerRes.value
-          : customerRes.error.kind === "not_found"
-            ? null
-            : null;
+      // PERF3 (task 0132): collapse 4 sequential round-trips into 2 parallel
+      // phases on the shared connection pool. Phase 1 (customer + active
+      // subscription) then phase 2 (plan + entitlements) each run concurrently;
+      // the plan read follows because it needs the resolved subscription. Query
+      // order is preserved (customer, subscription, plan, entitlements).
+      const [customerRes, subRes] = await Promise.all([
+        this.getBillingCustomer(orgId),
+        this.getActiveSubscription(orgId),
+      ]);
+
+      const customer = customerRes.ok ? customerRes.value : null;
       if (!customerRes.ok && customerRes.error.kind === "internal") {
         return safeError(customerRes.error.message);
       }
 
-      const subRes = await this.getActiveSubscription(orgId);
-      const activeSubscription =
-        subRes.ok
-          ? subRes.value
-          : subRes.error.kind === "not_found"
-            ? null
-            : null;
+      const activeSubscription = subRes.ok ? subRes.value : null;
       if (!subRes.ok && subRes.error.kind === "internal") {
         return safeError(subRes.error.message);
       }
 
+      const [planRes, entRes] = await Promise.all([
+        activeSubscription ? this.getPlan(activeSubscription.planId) : Promise.resolve(null),
+        this.listEntitlements({ orgId }),
+      ]);
+
       let plan: Plan | null = null;
-      if (activeSubscription) {
-        const planRes = await this.getPlan(activeSubscription.planId);
+      if (planRes) {
         if (planRes.ok) plan = planRes.value;
-        else if (planRes.error.kind === "internal")
-          return safeError(planRes.error.message);
+        else if (planRes.error.kind === "internal") return safeError(planRes.error.message);
       }
 
-      const entRes = await this.listEntitlements({ orgId });
       if (!entRes.ok) {
         const msg = entRes.error.kind === "internal" ? entRes.error.message : "Failed to load entitlements";
         return safeError(msg);
