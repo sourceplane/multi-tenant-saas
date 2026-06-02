@@ -610,6 +610,62 @@ describe("decideEntitlement", () => {
     });
   });
 
+  it("returns an allowed free-tier default for a missing bootstrap-critical limit key", async () => {
+    for (const [key, limit] of [
+      ["limit.projects", 3],
+      ["limit.environments", 3],
+      ["limit.members", 5],
+    ] as const) {
+      const repo = fakeRepo({ ok: false, error: { kind: "not_found" } });
+      const outcome = await decideEntitlement(repo, {
+        publicOrgId: TEST_ORG_PUBLIC,
+        orgId: TEST_ORG_HEX,
+        entitlementKey: key,
+      });
+      expect(outcome).toEqual({
+        kind: "decision",
+        body: {
+          allowed: true,
+          orgId: TEST_ORG_PUBLIC,
+          entitlementKey: key,
+          valueType: "quantity",
+          limitValue: limit,
+          source: "plan",
+          subscriptionId: null,
+        },
+      });
+    }
+  });
+
+  it("still denies (not_configured) for a missing NON-default key", async () => {
+    const repo = fakeRepo({ ok: false, error: { kind: "not_found" } });
+    const outcome = await decideEntitlement(repo, {
+      publicOrgId: TEST_ORG_PUBLIC,
+      orgId: TEST_ORG_HEX,
+      entitlementKey: "feature.custom_domains",
+    });
+    expect(outcome.kind).toBe("decision");
+    if (outcome.kind !== "decision") return;
+    expect(outcome.body.allowed).toBe(false);
+  });
+
+  it("lets an explicit disabled row override the default for a default key", async () => {
+    const repo = fakeRepo({ ok: true, value: makeEntitlement({ enabled: false }) });
+    const outcome = await decideEntitlement(repo, {
+      publicOrgId: TEST_ORG_PUBLIC,
+      orgId: TEST_ORG_HEX,
+      entitlementKey: "limit.projects",
+    });
+    expect(outcome.kind).toBe("decision");
+    if (outcome.kind !== "decision") return;
+    expect(outcome.body).toEqual({
+      allowed: false,
+      orgId: TEST_ORG_PUBLIC,
+      entitlementKey: "limit.projects",
+      reason: "disabled",
+    });
+  });
+
   it("surfaces repo_error for non-not_found repository failures", async () => {
     const repo = fakeRepo({
       ok: false,

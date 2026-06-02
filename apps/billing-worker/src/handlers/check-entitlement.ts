@@ -23,6 +23,32 @@ interface ParsedRequest {
   entitlementKey: string;
 }
 
+/**
+ * Implicit free-tier baseline ("default plan") entitlements.
+ *
+ * Per `specs/components/11-billing.md` ("Plans drive entitlement defaults") and
+ * `specs/product-overview.md` (create-project is a REQUIRED bootstrap flow that
+ * "must not be required for the basic SaaS bootstrap flows to work"), an org
+ * with no explicit subscription/override must still be able to perform the
+ * baseline bootstrap actions. Billing has no subscription-creation write path
+ * yet, so without this baseline every brand-new org is permanently blocked from
+ * creating its first project/environment/invite.
+ *
+ * These defaults apply ONLY when no explicit entitlement row exists for the
+ * (org, key). An explicit row — including an `enabled:false` row or a
+ * subscription/override limit — always takes precedence (it is returned by
+ * `getEntitlement` before this map is consulted). Keys NOT listed here keep the
+ * deny-by-default `not_configured` posture (e.g. paid `feature.*` flags).
+ *
+ * `limitValue: null` would mean unlimited; finite values give a sane free cap.
+ */
+const DEFAULT_TIER_ENTITLEMENTS: Record<string, number> = {
+  "limit.projects": 3,
+  "limit.environments": 3,
+  "limit.members": 5,
+};
+
+
 export function parseCheckEntitlementBody(
   body: unknown,
 ): ParsedRequest | { error: string } {
@@ -72,6 +98,25 @@ export async function decideEntitlement(
 
   if (!result.ok) {
     if (result.error.kind === "not_found") {
+      // No explicit entitlement row. Fall back to the implicit free-tier
+      // baseline for bootstrap-critical limit keys so a brand-new org can
+      // create its first project/environment/invite; all other keys keep the
+      // deny-by-default `not_configured` posture.
+      const defaultLimit = DEFAULT_TIER_ENTITLEMENTS[parsed.entitlementKey];
+      if (defaultLimit !== undefined) {
+        return {
+          kind: "decision",
+          body: {
+            allowed: true,
+            orgId: parsed.publicOrgId,
+            entitlementKey: parsed.entitlementKey,
+            valueType: "quantity",
+            limitValue: defaultLimit,
+            source: "plan",
+            subscriptionId: null,
+          },
+        };
+      }
       return {
         kind: "decision",
         body: {
