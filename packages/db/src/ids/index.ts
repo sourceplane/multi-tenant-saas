@@ -35,7 +35,19 @@ export function uuidFromPublicId(publicId: string, prefix?: string): Uuid | null
   const sep = publicId.indexOf("_");
   if (sep < 1) return null;
   if (prefix !== undefined && publicId.slice(0, sep) !== prefix) return null;
-  const hex = publicId.slice(sep + 1);
+  return hexToUuid(publicId.slice(sep + 1)) as Uuid | null;
+}
+
+// ── Public-id ⇄ UUID conversion primitives ──────────────────
+// Shared so the 10 workers stop each carrying an identical private copy.
+
+/** Strip the dashes from a UUID to form the hex body of a public id. */
+export function uuidToHex(uuid: string): string {
+  return uuid.replace(/-/g, "");
+}
+
+/** Re-insert dashes into a 32-char hex body; null if not 32 hex chars. */
+export function hexToUuid(hex: string): string | null {
   if (!HEX32_RE.test(hex)) return null;
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}` as Uuid;
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }

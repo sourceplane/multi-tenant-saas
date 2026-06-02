@@ -1,3 +1,4 @@
+import { hexToUuid, uuidToHex } from "@saas/db/ids";
 function randomHex(bytes: number): string {
   const buf = new Uint8Array(bytes);
   crypto.getRandomValues(buf);
@@ -8,14 +9,7 @@ function randomHex(bytes: number): string {
   return hex;
 }
 
-function uuidToHex(uuid: string): string {
-  return uuid.replace(/-/g, "");
-}
 
-function hexToUuid(hex: string): string | null {
-  if (hex.length !== 32 || !/^[0-9a-f]+$/i.test(hex)) return null;
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
-}
 
 export function generateRequestId(): string {
   return `req_${randomHex(12)}`;
