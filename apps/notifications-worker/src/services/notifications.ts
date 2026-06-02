@@ -13,7 +13,7 @@ import type {
   StoredNotificationAttempt,
 } from "@saas/db/notifications";
 import type { Env } from "../env.js";
-import { notificationPublicId, parseNotificationPublicId } from "../ids.js";
+import { notificationPublicId, parseNotificationPublicId, parseOrgIdInput } from "../ids.js";
 import { emitEvent } from "../events-client.js";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -159,9 +159,16 @@ export async function enqueueNotification(
   const genUuid = deps.generateUuid ?? (() => crypto.randomUUID());
   const emit = deps.emit ?? emitEvent;
 
+  // notifications.org_id is a UUID column; decode the incoming org id (public
+  // `org_<hex>` form or a bare UUID) into a branded Uuid before any repo call.
+  const orgUuid = parseOrgIdInput(request.orgId);
+  if (!orgUuid) {
+    return { error: { code: "validation_error", status: 422, message: "Invalid org id" } };
+  }
+
   // Idempotency check.
   if (request.idempotencyKey) {
-    const existing = await repo.findNotificationByIdempotencyKey(request.orgId, request.idempotencyKey);
+    const existing = await repo.findNotificationByIdempotencyKey(orgUuid, request.idempotencyKey);
     if (existing.ok) {
       const attempts = await repo.listAttempts(existing.value.id);
       return {
@@ -176,12 +183,12 @@ export async function enqueueNotification(
   }
 
   // Suppression short-circuit.
-  const suppressed = await repo.isSuppressed(request.orgId, request.recipient.channel, request.recipient.address);
+  const suppressed = await repo.isSuppressed(orgUuid, request.recipient.channel, request.recipient.address);
   if (suppressed.ok && suppressed.value) {
     const id = genUuid();
     const create = await repo.createNotification({
       id,
-      orgId: request.orgId,
+      orgId: orgUuid,
       category: request.category,
       templateKey: request.templateKey,
       templateData: request.templateData ?? {},
@@ -229,7 +236,7 @@ export async function enqueueNotification(
   const id = genUuid();
   const created = await repo.createNotification({
     id,
-    orgId: request.orgId,
+    orgId: orgUuid,
     category: request.category,
     templateKey: request.templateKey,
     templateData: request.templateData ?? {},
@@ -246,7 +253,7 @@ export async function enqueueNotification(
     if (created.error.kind === "conflict") {
       // Idempotency race: re-fetch.
       if (request.idempotencyKey) {
-        const re = await repo.findNotificationByIdempotencyKey(request.orgId, request.idempotencyKey);
+        const re = await repo.findNotificationByIdempotencyKey(orgUuid, request.idempotencyKey);
         if (re.ok) {
           const attempts = await repo.listAttempts(re.value.id);
           return {
