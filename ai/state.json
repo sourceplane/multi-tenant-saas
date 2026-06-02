@@ -1,10 +1,10 @@
 {
   "goal": "Supabase/Postgres-backed multi-organization Orun SaaS control plane",
-  "active_milestone": null,
-  "current_task": null,
+  "active_milestone": "U11-console-vercel-standard",
+  "current_task": "0127",
   "last_verified": "2026-06-01T12:00:00Z",
   "repo_health": "green",
-  "next_focus": "Re-survey next leg (trust code over docs). B-track forward legs B1 (OAuth+email) / B6 (Stripe creds) / B10 (SSO/SCIM) are human-blocked; B9-console is DEFERRED on a human architecture decision; P1 promote-flow is the likely next human-independent leg.",
+  "next_focus": "Task 0127 (U11) scoped: Vercel-standard console completion — close API-backed buyer-facing gaps (usage/quota view, notification preferences, account profile, org/project settings homes), complete the design-system primitive set (Select/Sheet/Tooltip/Popover/Checkbox), add mobile nav, make Cmd-K an extensible registry, and add optimistic mutations where safe. All scoped to existing @saas/sdk surface (no rename/update UI — no API for it). B-track forward legs B1/B6/B10 remain human-blocked; B9-console DEFERRED on a human architecture decision; P1 promote-flow remains the likely next backend-leaning leg.",
   "deferred": [
     "0085b",
     "notifications-provider-swap",
@@ -152,7 +152,7 @@
     "0125",
     "0126"
   ],
-  "task_agent": null,
+  "task_agent": "ai/tasks/task-0127.md",
   "waiting_for_input": "false",
   "notes": [
     "2026-06-01: ai/ working tree compacted. Historical task prompts (ai/tasks/), implementer/verifier reports (ai/reports/), spec proposals (ai/proposals/), the task ledger (ai/context/task-ledger.md), and the orchestrator journal/brief were removed from the working tree to keep a minimal context surface. ALL remain recoverable from git history (see ai/context/current.md for retrieval). Live boot surface kept: this file, ai/context/current.md (compact summary), ai/context/decisions.md, ai/context/open-risks.md, ai/deferred.md, ai/waiting_for_input.md.",
