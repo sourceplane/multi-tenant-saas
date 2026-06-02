@@ -41,6 +41,15 @@ interface ParsedRequest {
  * deny-by-default `not_configured` posture (e.g. paid `feature.*` flags).
  *
  * `limitValue: null` would mean unlimited; finite values give a sane free cap.
+ *
+ * Task 0128 (B11) makes the free tier a REAL plan: org bootstrap now assigns the
+ * `free` plan and materializes these same keys into `billing.entitlements`
+ * rows, so this map is normally never consulted. It is retained as a
+ * **last-resort safety net** so a transient plan-assignment failure during
+ * bootstrap can't hard-block the REQUIRED create-project/environment/invite
+ * flows. The values are kept >= the free plan's so the net never grants more
+ * than the plan. Remove this map only once bootstrap assignment is proven
+ * reliable end-to-end (and a backfill covers any pre-0128 orgs).
  */
 const DEFAULT_TIER_ENTITLEMENTS: Record<string, number> = {
   "limit.projects": 3,
