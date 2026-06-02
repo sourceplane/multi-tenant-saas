@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { wrap } from "@/lib/api";
 import { useSession } from "@/lib/session";
+import { AccountTabs } from "@/components/account/account-tabs";
 import {
   appendSecurityPage,
   EMPTY_SECURITY_EVENTS,
@@ -68,7 +69,14 @@ export default function AccountSecurityPage() {
   return (
     <div className="space-y-5">
       <header>
-        <h1 className="text-xl font-semibold tracking-tight">Security activity</h1>
+        <h1 className="text-xl font-semibold tracking-tight">Account</h1>
+        <p className="text-sm text-muted-foreground">Manage your profile and session.</p>
+      </header>
+
+      <AccountTabs active="security" />
+
+      <header>
+        <h2 className="text-base font-semibold tracking-tight">Security activity</h2>
         <p className="text-sm text-muted-foreground">
           Recent authentication and session events on your account, newest
           first. Sensitive material (codes, tokens, hashes) is never shown.

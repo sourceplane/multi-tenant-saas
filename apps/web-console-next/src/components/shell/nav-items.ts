@@ -42,12 +42,13 @@ export function buildNavSections(scope: NavScope): NavSection[] {
     links: [{ href: "/orgs", label: "Organizations", icon: "Building2" }],
   });
 
-  // Account links are added per-surface as those routes land (U11 slices add
-  // Profile and Notifications). Security activity already exists.
   sections.push({
     id: "account",
     label: "Account",
-    links: [{ href: "/account/security", label: "Security activity", icon: "ShieldCheck" }],
+    links: [
+      { href: "/account", label: "Profile", icon: "User2" },
+      { href: "/account/security", label: "Security activity", icon: "ShieldCheck" },
+    ],
   });
 
   if (orgBase) {
@@ -66,6 +67,7 @@ export function buildNavSections(scope: NavScope): NavSection[] {
         { href: `${orgBase}/config`, label: "Config", icon: "Settings" },
         { href: `${orgBase}/audit`, label: "Audit log", icon: "ScrollText" },
         { href: `${orgBase}/billing`, label: "Billing", icon: "Receipt" },
+        { href: `${orgBase}/settings`, label: "Settings", icon: "SlidersHorizontal" },
       ],
     });
   }

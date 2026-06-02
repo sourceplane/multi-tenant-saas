@@ -93,6 +93,15 @@ export function buildBaseCommands(ctx: CommandContext): CommandDescriptor[] {
     shortcut: "O",
   });
   out.push({
+    id: "nav.account",
+    label: "Account profile",
+    group: "Navigation",
+    kind: "navigate",
+    to: "/account",
+    icon: "User2",
+    keywords: ["profile", "account", "me", "name", "display name", "sign out", "logout"],
+  });
+  out.push({
     id: "nav.account.security",
     label: "Security activity",
     group: "Navigation",
@@ -102,9 +111,6 @@ export function buildBaseCommands(ctx: CommandContext): CommandDescriptor[] {
     keywords: ["security", "sessions", "activity", "login", "account"],
   });
 
-  // Note: account profile, notification preferences, usage & quota, and org
-  // settings commands are contributed by their respective U11 slices alongside
-  // the routes they navigate to, so the palette never points at a 404.
   if (orgBase) {
     out.push(
       navItem("nav.projects", "Projects", `${orgBase}/projects`, "FolderKanban", ["project"]),
@@ -122,6 +128,11 @@ export function buildBaseCommands(ctx: CommandContext): CommandDescriptor[] {
       navItem("nav.config", "Config", `${orgBase}/config`, "Settings", ["config", "settings", "flags"]),
       navItem("nav.audit", "Audit log", `${orgBase}/audit`, "ScrollText", ["audit", "history", "events"]),
       navItem("nav.billing", "Billing", `${orgBase}/billing`, "Receipt", ["billing", "plan", "invoice"]),
+      navItem("nav.org-settings", "Organization settings", `${orgBase}/settings`, "SlidersHorizontal", [
+        "settings",
+        "org",
+        "danger",
+      ]),
     );
   }
   if (projectBase) {

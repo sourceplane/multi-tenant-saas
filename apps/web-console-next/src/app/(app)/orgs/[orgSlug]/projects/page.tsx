@@ -14,10 +14,13 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ZodForm } from "@/components/ui/zod-form";
 import { PreconditionInsight } from "@/components/precondition/insight";
+import { ArchiveMenu } from "@/components/settings/archive-menu";
+import { removeById } from "@/components/settings/archive";
 import { useSession } from "@/lib/session";
 import { useAsync } from "@/lib/use-async";
 import { useToast } from "@/components/ui/toast";
 import { wrap, type ApiErrorBody } from "@/lib/api";
+import type { PublicProject } from "@saas/contracts/projects";
 
 const schema = z.object({
   name: z.string().min(2).max(64),
@@ -39,6 +42,24 @@ function Inner({ orgId, orgSlug }: { orgId: string; orgSlug: string }) {
   );
   const [open, setOpen] = React.useState(false);
   const [precondition, setPrecondition] = React.useState<ApiErrorBody | null>(null);
+
+  // Local mirror of the fetched list so archive can mutate optimistically.
+  const [items, setItems] = React.useState<PublicProject[]>([]);
+  React.useEffect(() => {
+    if (projects.data) setItems(projects.data);
+  }, [projects.data]);
+
+  const archive = async (project: PublicProject) => {
+    const previous = items;
+    setItems((cur) => removeById(cur, project.id)); // optimistic
+    const r = await wrap(() => client.projects.archive(orgId, project.id));
+    if (!r.ok) {
+      setItems(previous); // rollback
+      toast({ kind: "error", title: "Archive failed", description: r.error.message });
+      return;
+    }
+    toast({ kind: "success", title: `Archived ${project.name}` });
+  };
 
   return (
     <div className="space-y-5">
@@ -113,7 +134,7 @@ function Inner({ orgId, orgSlug }: { orgId: string; orgSlug: string }) {
             <CardDescription>{projects.error.message}</CardDescription>
           </CardHeader>
         </Card>
-      ) : !projects.data || projects.data.length === 0 ? (
+      ) : items.length === 0 ? (
         <EmptyState
           icon={FolderKanban}
           title="No projects yet"
@@ -122,27 +143,32 @@ function Inner({ orgId, orgSlug }: { orgId: string; orgSlug: string }) {
         />
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {projects.data.map((p) => (
-            <Link
-              key={p.id}
-              href={`/orgs/${orgSlug}/projects/${p.slug}/environments`}
-              className="group"
-            >
-              <Card className="h-full transition-shadow group-hover:shadow-md group-hover:border-primary/40">
-                <CardHeader>
-                  <div className="flex items-center justify-between gap-2">
-                    <CardTitle className="text-base truncate">{p.name}</CardTitle>
-                    <Badge variant={p.status === "active" ? "success" : "secondary"}>{p.status}</Badge>
-                  </div>
-                  <CardDescription className="text-xs">{p.slug}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-xs text-muted-foreground">
-                    Updated {new Date(p.updatedAt).toLocaleDateString()}
-                  </div>
-                </CardContent>
-              </Card>
-            </Link>
+          {items.map((p) => (
+            <div key={p.id} className="relative">
+              <div className="absolute right-3 top-3 z-10">
+                <ArchiveMenu
+                  resourceLabel="project"
+                  name={p.name}
+                  onConfirm={() => archive(p)}
+                />
+              </div>
+              <Link href={`/orgs/${orgSlug}/projects/${p.slug}/environments`} className="group block">
+                <Card className="h-full transition-shadow group-hover:shadow-md group-hover:border-primary/40">
+                  <CardHeader>
+                    <div className="flex items-center justify-between gap-2 pr-8">
+                      <CardTitle className="text-base truncate">{p.name}</CardTitle>
+                      <Badge variant={p.status === "active" ? "success" : "secondary"}>{p.status}</Badge>
+                    </div>
+                    <CardDescription className="text-xs">{p.slug}</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-xs text-muted-foreground">
+                      Updated {new Date(p.updatedAt).toLocaleDateString()}
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
+            </div>
           ))}
         </div>
       )}

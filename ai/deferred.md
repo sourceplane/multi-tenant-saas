@@ -54,6 +54,26 @@ selection pass.
   resources slice. Do not emit a CLI-only task for this until backend
   routes exist.
 
+## Console notification-preferences surface (U11) — needs api-edge notifications facade
+- Deferred: 2026-06-02
+- Blocking decision: backend gap, not user input. `@saas/sdk` exposes
+  `notifications.getPreferences` / `updatePreferences`, but **api-edge has no
+  notifications facade** — the facade set is auth, org, project, webhooks,
+  billing, config, metering, audit (`apps/api-edge/src/*-facade.ts`). A live
+  `GET /v1/notifications/preferences` against stage returns `not_found`. The
+  web console may only consume api-edge, so a notification-preferences page
+  would be a broken (404) feature. Dropped from Task 0127 (U11 slice C) for
+  this reason.
+- Unblock signal: a backend task lands a `/v1/notifications/preferences`
+  (GET + PUT) facade on api-edge routing to notifications-worker, with the
+  org-scoped actor auth the other facades use.
+- Notes: the console foundation is ready — the dependency-free `Switch`
+  primitive (Slice A) and the page pattern are in place; this becomes a small
+  console PR (org-scoped page over `notifications.getPreferences/updatePreferences`
+  with optimistic per-category toggles) once the edge route exists. Preferences
+  are keyed by `(orgId, subjectKind:"user", subjectId, channel:"email")`, so the
+  page is org-scoped (`/orgs/:slug/notifications`), not a pure account page.
+
 ## notifications-worker-dev provisioning + dev binding (REFRAMED → `notifications-worker-dev-reframe`)
 - Deferred: 2026-05-30 (originally parked behind Task 0089 as a narrow
   follow-up; reframed during Task 0090 scoping after orchestrator

@@ -7,10 +7,10 @@ describe("buildNavSections", () => {
     expect(ids).toContain("account");
   });
 
-  it("exposes the security activity link in the account section", () => {
+  it("exposes the profile + security activity links in the account section", () => {
     const account = buildNavSections({}).find((s) => s.id === "account")!;
     const hrefs = account.links.map((l) => l.href);
-    expect(hrefs).toEqual(["/account/security"]);
+    expect(hrefs).toEqual(["/account", "/account/security"]);
   });
 
   it("omits org/project sections without slugs", () => {
