@@ -63,7 +63,7 @@
       "vars": {
         "ENVIRONMENT": "prod",
         "DEBUG_DELIVERY": "false",
-        "GITHUB_OAUTH_CLIENT_ID": "",
+        "GITHUB_OAUTH_CLIENT_ID": "Ov23lilp2aoyeBDVU8Vc",
         "OAUTH_REDIRECT_BASE_URL": "https://api-edge-prod.rahulvarghesepullely.workers.dev",
         "OAUTH_ALLOWED_CONSOLE_ORIGINS": "https://prod.sourceplane.ai,https://sourceplane-web-console-next-prod.rahulvarghesepullely.workers.dev"
       },
