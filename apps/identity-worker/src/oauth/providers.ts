@@ -8,6 +8,7 @@ import type { OAuthProviderInfo } from "@saas/contracts/auth";
 import type { Env } from "../env.js";
 import { getRedirectBaseOrigin, getStateSecret } from "./config.js";
 import { githubProvider } from "./github.js";
+import { googleProvider } from "./google.js";
 
 /** A stable, provider-scoped subject + the profile facts we trust. */
 export interface OAuthIdentity {
@@ -40,17 +41,20 @@ export interface ConfiguredProvider {
 
 const PROVIDERS: Record<string, OAuthProvider> = {
   [githubProvider.id]: githubProvider,
+  [googleProvider.id]: googleProvider,
 };
 
 /** Per-provider client credentials read from `Env`, or null when not set. */
 function readClientCredentials(env: Env, providerId: string): { clientId: string; clientSecret: string } | null {
-  if (providerId === "github") {
-    const clientId = env.GITHUB_OAUTH_CLIENT_ID;
-    const clientSecret = env.GITHUB_OAUTH_CLIENT_SECRET;
-    if (typeof clientId === "string" && clientId && typeof clientSecret === "string" && clientSecret) {
-      return { clientId, clientSecret };
-    }
-    return null;
+  const pairs: Record<string, { id: string | undefined; secret: string | undefined }> = {
+    github: { id: env.GITHUB_OAUTH_CLIENT_ID, secret: env.GITHUB_OAUTH_CLIENT_SECRET },
+    google: { id: env.GOOGLE_OAUTH_CLIENT_ID, secret: env.GOOGLE_OAUTH_CLIENT_SECRET },
+  };
+  const creds = pairs[providerId];
+  if (!creds) return null;
+  const { id, secret } = creds;
+  if (typeof id === "string" && id && typeof secret === "string" && secret) {
+    return { clientId: id, clientSecret: secret };
   }
   return null;
 }

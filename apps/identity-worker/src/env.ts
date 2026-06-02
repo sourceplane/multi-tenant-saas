@@ -16,6 +16,10 @@ export interface Env {
   GITHUB_OAUTH_CLIENT_ID?: string;
   /** GitHub OAuth App client secret (secret). */
   GITHUB_OAUTH_CLIENT_SECRET?: string;
+  /** Google OAuth 2.0 client id (non-secret config). */
+  GOOGLE_OAUTH_CLIENT_ID?: string;
+  /** Google OAuth 2.0 client secret (secret). */
+  GOOGLE_OAUTH_CLIENT_SECRET?: string;
   /** HMAC signing secret for the stateless OAuth `state` token (secret). */
   OAUTH_STATE_SECRET?: string;
   /** Public api-edge origin fronting this worker; used to build the provider
