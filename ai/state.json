@@ -2,9 +2,9 @@
   "goal": "Supabase/Postgres-backed multi-organization Orun SaaS control plane",
   "active_milestone": null,
   "current_task": null,
-  "last_verified": "2026-06-02T12:10:00Z",
+  "last_verified": "2026-06-02T12:20:00Z",
   "repo_health": "green",
-  "next_focus": "PERF connection-reuse (task 0134) DONE \u2014 merged PR #224 (module-scoped, self-healing postgres client pool in @saas/db executor: reuse across requests, no-op dispose, evict+recreate+retry-once on connection errors incl. Workers cross-request I/O) + PR #225 (rebuilt all 10 DB-using workers so the bundled executor actually ships, since Orun doesn't cascade shared-package changes to dependent deploys). Verified on stage: all requests HTTP 200 (no connection / 'I/O on behalf of a different request' errors) \u2014 safe. Latency win lands as the 10-worker post-merge deploy converges (CI throughput slow). Remaining PERF: 0133 PERF4 (hop reduction + Server-Timing observability \u2014 recommended next so further gains are measurable); reverse-lookup index migration; Hyperdrive cache-eligibility audit. PRIOR DONE: 0130 (client cache), 0131 (edge bearer cache), 0132 (parallel billing + member N+1).",
+  "next_focus": "PERF connection-reuse (task 0134) REVERTED \u2014 #224/#225 shipped a module-scoped postgres client pool but stage verification FAILED: Cloudflare Workers rejects reusing a client/socket opened in another request ('Cannot perform I/O on behalf of a different request'). membership-worker returned 500 and billing went flaky 503; the self-heal retry did not recover. Rolled back via PR #227 (squash 2f5f4fc): executor.ts restored to per-request client creation + real dispose() (with a comment documenting why reuse is unsafe in Workers), removed the module pool + __poolTestHooks + pool test, re-touched all 10 DB-using workers to redeploy the safe executor (Orun doesn't cascade packages/db changes). A Workers-safe reuse approach (Hyperdrive driver guidance / ctx.waitUntil(sql.end())) would need a canary before any retry. NEXT: verify stage recovered (members/billing HTTP 200) after the post-#227 deploy converges, then 0133 PERF4 (hot-path hop reduction + parallelization + Server-Timing observability). Remaining PERF after that: reverse-lookup index migration; Hyperdrive cache-eligibility audit. PRIOR DONE: 0130 (client cache), 0131 (edge bearer cache), 0132 (parallel billing + member N+1).",
   "deferred": [
     "0085b",
     "notifications-provider-swap",
@@ -155,13 +155,16 @@
     "0128",
     "0130",
     "0131",
-    "0132",
+    "0132"
+  ],
+  "reverted": [
     "0134"
   ],
   "task_agent": "ai/reports/task-0134-implementer.md",
   "waiting_for_input": "false",
   "notes": [
     "2026-06-01: ai/ working tree compacted. Historical task prompts (ai/tasks/), implementer/verifier reports (ai/reports/), spec proposals (ai/proposals/), the task ledger (ai/context/task-ledger.md), and the orchestrator journal/brief were removed from the working tree to keep a minimal context surface. ALL remain recoverable from git history (see ai/context/current.md for retrieval). Live boot surface kept: this file, ai/context/current.md (compact summary), ai/context/decisions.md, ai/context/open-risks.md, ai/deferred.md, ai/waiting_for_input.md.",
-    "2026-06-01: Task 0126 (B5 manual webhook delivery replay) DONE \u2014 implemented and merged as PR #181, squash 63886a6, now main HEAD. State files previously lagged reality (said 0126 only scoped). No active task; orchestrator must re-survey to scope the next leg."
+    "2026-06-01: Task 0126 (B5 manual webhook delivery replay) DONE \u2014 implemented and merged as PR #181, squash 63886a6, now main HEAD. State files previously lagged reality (said 0126 only scoped). No active task; orchestrator must re-survey to scope the next leg.",
+    "2026-06-02: Task 0134 (connection reuse) REVERTED. The module-scoped postgres client pool (#224/#225) broke on stage \u2014 Cloudflare Workers cannot reuse a socket opened in a different request ('Cannot perform I/O on behalf of a different request'); membership 500, billing flaky 503, self-heal retry insufficient. Rolled back via PR #227 (squash 2f5f4fc) to per-request executor + dispose(). Lesson: any cross-request connection reuse on Workers must go through Hyperdrive-supported patterns and be canaried before retry."
   ]
 }
