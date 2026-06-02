@@ -622,10 +622,17 @@ export function createMembershipRepository(executor: SqlExecutor): MembershipRep
       if (subjectIds.length === 0) return { ok: true, value: map };
       try {
         // PERF3 (task 0132): one batched query instead of N per-member queries.
+        // NOTE: use a parameterized IN (...) list of scalar text params rather
+        // than `= ANY($2)` with a JS array. The pg driver runs with
+        // `fetch_types: false` (executor.ts), which leaves array parameters
+        // without a resolvable element-type OID and makes `ANY($array)` throw
+        // at bind time — that surfaced as a hard 500 on the members list. A
+        // scalar IN list avoids array serialization entirely.
+        const placeholders = subjectIds.map((_, i) => `$${i + 2}`).join(", ");
         const result = await executor.execute<Record<string, unknown>>(
           `SELECT * FROM membership.role_assignments
-           WHERE org_id = $1 AND subject_id = ANY($2) AND revoked_at IS NULL`,
-          [orgId, subjectIds],
+           WHERE org_id = $1 AND subject_id IN (${placeholders}) AND revoked_at IS NULL`,
+          [orgId, ...subjectIds],
         );
         for (const id of subjectIds) map.set(id, []);
         for (const row of result.rows) {

@@ -1112,6 +1112,44 @@ describe("MembershipRepository", () => {
     });
   });
 
+  describe("listRoleAssignmentsForSubjects", () => {
+    it("batches with a scalar IN list (no array param) and groups by subject", async () => {
+      const { executor, queries } = createFakeExecutor({
+        rows: [
+          SAMPLE_ROLE_ASSIGNMENT_ROW,
+          { ...SAMPLE_ROLE_ASSIGNMENT_ROW, id: "ra-002", subject_id: "usr-002", role: "member" },
+        ],
+      });
+      const repo = createMembershipRepository(executor);
+
+      const result = await repo.listRoleAssignmentsForSubjects!(ORG1, ["usr-001", "usr-002"]);
+
+      // One query, not N. Regression guard: must use scalar IN-list params,
+      // never `= ANY($array)` (array params throw under fetch_types:false).
+      expect(queries).toHaveLength(1);
+      expect(queries[0]!.text).toContain("subject_id IN ($2, $3)");
+      expect(queries[0]!.text).not.toContain("ANY(");
+      expect(queries[0]!.params).toEqual([ORG1, "usr-001", "usr-002"]);
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value.get("usr-001")?.map((ra) => ra.role)).toEqual(["owner"]);
+        expect(result.value.get("usr-002")?.map((ra) => ra.role)).toEqual(["member"]);
+      }
+    });
+
+    it("short-circuits without a query for an empty subject list", async () => {
+      const { executor, queries } = createFakeExecutor({ rows: [] });
+      const repo = createMembershipRepository(executor);
+
+      const result = await repo.listRoleAssignmentsForSubjects!(ORG1, []);
+
+      expect(queries).toHaveLength(0);
+      expect(result.ok).toBe(true);
+      if (result.ok) expect(result.value.size).toBe(0);
+    });
+  });
+
   describe("revokeRoleAssignment", () => {
     it("uses parameterized update with revoked_at IS NULL guard", async () => {
       const { executor, queries } = createFakeExecutor({
