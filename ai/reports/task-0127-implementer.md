@@ -108,3 +108,62 @@ PR: `claude/u11-b-usage`.
 - Browser: Consumption + Quota-violations render; Select primitives work; a
   metric query resolves to the designed "No usage recorded" / "No quota
   violations" empty states against live stage; **zero console errors**.
+
+Merged: PR #205 (squash `edd1308`).
+
+---
+
+## Slice C — Account profile, org settings, optimistic archive
+
+PR: `claude/u11-c-account-settings`. (Final slice; combines the planned C + D
+to reduce CI cycles.)
+
+### Code-reality correction (important)
+The planned **notification-preferences** surface was **dropped from the
+console**: although `@saas/sdk` exposes `notifications.getPreferences/
+updatePreferences`, **api-edge has no notifications facade** — the facade set is
+audit, auth, billing, config, metering, org, project, webhooks (verified in
+`apps/api-edge/src/*-facade.ts`; a live `GET /v1/notifications/preferences`
+returns `not_found`). The console may only consume api-edge, so shipping that
+page would be a broken (404) feature. It is recorded as backend-blocked in
+`ai/deferred.md` and the roadmap U11 entry; the dependency-free `Switch`
+primitive from Slice A is retained for when the edge facade lands.
+
+### What shipped
+- **Account profile** `app/(app)/account/page.tsx` over `auth.getProfile/
+  updateProfile/logout`: editable display name (dirty-gated Save, discard),
+  read-only email, user id, avatar initials, and an explicit **Sign out**. A
+  shared `AccountTabs` (Profile / Security activity) sub-nav added to both
+  account routes. Pure helper `components/account/profile.ts`.
+- **Org settings** `app/(app)/orgs/[orgSlug]/settings/page.tsx`: read-only
+  name/slug/id (copy buttons) with an honest "renaming isn't available from the
+  console yet" note (no org `update` API), and a **Danger zone** whose delete is
+  a disabled, tooltip-explained "handled by support" control (no org `delete`
+  API — does not fake an action).
+- **Optimistic archive** on the projects and environments lists: a shared
+  `ArchiveMenu` (⋯ → confirm dialog) + `components/settings/archive.ts`; the
+  parent removes the row optimistically and rolls back on error. Uses the
+  existing `projects.archive` / `environments.archive`.
+- **Nav + Cmd-K**: Profile (account section), org Settings, and `nav.account` /
+  `nav.org-settings` commands added alongside their routes.
+
+### Tests & gates
+- `profile.test.ts`, `archive.test.ts` (+ Slice-A/B suites). Full suite
+  **135 passing**.
+- typecheck ✓, lint ✓, `next build` ✓.
+- Browser (live stage): account profile loads, **a display-name edit persists to
+  the backend** (confirmed via `GET /v1/auth/profile`), sign-out present; org
+  settings renders metadata + danger zone; sidebar shows Profile + Settings and
+  correctly omits Notifications; **zero console errors**. Project/environment
+  archive is code-complete + unit-tested but not browser-verified end-to-end —
+  the verification org's entitlement gate blocks project creation
+  (`precondition_failed / not_configured`), so there were no projects/envs to
+  archive; the optimistic logic and confirm UI are covered by unit tests and
+  render correctly.
+
+## U11 outcome
+Shipped: U2 primitive completion (Select/Tooltip/Sheet + Switch/Checkbox),
+mobile nav, extensible Cmd-K (Slice A); usage & quota (Slice B); account profile
++ org/project settings + optimistic archive (Slice C). Deferred (backend-blocked,
+not a console gap): notification preferences, pending an api-edge notifications
+facade. Rename/update of org/project/env remains out (no API), as scoped.
