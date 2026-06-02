@@ -1,7 +1,13 @@
 import {
   createMembershipRepository,
 } from "@saas/db/membership";
+import { asUuid } from "@saas/db";
 import type { SqlExecutor, SqlExecutorResult, SqlRow } from "@saas/db/hyperdrive";
+
+const ORG1 = asUuid("00000000-0000-0000-0000-000000000001");
+const ORG2 = asUuid("00000000-0000-0000-0000-000000000002");
+const ORG999 = asUuid("00000000-0000-0000-0000-000000000099");
+const ORG_EMPTY = asUuid("00000000-0000-0000-0000-0000000000ee");
 
 type QueryRecord = { text: string; params: unknown[] };
 
@@ -45,7 +51,7 @@ const FUTURE = new Date("2099-01-15T11:00:00Z");
 const PAST = new Date("2020-01-15T09:00:00Z");
 
 const SAMPLE_ORG_ROW = {
-  id: "org-001",
+  id: ORG1,
   name: "Acme Corp",
   slug: "acme-corp",
   slug_lower: "acme-corp",
@@ -56,7 +62,7 @@ const SAMPLE_ORG_ROW = {
 
 const SAMPLE_MEMBER_ROW = {
   id: "mem-001",
-  org_id: "org-001",
+  org_id: ORG1,
   subject_id: "usr-001",
   subject_type: "user",
   status: "active",
@@ -66,7 +72,7 @@ const SAMPLE_MEMBER_ROW = {
 
 const SAMPLE_INVITATION_ROW = {
   id: "inv-001",
-  org_id: "org-001",
+  org_id: ORG1,
   email: "Invite@Example.com",
   email_lower: "invite@example.com",
   role: "builder",
@@ -80,7 +86,7 @@ const SAMPLE_INVITATION_ROW = {
 
 const SAMPLE_ROLE_ASSIGNMENT_ROW = {
   id: "ra-001",
-  org_id: "org-001",
+  org_id: ORG1,
   subject_id: "usr-001",
   subject_type: "user",
   role: "owner",
@@ -97,7 +103,7 @@ describe("MembershipRepository", () => {
       const repo = createMembershipRepository(executor);
 
       await repo.createOrganization({
-        id: "org-001",
+        id: ORG1,
         name: "Acme Corp",
         slug: "acme-corp",
         slugLower: "acme-corp",
@@ -110,7 +116,7 @@ describe("MembershipRepository", () => {
       expect(queries[0]!.text).toContain("$3");
       expect(queries[0]!.text).toContain("$4");
       expect(queries[0]!.params).toEqual([
-        "org-001",
+        ORG1,
         "Acme Corp",
         "acme-corp",
         "acme-corp",
@@ -123,7 +129,7 @@ describe("MembershipRepository", () => {
       const repo = createMembershipRepository(executor);
 
       const result = await repo.createOrganization({
-        id: "org-001",
+        id: ORG1,
         name: "Acme Corp",
         slug: "acme-corp",
         slugLower: "acme-corp",
@@ -132,7 +138,7 @@ describe("MembershipRepository", () => {
 
       expect(result.ok).toBe(true);
       if (result.ok) {
-        expect(result.value.id).toBe("org-001");
+        expect(result.value.id).toBe(ORG1);
         expect(result.value.name).toBe("Acme Corp");
         expect(result.value.slugLower).toBe("acme-corp");
         expect(result.value.status).toBe("active");
@@ -145,7 +151,7 @@ describe("MembershipRepository", () => {
       const repo = createMembershipRepository(executor);
 
       const result = await repo.createOrganization({
-        id: "org-001",
+        id: ORG1,
         name: "Acme Corp",
         slug: "acme-corp",
         slugLower: "acme-corp",
@@ -165,7 +171,7 @@ describe("MembershipRepository", () => {
       const repo = createMembershipRepository(executor);
 
       const result = await repo.createOrganization({
-        id: "org-002",
+        id: ORG2,
         name: "Acme Corp",
         slug: "acme-corp",
         slugLower: "acme-corp",
@@ -190,7 +196,7 @@ describe("MembershipRepository", () => {
       let result;
       try {
         result = await repo.createOrganization({
-          id: "org-001",
+          id: ORG1,
           name: "Test",
           slug: "test",
           slugLower: "test",
@@ -220,9 +226,9 @@ describe("MembershipRepository", () => {
       const { executor, queries } = createFakeExecutor({ rows: [SAMPLE_ORG_ROW] });
       const repo = createMembershipRepository(executor);
 
-      await repo.getOrganizationById("org-001");
+      await repo.getOrganizationById(ORG1);
 
-      expect(queries[0]!.params).toEqual(["org-001"]);
+      expect(queries[0]!.params).toEqual([ORG1]);
       expect(queries[0]!.text).toContain("$1");
     });
 
@@ -294,9 +300,9 @@ describe("MembershipRepository", () => {
       const repo = createMembershipRepository(executor);
 
       const result = await repo.bootstrapOrganization({
-        org: { id: "org-001", name: "Acme Corp", slug: "acme-corp", slugLower: "acme-corp", createdAt: NOW },
-        member: { id: "mem-001", orgId: "org-001", subjectId: "usr-001", subjectType: "user", createdAt: NOW },
-        roleAssignment: { id: "ra-001", orgId: "org-001", subjectId: "usr-001", subjectType: "user", role: "owner", scopeKind: "organization", createdAt: NOW },
+        org: { id: ORG1, name: "Acme Corp", slug: "acme-corp", slugLower: "acme-corp", createdAt: NOW },
+        member: { id: "mem-001", orgId: ORG1, subjectId: "usr-001", subjectType: "user", createdAt: NOW },
+        roleAssignment: { id: "ra-001", orgId: ORG1, subjectId: "usr-001", subjectType: "user", role: "owner", scopeKind: "organization", createdAt: NOW },
       });
 
       expect(queries).toHaveLength(1);
@@ -306,7 +312,7 @@ describe("MembershipRepository", () => {
       expect(queries[0]!.text).toContain("CROSS JOIN");
       expect(result.ok).toBe(true);
       if (result.ok) {
-        expect(result.value.org.id).toBe("org-001");
+        expect(result.value.org.id).toBe(ORG1);
         expect(result.value.member.subjectId).toBe("usr-001");
         expect(result.value.roleAssignment.role).toBe("owner");
       }
@@ -323,9 +329,9 @@ describe("MembershipRepository", () => {
       const repo = createMembershipRepository(executor);
 
       await repo.bootstrapOrganization({
-        org: { id: "org-001", name: "Acme Corp", slug: "acme-corp", slugLower: "acme-corp", createdAt: NOW },
-        member: { id: "mem-001", orgId: "org-001", subjectId: "usr-001", subjectType: "user", createdAt: NOW },
-        roleAssignment: { id: "ra-001", orgId: "org-001", subjectId: "usr-001", subjectType: "user", role: "owner", scopeKind: "organization", createdAt: NOW },
+        org: { id: ORG1, name: "Acme Corp", slug: "acme-corp", slugLower: "acme-corp", createdAt: NOW },
+        member: { id: "mem-001", orgId: ORG1, subjectId: "usr-001", subjectType: "user", createdAt: NOW },
+        roleAssignment: { id: "ra-001", orgId: ORG1, subjectId: "usr-001", subjectType: "user", role: "owner", scopeKind: "organization", createdAt: NOW },
       });
 
       expect(queries[0]!.text).toContain("$1");
@@ -338,9 +344,9 @@ describe("MembershipRepository", () => {
       const repo = createMembershipRepository(executor);
 
       const result = await repo.bootstrapOrganization({
-        org: { id: "org-001", name: "Acme Corp", slug: "acme-corp", slugLower: "acme-corp", createdAt: NOW },
-        member: { id: "mem-001", orgId: "org-001", subjectId: "usr-001", subjectType: "user", createdAt: NOW },
-        roleAssignment: { id: "ra-001", orgId: "org-001", subjectId: "usr-001", subjectType: "user", role: "owner", scopeKind: "organization", createdAt: NOW },
+        org: { id: ORG1, name: "Acme Corp", slug: "acme-corp", slugLower: "acme-corp", createdAt: NOW },
+        member: { id: "mem-001", orgId: ORG1, subjectId: "usr-001", subjectType: "user", createdAt: NOW },
+        roleAssignment: { id: "ra-001", orgId: ORG1, subjectId: "usr-001", subjectType: "user", role: "owner", scopeKind: "organization", createdAt: NOW },
       });
 
       expect(result.ok).toBe(false);
@@ -358,9 +364,9 @@ describe("MembershipRepository", () => {
       const repo = createMembershipRepository(executor);
 
       await repo.bootstrapOrganization({
-        org: { id: "org-001", name: "Acme Corp", slug: "acme-corp", slugLower: "acme-corp", createdAt: NOW },
-        member: { id: "mem-001", orgId: "org-001", subjectId: "usr-001", subjectType: "user", createdAt: NOW },
-        roleAssignment: { id: "ra-001", orgId: "org-001", subjectId: "usr-001", subjectType: "user", role: "owner", scopeKind: "organization", createdAt: NOW },
+        org: { id: ORG1, name: "Acme Corp", slug: "acme-corp", slugLower: "acme-corp", createdAt: NOW },
+        member: { id: "mem-001", orgId: ORG1, subjectId: "usr-001", subjectType: "user", createdAt: NOW },
+        roleAssignment: { id: "ra-001", orgId: ORG1, subjectId: "usr-001", subjectType: "user", role: "owner", scopeKind: "organization", createdAt: NOW },
       });
 
       expect(queries[0]!.text).toContain("FROM new_org");
@@ -375,7 +381,7 @@ describe("MembershipRepository", () => {
 
       await repo.createMember({
         id: "mem-001",
-        orgId: "org-001",
+        orgId: ORG1,
         subjectId: "usr-001",
         subjectType: "user",
         createdAt: NOW,
@@ -384,7 +390,7 @@ describe("MembershipRepository", () => {
       expect(queries[0]!.text).toContain("$1");
       expect(queries[0]!.params).toEqual([
         "mem-001",
-        "org-001",
+        ORG1,
         "usr-001",
         "user",
         NOW.toISOString(),
@@ -399,7 +405,7 @@ describe("MembershipRepository", () => {
 
       const result = await repo.createMember({
         id: "mem-002",
-        orgId: "org-001",
+        orgId: ORG1,
         subjectId: "usr-001",
         subjectType: "user",
         createdAt: NOW,
@@ -415,16 +421,16 @@ describe("MembershipRepository", () => {
       const { executor, queries } = createFakeExecutor({ rows: [SAMPLE_MEMBER_ROW] });
       const repo = createMembershipRepository(executor);
 
-      await repo.getMemberById("org-001", "mem-001");
+      await repo.getMemberById(ORG1, "mem-001");
 
-      expect(queries[0]!.params).toEqual(["org-001", "mem-001"]);
+      expect(queries[0]!.params).toEqual([ORG1, "mem-001"]);
     });
 
     it("returns not_found when no rows", async () => {
       const { executor } = createFakeExecutor({ rows: [] });
       const repo = createMembershipRepository(executor);
 
-      const result = await repo.getMemberById("org-001", "mem-missing");
+      const result = await repo.getMemberById(ORG1, "mem-missing");
 
       expect(result.ok).toBe(false);
       if (!result.ok) expect(result.error.kind).toBe("not_found");
@@ -436,7 +442,7 @@ describe("MembershipRepository", () => {
       });
       const repo = createMembershipRepository(executor);
 
-      const result = await repo.getMemberById("org-001", "mem-001");
+      const result = await repo.getMemberById(ORG1, "mem-001");
 
       expect(result.ok).toBe(false);
       if (!result.ok) expect(result.error.kind).toBe("removed");
@@ -448,9 +454,9 @@ describe("MembershipRepository", () => {
       const { executor, queries } = createFakeExecutor({ rows: [SAMPLE_MEMBER_ROW] });
       const repo = createMembershipRepository(executor);
 
-      await repo.listMembers("org-001");
+      await repo.listMembers(ORG1);
 
-      expect(queries[0]!.params).toEqual(["org-001"]);
+      expect(queries[0]!.params).toEqual([ORG1]);
       expect(queries[0]!.text).toContain("status = 'active'");
     });
 
@@ -458,7 +464,7 @@ describe("MembershipRepository", () => {
       const { executor } = createFakeExecutor({ rows: [] });
       const repo = createMembershipRepository(executor);
 
-      const result = await repo.listMembers("org-empty");
+      const result = await repo.listMembers(ORG_EMPTY);
 
       expect(result.ok).toBe(true);
       if (result.ok) expect(result.value).toEqual([]);
@@ -472,17 +478,17 @@ describe("MembershipRepository", () => {
       });
       const repo = createMembershipRepository(executor);
 
-      await repo.removeMember("org-001", "mem-001", NOW);
+      await repo.removeMember(ORG1, "mem-001", NOW);
 
       expect(queries[0]!.text).toContain("status = 'active'");
-      expect(queries[0]!.params).toEqual(["org-001", "mem-001", NOW.toISOString()]);
+      expect(queries[0]!.params).toEqual([ORG1, "mem-001", NOW.toISOString()]);
     });
 
     it("returns not_found when member already removed", async () => {
       const { executor } = createFakeExecutor({ rows: [], rowCount: 0 });
       const repo = createMembershipRepository(executor);
 
-      const result = await repo.removeMember("org-001", "mem-001", NOW);
+      const result = await repo.removeMember(ORG1, "mem-001", NOW);
 
       expect(result.ok).toBe(false);
       if (!result.ok) expect(result.error.kind).toBe("not_found");
@@ -496,7 +502,7 @@ describe("MembershipRepository", () => {
 
       await repo.createInvitation({
         id: "inv-001",
-        orgId: "org-001",
+        orgId: ORG1,
         email: "Invite@Example.com",
         emailLower: "invite@example.com",
         role: "builder",
@@ -516,7 +522,7 @@ describe("MembershipRepository", () => {
 
       const result = await repo.createInvitation({
         id: "inv-001",
-        orgId: "org-001",
+        orgId: ORG1,
         email: "Invite@Example.com",
         emailLower: "invite@example.com",
         role: "builder",
@@ -541,7 +547,7 @@ describe("MembershipRepository", () => {
 
       const result = await repo.createInvitation({
         id: "inv-002",
-        orgId: "org-001",
+        orgId: ORG1,
         email: "test@example.com",
         emailLower: "test@example.com",
         role: "viewer",
@@ -561,16 +567,16 @@ describe("MembershipRepository", () => {
       const { executor, queries } = createFakeExecutor({ rows: [SAMPLE_INVITATION_ROW] });
       const repo = createMembershipRepository(executor);
 
-      await repo.getInvitationById("org-001", "inv-001");
+      await repo.getInvitationById(ORG1, "inv-001");
 
-      expect(queries[0]!.params).toEqual(["org-001", "inv-001"]);
+      expect(queries[0]!.params).toEqual([ORG1, "inv-001"]);
     });
 
     it("returns not_found for missing invitation", async () => {
       const { executor } = createFakeExecutor({ rows: [] });
       const repo = createMembershipRepository(executor);
 
-      const result = await repo.getInvitationById("org-001", "inv-missing");
+      const result = await repo.getInvitationById(ORG1, "inv-missing");
 
       expect(result.ok).toBe(false);
       if (!result.ok) expect(result.error.kind).toBe("not_found");
@@ -582,7 +588,7 @@ describe("MembershipRepository", () => {
       });
       const repo = createMembershipRepository(executor);
 
-      const result = await repo.getInvitationById("org-001", "inv-001");
+      const result = await repo.getInvitationById(ORG1, "inv-001");
 
       expect(result.ok).toBe(false);
       if (!result.ok) expect(result.error.kind).toBe("revoked");
@@ -594,7 +600,7 @@ describe("MembershipRepository", () => {
       });
       const repo = createMembershipRepository(executor);
 
-      const result = await repo.getInvitationById("org-001", "inv-001");
+      const result = await repo.getInvitationById(ORG1, "inv-001");
 
       expect(result.ok).toBe(false);
       if (!result.ok) expect(result.error.kind).toBe("already_accepted");
@@ -606,7 +612,7 @@ describe("MembershipRepository", () => {
       });
       const repo = createMembershipRepository(executor);
 
-      const result = await repo.getInvitationById("org-001", "inv-001");
+      const result = await repo.getInvitationById(ORG1, "inv-001");
 
       expect(result.ok).toBe(false);
       if (!result.ok) expect(result.error.kind).toBe("expired");
@@ -616,7 +622,7 @@ describe("MembershipRepository", () => {
       const { executor } = createFakeExecutor({ rows: [SAMPLE_INVITATION_ROW] });
       const repo = createMembershipRepository(executor);
 
-      const result = await repo.getInvitationById("org-001", "inv-001");
+      const result = await repo.getInvitationById(ORG1, "inv-001");
 
       expect(result.ok).toBe(true);
       if (result.ok) {
@@ -689,16 +695,16 @@ describe("MembershipRepository", () => {
       const { executor, queries } = createFakeExecutor({ rows: [SAMPLE_INVITATION_ROW] });
       const repo = createMembershipRepository(executor);
 
-      await repo.listInvitations("org-001");
+      await repo.listInvitations(ORG1);
 
-      expect(queries[0]!.params).toEqual(["org-001"]);
+      expect(queries[0]!.params).toEqual([ORG1]);
     });
 
     it("returns empty array when no invitations", async () => {
       const { executor } = createFakeExecutor({ rows: [] });
       const repo = createMembershipRepository(executor);
 
-      const result = await repo.listInvitations("org-empty");
+      const result = await repo.listInvitations(ORG_EMPTY);
 
       expect(result.ok).toBe(true);
       if (result.ok) expect(result.value).toEqual([]);
@@ -712,18 +718,18 @@ describe("MembershipRepository", () => {
       });
       const repo = createMembershipRepository(executor);
 
-      await repo.revokeInvitation("org-001", "inv-001", NOW);
+      await repo.revokeInvitation(ORG1, "inv-001", NOW);
 
       expect(queries[0]!.text).toContain("status = 'pending'");
       expect(queries[0]!.text).toContain("revoked_at IS NULL");
-      expect(queries[0]!.params).toEqual(["org-001", "inv-001", NOW.toISOString()]);
+      expect(queries[0]!.params).toEqual([ORG1, "inv-001", NOW.toISOString()]);
     });
 
     it("returns not_found when invitation already revoked or accepted", async () => {
       const { executor } = createFakeExecutor({ rows: [], rowCount: 0 });
       const repo = createMembershipRepository(executor);
 
-      const result = await repo.revokeInvitation("org-001", "inv-001", NOW);
+      const result = await repo.revokeInvitation(ORG1, "inv-001", NOW);
 
       expect(result.ok).toBe(false);
       if (!result.ok) expect(result.error.kind).toBe("not_found");
@@ -742,7 +748,7 @@ describe("MembershipRepository", () => {
 
       const result = await repo.acceptInvitation({
         tokenHash: "sha256-hashed-token",
-        orgId: "org-001",
+        orgId: ORG1,
         emailLower: "invite@example.com",
         memberId: "mem-002",
         roleAssignmentId: "ra-002",
@@ -779,7 +785,7 @@ describe("MembershipRepository", () => {
 
       const result = await repo.acceptInvitation({
         tokenHash: "sha256-unknown-token",
-        orgId: "org-001",
+        orgId: ORG1,
         emailLower: "invite@example.com",
         memberId: "mem-002",
         roleAssignmentId: "ra-002",
@@ -802,7 +808,7 @@ describe("MembershipRepository", () => {
 
       const result = await repo.acceptInvitation({
         tokenHash: "sha256-hashed-token",
-        orgId: "org-999",
+        orgId: ORG999,
         emailLower: "invite@example.com",
         memberId: "mem-002",
         roleAssignmentId: "ra-002",
@@ -826,7 +832,7 @@ describe("MembershipRepository", () => {
 
       const result = await repo.acceptInvitation({
         tokenHash: "sha256-hashed-token",
-        orgId: "org-001",
+        orgId: ORG1,
         emailLower: "wrong@example.com",
         memberId: "mem-002",
         roleAssignmentId: "ra-002",
@@ -850,7 +856,7 @@ describe("MembershipRepository", () => {
 
       const result = await repo.acceptInvitation({
         tokenHash: "sha256-hashed-token",
-        orgId: "org-001",
+        orgId: ORG1,
         emailLower: "invite@example.com",
         memberId: "mem-002",
         roleAssignmentId: "ra-002",
@@ -874,7 +880,7 @@ describe("MembershipRepository", () => {
 
       const result = await repo.acceptInvitation({
         tokenHash: "sha256-hashed-token",
-        orgId: "org-001",
+        orgId: ORG1,
         emailLower: "invite@example.com",
         memberId: "mem-002",
         roleAssignmentId: "ra-002",
@@ -898,7 +904,7 @@ describe("MembershipRepository", () => {
 
       const result = await repo.acceptInvitation({
         tokenHash: "sha256-hashed-token",
-        orgId: "org-001",
+        orgId: ORG1,
         emailLower: "invite@example.com",
         memberId: "mem-002",
         roleAssignmentId: "ra-002",
@@ -923,7 +929,7 @@ describe("MembershipRepository", () => {
 
       const result = await repo.acceptInvitation({
         tokenHash: "sha256-hashed-token",
-        orgId: "org-001",
+        orgId: ORG1,
         emailLower: "invite@example.com",
         memberId: "mem-002",
         roleAssignmentId: "ra-002",
@@ -947,7 +953,7 @@ describe("MembershipRepository", () => {
 
       const result = await repo.acceptInvitation({
         tokenHash: "sha256-hashed-token",
-        orgId: "org-001",
+        orgId: ORG1,
         emailLower: "invite@example.com",
         memberId: "mem-002",
         roleAssignmentId: "ra-002",
@@ -974,7 +980,7 @@ describe("MembershipRepository", () => {
 
       await repo.acceptInvitation({
         tokenHash: "sha256-hashed-token",
-        orgId: "org-001",
+        orgId: ORG1,
         emailLower: "invite@example.com",
         memberId: "mem-002",
         roleAssignmentId: "ra-002",
@@ -999,7 +1005,7 @@ describe("MembershipRepository", () => {
 
       const result = await repo.acceptInvitation({
         tokenHash: "sha256-hashed-token",
-        orgId: "org-001",
+        orgId: ORG1,
         emailLower: "invite@example.com",
         memberId: "mem-002",
         roleAssignmentId: "ra-002",
@@ -1023,7 +1029,7 @@ describe("MembershipRepository", () => {
 
       await repo.createRoleAssignment({
         id: "ra-001",
-        orgId: "org-001",
+        orgId: ORG1,
         subjectId: "usr-001",
         subjectType: "user",
         role: "owner",
@@ -1034,7 +1040,7 @@ describe("MembershipRepository", () => {
       expect(queries[0]!.text).toContain("$1");
       expect(queries[0]!.params).toEqual([
         "ra-001",
-        "org-001",
+        ORG1,
         "usr-001",
         "user",
         "owner",
@@ -1051,7 +1057,7 @@ describe("MembershipRepository", () => {
 
       await repo.createRoleAssignment({
         id: "ra-002",
-        orgId: "org-001",
+        orgId: ORG1,
         subjectId: "usr-001",
         subjectType: "user",
         role: "project_builder",
@@ -1071,7 +1077,7 @@ describe("MembershipRepository", () => {
 
       const result = await repo.createRoleAssignment({
         id: "ra-003",
-        orgId: "org-001",
+        orgId: ORG1,
         subjectId: "usr-001",
         subjectType: "user",
         role: "owner",
@@ -1089,9 +1095,9 @@ describe("MembershipRepository", () => {
       const { executor, queries } = createFakeExecutor({ rows: [SAMPLE_ROLE_ASSIGNMENT_ROW] });
       const repo = createMembershipRepository(executor);
 
-      await repo.listRoleAssignments("org-001", "usr-001");
+      await repo.listRoleAssignments(ORG1, "usr-001");
 
-      expect(queries[0]!.params).toEqual(["org-001", "usr-001"]);
+      expect(queries[0]!.params).toEqual([ORG1, "usr-001"]);
       expect(queries[0]!.text).toContain("revoked_at IS NULL");
     });
 
@@ -1099,7 +1105,7 @@ describe("MembershipRepository", () => {
       const { executor } = createFakeExecutor({ rows: [] });
       const repo = createMembershipRepository(executor);
 
-      const result = await repo.listRoleAssignments("org-001", "usr-missing");
+      const result = await repo.listRoleAssignments(ORG1, "usr-missing");
 
       expect(result.ok).toBe(true);
       if (result.ok) expect(result.value).toEqual([]);
@@ -1113,17 +1119,17 @@ describe("MembershipRepository", () => {
       });
       const repo = createMembershipRepository(executor);
 
-      await repo.revokeRoleAssignment("org-001", "ra-001", NOW);
+      await repo.revokeRoleAssignment(ORG1, "ra-001", NOW);
 
       expect(queries[0]!.text).toContain("revoked_at IS NULL");
-      expect(queries[0]!.params).toEqual(["org-001", "ra-001", NOW.toISOString()]);
+      expect(queries[0]!.params).toEqual([ORG1, "ra-001", NOW.toISOString()]);
     });
 
     it("returns not_found when assignment already revoked", async () => {
       const { executor } = createFakeExecutor({ rows: [], rowCount: 0 });
       const repo = createMembershipRepository(executor);
 
-      const result = await repo.revokeRoleAssignment("org-001", "ra-001", NOW);
+      const result = await repo.revokeRoleAssignment(ORG1, "ra-001", NOW);
 
       expect(result.ok).toBe(false);
       if (!result.ok) expect(result.error.kind).toBe("not_found");
@@ -1138,7 +1144,7 @@ describe("MembershipRepository", () => {
       const { executor } = createFakeExecutor({ error: pgError });
       const repo = createMembershipRepository(executor);
 
-      const result = await repo.getOrganizationById("org-001");
+      const result = await repo.getOrganizationById(ORG1);
 
       expect(result.ok).toBe(false);
       if (!result.ok && result.error.kind === "internal") {
@@ -1155,7 +1161,7 @@ describe("MembershipRepository", () => {
       const repo = createMembershipRepository(executor);
 
       const result = await repo.createOrganization({
-        id: "org-001",
+        id: ORG1,
         name: "Test",
         slug: "test",
         slugLower: "test",
@@ -1178,7 +1184,7 @@ describe("MembershipRepository", () => {
 
       const result = await repo.createInvitation({
         id: "inv-001",
-        orgId: "org-001",
+        orgId: ORG1,
         email: "test@example.com",
         emailLower: "test@example.com",
         role: "viewer",
@@ -1203,7 +1209,7 @@ describe("MembershipRepository", () => {
 
       const result = await repo.createInvitation({
         id: "inv-001",
-        orgId: "org-001",
+        orgId: ORG1,
         email: "user@secret-domain.com",
         emailLower: "user@secret-domain.com",
         role: "viewer",
@@ -1241,13 +1247,13 @@ describe("MembershipRepository", () => {
 
       await repo.listOrganizationsForSubjectPaged("usr-001", {
         limit: 5,
-        cursor: { createdAt: "2026-01-15T10:00:00.000Z", id: "org-001" },
+        cursor: { createdAt: "2026-01-15T10:00:00.000Z", id: ORG1 },
       });
 
       expect(queries).toHaveLength(1);
       expect(queries[0]!.text).toContain("$3");
       expect(queries[0]!.text).toContain("$4");
-      expect(queries[0]!.params).toEqual(["usr-001", 6, "2026-01-15T10:00:00.000Z", "org-001"]);
+      expect(queries[0]!.params).toEqual(["usr-001", 6, "2026-01-15T10:00:00.000Z", ORG1]);
     });
 
     it("returns nextCursor when more rows exist", async () => {
@@ -1303,21 +1309,21 @@ describe("MembershipRepository", () => {
       const { executor, queries } = createFakeExecutor({ rows: [SAMPLE_MEMBER_ROW] });
       const repo = createMembershipRepository(executor);
 
-      await repo.listMembersPaged("org-001", { limit: 10, cursor: null });
+      await repo.listMembersPaged(ORG1, { limit: 10, cursor: null });
 
       expect(queries).toHaveLength(1);
       expect(queries[0]!.text).toContain("$1");
       expect(queries[0]!.text).toContain("$2");
       expect(queries[0]!.text).toContain("ORDER BY");
       expect(queries[0]!.text).toContain("LIMIT");
-      expect(queries[0]!.params).toEqual(["org-001", 11]);
+      expect(queries[0]!.params).toEqual([ORG1, 11]);
     });
 
     it("applies cursor filtering with timestamp and id tie-breaker", async () => {
       const { executor, queries } = createFakeExecutor({ rows: [] });
       const repo = createMembershipRepository(executor);
 
-      await repo.listMembersPaged("org-001", {
+      await repo.listMembersPaged(ORG1, {
         limit: 5,
         cursor: { createdAt: "2026-01-15T10:00:00.000Z", id: "mem-001" },
       });
@@ -1325,7 +1331,7 @@ describe("MembershipRepository", () => {
       expect(queries).toHaveLength(1);
       expect(queries[0]!.text).toContain("$3");
       expect(queries[0]!.text).toContain("$4");
-      expect(queries[0]!.params).toEqual(["org-001", 6, "2026-01-15T10:00:00.000Z", "mem-001"]);
+      expect(queries[0]!.params).toEqual([ORG1, 6, "2026-01-15T10:00:00.000Z", "mem-001"]);
     });
 
     it("returns nextCursor when more rows exist", async () => {
@@ -1338,7 +1344,7 @@ describe("MembershipRepository", () => {
       const { executor } = createFakeExecutor({ rows });
       const repo = createMembershipRepository(executor);
 
-      const result = await repo.listMembersPaged("org-001", { limit: 2, cursor: null });
+      const result = await repo.listMembersPaged(ORG1, { limit: 2, cursor: null });
 
       expect(result.ok).toBe(true);
       if (result.ok) {
@@ -1353,7 +1359,7 @@ describe("MembershipRepository", () => {
       const { executor } = createFakeExecutor({ rows });
       const repo = createMembershipRepository(executor);
 
-      const result = await repo.listMembersPaged("org-001", { limit: 10, cursor: null });
+      const result = await repo.listMembersPaged(ORG1, { limit: 10, cursor: null });
 
       expect(result.ok).toBe(true);
       if (result.ok) {
@@ -1366,7 +1372,7 @@ describe("MembershipRepository", () => {
       const { executor } = createFakeExecutor({ rows: [] });
       const repo = createMembershipRepository(executor);
 
-      const result = await repo.listMembersPaged("org-001", { limit: 50, cursor: null });
+      const result = await repo.listMembersPaged(ORG1, { limit: 50, cursor: null });
 
       expect(result.ok).toBe(true);
       if (result.ok) {
@@ -1394,21 +1400,21 @@ describe("MembershipRepository", () => {
       const { executor, queries } = createFakeExecutor({ rows: [SAMPLE_INVITATION_ROW] });
       const repo = createMembershipRepository(executor);
 
-      await repo.listInvitationsPaged("org-001", { limit: 10, cursor: null });
+      await repo.listInvitationsPaged(ORG1, { limit: 10, cursor: null });
 
       expect(queries).toHaveLength(1);
       expect(queries[0]!.text).toContain("$1");
       expect(queries[0]!.text).toContain("$2");
       expect(queries[0]!.text).toContain("ORDER BY");
       expect(queries[0]!.text).toContain("LIMIT");
-      expect(queries[0]!.params).toEqual(["org-001", 11]);
+      expect(queries[0]!.params).toEqual([ORG1, 11]);
     });
 
     it("applies cursor filtering with timestamp and id tie-breaker", async () => {
       const { executor, queries } = createFakeExecutor({ rows: [] });
       const repo = createMembershipRepository(executor);
 
-      await repo.listInvitationsPaged("org-001", {
+      await repo.listInvitationsPaged(ORG1, {
         limit: 5,
         cursor: { createdAt: "2026-01-15T10:00:00.000Z", id: "inv-001" },
       });
@@ -1416,7 +1422,7 @@ describe("MembershipRepository", () => {
       expect(queries).toHaveLength(1);
       expect(queries[0]!.text).toContain("$3");
       expect(queries[0]!.text).toContain("$4");
-      expect(queries[0]!.params).toEqual(["org-001", 6, "2026-01-15T10:00:00.000Z", "inv-001"]);
+      expect(queries[0]!.params).toEqual([ORG1, 6, "2026-01-15T10:00:00.000Z", "inv-001"]);
     });
 
     it("returns nextCursor when more rows exist", async () => {
@@ -1428,7 +1434,7 @@ describe("MembershipRepository", () => {
       const { executor } = createFakeExecutor({ rows });
       const repo = createMembershipRepository(executor);
 
-      const result = await repo.listInvitationsPaged("org-001", { limit: 2, cursor: null });
+      const result = await repo.listInvitationsPaged(ORG1, { limit: 2, cursor: null });
 
       expect(result.ok).toBe(true);
       if (result.ok) {
@@ -1443,7 +1449,7 @@ describe("MembershipRepository", () => {
       const { executor } = createFakeExecutor({ rows });
       const repo = createMembershipRepository(executor);
 
-      const result = await repo.listInvitationsPaged("org-001", { limit: 10, cursor: null });
+      const result = await repo.listInvitationsPaged(ORG1, { limit: 10, cursor: null });
 
       expect(result.ok).toBe(true);
       if (result.ok) {
@@ -1456,7 +1462,7 @@ describe("MembershipRepository", () => {
       const { executor } = createFakeExecutor({ rows: [] });
       const repo = createMembershipRepository(executor);
 
-      const result = await repo.listInvitationsPaged("org-001", { limit: 50, cursor: null });
+      const result = await repo.listInvitationsPaged(ORG1, { limit: 50, cursor: null });
 
       expect(result.ok).toBe(true);
       if (result.ok) {
@@ -1469,7 +1475,7 @@ describe("MembershipRepository", () => {
       const { executor } = createFakeExecutor({ rows: [SAMPLE_INVITATION_ROW] });
       const repo = createMembershipRepository(executor);
 
-      const result = await repo.listInvitationsPaged("org-001", { limit: 10, cursor: null });
+      const result = await repo.listInvitationsPaged(ORG1, { limit: 10, cursor: null });
 
       expect(result.ok).toBe(true);
       if (result.ok) {
@@ -1486,13 +1492,13 @@ describe("MembershipRepository", () => {
       });
       const repo = createMembershipRepository(executor);
 
-      await repo.revokeAllRoleAssignments("org-001", "usr-001", NOW);
+      await repo.revokeAllRoleAssignments(ORG1, "usr-001", NOW);
 
       expect(queries[0]!.text).toContain("$1");
       expect(queries[0]!.text).toContain("$2");
       expect(queries[0]!.text).toContain("$3");
       expect(queries[0]!.text).toContain("revoked_at IS NULL");
-      expect(queries[0]!.params).toEqual(["org-001", "usr-001", NOW.toISOString()]);
+      expect(queries[0]!.params).toEqual([ORG1, "usr-001", NOW.toISOString()]);
     });
 
     it("returns all revoked role assignments", async () => {
@@ -1503,7 +1509,7 @@ describe("MembershipRepository", () => {
       const { executor } = createFakeExecutor({ rows });
       const repo = createMembershipRepository(executor);
 
-      const result = await repo.revokeAllRoleAssignments("org-001", "usr-001", NOW);
+      const result = await repo.revokeAllRoleAssignments(ORG1, "usr-001", NOW);
 
       expect(result.ok).toBe(true);
       if (result.ok) {
@@ -1517,7 +1523,7 @@ describe("MembershipRepository", () => {
       const { executor } = createFakeExecutor({ rows: [] });
       const repo = createMembershipRepository(executor);
 
-      const result = await repo.revokeAllRoleAssignments("org-001", "usr-001", NOW);
+      const result = await repo.revokeAllRoleAssignments(ORG1, "usr-001", NOW);
 
       expect(result.ok).toBe(true);
       if (result.ok) expect(result.value).toEqual([]);
@@ -1527,7 +1533,7 @@ describe("MembershipRepository", () => {
       const { executor } = createFakeExecutor({ error: new Error("connection refused") });
       const repo = createMembershipRepository(executor);
 
-      const result = await repo.revokeAllRoleAssignments("org-001", "usr-001", NOW);
+      const result = await repo.revokeAllRoleAssignments(ORG1, "usr-001", NOW);
 
       expect(result.ok).toBe(false);
       if (!result.ok) {
@@ -1542,21 +1548,21 @@ describe("MembershipRepository", () => {
       const { executor, queries } = createFakeExecutor({ rows: [{ cnt: "2" }] });
       const repo = createMembershipRepository(executor);
 
-      await repo.countActiveOwners("org-001");
+      await repo.countActiveOwners(ORG1);
 
       expect(queries[0]!.text).toContain("$1");
       expect(queries[0]!.text).toContain("role = 'owner'");
       expect(queries[0]!.text).toContain("scope_kind = 'organization'");
       expect(queries[0]!.text).toContain("revoked_at IS NULL");
       expect(queries[0]!.text).toContain("status = 'active'");
-      expect(queries[0]!.params).toEqual(["org-001"]);
+      expect(queries[0]!.params).toEqual([ORG1]);
     });
 
     it("returns count of active owners", async () => {
       const { executor } = createFakeExecutor({ rows: [{ cnt: "3" }] });
       const repo = createMembershipRepository(executor);
 
-      const result = await repo.countActiveOwners("org-001");
+      const result = await repo.countActiveOwners(ORG1);
 
       expect(result.ok).toBe(true);
       if (result.ok) expect(result.value).toBe(3);
@@ -1566,7 +1572,7 @@ describe("MembershipRepository", () => {
       const { executor } = createFakeExecutor({ rows: [{ cnt: "0" }] });
       const repo = createMembershipRepository(executor);
 
-      const result = await repo.countActiveOwners("org-001");
+      const result = await repo.countActiveOwners(ORG1);
 
       expect(result.ok).toBe(true);
       if (result.ok) expect(result.value).toBe(0);
@@ -1576,7 +1582,7 @@ describe("MembershipRepository", () => {
       const { executor } = createFakeExecutor({ error: new Error("timeout") });
       const repo = createMembershipRepository(executor);
 
-      const result = await repo.countActiveOwners("org-001");
+      const result = await repo.countActiveOwners(ORG1);
 
       expect(result.ok).toBe(false);
       if (!result.ok) {
@@ -1591,7 +1597,7 @@ describe("MembershipRepository", () => {
       const repo = createMembershipRepository(executor);
       const now = new Date("2026-01-15T10:00:00Z");
 
-      await repo.countBillableMembers("org-001", now);
+      await repo.countBillableMembers(ORG1, now);
 
       const sql = queries[0]!.text;
       expect(sql).toContain("$1");
@@ -1603,14 +1609,14 @@ describe("MembershipRepository", () => {
       expect(sql).toContain("revoked_at IS NULL");
       expect(sql).toContain("accepted_at IS NULL");
       expect(sql).toContain("expires_at > $2");
-      expect(queries[0]!.params).toEqual(["org-001", now.toISOString()]);
+      expect(queries[0]!.params).toEqual([ORG1, now.toISOString()]);
     });
 
     it("returns the combined billable count", async () => {
       const { executor } = createFakeExecutor({ rows: [{ cnt: "7" }] });
       const repo = createMembershipRepository(executor);
 
-      const result = await repo.countBillableMembers("org-001", new Date());
+      const result = await repo.countBillableMembers(ORG1, new Date());
 
       expect(result.ok).toBe(true);
       if (result.ok) expect(result.value).toBe(7);
@@ -1620,7 +1626,7 @@ describe("MembershipRepository", () => {
       const { executor } = createFakeExecutor({ rows: [{ cnt: "0" }] });
       const repo = createMembershipRepository(executor);
 
-      const result = await repo.countBillableMembers("org-empty", new Date());
+      const result = await repo.countBillableMembers(ORG_EMPTY, new Date());
 
       expect(result.ok).toBe(true);
       if (result.ok) expect(result.value).toBe(0);
@@ -1630,7 +1636,7 @@ describe("MembershipRepository", () => {
       const { executor } = createFakeExecutor({ error: new Error("connection refused") });
       const repo = createMembershipRepository(executor);
 
-      const result = await repo.countBillableMembers("org-001", new Date());
+      const result = await repo.countBillableMembers(ORG1, new Date());
 
       expect(result.ok).toBe(false);
       if (!result.ok) {
