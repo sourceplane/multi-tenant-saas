@@ -1,4 +1,4 @@
-import { hexToUuid, uuidToHex } from "@saas/db/ids";
+import { hexToUuid, uuidFromPublicId, uuidToHex, type Uuid } from "@saas/db/ids";
 function randomHex(bytes: number): string {
   const buf = new Uint8Array(bytes);
   crypto.getRandomValues(buf);
@@ -86,16 +86,14 @@ export function parseUserPublicId(publicId: string): string | null {
 }
 
 /** Decode a public org id (`org_<32 hex>`) to the bare UUID used by UUID columns. */
-export function parseOrgPublicId(publicId: string): string | null {
-  if (!publicId.startsWith("org_")) return null;
-  return hexToUuid(publicId.slice(4));
+export function parseOrgPublicId(publicId: string): Uuid | null {
+  return uuidFromPublicId(publicId, "org");
 }
 
 /** Decode a public project id (`prj_<32 hex>`) to the bare UUID used by the
  *  service_principals.project_id UUID column. */
-export function parseProjectPublicId(publicId: string): string | null {
-  if (!publicId.startsWith("prj_")) return null;
-  return hexToUuid(publicId.slice(4));
+export function parseProjectPublicId(publicId: string): Uuid | null {
+  return uuidFromPublicId(publicId, "prj");
 }
 
 /**
@@ -105,8 +103,6 @@ export function parseProjectPublicId(publicId: string): string | null {
  * shape. TEXT columns (event_log.actor_id, role_assignments.subject_id) keep the
  * public form, so callers only use this for the UUID-typed fields.
  */
-export function parseSubjectUuid(publicId: string): string | null {
-  const sep = publicId.indexOf("_");
-  if (sep < 1) return null;
-  return hexToUuid(publicId.slice(sep + 1));
+export function parseSubjectUuid(publicId: string): Uuid | null {
+  return uuidFromPublicId(publicId);
 }

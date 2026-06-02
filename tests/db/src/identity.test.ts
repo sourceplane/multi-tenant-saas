@@ -1,7 +1,13 @@
 import {
   createIdentityRepository,
 } from "@saas/db/identity";
+import { asUuid } from "@saas/db";
 import type { SqlExecutor, SqlExecutorResult, SqlRow } from "@saas/db/hyperdrive";
+
+const ORG_UUID = asUuid("00000000-0000-4000-8000-000000000001");
+const USER_UUID = asUuid("00000000-0000-4000-8000-000000000002");
+const PROJECT_UUID = asUuid("00000000-0000-4000-8000-000000000003");
+const REVOKER_UUID = asUuid("00000000-0000-4000-8000-000000000004");
 
 type QueryRecord = { text: string; params: unknown[] };
 
@@ -947,12 +953,12 @@ describe("IdentityRepository", () => {
 
   const SAMPLE_SERVICE_PRINCIPAL_ROW = {
     id: "sp-001",
-    org_id: "org-001",
+    org_id: ORG_UUID,
     project_id: null,
     display_name: "CI Pipeline",
     description: "Continuous integration automation",
     status: "active",
-    created_by: "u-001",
+    created_by: USER_UUID,
     created_at: NOW.toISOString(),
     updated_at: NOW.toISOString(),
   };
@@ -964,17 +970,17 @@ describe("IdentityRepository", () => {
 
       const result = await repo.createServicePrincipal({
         id: "sp-001",
-        orgId: "org-001",
+        orgId: ORG_UUID,
         displayName: "CI Pipeline",
         description: "Continuous integration automation",
-        createdBy: "u-001",
+        createdBy: USER_UUID,
         createdAt: NOW,
       });
 
       expect(result.ok).toBe(true);
       if (result.ok) {
         expect(result.value.id).toBe("sp-001");
-        expect(result.value.orgId).toBe("org-001");
+        expect(result.value.orgId).toBe(ORG_UUID);
         expect(result.value.projectId).toBeNull();
         expect(result.value.displayName).toBe("CI Pipeline");
       }
@@ -984,22 +990,22 @@ describe("IdentityRepository", () => {
     });
 
     it("supports project-scoped service principals", async () => {
-      const projectRow = { ...SAMPLE_SERVICE_PRINCIPAL_ROW, project_id: "proj-001" };
+      const projectRow = { ...SAMPLE_SERVICE_PRINCIPAL_ROW, project_id: PROJECT_UUID };
       const { executor } = createFakeExecutor({ rows: [projectRow] });
       const repo = createIdentityRepository(executor);
 
       const result = await repo.createServicePrincipal({
         id: "sp-001",
-        orgId: "org-001",
-        projectId: "proj-001",
+        orgId: ORG_UUID,
+        projectId: PROJECT_UUID,
         displayName: "CI Pipeline",
-        createdBy: "u-001",
+        createdBy: USER_UUID,
         createdAt: NOW,
       });
 
       expect(result.ok).toBe(true);
       if (result.ok) {
-        expect(result.value.projectId).toBe("proj-001");
+        expect(result.value.projectId).toBe(PROJECT_UUID);
       }
     });
 
@@ -1009,9 +1015,9 @@ describe("IdentityRepository", () => {
 
       const result = await repo.createServicePrincipal({
         id: "sp-001",
-        orgId: "org-001",
+        orgId: ORG_UUID,
         displayName: "CI Pipeline",
-        createdBy: "u-001",
+        createdBy: USER_UUID,
         createdAt: NOW,
       });
 
@@ -1027,9 +1033,9 @@ describe("IdentityRepository", () => {
 
       const result = await repo.createServicePrincipal({
         id: "sp-001",
-        orgId: "org-001",
+        orgId: ORG_UUID,
         displayName: "CI Pipeline",
-        createdBy: "u-001",
+        createdBy: USER_UUID,
         createdAt: NOW,
       });
 
@@ -1050,7 +1056,7 @@ describe("IdentityRepository", () => {
       expect(result.ok).toBe(true);
       if (result.ok) {
         expect(result.value.id).toBe("sp-001");
-        expect(result.value.orgId).toBe("org-001");
+        expect(result.value.orgId).toBe(ORG_UUID);
       }
     });
 
@@ -1078,7 +1084,7 @@ describe("IdentityRepository", () => {
       expect(result.ok).toBe(true);
       if (result.ok) {
         expect(result.value.length).toBe(1);
-        expect(result.value[0]!.orgId).toBe("org-001");
+        expect(result.value[0]!.orgId).toBe(ORG_UUID);
       }
       expect(queries[0]!.text).toContain("status != 'deleted'");
       expect(queries[0]!.text).toContain("ORDER BY created_at DESC");
@@ -1090,7 +1096,7 @@ describe("IdentityRepository", () => {
   const SAMPLE_API_KEY_ROW = {
     id: "ak-001",
     service_principal_id: "sp-001",
-    org_id: "org-001",
+    org_id: ORG_UUID,
     key_prefix: "spk_abc1",
     label: "Production CI key",
     status: "active",
@@ -1098,7 +1104,7 @@ describe("IdentityRepository", () => {
     last_used_at: null,
     revoked_at: null,
     revoked_by: null,
-    created_by: "u-001",
+    created_by: USER_UUID,
     created_at: NOW.toISOString(),
     updated_at: NOW.toISOString(),
   };
@@ -1111,12 +1117,12 @@ describe("IdentityRepository", () => {
       const result = await repo.createApiKey({
         id: "ak-001",
         servicePrincipalId: "sp-001",
-        orgId: "org-001",
+        orgId: ORG_UUID,
         keyPrefix: "spk_abc1",
         keyHash: "sha256hashvalue",
         label: "Production CI key",
         expiresAt: FUTURE,
-        createdBy: "u-001",
+        createdBy: USER_UUID,
         createdAt: NOW,
       });
 
@@ -1124,7 +1130,7 @@ describe("IdentityRepository", () => {
       if (result.ok) {
         expect(result.value.id).toBe("ak-001");
         expect(result.value.servicePrincipalId).toBe("sp-001");
-        expect(result.value.orgId).toBe("org-001");
+        expect(result.value.orgId).toBe(ORG_UUID);
         expect(result.value.keyPrefix).toBe("spk_abc1");
         expect(result.value.label).toBe("Production CI key");
         expect(result.value.status).toBe("active");
@@ -1143,10 +1149,10 @@ describe("IdentityRepository", () => {
       const result = await repo.createApiKey({
         id: "ak-001",
         servicePrincipalId: "sp-001",
-        orgId: "org-001",
+        orgId: ORG_UUID,
         keyPrefix: "spk_abc1",
         keyHash: "sha256hashvalue",
-        createdBy: "u-001",
+        createdBy: USER_UUID,
         createdAt: NOW,
       });
 
@@ -1168,10 +1174,10 @@ describe("IdentityRepository", () => {
       const result = await repo.createApiKey({
         id: "ak-001",
         servicePrincipalId: "sp-001",
-        orgId: "org-001",
+        orgId: ORG_UUID,
         keyPrefix: "spk_abc1",
         keyHash: "sha256hashvalue",
-        createdBy: "u-001",
+        createdBy: USER_UUID,
         createdAt: NOW,
       });
 
@@ -1264,16 +1270,16 @@ describe("IdentityRepository", () => {
 
   describe("revokeApiKey", () => {
     it("revokes an active API key", async () => {
-      const revokedRow = { ...SAMPLE_API_KEY_ROW, status: "revoked", revoked_at: NOW.toISOString(), revoked_by: "u-002" };
+      const revokedRow = { ...SAMPLE_API_KEY_ROW, status: "revoked", revoked_at: NOW.toISOString(), revoked_by: REVOKER_UUID };
       const { executor, queries } = createFakeExecutor({ rows: [revokedRow] });
       const repo = createIdentityRepository(executor);
 
-      const result = await repo.revokeApiKey("ak-001", "u-002", NOW);
+      const result = await repo.revokeApiKey("ak-001", REVOKER_UUID, NOW);
 
       expect(result.ok).toBe(true);
       if (result.ok) {
         expect(result.value.status).toBe("revoked");
-        expect(result.value.revokedBy).toBe("u-002");
+        expect(result.value.revokedBy).toBe(REVOKER_UUID);
         expect(result.value.revokedAt).not.toBeNull();
       }
       expect(queries[0]!.text).toContain("status = 'active'");
@@ -1286,7 +1292,7 @@ describe("IdentityRepository", () => {
       const { executor } = createFakeExecutor({ rows: [], rowCount: 0 });
       const repo = createIdentityRepository(executor);
 
-      const result = await repo.revokeApiKey("ak-001", "u-002", NOW);
+      const result = await repo.revokeApiKey("ak-001", REVOKER_UUID, NOW);
 
       expect(result.ok).toBe(false);
       if (!result.ok) {
@@ -1303,10 +1309,10 @@ describe("IdentityRepository", () => {
       const result = await repo.createApiKey({
         id: "ak-001",
         servicePrincipalId: "sp-001",
-        orgId: "org-001",
+        orgId: ORG_UUID,
         keyPrefix: "spk_abc1",
         keyHash: "sha256hashvalue",
-        createdBy: "u-001",
+        createdBy: USER_UUID,
         createdAt: NOW,
       });
 
@@ -1331,10 +1337,10 @@ describe("IdentityRepository", () => {
       const result = await repo.createApiKey({
         id: "ak-001",
         servicePrincipalId: "sp-001",
-        orgId: "org-001",
+        orgId: ORG_UUID,
         keyPrefix: "spk_abc1",
         keyHash: "sha256secrethash",
-        createdBy: "u-001",
+        createdBy: USER_UUID,
         createdAt: NOW,
       });
 

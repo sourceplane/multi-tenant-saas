@@ -1,5 +1,6 @@
 /// <reference types="@cloudflare/workers-types" />
 import { createFakeRepository } from "./helpers/fake-repository";
+import { asUuid } from "@saas/db";
 import crypto from "node:crypto";
 import type { Env } from "../../../apps/identity-worker/src/env";
 import type {
@@ -38,11 +39,11 @@ import {
 // org_id as a bare UUID. The handler must decode the former into the latter
 // before any DB/service call. ORG_PUB decodes to ORG_UUID.
 const ORG_PUB = "org_" + "a".repeat(32);
-const ORG_UUID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+const ORG_UUID = asUuid("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
 // Actor (user) public id `usr_<32 hex>` decodes to a UUID for the UUID-typed
 // columns created_by / revoked_by / security_events.user_id.
 const ACTOR_PUB = "usr_" + "c".repeat(32);
-const ACTOR_UUID = "cccccccc-cccc-cccc-cccc-cccccccccccc";
+const ACTOR_UUID = asUuid("cccccccc-cccc-cccc-cccc-cccccccccccc");
 
 // ---------------------------------------------------------------------------
 // Helpers
