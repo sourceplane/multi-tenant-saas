@@ -999,6 +999,40 @@ describe("handleListProjects", () => {
     expect(response.status).toBe(404);
   });
 
+  it("PERF4: deny never leaks data even though read runs in parallel with authz", async () => {
+    // The read is started concurrently with the authz fetch; on deny it must be
+    // discarded. Assert the denied response carries neither the project nor its
+    // raw UUIDs.
+    const env = createFakeEnv({
+      POLICY_WORKER: createMockFetcher({ data: { allow: false, reason: "no_matching_role", policyVersion: 1, derivedScope: { orgId: TEST_ORG_UUID } } }),
+    });
+    const projectsRepo = createFakeProjectsRepo();
+
+    const request = listRequest(TEST_ORG_PUBLIC);
+    const response = await handleListProjects(request, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, { projectsRepo });
+
+    expect(response.status).toBe(404);
+    const raw = await response.text();
+    expect(raw).not.toContain(TEST_PROJECT_PUBLIC);
+    expect(raw).not.toContain(TEST_PROJECT_UUID);
+    expect(raw).not.toContain("projects");
+  });
+
+  it("PERF4: emits a Server-Timing header with authctx/db/policy/total phases", async () => {
+    const env = createFakeEnv();
+    const projectsRepo = createFakeProjectsRepo();
+
+    const request = listRequest(TEST_ORG_PUBLIC);
+    const response = await handleListProjects(request, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, { projectsRepo });
+
+    expect(response.status).toBe(200);
+    const timing = response.headers.get("Server-Timing");
+    expect(timing).toBeTruthy();
+    for (const phase of ["authctx", "db", "policy", "total"]) {
+      expect(timing).toContain(phase);
+    }
+  });
+
   it("returns 404 when policy returns malformed envelope", async () => {
     const env = createFakeEnv({
       POLICY_WORKER: createMockFetcher({ wrong: "shape" }),

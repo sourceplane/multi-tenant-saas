@@ -10,6 +10,7 @@ import {
   decideEntitlement,
   handleCheckEntitlement,
 } from "@billing-worker/handlers/check-entitlement";
+import { handleGetBillingSummary } from "@billing-worker/handlers/get-summary";
 import type { BillingRepository, BillingResult, Entitlement } from "@saas/db/billing";
 
 const TEST_ORG_UUID = "11111111-1111-1111-1111-111111111111";
@@ -224,6 +225,73 @@ describe("router", () => {
     );
     const res = await route(req, env);
     expect(res.status).toBe(404);
+  });
+
+  describe("PERF4: billing summary parallelize + Server-Timing", () => {
+    const fixedDate = new Date("2026-01-15T10:00:00.000Z");
+    const summaryValue = {
+      customer: null,
+      activeSubscription: null,
+      plan: null,
+      entitlements: [
+        {
+          id: "ent_1",
+          orgId: TEST_ORG_UUID,
+          subscriptionId: null,
+          entitlementKey: "SECRET_LIMIT_MARKER",
+          valueType: "limit" as const,
+          enabled: true,
+          limitValue: 7,
+          source: "plan" as const,
+          metadata: null,
+          createdAt: fixedDate,
+          updatedAt: fixedDate,
+        },
+      ],
+    };
+    function summaryRepo(): Pick<BillingRepository, "getBillingSummary"> {
+      return {
+        getBillingSummary: async () => ({ ok: true, value: summaryValue }) as BillingResult<typeof summaryValue>,
+      } as unknown as Pick<BillingRepository, "getBillingSummary">;
+    }
+
+    it("emits a Server-Timing header with authz/db/total on success", async () => {
+      const env = createFakeEnv();
+      const res = await handleGetBillingSummary(
+        makeRequest("GET", `/v1/organizations/${TEST_ORG_PUBLIC}/billing/summary`),
+        env,
+        "req_test123",
+        { subjectId: TEST_USER_ID, subjectType: "user" },
+        TEST_ORG_UUID,
+        { repo: summaryRepo() },
+      );
+      expect(res.status).toBe(200);
+      const timing = res.headers.get("Server-Timing");
+      expect(timing).toBeTruthy();
+      for (const phase of ["authz", "db", "total"]) {
+        expect(timing).toContain(phase);
+      }
+    });
+
+    it("deny never leaks summary data even though the read runs in parallel", async () => {
+      const denyPolicy = createMockFetcher({
+        data: { allow: false, reason: "no_matching_role", policyVersion: 1, derivedScope: { orgId: TEST_ORG_UUID } },
+      });
+      const env = createFakeEnv({ POLICY_WORKER: denyPolicy });
+      const res = await handleGetBillingSummary(
+        makeRequest("GET", `/v1/organizations/${TEST_ORG_PUBLIC}/billing/summary`),
+        env,
+        "req_test123",
+        { subjectId: TEST_USER_ID, subjectType: "user" },
+        TEST_ORG_UUID,
+        { repo: summaryRepo() },
+      );
+      expect(res.status).toBe(404);
+      const raw = await res.text();
+      expect(raw).not.toContain("SECRET_LIMIT_MARKER");
+      // Still carries timings on the deny path.
+      expect(res.headers.get("Server-Timing")).toBeTruthy();
+    });
   });
 
   it("returns 400 for invalid status query on plans", async () => {

@@ -920,6 +920,34 @@ describe("handleListMembers handler integration", () => {
     const json = await response.json() as JsonResp;
     expect(json.error.code).toBe("internal_error");
   });
+
+  it("PERF4: deny never leaks the members page even though the read runs in parallel", async () => {
+    const repo = createFakeRepo();
+    const env: Env = { POLICY_WORKER: createPolicyFetcher(false), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+    const response = await handleListMembers(env, "req_test", actor, orgPublicIdStr, undefined, { repo });
+
+    expect(response.status).toBe(404);
+    const raw = await response.text();
+    // The page read ran concurrently with authz; on deny it must be discarded.
+    expect(raw).not.toContain("usr_viewer");
+    expect(raw).not.toContain("mem_");
+    expect(raw).not.toContain("members");
+  });
+
+  it("PERF4: emits a Server-Timing header with authctx/db/policy/total phases", async () => {
+    const repo = createFakeRepo();
+    const env: Env = { POLICY_WORKER: createPolicyFetcher(true), SOURCEPLANE_DB: {} as Hyperdrive, ENVIRONMENT: "test" };
+
+    const response = await handleListMembers(env, "req_test", actor, orgPublicIdStr, undefined, { repo });
+
+    expect(response.status).toBe(200);
+    const timing = response.headers.get("Server-Timing");
+    expect(timing).toBeTruthy();
+    for (const phase of ["authctx", "db", "policy", "total"]) {
+      expect(timing).toContain(phase);
+    }
+  });
 });
 
 describe("pagination", () => {

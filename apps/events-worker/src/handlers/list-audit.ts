@@ -6,9 +6,10 @@ import { createEventsRepository } from "@saas/db/events";
 import { createSqlExecutor } from "@saas/db/hyperdrive";
 import { fetchAuthorizationContext } from "../membership-client.js";
 import { authorizeViaPolicy } from "../policy-client.js";
-import { errorResponse, validationError } from "../http.js";
+import { errorResponse, validationError, withTimings } from "../http.js";
 import { parsePageParams, parseAuditFilters, encodeCursor } from "../pagination.js";
 import { toPublicId, toPublicScopeId } from "../ids.js";
+import { createTimings } from "@saas/contracts/timing";
 
 const CATEGORY_RE = /^[a-z0-9_.\-]{1,64}$/;
 
@@ -105,45 +106,64 @@ export async function handleListAudit(
     return validationError(requestId, { [filtersResult.field]: [filtersResult.reason] });
   }
 
-  const contextResult = await fetchAuthorizationContext(
-    env.MEMBERSHIP_WORKER,
-    actor.subjectId,
-    actor.subjectType,
-    orgId,
-    requestId,
-  );
-  if (!contextResult.ok) {
-    return errorResponse("not_found", "Not found", 404, requestId);
-  }
-
-  const policyResult = await authorizeViaPolicy(
-    env.POLICY_WORKER,
-    actor.subjectId,
-    actor.subjectType,
-    "audit.read",
-    { kind: "organization", orgId },
-    contextResult.memberships,
-    requestId,
-  );
-  if (!policyResult.allow) {
-    return errorResponse("not_found", "Not found", 404, requestId);
-  }
-
   const { limit, cursor } = pageResult.value;
   const dbCursor = cursor ? { occurredAt: cursor.occurredAt, id: cursor.id } : null;
 
   const executor = createSqlExecutor(env.SOURCEPLANE_DB);
+  const timings = createTimings();
+  const endTotal = timings.start("total");
   try {
     const repo = deps?.eventsRepo ?? createEventsRepository(executor);
-    const result = await repo.queryAuditByOrg(
-      orgId,
-      { limit, cursor: dbCursor },
-      categoryParam ?? undefined,
-      filtersResult.value,
+
+    // PERF4 (task 0133): the authorization-context fetch (membership-worker) and
+    // the resource read are independent — the read does not depend on the authz
+    // result for WHAT to read, only on WHETHER to return it. Run them
+    // concurrently, then apply the policy decision and discard the read on deny.
+    const [contextResult, result] = await Promise.all([
+      timings.measure("authctx", () =>
+        fetchAuthorizationContext(
+          env.MEMBERSHIP_WORKER!,
+          actor.subjectId,
+          actor.subjectType,
+          orgId,
+          requestId,
+        ),
+      ),
+      timings.measure("db", () =>
+        repo.queryAuditByOrg(
+          orgId,
+          { limit, cursor: dbCursor },
+          categoryParam ?? undefined,
+          filtersResult.value,
+        ),
+      ),
+    ]);
+
+    if (!contextResult.ok) {
+      endTotal();
+      return withTimings(errorResponse("not_found", "Not found", 404, requestId), requestId, "audit.read", timings);
+    }
+
+    const policyResult = await timings.measure("policy", () =>
+      authorizeViaPolicy(
+        env.POLICY_WORKER!,
+        actor.subjectId,
+        actor.subjectType,
+        "audit.read",
+        { kind: "organization", orgId },
+        contextResult.memberships,
+        requestId,
+      ),
     );
+    if (!policyResult.allow) {
+      // Deny-by-default: never return the speculatively-read data.
+      endTotal();
+      return withTimings(errorResponse("not_found", "Not found", 404, requestId), requestId, "audit.read", timings);
+    }
 
     if (!result.ok) {
-      return errorResponse("internal_error", "Service unavailable", 503, requestId);
+      endTotal();
+      return withTimings(errorResponse("internal_error", "Service unavailable", 503, requestId), requestId, "audit.read", timings);
     }
 
     const auditEntries = result.value.items.map(toPublicAuditEntry);
@@ -151,15 +171,22 @@ export async function handleListAudit(
       ? encodeCursor(result.value.nextCursor.occurredAt, result.value.nextCursor.id)
       : null;
 
-    return Response.json(
-      {
-        data: { auditEntries },
-        meta: { requestId, cursor: nextCursor },
-      },
-      { status: 200, headers: { "content-type": "application/json" } },
+    endTotal();
+    return withTimings(
+      Response.json(
+        {
+          data: { auditEntries },
+          meta: { requestId, cursor: nextCursor },
+        },
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+      requestId,
+      "audit.read",
+      timings,
     );
   } catch {
-    return errorResponse("internal_error", "Service unavailable", 503, requestId);
+    endTotal();
+    return withTimings(errorResponse("internal_error", "Service unavailable", 503, requestId), requestId, "audit.read", timings);
   } finally {
     await executor.dispose();
   }
