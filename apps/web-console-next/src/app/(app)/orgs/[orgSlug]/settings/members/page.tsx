@@ -28,6 +28,17 @@ function Inner({ orgId }: { orgId: string }) {
     wrap(async () => (await client.memberships.listMembers(orgId)).members),
   );
 
+  const removeMember = async (id: string, subjectId: string) => {
+    if (!confirm(`Remove ${subjectId}?`)) return;
+    const r = await wrap(() => client.memberships.removeMember(orgId, id));
+    if (!r.ok) {
+      toast({ kind: "error", title: "Remove failed", description: r.error.message });
+      return;
+    }
+    toast({ kind: "success", title: "Member removed" });
+    members.reload();
+  };
+
   return (
     <div className="space-y-5">
       <header>
@@ -58,65 +69,85 @@ function Inner({ orgId }: { orgId: string }) {
           primaryAction={{ label: "Go to invitations", href: `./invitations` }}
         />
       ) : (
-        <Card>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Subject</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Roles</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Joined</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {members.data.map((m) => (
-                <TableRow key={m.id}>
-                  <TableCell className="font-mono text-xs">{m.subjectId}</TableCell>
-                  <TableCell>
-                    <Badge variant="secondary">{m.subjectType}</Badge>
-                  </TableCell>
-                  <TableCell>
+        <>
+          {/* Mobile: stacked cards */}
+          <div className="space-y-3 md:hidden">
+            {members.data.map((m) => (
+              <Card key={m.id} className="space-y-3 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 space-y-1.5">
+                    <div className="break-all font-mono text-xs">{m.subjectId}</div>
                     <div className="flex flex-wrap gap-1">
-                      {m.roles.map((r, i) => (
-                        <Badge key={i} variant="outline">
-                          {r.role}
-                        </Badge>
-                      ))}
+                      <Badge variant="secondary">{m.subjectType}</Badge>
+                      <Badge variant={m.status === "active" ? "success" : "warning"}>{m.status}</Badge>
                     </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={m.status === "active" ? "success" : "warning"}>{m.status}</Badge>
-                  </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
-                    {new Date(m.joinedAt).toLocaleDateString()}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={async () => {
-                        if (!confirm(`Remove ${m.subjectId}?`)) return;
-                        const r = await wrap(() =>
-                          client.memberships.removeMember(orgId, m.id),
-                        );
-                        if (!r.ok) {
-                          toast({ kind: "error", title: "Remove failed", description: r.error.message });
-                          return;
-                        }
-                        toast({ kind: "success", title: "Member removed" });
-                        members.reload();
-                      }}
-                    >
-                      Remove
-                    </Button>
-                  </TableCell>
+                  </div>
+                  <Button size="sm" variant="ghost" onClick={() => removeMember(m.id, m.subjectId)}>
+                    Remove
+                  </Button>
+                </div>
+                {m.roles.length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {m.roles.map((r, i) => (
+                      <Badge key={i} variant="outline">
+                        {r.role}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+                <div className="text-xs text-muted-foreground">
+                  Joined {new Date(m.joinedAt).toLocaleDateString()}
+                </div>
+              </Card>
+            ))}
+          </div>
+
+          {/* Desktop: table */}
+          <Card className="hidden md:block">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Subject</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Roles</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Joined</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </Card>
+              </TableHeader>
+              <TableBody>
+                {members.data.map((m) => (
+                  <TableRow key={m.id}>
+                    <TableCell className="font-mono text-xs">{m.subjectId}</TableCell>
+                    <TableCell>
+                      <Badge variant="secondary">{m.subjectType}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1">
+                        {m.roles.map((r, i) => (
+                          <Badge key={i} variant="outline">
+                            {r.role}
+                          </Badge>
+                        ))}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={m.status === "active" ? "success" : "warning"}>{m.status}</Badge>
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {new Date(m.joinedAt).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button size="sm" variant="ghost" onClick={() => removeMember(m.id, m.subjectId)}>
+                        Remove
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Card>
+        </>
       )}
     </div>
   );

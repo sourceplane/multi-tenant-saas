@@ -69,7 +69,7 @@ export function ScopeSwitcher() {
   }, [client, currentOrg, currentProject]);
 
   return (
-    <div className="flex items-center gap-1 text-sm">
+    <div className="flex min-w-0 items-center gap-1 text-sm">
       <Crumb
         icon={<Building2 className="h-3.5 w-3.5" />}
         label={currentOrg?.name ?? orgSlug ?? "Select organization"}
@@ -91,7 +91,7 @@ export function ScopeSwitcher() {
       </Crumb>
 
       {orgSlug && (
-        <>
+        <div className="hidden min-w-0 items-center md:flex">
           <Slash className="h-3 w-3 text-muted-foreground/60 mx-0.5" />
           <Crumb
             icon={<FolderKanban className="h-3.5 w-3.5" />}
@@ -119,11 +119,11 @@ export function ScopeSwitcher() {
               View all projects…
             </DropdownMenuItem>
           </Crumb>
-        </>
+        </div>
       )}
 
       {orgSlug && projectSlug && (
-        <>
+        <div className="hidden min-w-0 items-center md:flex">
           <Slash className="h-3 w-3 text-muted-foreground/60 mx-0.5" />
           <Crumb
             icon={<Boxes className="h-3.5 w-3.5" />}
@@ -153,7 +153,7 @@ export function ScopeSwitcher() {
               View all environments…
             </DropdownMenuItem>
           </Crumb>
-        </>
+        </div>
       )}
     </div>
   );
@@ -180,7 +180,7 @@ function Crumb({
         )}
       >
         {icon}
-        <span className="max-w-[160px] truncate font-medium">{label}</span>
+        <span className="max-w-[44vw] truncate font-medium sm:max-w-[160px]">{label}</span>
         <ChevronsUpDown className="h-3 w-3 opacity-60" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="min-w-[240px]">

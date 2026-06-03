@@ -1,10 +1,28 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "../styles/globals.css";
 import { Providers } from "./providers";
 
 export const metadata: Metadata = {
   title: "Sourceplane Console",
   description: "Next-gen control plane for your projects, environments, and entitlements.",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    title: "Sourceplane",
+    statusBarStyle: "black-translucent",
+  },
+};
+
+// `viewport-fit=cover` enables `env(safe-area-inset-*)` on notched devices;
+// theme-color tints the mobile browser chrome to match light/dark surfaces.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#09090b" },
+  ],
 };
 
 // The whole console is session-authenticated and renders nothing of value

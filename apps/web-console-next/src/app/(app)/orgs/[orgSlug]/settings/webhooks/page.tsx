@@ -80,19 +80,53 @@ function Inner({ orgId, orgSlug }: { orgId: string; orgSlug: string }) {
           primaryAction={{ label: "Create endpoint", onClick: () => setCreateOpen(true) }}
         />
       ) : (
-        <Card>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>URL</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Secret version</TableHead>
-                <TableHead>Last rotated</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {endpoints.data.map((ep) => (
+        <>
+          {/* Mobile: stacked cards */}
+          <div className="space-y-3 md:hidden">
+            {endpoints.data.map((ep) => (
+              <Link
+                key={ep.id}
+                href={`/orgs/${orgSlug}/settings/webhooks/${ep.id}`}
+                className="block"
+              >
+                <Card className="space-y-2 p-4 transition-colors active:bg-accent/40">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      {ep.name && <div className="truncate text-sm font-medium">{ep.name}</div>}
+                      <div className="break-all font-mono text-xs text-muted-foreground">{ep.url}</div>
+                    </div>
+                    <Badge variant={ep.status === "active" ? "outline" : "destructive"}>
+                      {ep.status}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>secret v{ep.secretVersion}</span>
+                    <span>
+                      rotated{" "}
+                      {ep.secretLastRotatedAt
+                        ? new Date(ep.secretLastRotatedAt).toLocaleDateString()
+                        : "never"}
+                    </span>
+                  </div>
+                </Card>
+              </Link>
+            ))}
+          </div>
+
+          {/* Desktop: table */}
+          <Card className="hidden md:block">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>URL</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Secret version</TableHead>
+                  <TableHead>Last rotated</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {endpoints.data.map((ep) => (
                 <TableRow key={ep.id}>
                   <TableCell className="font-mono text-xs break-all max-w-[26rem]">
                     {ep.name ? (
@@ -127,9 +161,10 @@ function Inner({ orgId, orgSlug }: { orgId: string; orgSlug: string }) {
                   </TableCell>
                 </TableRow>
               ))}
-            </TableBody>
-          </Table>
-        </Card>
+              </TableBody>
+            </Table>
+          </Card>
+        </>
       )}
 
       <CreateEndpointDialog
