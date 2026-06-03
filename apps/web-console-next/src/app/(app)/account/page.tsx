@@ -141,8 +141,12 @@ export default function AccountPage() {
               </div>
 
               <div className="flex items-center gap-2">
-                <Button onClick={() => void save()} disabled={!dirty || !nameValid.ok || saving}>
-                  {saving ? "Saving…" : "Save changes"}
+                <Button
+                  onClick={() => void save()}
+                  loading={saving}
+                  disabled={!dirty || !nameValid.ok}
+                >
+                  Save changes
                 </Button>
                 {dirty ? (
                   <Button

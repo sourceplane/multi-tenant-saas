@@ -142,9 +142,10 @@ export function DisableEndpointDialog({
             <Button
               variant="destructive"
               onClick={handleConfirm}
-              disabled={busy || !reasonCheck.ok}
+              loading={busy}
+              disabled={!reasonCheck.ok}
             >
-              {busy ? "Disabling…" : "Disable endpoint"}
+              Disable endpoint
             </Button>
           </DialogFooter>
         </DialogContent>

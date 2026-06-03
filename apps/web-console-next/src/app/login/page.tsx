@@ -175,7 +175,8 @@ export default function LoginPage() {
                         Back
                       </Button>
                       <Button
-                        disabled={busy || code.length < 4}
+                        loading={busy}
+                        disabled={code.length < 4}
                         onClick={async () => {
                           if (!challengeId) return;
                           setBusy(true);
