@@ -277,3 +277,85 @@ describe("PATCH /v1/auth/profile", () => {
     expect(json.meta.requestId).toBe("req_u12");
   });
 });
+
+describe("PATCH /v1/auth/profile — lastOrgSlug preference", () => {
+  it("defaults lastOrgSlug to null on a new user", async () => {
+    const repo = createFakeRepository();
+    const { token } = await setupAuthenticatedUser(repo);
+    const response = await handleProfile(makeGetRequest(token), makeEnv(), "req_lo0", { repo });
+    const json = (await response.json()) as JsonResp;
+    expect(json.data.user.lastOrgSlug ?? null).toBeNull();
+  });
+
+  it("updates lastOrgSlug and reflects it on read", async () => {
+    const repo = createFakeRepository();
+    const { token } = await setupAuthenticatedUser(repo);
+
+    const patch = await handleProfile(
+      makePatchRequest(token, { lastOrgSlug: "acme" }),
+      makeEnv(),
+      "req_lo1",
+      { repo },
+    );
+    expect(patch.status).toBe(200);
+    expect(((await patch.json()) as JsonResp).data.user.lastOrgSlug).toBe("acme");
+
+    const get = await handleProfile(makeGetRequest(token), makeEnv(), "req_lo2", { repo });
+    expect(((await get.json()) as JsonResp).data.user.lastOrgSlug).toBe("acme");
+  });
+
+  it("updates lastOrgSlug without touching displayName (partial update)", async () => {
+    const repo = createFakeRepository();
+    const { token } = await setupAuthenticatedUser(repo);
+    await handleProfile(makePatchRequest(token, { displayName: "Alice" }), makeEnv(), "req_lo3a", { repo });
+
+    const response = await handleProfile(
+      makePatchRequest(token, { lastOrgSlug: "acme" }),
+      makeEnv(),
+      "req_lo3b",
+      { repo },
+    );
+    const json = (await response.json()) as JsonResp;
+    expect(json.data.user.displayName).toBe("Alice");
+    expect(json.data.user.lastOrgSlug).toBe("acme");
+  });
+
+  it("does NOT record a security event for a lastOrgSlug-only update (audit-quiet)", async () => {
+    const repo = createFakeRepository();
+    const { token } = await setupAuthenticatedUser(repo);
+
+    await handleProfile(makePatchRequest(token, { lastOrgSlug: "acme" }), makeEnv(), "req_lo4", { repo });
+
+    const profileEvents = repo._securityEvents.filter(
+      (e: SecurityEvent) => e.eventType === "user.profile.updated",
+    );
+    expect(profileEvents).toHaveLength(0);
+  });
+
+  it("clears lastOrgSlug when null is provided", async () => {
+    const repo = createFakeRepository();
+    const { token } = await setupAuthenticatedUser(repo);
+    await handleProfile(makePatchRequest(token, { lastOrgSlug: "acme" }), makeEnv(), "req_lo5a", { repo });
+
+    const response = await handleProfile(
+      makePatchRequest(token, { lastOrgSlug: null }),
+      makeEnv(),
+      "req_lo5b",
+      { repo },
+    );
+    expect(((await response.json()) as JsonResp).data.user.lastOrgSlug).toBeNull();
+  });
+
+  it("rejects lastOrgSlug exceeding 100 characters", async () => {
+    const repo = createFakeRepository();
+    const { token } = await setupAuthenticatedUser(repo);
+    const response = await handleProfile(
+      makePatchRequest(token, { lastOrgSlug: "a".repeat(101) }),
+      makeEnv(),
+      "req_lo6",
+      { repo },
+    );
+    expect(response.status).toBe(422);
+    expect((await response.json() as JsonResp).error.details.fields.lastOrgSlug).toBeDefined();
+  });
+});

@@ -54,3 +54,31 @@ export function clearLastOrgSlug(): void {
 export function defaultOrgDestination(lastOrgSlug: string | null): string {
   return lastOrgSlug ? `/orgs/${lastOrgSlug}/projects` : "/orgs";
 }
+
+/** Minimal shape of the auth client needed to read the server-side preference. */
+interface ProfileReader {
+  auth: { getProfile: () => Promise<{ user: { lastOrgSlug?: string | null } }> };
+}
+
+/**
+ * Resolve where to send the user right after authentication.
+ *
+ * The server preference is the cross-device source of truth: we read it with the
+ * freshly-authenticated client, seed the local cache from it, and route there.
+ * If the read fails (network, API-key token, no server value) we fall back to
+ * the local cache so the redirect is never blocked. Pass a client built with the
+ * NEW token — the session context's client may not have it yet on this tick.
+ */
+export async function resolvePostAuthDestination(client: ProfileReader): Promise<string> {
+  try {
+    const { user } = await client.auth.getProfile();
+    const serverSlug = user.lastOrgSlug ?? null;
+    if (serverSlug) {
+      writeLastOrgSlug(serverSlug);
+      return defaultOrgDestination(serverSlug);
+    }
+  } catch {
+    /* fall back to the local cache */
+  }
+  return defaultOrgDestination(readLastOrgSlug());
+}

@@ -3,7 +3,8 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/session";
-import { readLastOrgSlug, defaultOrgDestination } from "@/lib/last-org";
+import { resolvePostAuthDestination } from "@/lib/last-org";
+import { createClient } from "@/lib/api";
 import { useToast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 
@@ -25,7 +26,7 @@ const ERROR_COPY: Record<string, string> = {
 
 export default function OAuthCallbackPage() {
   const router = useRouter();
-  const { setToken } = useSession();
+  const { setToken, target } = useSession();
   const { toast } = useToast();
   const [error, setError] = React.useState<string | null>(null);
 
@@ -46,12 +47,14 @@ export default function OAuthCallbackPage() {
     if (token) {
       setToken(token);
       toast({ kind: "success", title: "Signed in" });
-      router.replace(defaultOrgDestination(readLastOrgSlug()));
+      void resolvePostAuthDestination(createClient(target, token)).then((dest) =>
+        router.replace(dest),
+      );
       return;
     }
 
     setError(err ?? "oauth_failed");
-  }, [router, setToken, toast]);
+  }, [router, setToken, toast, target]);
 
   if (error) {
     return (

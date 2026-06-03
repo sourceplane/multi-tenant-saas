@@ -17,6 +17,8 @@ export interface User {
   email: string;
   emailLower: string;
   displayName: string | null;
+  /** Slug of the org the user last worked in; a soft UI hint (see migration 160). */
+  lastOrgSlug: string | null;
   status: string;
   createdAt: Date;
   updatedAt: Date;
@@ -204,7 +206,10 @@ export interface SecurityEventPagedResult {
 }
 
 export interface UpdateUserProfileInput {
-  displayName: string | null;
+  /** Provide to change; omit to leave unchanged (partial update). */
+  displayName?: string | null;
+  /** Provide to change; omit to leave unchanged (partial update). */
+  lastOrgSlug?: string | null;
   updatedAt: Date;
 }
 

@@ -13,6 +13,11 @@ export interface AuthUser {
   id: string;
   email: string;
   displayName: string | null;
+  /**
+   * Slug of the org the user last worked in — a cross-device default-landing
+   * hint. Optional: only the profile/session read populates it.
+   */
+  lastOrgSlug?: string | null;
 }
 
 export interface LoginStartResponse {
@@ -95,7 +100,10 @@ export interface ProfileResponse {
 }
 
 export interface UpdateProfileRequest {
-  displayName: string | null;
+  /** Omit to leave unchanged (partial update). */
+  displayName?: string | null;
+  /** Omit to leave unchanged (partial update). */
+  lastOrgSlug?: string | null;
 }
 
 export interface ApiSuccessEnvelope<T> {

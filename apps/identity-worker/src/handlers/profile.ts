@@ -7,7 +7,8 @@ import { successResponse, errorResponse, extractBearerToken, validationError } f
 import { parseSessionToken } from "../ids.js";
 
 const MAX_DISPLAY_NAME_LENGTH = 120;
-const ALLOWED_FIELDS = new Set(["displayName"]);
+const MAX_LAST_ORG_SLUG_LENGTH = 100;
+const ALLOWED_FIELDS = new Set(["displayName", "lastOrgSlug"]);
 
 export interface HandleProfileDeps {
   repo?: IdentityRepository;
@@ -74,29 +75,54 @@ export async function handleProfile(
       return validationError(requestId, fields);
     }
 
-    // Validate displayName is present
-    if (!("displayName" in bodyObj)) {
-      return validationError(requestId, { displayName: ["Required"] });
-    }
+    // Partial update: validate only the provided fields; require at least one.
+    const patch: { displayName?: string | null; lastOrgSlug?: string | null } = {};
 
-    const rawDisplayName = bodyObj.displayName;
-    if (rawDisplayName !== null && typeof rawDisplayName !== "string") {
-      return validationError(requestId, { displayName: ["Must be a string or null"] });
-    }
-
-    let displayName: string | null = null;
-    if (typeof rawDisplayName === "string") {
-      const trimmed = rawDisplayName.trim();
-      if (trimmed === "") {
-        displayName = null;
-      } else if (trimmed.length > MAX_DISPLAY_NAME_LENGTH) {
-        return validationError(requestId, { displayName: [`Must be at most ${MAX_DISPLAY_NAME_LENGTH} characters`] });
-      } else {
-        displayName = trimmed;
+    if ("displayName" in bodyObj) {
+      const rawDisplayName = bodyObj.displayName;
+      if (rawDisplayName !== null && typeof rawDisplayName !== "string") {
+        return validationError(requestId, { displayName: ["Must be a string or null"] });
       }
+      let displayName: string | null = null;
+      if (typeof rawDisplayName === "string") {
+        const trimmed = rawDisplayName.trim();
+        if (trimmed === "") {
+          displayName = null;
+        } else if (trimmed.length > MAX_DISPLAY_NAME_LENGTH) {
+          return validationError(requestId, { displayName: [`Must be at most ${MAX_DISPLAY_NAME_LENGTH} characters`] });
+        } else {
+          displayName = trimmed;
+        }
+      }
+      patch.displayName = displayName;
     }
 
-    const result = await auth.updateProfile(token, { displayName });
+    if ("lastOrgSlug" in bodyObj) {
+      const rawSlug = bodyObj.lastOrgSlug;
+      if (rawSlug !== null && typeof rawSlug !== "string") {
+        return validationError(requestId, { lastOrgSlug: ["Must be a string or null"] });
+      }
+      let lastOrgSlug: string | null = null;
+      if (typeof rawSlug === "string") {
+        const trimmed = rawSlug.trim();
+        if (trimmed === "") {
+          lastOrgSlug = null;
+        } else if (trimmed.length > MAX_LAST_ORG_SLUG_LENGTH) {
+          return validationError(requestId, {
+            lastOrgSlug: [`Must be at most ${MAX_LAST_ORG_SLUG_LENGTH} characters`],
+          });
+        } else {
+          lastOrgSlug = trimmed;
+        }
+      }
+      patch.lastOrgSlug = lastOrgSlug;
+    }
+
+    if (Object.keys(patch).length === 0) {
+      return validationError(requestId, { body: ["Provide at least one of: displayName, lastOrgSlug"] });
+    }
+
+    const result = await auth.updateProfile(token, patch);
     if ("error" in result) {
       if (result.error === "unauthenticated") {
         return errorResponse(result.error, result.message, 401, requestId);

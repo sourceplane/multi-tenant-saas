@@ -9,8 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useSession } from "@/lib/session";
-import { readLastOrgSlug, defaultOrgDestination } from "@/lib/last-org";
-import { wrap } from "@/lib/api";
+import { resolvePostAuthDestination } from "@/lib/last-org";
+import { wrap, createClient } from "@/lib/api";
 import { useToast } from "@/components/ui/toast";
 import { ZodForm } from "@/components/ui/zod-form";
 import type { OAuthProviderInfo } from "@saas/contracts/auth";
@@ -189,7 +189,9 @@ export default function LoginPage() {
                           }
                           setToken(r.data.token);
                           toast({ kind: "success", title: "Signed in" });
-                          router.push(defaultOrgDestination(readLastOrgSlug()));
+                          router.push(
+                            await resolvePostAuthDestination(createClient(target, r.data.token)),
+                          );
                         }}
                       >
                         Sign in
@@ -216,10 +218,12 @@ export default function LoginPage() {
                 <Button
                   className="w-full"
                   disabled={!tokenInput}
-                  onClick={() => {
+                  onClick={async () => {
                     setToken(tokenInput);
                     toast({ kind: "success", title: "Token set" });
-                    router.push(defaultOrgDestination(readLastOrgSlug()));
+                    router.push(
+                      await resolvePostAuthDestination(createClient(target, tokenInput)),
+                    );
                   }}
                 >
                   Continue
