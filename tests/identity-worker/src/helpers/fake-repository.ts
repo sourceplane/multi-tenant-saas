@@ -78,6 +78,7 @@ export function createFakeRepository(): IdentityRepository & {
         email: input.email,
         emailLower: input.emailLower,
         displayName: input.displayName ?? null,
+        lastOrgSlug: null,
         status: "active",
         createdAt: input.createdAt,
         updatedAt: input.createdAt,
@@ -102,7 +103,8 @@ export function createFakeRepository(): IdentityRepository & {
     async updateUserProfile(userId: string, input: UpdateUserProfileInput): Promise<IdentityResult<User>> {
       const user = users.get(userId);
       if (!user) return { ok: false, error: { kind: "not_found" } };
-      user.displayName = input.displayName;
+      if (input.displayName !== undefined) user.displayName = input.displayName;
+      if (input.lastOrgSlug !== undefined) user.lastOrgSlug = input.lastOrgSlug;
       user.updatedAt = input.updatedAt;
       return { ok: true, value: user };
     },

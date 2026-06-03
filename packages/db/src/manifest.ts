@@ -147,5 +147,14 @@ export const manifest: MigrationManifest = {
       description:
         "Entitlement-decision observability — append-only, counts-only observation table (org × entitlement key × outcome) owned by the billing context",
     },
+    {
+      id: "160_identity_user_last_org",
+      context: "identity",
+      path: "160_identity_user_last_org/up.sql",
+      checksum:
+        "d102ce426114b032407f6e03ee2e02de65ccb25e4f42df25b340e5a641829dc6",
+      description:
+        "Per-user last-viewed organization preference (nullable slug hint on identity.users) backing the console's cross-device default landing",
+    },
   ],
 };

@@ -78,7 +78,7 @@ export interface LoginWithOAuthError {
 
 export interface GetSessionResult {
   session: { id: string; expiresAt: Date; createdAt: Date };
-  user: { id: string; email: string; displayName: string | null };
+  user: { id: string; email: string; displayName: string | null; lastOrgSlug: string | null };
 }
 
 export interface GetSessionError {
@@ -108,7 +108,7 @@ export interface ResolveBearerError {
 }
 
 export interface UpdateProfileResult {
-  user: { id: string; email: string; displayName: string | null };
+  user: { id: string; email: string; displayName: string | null; lastOrgSlug: string | null };
 }
 
 export interface UpdateProfileError {
@@ -197,7 +197,12 @@ export function createAuthService(deps: AuthServiceDeps) {
     const user = userResult.value;
     return {
       session: { id: sessionPublicId(session.id), expiresAt: session.expiresAt, createdAt: session.createdAt },
-      user: { id: userPublicId(user.id), email: user.email, displayName: user.displayName },
+      user: {
+        id: userPublicId(user.id),
+        email: user.email,
+        displayName: user.displayName,
+        lastOrgSlug: user.lastOrgSlug,
+      },
     };
   }
 
@@ -472,7 +477,7 @@ export function createAuthService(deps: AuthServiceDeps) {
 
     async updateProfile(
       token: string,
-      input: { displayName: string | null },
+      input: { displayName?: string | null; lastOrgSlug?: string | null },
     ): Promise<UpdateProfileResult | UpdateProfileError> {
       // Validate session
       const sessionResult = await getSession(token);
@@ -493,27 +498,47 @@ export function createAuthService(deps: AuthServiceDeps) {
         return { error: "internal_error", message: "Invalid user ID format" };
       }
 
-      const updateResult = await repo.updateUserProfile(uuid, {
-        displayName: input.displayName,
+      // Partial update: forward only the fields the caller provided.
+      const patch: { displayName?: string | null; lastOrgSlug?: string | null; updatedAt: Date } = {
         updatedAt: now(),
-      });
+      };
+      const changedFields: string[] = [];
+      if (input.displayName !== undefined) {
+        patch.displayName = input.displayName;
+        changedFields.push("displayName");
+      }
+      if (input.lastOrgSlug !== undefined) {
+        patch.lastOrgSlug = input.lastOrgSlug;
+        changedFields.push("lastOrgSlug");
+      }
+
+      const updateResult = await repo.updateUserProfile(uuid, patch);
 
       if (!updateResult.ok) {
         return { error: "internal_error", message: "Failed to update profile" };
       }
 
-      // Record security event with safe metadata
-      await repo.recordSecurityEvent({
-        ...eventBase(),
-        eventType: "user.profile.updated",
-        outcome: "success",
-        userId: uuid,
-        metadata: { changedFields: ["displayName"] },
-      });
+      // Record a security event only for meaningful identity changes. The
+      // last-org hint updates on routine navigation, so it must not spam the
+      // audit log.
+      if (changedFields.includes("displayName")) {
+        await repo.recordSecurityEvent({
+          ...eventBase(),
+          eventType: "user.profile.updated",
+          outcome: "success",
+          userId: uuid,
+          metadata: { changedFields },
+        });
+      }
 
       const user = updateResult.value;
       return {
-        user: { id: userPublicId(user.id), email: user.email, displayName: user.displayName },
+        user: {
+          id: userPublicId(user.id),
+          email: user.email,
+          displayName: user.displayName,
+          lastOrgSlug: user.lastOrgSlug,
+        },
       };
     },
 

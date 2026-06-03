@@ -29,6 +29,7 @@ function mapUser(row: Record<string, unknown>): User {
     email: row.email as string,
     emailLower: row.email_lower as string,
     displayName: (row.display_name as string) ?? null,
+    lastOrgSlug: (row.last_org_slug as string) ?? null,
     status: row.status as string,
     createdAt: new Date(row.created_at as string),
     updatedAt: new Date(row.updated_at as string),
@@ -188,12 +189,21 @@ export function createIdentityRepository(executor: SqlExecutor): IdentityReposit
 
     async updateUserProfile(userId: string, input: UpdateUserProfileInput): Promise<IdentityResult<User>> {
       try {
+        // Partial update: only set the columns the caller provided. `updated_at`
+        // is always bumped. $1 = id, $2 = updated_at, then provided fields.
+        const sets: string[] = ["updated_at = $2"];
+        const params: unknown[] = [userId, input.updatedAt.toISOString()];
+        if (input.displayName !== undefined) {
+          params.push(input.displayName);
+          sets.push(`display_name = $${params.length}`);
+        }
+        if (input.lastOrgSlug !== undefined) {
+          params.push(input.lastOrgSlug);
+          sets.push(`last_org_slug = $${params.length}`);
+        }
         const result = await executor.execute<Record<string, unknown>>(
-          `UPDATE identity.users
-           SET display_name = $2, updated_at = $3
-           WHERE id = $1
-           RETURNING *`,
-          [userId, input.displayName, input.updatedAt.toISOString()],
+          `UPDATE identity.users SET ${sets.join(", ")} WHERE id = $1 RETURNING *`,
+          params,
         );
         if (result.rowCount === 0) {
           return { ok: false, error: { kind: "not_found" } };

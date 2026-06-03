@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { ZodForm } from "@/components/ui/zod-form";
 import { PreconditionInsight } from "@/components/precondition/insight";
 import { useSession } from "@/lib/session";
+import { readLastOrgSlug, clearLastOrgSlug } from "@/lib/last-org";
 import { useApiQuery, qk, usePrefetch } from "@/lib/query";
 import { useToast } from "@/components/ui/toast";
 import { wrap, type ApiErrorBody } from "@/lib/api";
@@ -34,6 +35,15 @@ export default function OrgsPage() {
   );
   const [open, setOpen] = React.useState(false);
   const [precondition, setPrecondition] = React.useState<ApiErrorBody | null>(null);
+
+  // The org list is authoritative: if the remembered org isn't in it anymore,
+  // forget it so the default landing doesn't point at an inaccessible org.
+  React.useEffect(() => {
+    const last = readLastOrgSlug();
+    if (orgs.data && last && !orgs.data.some((o) => o.slug === last)) {
+      clearLastOrgSlug();
+    }
+  }, [orgs.data]);
 
   return (
     <div className="space-y-6">
