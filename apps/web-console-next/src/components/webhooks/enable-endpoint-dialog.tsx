@@ -101,8 +101,8 @@ export function EnableEndpointDialog({
             >
               Cancel
             </Button>
-            <Button onClick={handleConfirm} disabled={busy}>
-              {busy ? "Re-enabling…" : "Re-enable endpoint"}
+            <Button onClick={handleConfirm} loading={busy}>
+              Re-enable endpoint
             </Button>
           </DialogFooter>
         </DialogContent>

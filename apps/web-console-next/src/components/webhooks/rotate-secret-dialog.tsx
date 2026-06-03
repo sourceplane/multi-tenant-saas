@@ -175,9 +175,9 @@ export function RotateSecretDialog({
             <Button
               variant="destructive"
               onClick={handleConfirm}
-              disabled={state.phase === "rotating"}
+              loading={state.phase === "rotating"}
             >
-              {state.phase === "rotating" ? "Rotating…" : "Rotate signing secret"}
+              Rotate signing secret
             </Button>
           </DialogFooter>
         </DialogContent>

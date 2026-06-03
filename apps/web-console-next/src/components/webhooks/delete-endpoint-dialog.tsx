@@ -135,9 +135,10 @@ export function DeleteEndpointDialog({
             <Button
               variant="destructive"
               onClick={handleConfirm}
-              disabled={busy || !matches}
+              loading={busy}
+              disabled={!matches}
             >
-              {busy ? "Deleting…" : "Delete endpoint"}
+              Delete endpoint
             </Button>
           </DialogFooter>
         </DialogContent>

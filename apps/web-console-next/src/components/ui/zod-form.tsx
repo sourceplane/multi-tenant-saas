@@ -106,8 +106,8 @@ export function ZodForm<S extends ZodType<FieldValues>>({
             {cancel.label}
           </Button>
         )}
-        <Button type="submit" disabled={isSubmitting}>
-          {isSubmitting ? "Working…" : submitLabel}
+        <Button type="submit" loading={isSubmitting}>
+          {submitLabel}
         </Button>
       </div>
     </form>
