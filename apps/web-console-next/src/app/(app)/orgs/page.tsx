@@ -84,9 +84,10 @@ export default function OrgsPage() {
                   name: "slug",
                   label: "Slug",
                   placeholder: "acme",
-                  hint: "Optional. Lowercased URL identifier.",
+                  hint: "Auto-filled from the name; edit to override.",
                 },
               ]}
+              deriveSlug={{ from: "name", to: "slug" }}
               submitLabel="Create"
               cancel={{ label: "Cancel", onClick: () => setOpen(false) }}
               onSubmit={async (v) => {
