@@ -8,7 +8,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { ZodForm } from "@/components/ui/zod-form";
 import { PreconditionInsight } from "@/components/precondition/insight";
 import { useSession } from "@/lib/session";
@@ -64,6 +71,9 @@ export default function OrgsPage() {
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Create organization</DialogTitle>
+              <DialogDescription>
+                An organization is your tenant — it owns projects, members, and billing.
+              </DialogDescription>
             </DialogHeader>
             <ZodForm
               schema={schema}

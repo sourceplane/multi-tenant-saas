@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Menu, Sun, Moon, LogOut, User2 } from "lucide-react";
+import { Menu, Sun, Moon, LogOut, User2, ShieldCheck } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { NavContent } from "./sidebar";
@@ -50,6 +50,14 @@ export function MobileNav() {
             onClick={() => {
               close();
               router.push("/account");
+            }}
+          />
+          <FooterButton
+            icon={<ShieldCheck className="h-5 w-5 opacity-80" />}
+            label="Security activity"
+            onClick={() => {
+              close();
+              router.push("/account/security");
             }}
           />
           <FooterButton

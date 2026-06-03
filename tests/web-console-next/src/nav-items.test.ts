@@ -1,16 +1,17 @@
 import { buildNavSections, isLinkActive } from "@web-console-next/components/shell/nav-items";
 
 describe("buildNavSections", () => {
-  it("always includes Workspace and Account sections", () => {
+  it("always includes the Workspace section", () => {
     const ids = buildNavSections({}).map((s) => s.id);
     expect(ids).toContain("workspace");
-    expect(ids).toContain("account");
   });
 
-  it("exposes the profile + security activity links in the account section", () => {
-    const account = buildNavSections({}).find((s) => s.id === "account")!;
-    const hrefs = account.links.map((l) => l.href);
-    expect(hrefs).toEqual(["/account", "/account/security"]);
+  it("does not render Account as a nav section (it lives in the account chip)", () => {
+    const ids = buildNavSections({}).map((s) => s.id);
+    expect(ids).not.toContain("account");
+    const allHrefs = buildNavSections({ orgSlug: "acme" }).flatMap((s) => s.links.map((l) => l.href));
+    expect(allHrefs).not.toContain("/account");
+    expect(allHrefs).not.toContain("/account/security");
   });
 
   it("omits org/project sections without slugs", () => {
