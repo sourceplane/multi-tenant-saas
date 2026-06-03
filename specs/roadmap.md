@@ -388,6 +388,16 @@ plus `enrich` for members) and a structured timing log; api-edge appends its own
 end-to-end breakdown. Wiring the Server-Timing metrics into Analytics Engine for
 p50/p95 dashboards is left as a follow-up.
 
+### PERF5+ — UI latency plan (post-PERF4, data-backed)
+A detailed, milestone-based plan (M0–M6) derived from live stage `Server-Timing`
+measurements is in **`specs/perf-ui-latency-plan.md`**. Headline finding: every
+DB round-trip costs **~440 ms** (the dominant floor), the authorization-context
+hop pays it on *every* org read, and cold bearer adds **~950 ms** every 30 s.
+Highest-leverage next steps: M0 (pin the round-trip root cause + Analytics), M1
+(edge + KV caching of the read path, incl. the authz-context), M2 (cold-bearer:
+longer TTL + KV + single-JOIN identity), M3 (fold the 2nd round-trip on
+members/billing), M4 (Hyperdrive caching / locality, gated on M0).
+
 ### Additional resources worth adding (suggested)
 - **Workers KV** — bearer-resolution cache (PERF2) and hot read caching.
 - **Cloudflare Cache API / Tiered Cache** — cache safe GETs at the edge with
