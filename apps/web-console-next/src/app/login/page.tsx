@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useSession } from "@/lib/session";
+import { readLastOrgSlug, defaultOrgDestination } from "@/lib/last-org";
 import { wrap } from "@/lib/api";
 import { useToast } from "@/components/ui/toast";
 import { ZodForm } from "@/components/ui/zod-form";
@@ -188,7 +189,7 @@ export default function LoginPage() {
                           }
                           setToken(r.data.token);
                           toast({ kind: "success", title: "Signed in" });
-                          router.push("/orgs");
+                          router.push(defaultOrgDestination(readLastOrgSlug()));
                         }}
                       >
                         Sign in
@@ -218,7 +219,7 @@ export default function LoginPage() {
                   onClick={() => {
                     setToken(tokenInput);
                     toast({ kind: "success", title: "Token set" });
-                    router.push("/orgs");
+                    router.push(defaultOrgDestination(readLastOrgSlug()));
                   }}
                 >
                   Continue

@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useOrgBySlug } from "@/lib/use-org";
+import { readLastOrgSlug, clearLastOrgSlug } from "@/lib/last-org";
 import { AlertTriangle } from "lucide-react";
 
 /**
@@ -21,6 +22,15 @@ export function OrgScope({
   children: (org: { id: string; name: string; slug: string }) => React.ReactNode;
 }) {
   const { org, loading, error } = useOrgBySlug(slug);
+
+  // Self-heal the remembered-org hint: if this slug resolves to nothing (org
+  // archived or access revoked), drop it so the default landing falls back to
+  // the picker instead of looping back to a dead org.
+  React.useEffect(() => {
+    if (!loading && !error && !org && readLastOrgSlug() === slug) {
+      clearLastOrgSlug();
+    }
+  }, [loading, error, org, slug]);
 
   if (loading) {
     return (

@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/session";
+import { readLastOrgSlug, defaultOrgDestination } from "@/lib/last-org";
 import { useToast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 
@@ -45,7 +46,7 @@ export default function OAuthCallbackPage() {
     if (token) {
       setToken(token);
       toast({ kind: "success", title: "Signed in" });
-      router.replace("/orgs");
+      router.replace(defaultOrgDestination(readLastOrgSlug()));
       return;
     }
 

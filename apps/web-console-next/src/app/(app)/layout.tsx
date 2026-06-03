@@ -4,6 +4,7 @@ import * as React from "react";
 import { Sidebar } from "@/components/shell/sidebar";
 import { Topbar } from "@/components/shell/topbar";
 import { BottomTabs } from "@/components/shell/bottom-tabs";
+import { LastOrgRecorder } from "@/components/shell/last-org-recorder";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useRequireAuth } from "@/lib/use-async";
 
@@ -41,6 +42,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </main>
         {ready && <BottomTabs />}
       </div>
+      {ready && <LastOrgRecorder />}
     </div>
   );
 }
