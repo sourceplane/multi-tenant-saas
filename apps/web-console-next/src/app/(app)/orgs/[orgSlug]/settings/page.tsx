@@ -2,12 +2,11 @@
 
 import * as React from "react";
 import { useParams } from "next/navigation";
-import { Copy } from "lucide-react";
 import { OrgScope } from "@/components/shell/org-scope";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CopyButton } from "@/components/ui/copy-button";
 import { SettingsCard } from "@/components/settings/settings-card";
-import { useToast } from "@/components/ui/toast";
 
 export default function OrgSettingsPage() {
   const params = useParams<{ orgSlug: string }>();
@@ -16,12 +15,6 @@ export default function OrgSettingsPage() {
 }
 
 function Inner({ org }: { org: { id: string; name: string; slug: string } }) {
-  const { toast } = useToast();
-  const copy = (value: string, what: string) => {
-    void navigator.clipboard?.writeText(value);
-    toast({ kind: "success", title: `${what} copied` });
-  };
-
   return (
     <div className="space-y-6">
       <SettingsCard
@@ -36,11 +29,7 @@ function Inner({ org }: { org: { id: string; name: string; slug: string } }) {
         title="Organization Slug"
         description="This is your organization's URL namespace on Sourceplane. It identifies your organization across the console and the API."
         footerHint="Used in console URLs and API requests."
-        footerAction={
-          <Button variant="outline" size="sm" onClick={() => copy(org.slug, "Slug")}>
-            <Copy /> Copy
-          </Button>
-        }
+        footerAction={<CopyButton value={org.slug} />}
       >
         <div className="flex max-w-md items-stretch overflow-hidden rounded-md border bg-muted/40">
           <span className="select-none border-r px-3 py-2 text-sm text-muted-foreground">
@@ -59,11 +48,7 @@ function Inner({ org }: { org: { id: string; name: string; slug: string } }) {
         title="Organization ID"
         description="Use this identifier when contacting support or making API requests on behalf of this organization."
         footerHint="A unique, stable identifier for this organization."
-        footerAction={
-          <Button variant="outline" size="sm" onClick={() => copy(org.id, "ID")}>
-            <Copy /> Copy
-          </Button>
-        }
+        footerAction={<CopyButton value={org.id} />}
       >
         <Input value={org.id} disabled className="max-w-md font-mono text-xs" aria-label="Organization ID" />
       </SettingsCard>
