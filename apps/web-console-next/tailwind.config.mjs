@@ -70,13 +70,16 @@ export default {
           from: { opacity: "1" },
           to: { opacity: "0" },
         },
-        "scale-in": {
-          from: { opacity: "0", transform: "scale(0.96)" },
-          to: { opacity: "1", transform: "scale(1)" },
+        // Dialog enter/exit. The centering `translate(-50%, -50%)` is baked in
+        // so the scale animation never clobbers it — otherwise the dialog
+        // animates from an off-center position and snaps to center.
+        "dialog-in": {
+          from: { opacity: "0", transform: "translate(-50%, -50%) scale(0.96)" },
+          to: { opacity: "1", transform: "translate(-50%, -50%) scale(1)" },
         },
-        "scale-out": {
-          from: { opacity: "1", transform: "scale(1)" },
-          to: { opacity: "0", transform: "scale(0.96)" },
+        "dialog-out": {
+          from: { opacity: "1", transform: "translate(-50%, -50%) scale(1)" },
+          to: { opacity: "0", transform: "translate(-50%, -50%) scale(0.96)" },
         },
         "slide-in-left": {
           from: { transform: "translateX(-100%)" },
@@ -118,8 +121,8 @@ export default {
         // iOS-style easing for sheets so the panel decelerates naturally.
         "fade-in": "fade-in 150ms ease-out",
         "fade-out": "fade-out 150ms ease-in",
-        "scale-in": "scale-in 180ms cubic-bezier(0.32, 0.72, 0, 1)",
-        "scale-out": "scale-out 140ms ease-in",
+        "dialog-in": "dialog-in 180ms cubic-bezier(0.32, 0.72, 0, 1)",
+        "dialog-out": "dialog-out 140ms ease-in",
         "slide-in-left": "slide-in-left 280ms cubic-bezier(0.32, 0.72, 0, 1)",
         "slide-out-left": "slide-out-left 220ms cubic-bezier(0.32, 0.72, 0, 1)",
         "slide-in-right": "slide-in-right 280ms cubic-bezier(0.32, 0.72, 0, 1)",
