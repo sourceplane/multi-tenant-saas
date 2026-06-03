@@ -26,24 +26,28 @@ interface SessionCtx {
 const Ctx = React.createContext<SessionCtx | null>(null);
 
 export function SessionProvider({ children }: { children: React.ReactNode }) {
-  const [target, setTargetState] = React.useState<ApiTarget>(() => TARGETS[0]!);
-  const [token, setTokenState] = React.useState<string | null>(null);
-
-  // Hydrate from localStorage on the client.
-  React.useEffect(() => {
-    if (typeof window === "undefined") return;
+  // Read persisted session synchronously in the initializer (client only). This
+  // means the token is already present on the *first* client render, so the auth
+  // guard never observes a false `null` and bounces an authenticated user to
+  // /login on a hard refresh or deep link. SSR returns null and the shell gates
+  // on `ready` (set in an effect), so the committed markup stays consistent.
+  const [target, setTargetState] = React.useState<ApiTarget>(() => {
+    if (typeof window === "undefined") return TARGETS[0]!;
     try {
-      const savedTarget = window.localStorage.getItem(TARGET_KEY);
-      if (savedTarget) {
-        const found = TARGETS.find((t) => t.name === savedTarget);
-        if (found) setTargetState(found);
-      }
-      const savedToken = window.localStorage.getItem(TOKEN_KEY);
-      if (savedToken) setTokenState(savedToken);
+      const saved = window.localStorage.getItem(TARGET_KEY);
+      return TARGETS.find((t) => t.name === saved) ?? TARGETS[0]!;
     } catch {
-      /* ignore */
+      return TARGETS[0]!;
     }
-  }, []);
+  });
+  const [token, setTokenState] = React.useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      return window.localStorage.getItem(TOKEN_KEY);
+    } catch {
+      return null;
+    }
+  });
 
   const client = React.useMemo(() => createClient(target, token), [target, token]);
 

@@ -50,6 +50,17 @@ function Inner({ orgId }: { orgId: string }) {
   const [precondition, setPrecondition] = React.useState<ApiErrorBody | null>(null);
   const [copied, setCopied] = React.useState(false);
 
+  const revokeKey = async (id: string, label: string) => {
+    if (!confirm(`Revoke API key “${label}”?`)) return;
+    const r = await wrap(() => client.apiKeys.revoke(orgId, id));
+    if (!r.ok) {
+      toast({ kind: "error", title: "Revoke failed", description: r.error.message });
+      return;
+    }
+    toast({ kind: "success", title: "Key revoked" });
+    keys.reload();
+  };
+
   return (
     <div className="space-y-5">
       <header className="flex items-end justify-between gap-4">
@@ -155,58 +166,76 @@ function Inner({ orgId }: { orgId: string }) {
           primaryAction={{ label: "New API key", onClick: () => setOpen(true) }}
         />
       ) : (
-        <Card>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Label</TableHead>
-                <TableHead>Prefix</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Created</TableHead>
-                <TableHead>Last used</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {keys.data.map((k) => (
-                <TableRow key={k.id}>
-                  <TableCell className="font-medium">{k.label}</TableCell>
-                  <TableCell className="font-mono text-xs">{k.prefix}…</TableCell>
-                  <TableCell>
-                    <Badge variant="outline">{k.servicePrincipal.role}</Badge>
-                  </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
-                    {new Date(k.createdAt).toLocaleDateString()}
-                  </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
-                    {k.lastUsedAt ? new Date(k.lastUsedAt).toLocaleDateString() : "never"}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {!k.revokedAt && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={async () => {
-                          if (!confirm(`Revoke API key “${k.label}”?`)) return;
-                          const r = await wrap(() => client.apiKeys.revoke(orgId, k.id));
-                          if (!r.ok) {
-                            toast({ kind: "error", title: "Revoke failed", description: r.error.message });
-                            return;
-                          }
-                          toast({ kind: "success", title: "Key revoked" });
-                          keys.reload();
-                        }}
-                      >
-                        Revoke
-                      </Button>
-                    )}
-                    {k.revokedAt && <Badge variant="destructive">revoked</Badge>}
-                  </TableCell>
+        <>
+          {/* Mobile: stacked cards */}
+          <div className="space-y-3 md:hidden">
+            {keys.data.map((k) => (
+              <Card key={k.id} className="space-y-3 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 space-y-1.5">
+                    <div className="truncate font-medium">{k.label}</div>
+                    <div className="font-mono text-xs text-muted-foreground">{k.prefix}…</div>
+                  </div>
+                  {k.revokedAt ? (
+                    <Badge variant="destructive">revoked</Badge>
+                  ) : (
+                    <Button size="sm" variant="ghost" onClick={() => revokeKey(k.id, k.label)}>
+                      Revoke
+                    </Button>
+                  )}
+                </div>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                  <Badge variant="outline">{k.servicePrincipal.role}</Badge>
+                  <span>created {new Date(k.createdAt).toLocaleDateString()}</span>
+                  <span>
+                    last used {k.lastUsedAt ? new Date(k.lastUsedAt).toLocaleDateString() : "never"}
+                  </span>
+                </div>
+              </Card>
+            ))}
+          </div>
+
+          {/* Desktop: table */}
+          <Card className="hidden md:block">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Label</TableHead>
+                  <TableHead>Prefix</TableHead>
+                  <TableHead>Role</TableHead>
+                  <TableHead>Created</TableHead>
+                  <TableHead>Last used</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </Card>
+              </TableHeader>
+              <TableBody>
+                {keys.data.map((k) => (
+                  <TableRow key={k.id}>
+                    <TableCell className="font-medium">{k.label}</TableCell>
+                    <TableCell className="font-mono text-xs">{k.prefix}…</TableCell>
+                    <TableCell>
+                      <Badge variant="outline">{k.servicePrincipal.role}</Badge>
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {new Date(k.createdAt).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {k.lastUsedAt ? new Date(k.lastUsedAt).toLocaleDateString() : "never"}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {!k.revokedAt && (
+                        <Button size="sm" variant="ghost" onClick={() => revokeKey(k.id, k.label)}>
+                          Revoke
+                        </Button>
+                      )}
+                      {k.revokedAt && <Badge variant="destructive">revoked</Badge>}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Card>
+        </>
       )}
     </div>
   );

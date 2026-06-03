@@ -73,6 +73,19 @@
   ::selection {
     background: hsl(var(--primary) / 0.35);
   }
+
+  /* Respect the OS "reduce motion" setting: collapse animations/transitions to
+     a near-instant state so the UI stays functional without movement. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    ::before,
+    ::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
 }
 
 @layer utilities {
@@ -83,5 +96,20 @@
   .scrollbar-thin::-webkit-scrollbar-thumb {
     background: hsl(var(--border));
     border-radius: 4px;
+  }
+
+  /* iOS safe-area helpers (notch / home indicator). Used by the sticky topbar,
+     the bottom tab bar, and the slide-out drawer. */
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .pl-safe {
+    padding-left: env(safe-area-inset-left);
+  }
+  .pr-safe {
+    padding-right: env(safe-area-inset-right);
   }
 }

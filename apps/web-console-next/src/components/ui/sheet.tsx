@@ -22,7 +22,8 @@ const SheetOverlay = React.forwardRef<
   <DialogPrimitive.Overlay
     ref={ref}
     className={cn(
-      "fixed inset-0 z-50 bg-background/60 backdrop-blur-sm data-[state=open]:animate-fade-in",
+      // Solid scrim (no backdrop-blur) so the slide stays at 60fps on mobile.
+      "fixed inset-0 z-50 bg-black/50 data-[state=open]:animate-fade-in data-[state=closed]:animate-fade-out",
       className,
     )}
     {...props}
@@ -33,10 +34,18 @@ SheetOverlay.displayName = "SheetOverlay";
 type Side = "left" | "right" | "top" | "bottom";
 
 const sideClasses: Record<Side, string> = {
-  left: "inset-y-0 left-0 h-full w-72 max-w-[85vw] border-r",
-  right: "inset-y-0 right-0 h-full w-72 max-w-[85vw] border-l",
-  top: "inset-x-0 top-0 w-full border-b",
-  bottom: "inset-x-0 bottom-0 w-full border-t",
+  left: "inset-y-0 left-0 h-full w-72 max-w-[85vw] border-r pl-safe",
+  right: "inset-y-0 right-0 h-full w-72 max-w-[85vw] border-l pr-safe",
+  top: "inset-x-0 top-0 w-full border-b pt-safe",
+  bottom: "inset-x-0 bottom-0 w-full border-t pb-safe",
+};
+
+// Directional enter/exit so the panel slides in from (and back out to) its edge.
+const sideAnim: Record<Side, string> = {
+  left: "data-[state=open]:animate-slide-in-left data-[state=closed]:animate-slide-out-left",
+  right: "data-[state=open]:animate-slide-in-right data-[state=closed]:animate-slide-out-right",
+  top: "data-[state=open]:animate-slide-in-bottom data-[state=closed]:animate-slide-out-bottom",
+  bottom: "data-[state=open]:animate-slide-in-bottom data-[state=closed]:animate-slide-out-bottom",
 };
 
 export const SheetContent = React.forwardRef<
@@ -48,16 +57,16 @@ export const SheetContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed z-50 flex flex-col gap-4 bg-card text-card-foreground p-4 shadow-xl",
-        "data-[state=open]:animate-fade-in",
+        "fixed z-50 flex flex-col gap-4 bg-card text-card-foreground p-4 shadow-xl will-change-transform",
         sideClasses[side],
+        sideAnim[side],
         className,
       )}
       {...props}
     >
       {children}
-      <DialogPrimitive.Close className="absolute right-3 top-3 rounded-md opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring">
-        <X className="h-4 w-4" />
+      <DialogPrimitive.Close className="absolute right-2 top-2 inline-flex h-9 w-9 items-center justify-center rounded-md opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring">
+        <X className="h-5 w-5" />
         <span className="sr-only">Close</span>
       </DialogPrimitive.Close>
     </DialogPrimitive.Content>

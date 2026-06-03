@@ -3,6 +3,8 @@
 import * as React from "react";
 import { Sidebar } from "@/components/shell/sidebar";
 import { Topbar } from "@/components/shell/topbar";
+import { BottomTabs } from "@/components/shell/bottom-tabs";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useRequireAuth } from "@/lib/use-async";
 
 /**
@@ -11,6 +13,10 @@ import { useRequireAuth } from "@/lib/use-async";
  * children mount only once the session token has hydrated (`ready`), which
  * avoids firing requests with no token. `useRequireAuth` still redirects to
  * /login when there is genuinely no token (Task 0130 / PERF1).
+ *
+ * On mobile the desktop sidebar collapses (it's `hidden md:flex`); navigation
+ * is provided by the topbar hamburger drawer and the bottom tab bar, so the
+ * main column reserves bottom space for the tab bar + home-indicator inset.
  */
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const ready = useRequireAuth();
@@ -21,19 +27,34 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       ) : (
         <aside className="hidden md:flex w-60 shrink-0 border-r bg-card/40" aria-hidden />
       )}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex min-w-0 flex-1 flex-col">
         {ready ? (
           <Topbar />
         ) : (
-          <header className="sticky top-0 z-30 h-12 border-b bg-background/80 backdrop-blur-md" aria-hidden />
+          <header
+            className="sticky top-0 z-30 h-12 border-b bg-background/80 backdrop-blur-md pt-safe"
+            aria-hidden
+          />
         )}
-        <main className="flex-1 px-4 md:px-8 py-6 max-w-7xl w-full mx-auto">
-          {ready ? (
-            children
-          ) : (
-            <div className="text-sm text-muted-foreground">Loading session…</div>
-          )}
+        <main className="mx-auto w-full max-w-7xl flex-1 px-4 pb-[calc(env(safe-area-inset-bottom)+4.5rem)] pt-6 md:px-8 md:pb-6">
+          {ready ? children : <ShellSkeleton />}
         </main>
+        {ready && <BottomTabs />}
+      </div>
+    </div>
+  );
+}
+
+function ShellSkeleton() {
+  return (
+    <div className="space-y-6" aria-hidden>
+      <div className="space-y-2">
+        <Skeleton className="h-7 w-48" />
+        <Skeleton className="h-4 w-72 max-w-full" />
+      </div>
+      <div className="space-y-3">
+        <Skeleton className="h-24 w-full rounded-xl" />
+        <Skeleton className="h-24 w-full rounded-xl" />
       </div>
     </div>
   );
