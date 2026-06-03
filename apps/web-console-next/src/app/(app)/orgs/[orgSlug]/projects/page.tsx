@@ -11,7 +11,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { ZodForm } from "@/components/ui/zod-form";
 import { PreconditionInsight } from "@/components/precondition/insight";
 import { ArchiveMenu } from "@/components/settings/archive-menu";
@@ -78,6 +85,9 @@ function Inner({ orgId, orgSlug }: { orgId: string; orgSlug: string }) {
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Create project</DialogTitle>
+              <DialogDescription>
+                A project groups your environments and configuration.
+              </DialogDescription>
             </DialogHeader>
             <ZodForm
               schema={schema}

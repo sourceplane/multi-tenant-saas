@@ -8,6 +8,7 @@
  */
 export const qk = {
   orgs: () => ["orgs"] as const,
+  profile: () => ["profile"] as const,
   projects: (orgId: string) => ["projects", orgId] as const,
   environments: (orgId: string, projectId: string) =>
     ["environments", orgId, projectId] as const,

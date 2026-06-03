@@ -42,14 +42,9 @@ export function buildNavSections(scope: NavScope): NavSection[] {
     links: [{ href: "/orgs", label: "Organizations", icon: "Building2" }],
   });
 
-  sections.push({
-    id: "account",
-    label: "Account",
-    links: [
-      { href: "/account", label: "Profile", icon: "User2" },
-      { href: "/account/security", label: "Security activity", icon: "ShieldCheck" },
-    ],
-  });
+  // Account (Profile / Security activity) is not a nav section: the signed-in
+  // identity lives in the account chip at the bottom of the sidebar (desktop)
+  // and the drawer footer (mobile), matching Vercel's bottom-anchored user.
 
   if (orgBase) {
     // The primary sidebar is product-focused: the day-to-day surfaces an

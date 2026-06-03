@@ -7,7 +7,6 @@ import {
   Building2,
   ChevronDown,
   ChevronLeft,
-  ChevronRight,
   FolderKanban,
   Boxes,
   KeyRound,
@@ -27,6 +26,7 @@ import {
 import { cn } from "@/lib/cn";
 import { buildNavSections, isLinkActive } from "./nav-items";
 import { buildSettingsNav, flattenSettingsNav, isSettingsLinkActive } from "./settings-nav";
+import { SidebarAccount } from "./sidebar-account";
 
 const ICONS: Record<string, LucideIcon> = {
   Building2,
@@ -176,11 +176,8 @@ export function Sidebar() {
 
       <NavContent />
 
-      <div className="mt-auto p-3 text-[10px] text-muted-foreground border-t">
-        <div className="flex items-center justify-between">
-          <span>v0.0 · next-console</span>
-          <ChevronRight className="h-3 w-3 opacity-40" />
-        </div>
+      <div className="mt-auto border-t p-2">
+        <SidebarAccount />
       </div>
     </aside>
   );

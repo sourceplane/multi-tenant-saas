@@ -10,7 +10,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { ZodForm } from "@/components/ui/zod-form";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { PreconditionInsight } from "@/components/precondition/insight";
@@ -57,6 +64,9 @@ function Inner({ orgId }: { orgId: string }) {
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Send invitation</DialogTitle>
+              <DialogDescription>
+                Invite a teammate by email to join this organization.
+              </DialogDescription>
             </DialogHeader>
             <ZodForm
               schema={schema}

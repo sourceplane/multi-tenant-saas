@@ -63,13 +63,15 @@ export function Topbar() {
             {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </Button>
 
+          {/* Account lives in the sidebar chip on desktop; the topbar account
+              menu is mobile-only (the sidebar is a drawer there). */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
                 size="icon"
                 aria-label="Account menu"
-                className="h-10 w-10 sm:h-9 sm:w-9"
+                className="h-10 w-10 sm:h-9 sm:w-9 md:hidden"
               >
                 <User2 className="h-4 w-4" />
               </Button>
