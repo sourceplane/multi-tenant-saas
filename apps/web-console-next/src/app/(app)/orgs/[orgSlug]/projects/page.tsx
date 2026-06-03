@@ -94,8 +94,9 @@ function Inner({ orgId, orgSlug }: { orgId: string; orgSlug: string }) {
               defaultValues={{ name: "", slug: "" }}
               fields={[
                 { name: "name", label: "Name", placeholder: "Web app" },
-                { name: "slug", label: "Slug", placeholder: "web-app", hint: "Optional URL identifier." },
+                { name: "slug", label: "Slug", placeholder: "web-app", hint: "Auto-filled from the name; edit to override." },
               ]}
+              deriveSlug={{ from: "name", to: "slug" }}
               submitLabel="Create"
               cancel={{ label: "Cancel", onClick: () => setOpen(false) }}
               onSubmit={async (v) => {

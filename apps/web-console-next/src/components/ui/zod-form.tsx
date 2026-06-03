@@ -7,6 +7,7 @@ import type { z, ZodType } from "zod";
 import { Label } from "./label";
 import { Input } from "./input";
 import { Button } from "./button";
+import { slugify } from "@/lib/slug";
 import { cn } from "@/lib/cn";
 
 export interface FieldSpec<T extends FieldValues> {
@@ -25,6 +26,12 @@ interface ZodFormProps<S extends ZodType<FieldValues>> {
   submitLabel?: string;
   onSubmit: SubmitHandler<z.infer<S>>;
   cancel?: { label: string; onClick: () => void };
+  /**
+   * Auto-derive a slug field (`to`) from another field (`from`) as the user
+   * types — Vercel's "type a name, the slug fills itself" behaviour. Stops the
+   * moment the user edits `to` by hand.
+   */
+  deriveSlug?: { from: Path<z.infer<S>>; to: Path<z.infer<S>> };
   className?: string;
 }
 
@@ -41,22 +48,35 @@ export function ZodForm<S extends ZodType<FieldValues>>({
   submitLabel = "Submit",
   onSubmit,
   cancel,
+  deriveSlug,
   className,
 }: ZodFormProps<S>) {
   type Values = z.infer<S>;
   const {
     register,
     handleSubmit,
+    watch,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<Values>({
     resolver: zodResolver(schema),
     defaultValues,
   });
 
+  // Auto-derive the slug from its source field until the user edits it by hand.
+  const slugTouched = React.useRef(false);
+  const source = deriveSlug ? watch(deriveSlug.from) : undefined;
+  React.useEffect(() => {
+    if (!deriveSlug || slugTouched.current) return;
+    setValue(deriveSlug.to, slugify(String(source ?? "")) as never, { shouldValidate: false });
+  }, [deriveSlug, source, setValue]);
+
   return (
     <form onSubmit={handleSubmit(onSubmit)} className={cn("space-y-4", className)} noValidate>
       {fields.map((f) => {
         const err = (errors as Record<string, { message?: string } | undefined>)[f.name as string];
+        const slugField = deriveSlug && (f.name as string) === (deriveSlug.to as string);
+        const reg = register(f.name as Path<Values>);
         return (
           <div key={f.name as string} className="space-y-1.5">
             <Label htmlFor={f.name as string}>{f.label}</Label>
@@ -65,7 +85,11 @@ export function ZodForm<S extends ZodType<FieldValues>>({
               type={f.type ?? "text"}
               placeholder={f.placeholder}
               autoComplete={f.autoComplete}
-              {...register(f.name as Path<Values>)}
+              {...reg}
+              onChange={(e) => {
+                if (slugField) slugTouched.current = true;
+                void reg.onChange(e);
+              }}
               aria-invalid={err ? true : undefined}
             />
             {err?.message ? (
