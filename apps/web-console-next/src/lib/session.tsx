@@ -12,6 +12,21 @@ import {
 const TOKEN_KEY = "sourceplane.next.token";
 const TARGET_KEY = "sourceplane.next.target";
 
+/**
+ * Read the persisted bearer token straight from localStorage (client only).
+ * Shared by the provider's initial state and the auth guard so both observe the
+ * exact same source of truth — the guard never bounces a user who actually has
+ * a token, even before React state has propagated.
+ */
+export function readStoredToken(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
 interface SessionCtx {
   client: Sourceplane;
   target: ApiTarget;
@@ -40,14 +55,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       return TARGETS[0]!;
     }
   });
-  const [token, setTokenState] = React.useState<string | null>(() => {
-    if (typeof window === "undefined") return null;
-    try {
-      return window.localStorage.getItem(TOKEN_KEY);
-    } catch {
-      return null;
-    }
-  });
+  const [token, setTokenState] = React.useState<string | null>(() => readStoredToken());
 
   const client = React.useMemo(() => createClient(target, token), [target, token]);
 
