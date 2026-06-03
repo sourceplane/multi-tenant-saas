@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import type { ApiResult } from "@/lib/api";
-import { useSession } from "@/lib/session";
+import { useSession, readStoredToken } from "@/lib/session";
 
 export interface AsyncState<T> {
   data: T | null;
@@ -48,13 +48,23 @@ export function useAsync<T>(
   return { data, loading, error, reload: () => setSeq((x) => x + 1) };
 }
 
-/** Redirects to /login if no token in session. Returns whether session is present. */
+/**
+ * Redirects to /login only when there is genuinely no session, and returns
+ * whether the session is present.
+ *
+ * The token is hydrated synchronously from localStorage in the provider, so on a
+ * reload/deep-link `token` is already set on the first render. As a belt-and-
+ * suspenders guard we also re-check storage directly before redirecting: we
+ * never bounce a user who actually has a token, even if context state hasn't
+ * propagated yet. This is what prevents the "logged out after every reload" bug.
+ */
 export function useRequireAuth(): boolean {
   const { token } = useSession();
   const [ready, setReady] = React.useState(false);
   React.useEffect(() => {
     setReady(true);
-    if (typeof window !== "undefined" && !token) {
+    if (typeof window === "undefined") return;
+    if (!token && !readStoredToken()) {
       window.location.href = "/login";
     }
   }, [token]);
