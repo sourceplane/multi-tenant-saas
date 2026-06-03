@@ -38,6 +38,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="min-h-screen bg-background text-foreground antialiased">
+        {/*
+          esbuild's `keepNames` helper (`__name`) is referenced by the
+          next-themes inline theme script in the @opennextjs/cloudflare build,
+          but it isn't defined in the browser — so without this shim every page
+          throws `ReferenceError: __name is not defined` and crashes before
+          hydration. Define a no-op (returning the target) ahead of that script.
+        */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: "globalThis.__name=globalThis.__name||function(t){return t};",
+          }}
+        />
         <Providers>{children}</Providers>
       </body>
     </html>
