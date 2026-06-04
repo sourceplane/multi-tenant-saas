@@ -26,7 +26,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {ready ? (
         <Sidebar />
       ) : (
-        <aside className="hidden md:flex w-60 shrink-0 border-r bg-card/40" aria-hidden />
+        <aside
+          className="sticky top-0 hidden h-dvh w-60 shrink-0 self-start border-r bg-card/40 md:flex"
+          aria-hidden
+        />
       )}
       <div className="flex min-w-0 flex-1 flex-col">
         {ready ? (

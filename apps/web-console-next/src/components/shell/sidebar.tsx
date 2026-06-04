@@ -85,7 +85,7 @@ export function NavContent({
   });
 
   return (
-    <nav className={cn("overflow-y-auto scrollbar-thin px-2 pb-4", mobile ? "space-y-5" : "space-y-6")}>
+    <nav className={cn("px-2 pb-4 pt-3", mobile ? "space-y-5" : "space-y-6")}>
       {sections.map((section) => (
         <Section key={section.id} label={section.label} mobile={mobile}>
           {section.links.map((link) => {
@@ -126,7 +126,7 @@ function SettingsNavContent({
 }) {
   const links = flattenSettingsNav(buildSettingsNav(orgSlug));
   return (
-    <nav className="overflow-y-auto scrollbar-thin px-2 pb-4">
+    <nav className="px-2 pb-4 pt-3">
       <Link
         href={`/orgs/${orgSlug}/projects`}
         {...(onNavigate ? { onClick: onNavigate } : {})}
@@ -166,17 +166,23 @@ function SettingsNavContent({
 
 export function Sidebar() {
   return (
-    <aside className="hidden md:flex w-60 shrink-0 flex-col border-r bg-card/40">
-      <div className="px-4 py-4 flex items-center gap-2">
-        <div className="h-7 w-7 rounded-md bg-gradient-to-br from-primary to-primary/40 grid place-items-center text-primary-foreground text-xs font-bold">
+    // Sticky, full-viewport-height rail that stays put while the page scrolls.
+    // `self-start` keeps it from stretching to the (taller) content so `sticky`
+    // can pin it; the nav scrolls in its own region and the account chip is
+    // pinned at the bottom.
+    <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col self-start border-r bg-card/40 md:flex">
+      <div className="flex shrink-0 items-center gap-2 px-4 py-4">
+        <div className="grid h-7 w-7 place-items-center rounded-md bg-gradient-to-br from-primary to-primary/40 text-xs font-bold text-primary-foreground">
           S
         </div>
         <div className="text-sm font-semibold tracking-tight">Sourceplane</div>
       </div>
 
-      <NavContent />
+      <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
+        <NavContent />
+      </div>
 
-      <div className="mt-auto border-t p-2">
+      <div className="shrink-0 border-t p-2">
         <SidebarAccount />
       </div>
     </aside>

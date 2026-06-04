@@ -54,18 +54,20 @@ export function SidebarAccount() {
     <DropdownMenu>
       <DropdownMenuTrigger
         className={cn(
-          "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors",
+          "flex w-full items-center gap-2.5 rounded-md px-2 py-2 text-left transition-colors",
           "hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         )}
       >
-        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-gradient-to-br from-primary to-primary/40 text-[10px] font-bold text-primary-foreground">
+        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-to-br from-primary to-primary/40 text-[11px] font-bold text-primary-foreground">
           {seed}
         </span>
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="truncate text-sm font-medium leading-tight">{name}</span>
-          {email && <span className="truncate text-[11px] text-muted-foreground">{email}</span>}
+          {email && email !== name && (
+            <span className="truncate text-[11px] leading-tight text-muted-foreground">{email}</span>
+          )}
         </span>
-        <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        <ChevronsUpDown className="h-4 w-4 shrink-0 text-muted-foreground" />
       </DropdownMenuTrigger>
       <DropdownMenuContent side="top" align="start" className="min-w-[220px]">
         {email && <DropdownMenuLabel className="truncate font-normal text-muted-foreground">{email}</DropdownMenuLabel>}
