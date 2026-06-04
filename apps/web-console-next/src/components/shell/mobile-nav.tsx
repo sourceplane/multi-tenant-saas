@@ -4,8 +4,10 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { Menu, Sun, Moon, LogOut, User2, ShieldCheck } from "lucide-react";
 import { useTheme } from "next-themes";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { NavContent } from "./sidebar";
+import { SidebarOrgSwitcher } from "./sidebar-org-switcher";
+import { SidebarFind } from "./sidebar-find";
 import { useSession } from "@/lib/session";
 
 /**
@@ -30,14 +32,12 @@ export function MobileNav() {
         <Menu className="h-5 w-5" />
       </SheetTrigger>
       <SheetContent side="left" className="px-0">
-        <SheetHeader className="px-4 pt-1">
-          <SheetTitle className="flex items-center gap-2 text-base">
-            <span className="grid h-7 w-7 place-items-center rounded-md bg-gradient-to-br from-primary to-primary/40 text-[11px] font-bold text-primary-foreground">
-              S
-            </span>
-            Sourceplane
-          </SheetTitle>
-        </SheetHeader>
+        <SheetTitle className="sr-only">Navigation</SheetTitle>
+        {/* Mirror the desktop sidebar: org switcher + Find at the top. */}
+        <div className="space-y-2 border-b px-2 pb-2 pr-12">
+          <SidebarOrgSwitcher onNavigate={close} />
+          <SidebarFind onOpen={close} />
+        </div>
 
         <div className="flex-1 overflow-y-auto">
           <NavContent mobile onNavigate={close} />

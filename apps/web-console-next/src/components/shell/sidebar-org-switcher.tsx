@@ -19,12 +19,16 @@ import type { PublicOrganization } from "@saas/contracts/membership";
  * pattern): the current org as an avatar + name, opening a dropdown of orgs to
  * switch between, plus shortcuts to the full list and creating one.
  */
-export function SidebarOrgSwitcher() {
+export function SidebarOrgSwitcher({ onNavigate }: { onNavigate?: () => void } = {}) {
   const params = useParams<{ orgSlug?: string }>();
   const router = useRouter();
   const { client, token } = useSession();
   const orgSlug = params?.orgSlug ?? null;
   const [orgs, setOrgs] = React.useState<PublicOrganization[] | null>(null);
+  const go = (href: string) => {
+    onNavigate?.();
+    router.push(href);
+  };
 
   React.useEffect(() => {
     if (!token) return;
@@ -58,17 +62,17 @@ export function SidebarOrgSwitcher() {
       <DropdownMenuContent align="start" className="min-w-[240px]">
         <DropdownMenuLabel>Organizations</DropdownMenuLabel>
         {orgs?.map((o) => (
-          <DropdownMenuItem key={o.id} onSelect={() => router.push(`/orgs/${o.slug}/projects`)}>
+          <DropdownMenuItem key={o.id} onSelect={() => go(`/orgs/${o.slug}/projects`)}>
             <Building2 className="h-4 w-4 opacity-70" />
             <span className="truncate">{o.name}</span>
             {o.slug === orgSlug && <Check className="ml-auto h-4 w-4" />}
           </DropdownMenuItem>
         ))}
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={() => router.push("/orgs")}>
+        <DropdownMenuItem onSelect={() => go("/orgs")}>
           View all organizations…
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => router.push("/orgs")}>
+        <DropdownMenuItem onSelect={() => go("/orgs")}>
           <Plus className="h-4 w-4 opacity-70" /> Create organization
         </DropdownMenuItem>
       </DropdownMenuContent>
