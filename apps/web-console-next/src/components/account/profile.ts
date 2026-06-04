@@ -47,9 +47,13 @@ export function buildProfilePatch(
   return { displayName: next };
 }
 
-/** A short avatar seed (initials) from a display name or email local-part. */
-export function initials(displayName: string | null, email: string): string {
-  const source = (displayName && displayName.trim()) || email.split("@")[0] || email;
+/**
+ * A short avatar seed (initials) from a display name or email local-part.
+ * Tolerates a missing/empty email (some accounts have none) without throwing.
+ */
+export function initials(displayName: string | null, email: string | null | undefined): string {
+  const safeEmail = (email ?? "").trim();
+  const source = (displayName && displayName.trim()) || safeEmail.split("@")[0] || safeEmail;
   const parts = source.split(/[\s._-]+/).filter(Boolean);
   if (parts.length === 0) return "?";
   if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();

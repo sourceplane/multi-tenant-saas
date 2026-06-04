@@ -113,6 +113,15 @@ export default {
           from: { opacity: "1", transform: "translateY(0) scale(1)" },
           to: { opacity: "0", transform: "translateY(4px) scale(0.98)" },
         },
+        // Subtle directional swap for the sidebar nav (product <-> settings).
+        "sidebar-in-right": {
+          from: { opacity: "0", transform: "translateX(10px)" },
+          to: { opacity: "1", transform: "translateX(0)" },
+        },
+        "sidebar-in-left": {
+          from: { opacity: "0", transform: "translateX(-10px)" },
+          to: { opacity: "1", transform: "translateX(0)" },
+        },
         shimmer: {
           "100%": { transform: "translateX(100%)" },
         },
@@ -131,6 +140,8 @@ export default {
         "slide-out-bottom": "slide-out-bottom 220ms cubic-bezier(0.32, 0.72, 0, 1)",
         "pop-in": "pop-in 140ms ease-out",
         "pop-out": "pop-out 110ms ease-in",
+        "sidebar-in-right": "sidebar-in-right 220ms cubic-bezier(0.32, 0.72, 0, 1)",
+        "sidebar-in-left": "sidebar-in-left 220ms cubic-bezier(0.32, 0.72, 0, 1)",
         shimmer: "shimmer 1.6s linear infinite",
       },
     },
