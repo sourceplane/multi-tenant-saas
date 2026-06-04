@@ -53,17 +53,8 @@ export function Topbar() {
             {isLocked ? `locked · ${target.name}` : `target · ${target.name}`}
           </Badge>
 
-          {/* Standalone theme toggle on >=sm; on mobile it lives in the account
-              menu so the topbar stays uncluttered (and logout stays reachable). */}
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Toggle theme"
-            onClick={toggleTheme}
-            className="hidden sm:inline-flex"
-          >
-            {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-          </Button>
+          {/* Theme toggle lives in the profile menu (sidebar account chip on
+              desktop; account menu / drawer on mobile), not the topbar. */}
 
           {/* Account lives in the sidebar chip on desktop; the topbar account
               menu is mobile-only (the sidebar is a drawer there). */}
@@ -86,9 +77,8 @@ export function Topbar() {
               <DropdownMenuItem onSelect={() => router.push("/orgs")}>
                 <Building2 className="h-4 w-4 opacity-70" /> Organizations
               </DropdownMenuItem>
-              {/* Theme toggle, mirrored here so it's reachable on mobile. */}
+              {/* Theme toggle — this account menu is the mobile theme control. */}
               <DropdownMenuItem
-                className="sm:hidden"
                 onSelect={(e) => {
                   e.preventDefault();
                   toggleTheme();

@@ -10,6 +10,8 @@ export interface NavLink {
   label: string;
   /** lucide icon name, resolved by the renderer. */
   icon: string;
+  /** When true the link opens a nested sidebar panel (renderer shows a ›). */
+  subPanel?: boolean;
 }
 
 export interface NavSection {
@@ -36,15 +38,12 @@ export function buildNavSections(scope: NavScope): NavSection[] {
   const orgBase = orgSlug ? `/orgs/${orgSlug}` : null;
   const projectBase = orgSlug && projectSlug ? `/orgs/${orgSlug}/projects/${projectSlug}` : null;
 
-  sections.push({
-    id: "workspace",
-    label: "Workspace",
-    links: [{ href: "/orgs", label: "Organizations", icon: "Building2" }],
-  });
-
-  // Account (Profile / Security activity) is not a nav section: the signed-in
-  // identity lives in the account chip at the bottom of the sidebar (desktop)
-  // and the drawer footer (mobile), matching Vercel's bottom-anchored user.
+  // The Workspace/Organizations section is intentionally omitted: the org
+  // switcher at the top of the sidebar is the home for org selection (and links
+  // to the full list), so a separate "Organizations" nav row would be redundant.
+  //
+  // Account (Profile / Security activity) is likewise not a nav section — the
+  // signed-in identity lives in the account chip at the bottom of the sidebar.
 
   if (orgBase) {
     // The primary sidebar is product-focused: the day-to-day surfaces an
@@ -58,7 +57,8 @@ export function buildNavSections(scope: NavScope): NavSection[] {
       links: [
         { href: `${orgBase}/projects`, label: "Projects", icon: "FolderKanban" },
         { href: `${orgBase}/usage`, label: "Usage & quota", icon: "Gauge" },
-        { href: `${orgBase}/settings`, label: "Settings", icon: "Settings" },
+        // Opens the dedicated settings panel — flagged so the renderer shows a ›.
+        { href: `${orgBase}/settings`, label: "Settings", icon: "Settings", subPanel: true },
       ],
     });
   }

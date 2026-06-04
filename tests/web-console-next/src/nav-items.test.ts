@@ -1,17 +1,26 @@
 import { buildNavSections, isLinkActive } from "@web-console-next/components/shell/nav-items";
 
 describe("buildNavSections", () => {
-  it("always includes the Workspace section", () => {
-    const ids = buildNavSections({}).map((s) => s.id);
-    expect(ids).toContain("workspace");
-  });
-
-  it("does not render Account as a nav section (it lives in the account chip)", () => {
-    const ids = buildNavSections({}).map((s) => s.id);
+  it("does not render Workspace/Account nav sections (org switcher + account chip own those)", () => {
+    const ids = buildNavSections({ orgSlug: "acme" }).map((s) => s.id);
+    expect(ids).not.toContain("workspace");
     expect(ids).not.toContain("account");
     const allHrefs = buildNavSections({ orgSlug: "acme" }).flatMap((s) => s.links.map((l) => l.href));
+    expect(allHrefs).not.toContain("/orgs"); // Organizations link removed
     expect(allHrefs).not.toContain("/account");
     expect(allHrefs).not.toContain("/account/security");
+  });
+
+  it("flags the Settings link as a sub-panel (renderer shows a chevron)", () => {
+    const org = buildNavSections({ orgSlug: "acme" }).find((s) => s.id === "org")!;
+    const settings = org.links.find((l) => l.href === "/orgs/acme/settings")!;
+    expect(settings.subPanel).toBe(true);
+    const projects = org.links.find((l) => l.href === "/orgs/acme/projects")!;
+    expect(projects.subPanel ?? false).toBe(false);
+  });
+
+  it("returns no sections when there is no org scope", () => {
+    expect(buildNavSections({})).toHaveLength(0);
   });
 
   it("omits org/project sections without slugs", () => {
