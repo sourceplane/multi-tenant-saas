@@ -7,6 +7,7 @@ import {
   Building2,
   ChevronDown,
   ChevronLeft,
+  ChevronRight,
   FolderKanban,
   Boxes,
   KeyRound,
@@ -132,6 +133,7 @@ function ProductNav({
                 active={isLinkActive(link.href, pathname)}
                 onClick={onNavigate}
                 mobile={mobile}
+                chevron={!!link.subPanel}
               >
                 {link.label}
               </SidebarLink>
@@ -272,6 +274,7 @@ function SidebarLink({
   active,
   onClick,
   mobile = false,
+  chevron = false,
   children,
 }: {
   href: string;
@@ -279,6 +282,8 @@ function SidebarLink({
   active: boolean;
   onClick?: (() => void) | undefined;
   mobile?: boolean;
+  /** Show a trailing › to signal the link opens a nested sidebar panel. */
+  chevron?: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -294,7 +299,8 @@ function SidebarLink({
       )}
     >
       <Icon className={cn("opacity-80", mobile ? "h-5 w-5" : "h-4 w-4")} />
-      <span className="truncate">{children}</span>
+      <span className="min-w-0 flex-1 truncate">{children}</span>
+      {chevron && <ChevronRight className={cn("shrink-0 opacity-50", mobile ? "h-4 w-4" : "h-3.5 w-3.5")} />}
     </Link>
   );
 }
