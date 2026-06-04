@@ -27,6 +27,8 @@ import { cn } from "@/lib/cn";
 import { buildNavSections, isLinkActive } from "./nav-items";
 import { buildSettingsNav, flattenSettingsNav, isSettingsLinkActive } from "./settings-nav";
 import { SidebarAccount } from "./sidebar-account";
+import { SidebarOrgSwitcher } from "./sidebar-org-switcher";
+import { SidebarFind } from "./sidebar-find";
 
 const ICONS: Record<string, LucideIcon> = {
   Building2,
@@ -65,25 +67,57 @@ export function NavContent({
   const orgSlug = params?.orgSlug ?? null;
 
   // Within `/settings`, the sidebar swaps from the product nav to a dedicated
-  // settings nav (a flat list under a back-to-app header), mirroring how Vercel
-  // turns the whole left rail into a settings menu.
+  // settings nav (a flat list under a centered "Settings" header), mirroring
+  // how Vercel turns the whole left rail into a settings menu.
   const inSettings = !!orgSlug && !!pathname && pathname.startsWith(`/orgs/${orgSlug}/settings`);
-  if (inSettings) {
-    return (
-      <SettingsNavContent
-        orgSlug={orgSlug}
-        pathname={pathname}
-        onNavigate={onNavigate}
-        mobile={mobile}
-      />
-    );
+
+  // Subtle directional swap: settings slides in from the right, back-to-app from
+  // the left. The `key` remounts the panel so the animation replays on change.
+  const prev = React.useRef(inSettings);
+  let anim = "";
+  if (!mobile && inSettings !== prev.current) {
+    anim = inSettings ? "animate-sidebar-in-right" : "animate-sidebar-in-left";
   }
+  React.useEffect(() => {
+    prev.current = inSettings;
+  }, [inSettings]);
 
-  const sections = buildNavSections({
-    orgSlug,
-    projectSlug: params?.projectSlug ?? null,
-  });
+  return (
+    <div key={inSettings ? "settings" : "product"} className={anim}>
+      {inSettings ? (
+        <SettingsNavContent
+          orgSlug={orgSlug}
+          pathname={pathname}
+          onNavigate={onNavigate}
+          mobile={mobile}
+        />
+      ) : (
+        <ProductNav
+          orgSlug={orgSlug}
+          projectSlug={params?.projectSlug ?? null}
+          pathname={pathname}
+          onNavigate={onNavigate}
+          mobile={mobile}
+        />
+      )}
+    </div>
+  );
+}
 
+function ProductNav({
+  orgSlug,
+  projectSlug,
+  pathname,
+  onNavigate,
+  mobile,
+}: {
+  orgSlug: string | null;
+  projectSlug: string | null;
+  pathname: string | null;
+  onNavigate?: (() => void) | undefined;
+  mobile: boolean;
+}) {
+  const sections = buildNavSections({ orgSlug, projectSlug });
   return (
     <nav className={cn("px-2 pb-4 pt-3", mobile ? "space-y-5" : "space-y-6")}>
       {sections.map((section) => (
@@ -127,17 +161,23 @@ function SettingsNavContent({
   const links = flattenSettingsNav(buildSettingsNav(orgSlug));
   return (
     <nav className="px-2 pb-4 pt-3">
-      <Link
-        href={`/orgs/${orgSlug}/projects`}
-        {...(onNavigate ? { onClick: onNavigate } : {})}
-        className={cn(
-          "mb-2 flex items-center gap-1 rounded-md font-medium text-muted-foreground transition-colors hover:text-foreground",
-          mobile ? "min-h-11 px-3 text-base active:bg-accent/60" : "px-2 py-1.5 text-sm",
-        )}
-      >
-        <ChevronLeft className={mobile ? "h-5 w-5" : "h-4 w-4"} />
-        Settings
-      </Link>
+      {/* Back button on the left, "Settings" centered (Vercel pattern). */}
+      <div className={cn("relative mb-2 flex items-center justify-center", mobile ? "h-11" : "h-8")}>
+        <Link
+          href={`/orgs/${orgSlug}/projects`}
+          {...(onNavigate ? { onClick: onNavigate } : {})}
+          aria-label="Back to app"
+          className={cn(
+            "absolute left-0 grid place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground active:bg-accent",
+            mobile ? "h-9 w-9" : "h-7 w-7",
+          )}
+        >
+          <ChevronLeft className={mobile ? "h-5 w-5" : "h-4 w-4"} />
+        </Link>
+        <span className={cn("font-medium tracking-tight", mobile ? "text-base" : "text-sm")}>
+          Settings
+        </span>
+      </div>
       <div className="space-y-0.5">
         {links.map((link) => {
           const active = isSettingsLinkActive(link, pathname);
@@ -171,11 +211,9 @@ export function Sidebar() {
     // can pin it; the nav scrolls in its own region and the account chip is
     // pinned at the bottom.
     <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col self-start border-r bg-card/40 md:flex">
-      <div className="flex shrink-0 items-center gap-2 px-4 py-4">
-        <div className="grid h-7 w-7 place-items-center rounded-md bg-gradient-to-br from-primary to-primary/40 text-xs font-bold text-primary-foreground">
-          S
-        </div>
-        <div className="text-sm font-semibold tracking-tight">Sourceplane</div>
+      <div className="shrink-0 space-y-2 border-b p-2">
+        <SidebarOrgSwitcher />
+        <SidebarFind />
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">

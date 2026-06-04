@@ -70,29 +70,34 @@ export function ScopeSwitcher() {
 
   return (
     <div className="flex min-w-0 items-center gap-1 text-sm">
-      <Crumb
-        icon={<Building2 className="h-3.5 w-3.5" />}
-        label={currentOrg?.name ?? orgSlug ?? "Select organization"}
-        muted={!orgSlug}
-      >
-        {orgs?.length ? (
-          <>
-            <DropdownMenuLabel>Organizations</DropdownMenuLabel>
-            {orgs.map((o) => (
-              <DropdownMenuItem key={o.id} onSelect={() => router.push(`/orgs/${o.slug}/projects`)}>
-                <Building2 className="h-4 w-4 opacity-70" /> {o.name}
-                <span className="ml-auto text-[10px] text-muted-foreground">{o.slug}</span>
-              </DropdownMenuItem>
-            ))}
-            <DropdownMenuSeparator />
-          </>
-        ) : null}
-        <DropdownMenuItem onSelect={() => router.push("/orgs")}>View all organizations…</DropdownMenuItem>
-      </Crumb>
+      {/* Org lives in the sidebar switcher on desktop; the topbar shows it only
+          on small screens (the drawer has no persistent org switcher). */}
+      <div className="flex min-w-0 md:hidden">
+        <Crumb
+          icon={<Building2 className="h-3.5 w-3.5" />}
+          label={currentOrg?.name ?? orgSlug ?? "Select organization"}
+          muted={!orgSlug}
+        >
+          {orgs?.length ? (
+            <>
+              <DropdownMenuLabel>Organizations</DropdownMenuLabel>
+              {orgs.map((o) => (
+                <DropdownMenuItem key={o.id} onSelect={() => router.push(`/orgs/${o.slug}/projects`)}>
+                  <Building2 className="h-4 w-4 opacity-70" /> {o.name}
+                  <span className="ml-auto text-[10px] text-muted-foreground">{o.slug}</span>
+                </DropdownMenuItem>
+              ))}
+              <DropdownMenuSeparator />
+            </>
+          ) : null}
+          <DropdownMenuItem onSelect={() => router.push("/orgs")}>View all organizations…</DropdownMenuItem>
+        </Crumb>
+      </div>
 
       {orgSlug && (
         <div className="hidden min-w-0 items-center md:flex">
-          <Slash className="h-3 w-3 text-muted-foreground/60 mx-0.5" />
+          {/* Separator only needed to the org crumb, which is mobile-only. */}
+          <Slash className="mx-0.5 h-3 w-3 text-muted-foreground/60 md:hidden" />
           <Crumb
             icon={<FolderKanban className="h-3.5 w-3.5" />}
             label={currentProject?.name ?? projectSlug ?? "Select project"}

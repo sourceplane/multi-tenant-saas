@@ -33,12 +33,14 @@ export function Topbar() {
         <ScopeSwitcher />
 
         <div className="ml-auto flex items-center gap-1 sm:gap-2">
+          {/* Search lives in the sidebar "Find…" on desktop; the topbar keeps a
+              search affordance only on small screens (no sidebar there). */}
           <Button
             variant="outline"
             size="sm"
             onClick={() => palette.open()}
             aria-label="Search"
-            className="h-10 w-10 justify-center px-0 sm:h-8 sm:w-auto sm:justify-start sm:gap-2 sm:px-3"
+            className="h-10 w-10 justify-center px-0 sm:h-8 sm:w-auto sm:justify-start sm:gap-2 sm:px-3 md:hidden"
           >
             <Search className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
             <span className="hidden text-xs text-muted-foreground sm:inline">Search…</span>
