@@ -5,20 +5,33 @@
   "main": "src/index.ts",
   "minify": false,
   "workers_dev": false,
+  // Billing provider (epic saas-multi-org-billing / billing-provider-abstraction):
+  //   - Non-secret config is per-env `vars` below (BILLING_PROVIDER, POLAR_SERVER).
+  //   - Secrets are NEVER stored here. Set them per env with:
+  //       wrangler secret put POLAR_ACCESS_TOKEN  --env <env>
+  //       wrangler secret put POLAR_WEBHOOK_SECRET --env <env>
+  //   - POLAR_PRODUCT_MAP (plan code → Polar product id) and POLAR_SUCCESS_URL
+  //     are added per env once Polar products exist (BP1).
   "vars": {
-    "ENVIRONMENT": "local"
+    "ENVIRONMENT": "local",
+    "BILLING_PROVIDER": "polar",
+    "POLAR_SERVER": "sandbox"
   },
   "env": {
     "dev": {
       "workers_dev": false,
       "vars": {
-        "ENVIRONMENT": "dev"
+        "ENVIRONMENT": "dev",
+        "BILLING_PROVIDER": "polar",
+        "POLAR_SERVER": "sandbox"
       }
     },
     "stage": {
       "workers_dev": false,
       "vars": {
-        "ENVIRONMENT": "stage"
+        "ENVIRONMENT": "stage",
+        "BILLING_PROVIDER": "polar",
+        "POLAR_SERVER": "sandbox"
       },
       "hyperdrive": [
         {
@@ -40,7 +53,9 @@
     "prod": {
       "workers_dev": false,
       "vars": {
-        "ENVIRONMENT": "prod"
+        "ENVIRONMENT": "prod",
+        "BILLING_PROVIDER": "polar",
+        "POLAR_SERVER": "production"
       },
       "hyperdrive": [
         {
