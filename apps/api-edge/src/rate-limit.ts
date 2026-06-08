@@ -24,6 +24,17 @@
 // Failure-open: if the KV binding is missing, or `get`/`put` throws, the
 // request is admitted without rate-limit headers (we have no real counters
 // to publish under failure). Logged via `console.warn`.
+//
+// PERF5 Stage A (latency): the KV token bucket does a `get`+`put` per bucket on
+// EVERY request, before auth — measured at ~130ms/bucket, ~264ms for an
+// org-scoped read (org + identity buckets, previously serialized). Two changes
+// take that off the hot path without losing anti-abuse protection:
+//   1. Unsafe (mutating) methods keep the durable KV limiter, but the buckets
+//      are now evaluated CONCURRENTLY (`Promise.all`) instead of serially.
+//   2. Safe (read) methods use a colo-local, in-isolate token bucket with ZERO
+//      network I/O. It is approximate (per-isolate state ⇒ the effective global
+//      limit scales with isolate count), which is acceptable for reads: their
+//      caps are generous and reads are not the abuse vector writes are.
 
 import type { Env } from "./env.js";
 
@@ -96,6 +107,26 @@ const KV_PREFIX = "rl:v1";
 const KV_TTL_SECONDS = 600;
 const ORG_PATH_RE = /^\/v1\/organizations\/([^/]+)/;
 
+// PERF5 Stage A: only mutating methods pay the durable cross-isolate KV
+// limiter. Safe reads use the in-isolate limiter below. Mirrors the
+// `UNSAFE_METHODS` set in idempotency.ts (kept local to avoid an import cycle).
+const DURABLE_LIMIT_METHODS: ReadonlySet<string> = new Set([
+  "POST",
+  "PATCH",
+  "PUT",
+  "DELETE",
+]);
+
+// In-isolate token-bucket state for safe (read) methods. Colo-local and
+// per-isolate by design (see `enforceRateLimit`). Bounded so a long-lived
+// isolate seeing many distinct orgs/identities cannot grow it without limit.
+interface MemBucketState {
+  t: number;
+  r: number;
+}
+const MEM_BUCKET_CAP = 10_000;
+const memBuckets = new Map<string, MemBucketState>();
+
 /** Public result. `headers` is merged into the final response by the caller. */
 export type RateLimitResult =
   | { kind: "allowed"; headers: Record<string, string> }
@@ -129,12 +160,6 @@ export async function enforceRateLimit(
   routeFamily: RouteFamily,
 ): Promise<RateLimitResult> {
   const config = LIMITS[routeFamily];
-  const kv = env.IDEMPOTENCY_KV;
-
-  // Backend missing → fail open. No counters to publish.
-  if (!kv) {
-    return { kind: "allowed", headers: {} };
-  }
 
   const url = new URL(request.url);
   const orgId = extractOrgId(url.pathname);
@@ -158,26 +183,37 @@ export async function enforceRateLimit(
     limits: config.identity,
   });
 
-  const decisions: BucketDecision[] = [];
+  let decisions: BucketDecision[];
   let failureOpen = false;
-  for (const b of buckets) {
-    try {
-      const decision = await consumeToken(kv, b.key, b.limits, b.scope);
-      decisions.push(decision);
-    } catch (err) {
-      logKvFailure(err, requestId);
-      failureOpen = true;
-      // Failure-open synthetic decision: full bucket, no real counter.
-      const now = Math.ceil(Date.now() / 1000);
-      decisions.push({
-        scope: b.scope,
-        limit: b.limits.limit,
-        remaining: b.limits.limit,
-        resetEpoch: now + b.limits.windowSec,
-        retryAfterSec: 0,
-        allowed: true,
-      });
+
+  if (DURABLE_LIMIT_METHODS.has(request.method)) {
+    // Unsafe (mutating) methods → durable, cross-isolate KV limiter.
+    const kv = env.IDEMPOTENCY_KV;
+    // Backend missing → fail open. No counters to publish.
+    if (!kv) {
+      return { kind: "allowed", headers: {} };
     }
+    // PERF5 Stage A: the buckets are independent keys, so evaluate them
+    // CONCURRENTLY rather than in a serial await-loop. For an org-scoped route
+    // this roughly halves the KV cost (was two get+put round-trips serialized).
+    decisions = await Promise.all(
+      buckets.map(async (b) => {
+        try {
+          return await consumeToken(kv, b.key, b.limits, b.scope);
+        } catch (err) {
+          logKvFailure(err, requestId);
+          failureOpen = true;
+          return fullBucketDecision(b.scope, b.limits);
+        }
+      }),
+    );
+  } else {
+    // PERF5 Stage A: safe (read) methods use a colo-local, in-isolate token
+    // bucket — ZERO network I/O — so the KV read-modify-write is OFF the read
+    // hot path. Approximate (per-isolate) by design; see the module header.
+    decisions = buckets.map((b) =>
+      consumeTokenInMemory(b.key, b.limits, b.scope),
+    );
   }
 
   const headers = buildHeaders(decisions);
@@ -298,6 +334,84 @@ async function consumeToken(
     retryAfterSec,
     allowed: false,
   };
+}
+
+/** Synthetic full-bucket decision (failure-open: admit, no real counter). */
+function fullBucketDecision(
+  scope: "org" | "identity",
+  limits: BucketLimits,
+): BucketDecision {
+  const now = Math.ceil(Date.now() / 1000);
+  return {
+    scope,
+    limit: limits.limit,
+    remaining: limits.limit,
+    resetEpoch: now + limits.windowSec,
+    retryAfterSec: 0,
+    allowed: true,
+  };
+}
+
+/**
+ * Synchronous, in-isolate token bucket for safe-method (read) rate limiting
+ * (PERF5 Stage A). Same refill math as `consumeToken`, but state lives in a
+ * module-scoped Map instead of KV — no network I/O on the read hot path.
+ *
+ * Approximate by design: state is per-isolate, so the effective global limit
+ * scales with the number of live isolates. Acceptable for reads (generous caps;
+ * not the abuse vector writes are). Mutating methods keep the precise durable
+ * KV limiter.
+ */
+function consumeTokenInMemory(
+  key: string,
+  limits: BucketLimits,
+  scope: "org" | "identity",
+): BucketDecision {
+  const now = Date.now() / 1000;
+  const refillRate = limits.limit / limits.windowSec;
+  const existing = memBuckets.get(key);
+
+  // Bound memory: when the map is full and this is a new key, drop all state.
+  // A reset just refills everyone to capacity — harmless for an approximate
+  // read limiter, and isolates are recycled frequently anyway.
+  if (!existing && memBuckets.size >= MEM_BUCKET_CAP) {
+    memBuckets.clear();
+  }
+
+  const base: MemBucketState = existing ?? { t: limits.limit, r: now };
+  const elapsed = Math.max(0, now - base.r);
+  const refilled = Math.min(limits.limit, base.t + elapsed * refillRate);
+
+  if (refilled >= 1) {
+    const tokens = refilled - 1;
+    memBuckets.set(key, { t: tokens, r: now });
+    const tokensToFull = limits.limit - tokens;
+    return {
+      scope,
+      limit: limits.limit,
+      remaining: Math.floor(tokens),
+      resetEpoch: Math.ceil(now + tokensToFull / refillRate),
+      retryAfterSec: 0,
+      allowed: true,
+    };
+  }
+
+  memBuckets.set(key, { t: refilled, r: now });
+  const needed = 1 - refilled;
+  const tokensToFull = limits.limit - refilled;
+  return {
+    scope,
+    limit: limits.limit,
+    remaining: 0,
+    resetEpoch: Math.ceil(now + tokensToFull / refillRate),
+    retryAfterSec: Math.max(1, Math.ceil(needed / refillRate)),
+    allowed: false,
+  };
+}
+
+/** Test-only: clear the in-isolate read buckets between cases. */
+export function __resetRateLimitMemoryForTest(): void {
+  memBuckets.clear();
 }
 
 function parseState(raw: string): BucketState | null {

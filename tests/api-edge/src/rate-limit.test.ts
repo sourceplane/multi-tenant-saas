@@ -18,6 +18,7 @@ import { handleAuthRoute } from "@api-edge/auth-facade";
 import {
   enforceRateLimit,
   __rateLimitConfigForTest,
+  __resetRateLimitMemoryForTest,
   type RouteFamily,
 } from "@api-edge/rate-limit";
 import type { Env } from "@api-edge/env";
@@ -409,6 +410,114 @@ describe("api-edge rate limiter (Task 0097)", () => {
         "billing",
       );
       expect(otherFamily.kind).toBe("allowed");
+    });
+  });
+
+  describe("safe (read) methods use the in-isolate limiter (PERF5 Stage A)", () => {
+    beforeEach(() => {
+      __resetRateLimitMemoryForTest();
+    });
+
+    it("a GET does NOT touch KV but is still allowed and emits headers", async () => {
+      const kv = createFakeKv();
+      const result = await enforceRateLimit(
+        makeRequest({
+          url: "https://api.example.com/v1/organizations/org_read/projects",
+          method: "GET",
+          bearer: "tok_read",
+        }),
+        "req_get",
+        makeEnv(kv.binding),
+        "project",
+      );
+      expect(result.kind).toBe("allowed");
+      if (result.kind !== "allowed") return;
+      // No rl:* (or any) key was written to KV — the read path is I/O-free.
+      expect(kv.store.size).toBe(0);
+      // Both scopes still reported.
+      expect(result.headers["X-RateLimit-Limit-org"]).toBeDefined();
+      expect(result.headers["X-RateLimit-Limit-identity"]).toBeDefined();
+    });
+
+    it("reads are limited WITHOUT a KV binding (in-memory needs no backend)", async () => {
+      const result = await enforceRateLimit(
+        makeRequest({ url: "https://api.example.com/v1/auth/session", method: "GET", ip: "3.3.3.3" }),
+        "req_get_nokv",
+        makeEnv(undefined),
+        "auth",
+      );
+      expect(result.kind).toBe("allowed");
+      if (result.kind !== "allowed") return;
+      // Unlike the unsafe-method no-KV path (admit, no headers), reads still get
+      // real headers from the in-isolate bucket.
+      expect(result.headers["X-RateLimit-Limit-identity"]).toBe(
+        String(__rateLimitConfigForTest.auth.identity.limit),
+      );
+    });
+
+    it("a GET flood overflows the in-isolate identity bucket → 429", async () => {
+      const env = makeEnv(createFakeKv().binding);
+      const limit = __rateLimitConfigForTest.auth.identity.limit;
+      for (let i = 0; i < limit; i++) {
+        const r = await enforceRateLimit(
+          makeRequest({ url: "https://api.example.com/v1/auth/session", method: "GET", ip: "4.4.4.4" }),
+          `r${i}`,
+          env,
+          "auth",
+        );
+        expect(r.kind).toBe("allowed");
+      }
+      const denied = await enforceRateLimit(
+        makeRequest({ url: "https://api.example.com/v1/auth/session", method: "GET", ip: "4.4.4.4" }),
+        "r_overflow",
+        env,
+        "auth",
+      );
+      expect(denied.kind).toBe("denied");
+      if (denied.kind !== "denied") return;
+      expect(denied.response.status).toBe(429);
+      // Still no KV writes for the read path even at overflow.
+      // (env's KV store was created fresh and never used by the read path.)
+    });
+
+    it("different IPs do NOT share the in-isolate read bucket", async () => {
+      const env = makeEnv(undefined);
+      const limit = __rateLimitConfigForTest.auth.identity.limit;
+      for (let i = 0; i < limit; i++) {
+        await enforceRateLimit(
+          makeRequest({ url: "https://api.example.com/v1/auth/session", method: "GET", ip: "4.4.4.4" }),
+          `r${i}`,
+          env,
+          "auth",
+        );
+      }
+      const other = await enforceRateLimit(
+        makeRequest({ url: "https://api.example.com/v1/auth/session", method: "GET", ip: "5.6.7.8" }),
+        "r_other",
+        env,
+        "auth",
+      );
+      expect(other.kind).toBe("allowed");
+    });
+  });
+
+  describe("unsafe methods still use the durable KV limiter", () => {
+    it("a POST writes rl:* bucket state to KV", async () => {
+      const kv = createFakeKv();
+      const result = await enforceRateLimit(
+        makeRequest({
+          url: "https://api.example.com/v1/organizations/org_w/projects",
+          method: "POST",
+          bearer: "tok_w",
+        }),
+        "req_post",
+        makeEnv(kv.binding),
+        "project",
+      );
+      expect(result.kind).toBe("allowed");
+      const rlKeys = [...kv.store.keys()].filter((k) => k.startsWith("rl:v1:"));
+      // org + identity buckets both persisted.
+      expect(rlKeys.length).toBe(2);
     });
   });
 
