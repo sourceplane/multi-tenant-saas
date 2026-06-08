@@ -1,7 +1,6 @@
 import {
   resolveProviderId,
   createBillingProviderRegistry,
-  createDefaultBillingProviderRegistry,
   DEFAULT_BILLING_PROVIDER,
 } from "@billing-worker/billing-provider/registry";
 import type {
@@ -77,13 +76,5 @@ describe("createBillingProviderRegistry", () => {
     const reg = createBillingProviderRegistry({ polar: fakeProvider("polar") });
     const res = reg.resolve({ BILLING_PROVIDER: "paypal" });
     expect(res).toEqual({ ok: false, reason: "unknown_provider" });
-  });
-});
-
-describe("createDefaultBillingProviderRegistry", () => {
-  it("is dormant: resolves to not_configured until BP1 registers Polar", () => {
-    const reg = createDefaultBillingProviderRegistry();
-    expect(reg.get("polar")).toBeNull();
-    expect(reg.resolve({})).toEqual({ ok: false, reason: "not_configured" });
   });
 });

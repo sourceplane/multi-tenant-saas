@@ -59,12 +59,3 @@ export function createBillingProviderRegistry(
     },
   };
 }
-
-/**
- * The production registry. Empty until BP1 registers Polar — intentionally
- * dormant so BP0 changes no public behavior. BP1 replaces the empty map with
- * `{ polar: createPolarProvider(env) }`.
- */
-export function createDefaultBillingProviderRegistry(): BillingProviderRegistry {
-  return createBillingProviderRegistry({});
-}
