@@ -4,7 +4,7 @@ PR-sized milestones. **BP0 → BP1 → BP2** is the critical line to a working
 purchase; **BP1** can land in parallel with the parent epic's **MO1**. Nothing
 here is built yet.
 
-## BP0 — Provider interface, registry, config & normalized event — 🗓️ Planned
+## BP0 — Provider interface, registry, config & normalized event — ✅ Shipped (#254)
 
 - Define `BillingProvider` in `apps/billing-worker/src/billing-provider/` +
   a registry resolving the active provider from `BILLING_PROVIDER` (default
@@ -73,4 +73,3 @@ Land **BP0+BP1** alongside the parent epic's **MO1** (both human-independent
 modulo provider creds). **BP2** is the first buyer-visible surface and is the
 checkout the parent epic's **MO2** upgrade gate points at. **BP3** is the proof
 the abstraction is real — do it once Polar is live, not before.
-</content>
