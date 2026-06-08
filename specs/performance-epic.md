@@ -156,9 +156,43 @@ measurable" claim is true only for the part of the request that was already chea
 | **PERF2** (0131) | Edge bearer→actor cache (Cache API, token-hash key, 30s TTL, logout-evict) | Shipped — PR #220 |
 | **PERF3** (0132) | Parallel `getBillingSummary`, member-list N+1 fix, query efficiency | Shipped — PR #221 |
 | **PERF4** (0133) | Parallelize authorize∥read on hot reads; `Server-Timing` + structured timing | Shipped — PR #230 |
+| **PERF5 Stage A** | Reads → in-isolate limiter (zero I/O); write buckets parallelized | Shipped & verified — PR #245 |
+| **PERF5 Stage B** | Durable-object write counters (atomic, no KV write on the hot path) | Shipped & verified — PR #246 |
 
-The roadmap should be read as: **PERF1–PERF4 all shipped.** Only PERF4 carries a ✅
-there today; PERF1–3 are mislabelled as pending and are corrected by this epic.
+The roadmap should be read as: **PERF1–PERF5 all shipped.** Only PERF4 originally
+carried a ✅ there; PERF1–3 were mislabelled as pending and PERF5 was scheduled —
+all corrected by this epic.
+
+#### PERF5 — rate limiter off the KV hot path → Durable Objects ✅
+
+The edge token-bucket limiter ran on **every** request before auth and did a
+Workers-KV `get`+`put` per bucket, with the org+identity buckets evaluated
+serially → **~264ms on every org-scoped read** (~80% of warm server time) and
+the documented "last-writer-wins" inaccuracy on writes. Shipped in two stages:
+
+- **Stage A (PR #245)** — safe (read) methods use a colo-local, zero-I/O
+  in-isolate token bucket; unsafe (write) buckets are evaluated concurrently
+  (`Promise.all`). Reads leave the KV path entirely.
+- **Stage B (PR #246)** — the durable write counters move from KV to a
+  `RateLimiterDO` Durable Object (one instance per `(scope,key)` bucket). The
+  DO's single-threaded execution makes the consume **atomic** (fixing the race)
+  with no central KV write on the hot path. `enforceRateLimit` prefers the DO,
+  falls back to the Stage A KV limiter when the binding is absent (dev/local),
+  then to fail-open. First Durable Object in the repo; `v1` sqlite migration on
+  local/dev/stage/prod, validated with `wrangler --dry-run` on every env.
+
+**Verified live (prod, warm p50 TTFB):**
+
+| Path | Original | Stage A | Stage B |
+| --- | --- | --- | --- |
+| `GET …/projects` (read) | 320ms | 58ms | **56ms** |
+| `GET …/billing/summary` (read) | 332ms | 62ms | **53ms** |
+| `POST …/projects` (write) | ~320ms | 221ms | **65ms** |
+
+Org-scoped reads dropped **~5.5×** and writes **~5×**; both now sit near the
+~55ms edge floor. The DO-backed write returns correct, decrementing
+`X-RateLimit-*` counters, confirming the limiter is both faster and race-free.
+The epic SLO (org read p50 < 150ms) is beaten ~3× and writes now meet it too.
 
 ### ⛔ Deferred / abandoned
 
@@ -177,42 +211,8 @@ there today; PERF1–3 are mislabelled as pending and are corrected by this epic
 
 ### 🗓️ Scheduled (new)
 
-Ordered by impact ÷ effort. PERF5 is the headline.
-
-#### PERF5 — Take the rate limiter off the KV read-modify-write hot path
-
-**Problem:** ~264ms per org-scoped read, before auth, from two sequential KV
-get+put round-trips. See root cause #1.
-
-**Plan — land in two stages so the cheap win ships first:**
-
-*Stage A (immediate, no new infra, low risk):*
-- **Parallelize the buckets.** Replace the serial `for (const b of buckets) await`
-  in `enforceRateLimit` with `Promise.all`. Halves the 2-bucket case
-  (~264ms → ~132ms) with a one-line structural change.
-- **Stop rate-limiting safe reads on the per-request KV write path.** Reads are not
-  the abuse vector that unsafe writes are, and the read limits are generous
-  (300/min org, 60/min identity). Apply the KV token bucket to **unsafe methods
-  only**; gate GET/HEAD with a **colo-local approximate limiter** (Cache API or an
-  in-isolate counter) that does no central write on the hot path. Expected
-  org-read p50 **~120–150ms** (floor + actor-cache hit + one parallel DB read).
-- **Keep fail-open semantics** exactly as today (KV/DO outage must never 5xx).
-
-*Stage B (durable end-state):*
-- Move the precise per-(scope,key) counters to **Durable Objects** — one DO per
-  bucket key, in-memory token bucket with periodic persistence, atomic increments,
-  no per-request central write. This is the primitive the roadmap already names
-  ("Durable Objects (later) — per-org hot counters / rate-limit"). A DO hop is
-  same-colo single-digit ms vs ~130ms for a KV write, and it fixes the
-  last-writer-wins inaccuracy as a bonus.
-- Alternatively, if DO is judged too heavy for V1, keep KV but make the write
-  **lazy/sampled** (write every Nth token or only when the bucket is near-empty)
-  so the common request admits without a synchronous put.
-
-**Owner:** `apps/api-edge` (`rate-limit.ts`, `idempotency.ts`), + a DO binding in
-`wrangler.jsonc` for Stage B. **New resource:** Durable Object namespace (Stage B
-only). **Acceptance:** org-scoped read p50 < 150ms warm on prod; rate-limit
-correctness preserved under a burst test; fail-open verified.
+Ordered by impact ÷ effort. With PERF5 shipped, **PERF6 is the headline** — it
+makes the gains measurable in prod and closes the PERF4 Server-Timing blind spot.
 
 #### PERF6 — Make the whole edge request measurable + ship p50/p95 dashboards
 
@@ -278,13 +278,15 @@ routing behind a flag.
 
 ## Target SLOs (warm, server-side p50 unless noted)
 
-| Surface | Today | Target |
-| --- | --- | --- |
-| Edge floor | 56ms | ≤ 60ms |
-| DB round-trip (Hyperdrive) | 62ms | ≤ 70ms |
-| Org-scoped authed read (end-to-end) | ~320ms+ | **< 150ms** |
-| Edge cold-start p95 | ~0.9–1.6s | ≤ 600ms |
-| Console SSR cold TTFB | ~1.4–1.8s | ≤ 800ms |
+| Surface | Pre-PERF5 | Now (post-PERF5) | Target |
+| --- | --- | --- | --- |
+| Edge floor | 56ms | 56ms | ≤ 60ms |
+| DB round-trip (Hyperdrive) | 62ms | 62ms | ≤ 70ms |
+| Org-scoped authed read (rate-limit portion) | ~264ms | **~0ms** ✅ | — |
+| Org-scoped read (no-token probe, end-to-end) | ~320ms | **~55ms** ✅ | **< 150ms** |
+| Org-scoped write (no-token probe, end-to-end) | ~320ms | **~65ms** ✅ | < 150ms |
+| Edge cold-start p95 | ~0.9–1.6s | ~0.9–1.6s | ≤ 600ms (PERF7) |
+| Console SSR cold TTFB | ~1.4–1.8s | ~1.4–1.8s | ≤ 800ms (PERF7) |
 
 ## What this document is not
 
