@@ -319,14 +319,27 @@ webhook filter. Treat as separate sub-tasks once P3 and B9 give us the data.
 
 ## Performance & Caching (PERF) — make responses super-fast
 
-Measured 2026-06-02 against live stage (server TTFB, warm, no cold start):
-`/auth/profile` ≈ 1.0s, `/organizations` ≈ 1.6s, `/organizations/:org/projects`
-≈ 2.1s, `/organizations/:org/billing/summary` ≈ 3.1s. Network/TLS is ~40ms; the
-time is **server-side**, and **repeat calls never get faster → no caching at any
-layer.** Unauthenticated 401 ≈ 0.25s (the worker floor); bad-token 401 ≈ 0.7s
-(so bearer→actor resolution adds ~0.45s on every request).
+> **Detailed plan, fresh measurements, and per-task design live in
+> `specs/performance-epic.md`.** This section is the one-line index; the epic is
+> normative for detail. PERF1–PERF4 have all shipped (only PERF4 was previously
+> marked ✅ here — corrected below). A 2026-06-08 re-measurement found the latency
+> budget has moved: the dominant remaining cost is the **edge rate limiter's
+> Workers-KV read-modify-write on every request, before auth** — see PERF5.
 
-Root causes (code-confirmed): (a) every worker in a request opens a **fresh
+Original baseline, measured 2026-06-02 against live stage (server TTFB, warm, no
+cold start): `/auth/profile` ≈ 1.0s, `/organizations` ≈ 1.6s,
+`/organizations/:org/projects` ≈ 2.1s, `/organizations/:org/billing/summary`
+≈ 3.1s. Network/TLS is ~40ms; the time is **server-side**, and **repeat calls
+never got faster → no caching at any layer.** Unauthenticated 401 ≈ 0.25s (the
+worker floor); bad-token 401 ≈ 0.7s (so bearer→actor resolution added ~0.45s).
+
+**2026-06-08 re-measurement (prod, warm p50):** edge floor 56ms; Hyperdrive DB
+ping 62ms (the DB is no longer the problem — Hyperdrive pooling carries it);
+org-scoped read ~320ms, of which **~264ms is the rate limiter** (two sequential
+KV get+put round-trips, before the actor is even resolved). See the epic.
+
+Original root causes (2026-06-02; (a)–(f) are now **addressed** by PERF1–PERF4 —
+see the epic for the current picture): (a) every worker in a request opens a **fresh
 postgres client over Hyperdrive and `sql.end()`s it per request** — the
 TLS/auth handshake dominates and recurs in each hop; (b) **no bearer-resolution
 cache** — api-edge calls identity-worker (+2 DB queries) on every request; (c)
@@ -340,7 +353,7 @@ This cluster's end-state: p50 authed read < ~300ms server-side, and the console
 feels instant on navigation (cached + stale-while-revalidate). Tasks are
 ordered by impact ÷ effort.
 
-### PERF1 — Console client cache, SWR & prefetch (highest perceived win)
+### PERF1 — Console client cache, SWR & prefetch (highest perceived win) ✅
 Adopt a client query cache (`@tanstack/react-query` or equivalent) with
 stale-while-revalidate; render cached data instantly on navigation and
 revalidate in background; dedupe in-flight requests. Cache the org list in
@@ -348,25 +361,30 @@ session/query so `OrgScope` stops refetching it per page. Prefetch on
 hover/intent. Move the auth gate so the shell paints from cache immediately.
 Convert the existing optimistic flows to cache mutations. Frontend-only,
 human-independent. Owner: web-console-next. Scoped as Task 0130.
+**Done (PR #216).**
 
-### PERF2 — Edge bearer-resolution cache
+### PERF2 — Edge bearer-resolution cache ✅
 Cache the bearer→actor resolution at api-edge (Workers KV or the Workers Cache
 API, keyed by a token hash, short TTL ~30–60s, invalidated on logout) so the
 identity-worker hop + its 2 DB queries are skipped on the hot path. Owner:
 api-edge (+ identity-worker logout invalidation). Scoped as Task 0131.
 (Was numbered after the existing Task 0129 = B1 GitHub OAuth.)
-New resource: a Workers KV namespace (or use the built-in Cache API — no new
-resource).
+Shipped via the built-in Cache API (`caches.default`) — no new resource.
+**Done (PR #220).**
 
-### PERF3 — DB connection reuse & query efficiency
-Eliminate the per-request connection-setup tax: stop `create+dispose` of a
-postgres client per request where a warm-isolate module-scoped client (or
-Hyperdrive-pooled reuse) is safe; never open two executors for one request
-(billing `check-entitlement`); parallelize `getBillingSummary` (`Promise.all`
-or a single JOIN); fix the member-list N+1 with a batched role query; add the
-missing membership/subject index; verify Hyperdrive query caching is actually
-effective (reads stay non-transactional + parameterized). Owner: packages/db +
-the worker handlers. Scoped as Task 0132.
+### PERF3 — DB connection reuse & query efficiency ✅
+Eliminate the per-request connection-setup tax; never open two executors for one
+request (billing `check-entitlement`); parallelize `getBillingSummary`
+(`Promise.all` or a single JOIN); fix the member-list N+1 with a batched role
+query; add the missing membership/subject index; verify Hyperdrive query caching
+is actually effective. Owner: packages/db + the worker handlers. Scoped as
+Task 0132. **Done (PR #221)** for the query-efficiency legs.
+**Correction:** the follow-up module-scoped connection reuse (Task 0134) was
+**reverted** (PR #227) — the Workers runtime forbids cross-request socket reuse.
+It is also unnecessary: the 2026-06-08 numbers show Hyperdrive pooling already
+makes the DB round-trip ~6ms over floor. The reverse-lookup index migration and
+the Hyperdrive cache audit from this task remain open → folded into the epic's
+PERF9. Do not re-attempt isolate-scoped reuse without a stage canary.
 
 ### PERF4 — Hot-path hop reduction, parallelization & latency observability ✅
 Collapse/parallelize the sequential authorization fan-out on hot reads (run the
@@ -386,20 +404,55 @@ Each worker emits a `Server-Timing` header (`authctx`/`db`/`policy`/`total`,
 plus `enrich` for members) and a structured timing log; api-edge appends its own
 `edge_auth`/`edge_downstream`/`edge_total` phases so one response carries the
 end-to-end breakdown. Wiring the Server-Timing metrics into Analytics Engine for
-p50/p95 dashboards is left as a follow-up.
+p50/p95 dashboards is left as a follow-up (folded into PERF6).
+**Blind spot found 2026-06-08:** the timing block starts *inside*
+`replayOrExecute`, so the ~264ms rate-limiter gate that runs before it is in none
+of the emitted phases. PERF6 closes this.
+
+### PERF5 — Take the rate limiter off the KV read-modify-write hot path 🗓️
+**Headline of the new cluster.** `enforceRateLimit` does a Workers-KV `get`+`put`
+per bucket on every request, before auth, and the two buckets (org + identity)
+serialize → ~264ms on every org-scoped read (~80% of warm server time). Stage A
+(no new infra): parallelize the buckets and rate-limit only unsafe methods, with
+a colo-local approximate limiter for safe GETs. Stage B (end-state): move precise
+counters to **Durable Objects** (atomic, no per-request central write). Owner:
+api-edge. New resource: a Durable Object namespace (Stage B). Full plan in the
+epic. Target: org-scoped read p50 < 150ms.
+
+### PERF6 — Whole-request observability + p50/p95 dashboards 🗓️
+Extend the timing helper to cover `enforceRateLimit` + idempotency (emit
+`edge_ratelimit` / `edge_idem`) so the full request is measurable, then sink
+`Server-Timing` to Analytics Engine for per-route dashboards (absorbs the PERF4
+follow-up). Add a synthetic prober for the isolation probes. Owner: api-edge +
+contracts/timing + Analytics Engine.
+
+### PERF7 — Cold-start reduction (edge + console SSR) 🗓️
+Cold isolates add 0.9–1.8s. Shrink bundles + lazy-load rare-path deps; evaluate
+Smart Placement and a keep-warm cron / min-instances. Owner: all workers +
+web-console-next.
+
+### PERF8 — Edge response cache for safe GETs 🗓️
+Cache authorizable safe GETs at the edge (Cache API / `s-maxage` + SWR), keyed by
+actor+scope+route, invalidated on mutation; pairs with PERF1. Owner: api-edge.
+
+### PERF9 — At-scale DB + deferred PERF3 leftovers 🗓️
+Ship the reverse-lookup index migration and the Hyperdrive cache-eligibility
+audit deferred from PERF3; add a Supabase read replica + Hyperdrive read routing
+when traffic warrants. Owner: packages/db + infra.
 
 ### Additional resources worth adding (suggested)
-- **Workers KV** — bearer-resolution cache (PERF2) and hot read caching.
+- **Cloudflare Cache API** — bearer-resolution cache (shipped, PERF2) and safe-GET
+  edge caching (PERF8).
 - **Cloudflare Cache API / Tiered Cache** — cache safe GETs at the edge with
-  `s-maxage` + `stale-while-revalidate`.
-- **Hyperdrive caching** — already available; ensure enabled and that the read
-  path is cache-eligible (PERF3).
-- **Analytics Engine** (already a platform baseline) — sink for the PERF4
-  Server-Timing metrics; per-route p50/p95 dashboards.
-- **Durable Objects** (later) — per-org hot in-memory state / counters
-  (rate-limit, entitlement decisions) to avoid DB on the hot path.
+  `s-maxage` + `stale-while-revalidate` (PERF8).
+- **Hyperdrive caching** — already carrying the DB round-trip (~6ms over floor as
+  of 2026-06-08); confirm cache-eligibility audit (PERF9).
+- **Analytics Engine** (already a platform baseline) — sink for the Server-Timing
+  metrics; per-route p50/p95 dashboards (PERF6).
+- **Durable Objects** — per-(scope,key) rate-limit counters off the KV write path
+  (PERF5 Stage B); later, per-org hot entitlement counters.
 - **Supabase read replica + Hyperdrive read routing** (at scale) — offload
-  read traffic from the primary.
+  read traffic from the primary (PERF9).
 
 ## What This Document Is Not
 
