@@ -47,6 +47,27 @@ describe("plan catalog", () => {
     expect(isKnownPlanCode(DEFAULT_PLAN_CODE)).toBe(true);
     expect(getPlanDefinition(DEFAULT_PLAN_CODE)).not.toBeNull();
   });
+
+  it("adds business + enterprise tiers and the multi-org entitlement keys (D5)", () => {
+    expect(PLAN_CATALOG.map((p) => p.code)).toEqual(["free", "pro", "business", "enterprise"]);
+    expect(isKnownPlanCode("business")).toBe(true);
+    expect(isKnownPlanCode("enterprise")).toBe(true);
+
+    const multiOrg = (code: string) =>
+      getPlanDefinition(code)!.entitlements.find((e) => e.entitlementKey === "feature.multi_org")!;
+    const orgLimit = (code: string) =>
+      getPlanDefinition(code)!.entitlements.find((e) => e.entitlementKey === "limit.organizations")!;
+
+    // Multi-org unlocks at Business; free/pro stay single-org.
+    expect(multiOrg("free").enabled).toBe(false);
+    expect(orgLimit("free").limitValue).toBe(1);
+    expect(multiOrg("pro").enabled).toBe(false);
+    expect(orgLimit("pro").limitValue).toBe(1);
+    expect(multiOrg("business").enabled).toBe(true);
+    expect(orgLimit("business").limitValue).toBe(5);
+    expect(multiOrg("enterprise").enabled).toBe(true);
+    expect(orgLimit("enterprise").limitValue).toBeNull(); // unlimited
+  });
 });
 
 describe("parseAssignPlanBody", () => {
@@ -54,7 +75,7 @@ describe("parseAssignPlanBody", () => {
     expect("error" in parseAssignPlanBody(null)).toBe(true);
     expect("error" in parseAssignPlanBody({ planCode: "free" })).toBe(true);
     expect("error" in parseAssignPlanBody({ orgId: ORG_PUBLIC })).toBe(true);
-    expect("error" in parseAssignPlanBody({ orgId: ORG_PUBLIC, planCode: "enterprise" })).toBe(true);
+    expect("error" in parseAssignPlanBody({ orgId: ORG_PUBLIC, planCode: "platinum" })).toBe(true);
     expect("error" in parseAssignPlanBody({ orgId: "org_short", planCode: "free" })).toBe(true);
   });
   it("accepts a well-formed payload and maps the org public id to hex", () => {
@@ -205,7 +226,7 @@ describe("assignPlanWithRepos", () => {
     const old = state.subscriptions.find((s) => s.id === "sub_old")!;
     expect(old.status).toBe("canceled");
     const proj = state.entitlements.find((e) => e.entitlementKey === "limit.projects")!;
-    expect(proj.limitValue).toBe(50); // pro
+    expect(proj.limitValue).toBe(25); // pro
     expect(state.events.map((e) => e.type)).toContain("subscription.created");
   });
 

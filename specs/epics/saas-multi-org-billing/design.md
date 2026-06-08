@@ -72,7 +72,7 @@ Per D3, every per-org limit applies to **each** org an account owns; only
 
 | Plan (`code`) | Price/mo | Polar product | `limit.organizations` | `feature.multi_org` | `limit.projects` (per org) | `limit.environments` (per project) | `limit.members` (per org) | `feature.custom_domains` |
 |---|---|---|---|---|---|---|---|---|
-| Free (`free`) | $0 | — (no product) | 1 | false | 3 | 2 | 5 | false |
+| Free (`free`) | $0 | — (no product) | 1 | false | 3 | 3 †| 5 | false |
 | Pro (`pro`) | $20 | fixed-price | 1 | false | 25 | 3 | 20 | true |
 | Business (`business`) | $99 | fixed-price | 5 | **true** | 100 | 5 | 50 | true |
 | Enterprise (`enterprise`) | custom | — (sales; no self-serve product) | `null` (∞) | **true** | `null` (∞) | `null` (∞) | `null` (∞) | true |
@@ -81,9 +81,12 @@ Per D3, every per-org limit applies to **each** org an account owns; only
   Enterprise is unlimited and sold via "contact sales", not self-serve checkout.
 - **Free/Pro are single-org** (`limit.organizations=1`) so the org-creation gate
   (MO2) blocks a second org with an upgrade prompt to Business.
-- **MO1 reconciliation:** these supersede the placeholder `free`/`pro` numbers
-  currently in `plan-catalog.ts`; do not silently downgrade an in-use plan code's
-  limits (apply the D4 grandfather principle — see risks).
+- **MO1 reconciliation (as-built):** the catalog shipped in `plan-catalog.ts`
+  (PR for the MO1 catalog half). `free`'s `limit.environments` is kept at **3**
+  (†) — its current live value — rather than the 2 first proposed here, because
+  `free` is in use by every bootstrapped org and the no-regress rule forbids
+  lowering an in-use plan's limits (apply the D4 grandfather principle — see
+  risks). All other numbers are as listed.
 
 ## 4. The resolution seam
 
