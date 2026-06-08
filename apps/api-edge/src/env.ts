@@ -13,6 +13,11 @@ export interface Env {
   // verify-only stages. When unbound, `replayOrExecute` degrades to a
   // direct downstream forward — never 5xx.
   IDEMPOTENCY_KV?: KVNamespace;
+  // Durable Object namespace backing the per-(scope,key) rate-limit counters
+  // (PERF5 Stage B). Each bucket key maps to one DO instance for an atomic,
+  // race-free token bucket without a KV write on the hot path. Absent on
+  // dev/local, where the limiter falls back to the KV path (then fail-open).
+  RATE_LIMITER_DO?: DurableObjectNamespace;
   ENVIRONMENT: string;
   CONSOLE_CUSTOM_DOMAIN?: string;
 }

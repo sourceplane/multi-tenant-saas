@@ -12,6 +12,11 @@ import { isWebhooksRoute, handleWebhooksRoute } from "./webhooks-facade";
 import { isMeteringRoute, handleMeteringRoute } from "./metering-facade";
 import { isBillingRoute, handleBillingRoute } from "./billing-facade";
 
+// Durable Object class backing the PERF5 Stage B rate-limit counters. Must be
+// exported from the Worker entry so the runtime can instantiate it for the
+// `RATE_LIMITER_DO` binding.
+export { RateLimiterDO } from "./rate-limit-do";
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const preflight = handlePreflight(request, env);
