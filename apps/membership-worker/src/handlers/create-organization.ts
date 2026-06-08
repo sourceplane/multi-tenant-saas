@@ -1,18 +1,27 @@
 import type { Env } from "../env.js";
 import type { ActorContext } from "../router.js";
-import type { MembershipRepository } from "@saas/db/membership";
+import type { MembershipRepository, MembershipResult, Organization } from "@saas/db/membership";
 import type { EventsRepository } from "@saas/db/events";
 import { createSqlExecutor } from "@saas/db/hyperdrive";
-import { createMembershipRepository } from "@saas/db/membership";
+import { createMembershipRepository, effectiveBillingOrgId } from "@saas/db/membership";
 import { createEventsRepository } from "@saas/db/events";
 import { successResponse, errorResponse, validationError } from "../http.js";
 import { orgPublicId, memberPublicId } from "../ids.js";
 import { asUuid } from "@saas/db/ids";
-import { assignPlan, type AssignPlanResult } from "../billing-client.js";
+import {
+  assignPlan,
+  checkBillingEntitlement,
+  decideOrgCreationGate,
+  type AssignPlanResult,
+} from "../billing-client.js";
 
 /** Plan code assigned to every organization at bootstrap. Stable contract with
  * billing-worker's plan catalog (plan-catalog.ts DEFAULT_PLAN_CODE). */
 const BOOTSTRAP_PLAN_CODE = "free";
+
+/** Multi-org entitlement keys checked against the account's billing parent (MO2). */
+const MULTI_ORG_FEATURE_KEY = "feature.multi_org";
+const ORGANIZATIONS_LIMIT_KEY = "limit.organizations";
 
 const NAME_MIN = 1;
 const NAME_MAX = 100;
@@ -33,6 +42,76 @@ export interface CreateOrganizationDeps {
   /** Injected best-effort plan-assignment seam for unit tests. When omitted in
    * the deps path, bootstrap skips the billing call entirely. */
   assignPlan?: (orgPublicId: string) => Promise<AssignPlanResult>;
+  /**
+   * Injectable entitlement check for the MO2 additional-org gate. When `deps`
+   * is provided WITHOUT this, the gate is skipped entirely (preserves the
+   * pre-MO2 handler tests). Production always uses `checkBillingEntitlement`.
+   */
+  checkEntitlement?: typeof checkBillingEntitlement;
+  /** Injectable "orgs this subject belongs to" lookup for the gate (tests). */
+  listOrgsForSubject?: (subjectId: string) => Promise<MembershipResult<Organization[]>>;
+}
+
+/**
+ * MO2 gate: creating an *additional* org (the account already owns ≥1) requires
+ * the billing parent to have `feature.multi_org` enabled and to be under
+ * `limit.organizations`. The first/bootstrap org is always allowed. The billing
+ * parent is the account's earliest-created org (resolved through
+ * `effectiveBillingOrgId`). Fails closed (503) on any service/repo error.
+ *
+ * Returns a Response to short-circuit on deny/error, or null to proceed.
+ */
+async function gateAdditionalOrg(
+  env: Env,
+  actor: ActorContext,
+  requestId: string,
+  deps: CreateOrganizationDeps | undefined,
+  gateRepo: Pick<MembershipRepository, "listOrganizationsForSubject"> | null,
+): Promise<Response | null> {
+  // Skip the gate for the legacy deps path that doesn't opt into billing.
+  if (deps && !deps.checkEntitlement) return null;
+
+  const listFn =
+    deps?.listOrgsForSubject ??
+    (gateRepo ? (sid: string) => gateRepo.listOrganizationsForSubject(sid) : null);
+  if (!listFn) return null; // no way to read the account; treat as bootstrap-safe
+
+  const orgsRes = await listFn(actor.subjectId);
+  if (!orgsRes.ok) {
+    return errorResponse("internal_error", "Service unavailable", 503, requestId);
+  }
+  const existing = orgsRes.value;
+  if (existing.length === 0) return null; // first/bootstrap org — always allowed
+
+  const entitlementFn = deps?.checkEntitlement ?? checkBillingEntitlement;
+  const billingBinding = env.BILLING_WORKER;
+  if (!billingBinding && !deps?.checkEntitlement) {
+    return errorResponse("internal_error", "Service unavailable", 503, requestId);
+  }
+
+  // Billing parent = the account's earliest-created org, via effectiveBillingOrgId.
+  const parent = existing.reduce((a, b) =>
+    a.createdAt.getTime() <= b.createdAt.getTime() ? a : b,
+  );
+  const parentPublicId = orgPublicId(effectiveBillingOrgId(parent));
+
+  const multiOrg = await entitlementFn(billingBinding as Fetcher, parentPublicId, MULTI_ORG_FEATURE_KEY, requestId);
+  if (multiOrg.kind === "service_error") {
+    return errorResponse("internal_error", "Service unavailable", 503, requestId);
+  }
+  const orgsLimit = await entitlementFn(billingBinding as Fetcher, parentPublicId, ORGANIZATIONS_LIMIT_KEY, requestId);
+  if (orgsLimit.kind === "service_error") {
+    return errorResponse("internal_error", "Service unavailable", 503, requestId);
+  }
+
+  const gate = decideOrgCreationGate(multiOrg.decision, orgsLimit.decision, existing.length);
+  if (gate.kind === "service_error") {
+    return errorResponse("internal_error", "Service unavailable", 503, requestId);
+  }
+  if (gate.kind === "deny") {
+    return errorResponse("precondition_failed", gate.message, 412, requestId, { reason: gate.reason });
+  }
+  return null;
 }
 
 /**
@@ -139,6 +218,11 @@ export async function handleCreateOrganization(
 
   const executor = deps ? null : createSqlExecutor(env.SOURCEPLANE_DB!);
   try {
+    // MO2: gate creation of an *additional* organization (bootstrap is exempt).
+    const gateRepo = executor ? createMembershipRepository(executor) : null;
+    const gateResponse = await gateAdditionalOrg(env, actor, requestId, deps, gateRepo);
+    if (gateResponse) return gateResponse;
+
     if (executor && "transaction" in executor) {
       const result = await executor.transaction(async (txExec) => {
         const txRepo = createMembershipRepository(txExec);
