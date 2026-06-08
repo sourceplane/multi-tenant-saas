@@ -1,6 +1,6 @@
 # Projects And Environments
 
-Status: Ready for implementation
+Status: Shipped — live on main (trust code over this doc). Owning work epic: see specs/epics/ + specs/roadmap.md.
 
 Primary monorepo targets:
 
@@ -8,8 +8,8 @@ Primary monorepo targets:
 
 Primary dependencies:
 
-- `specs/contracts/api-guidelines.md`
-- `specs/contracts/event-envelope.schema.yaml`
+- `specs/core/contracts/api-guidelines.md`
+- `specs/core/contracts/event-envelope.schema.yaml`
 - `specs/components/03-policy-authorization.md`
 - `specs/components/04-organizations-membership.md`
 
@@ -40,9 +40,9 @@ Provide Supabase-console-like project separation under an organization. Projects
 
 ## Hard Contracts To Honor
 
-- Multitenant scope rules from `specs/contracts/tenancy-and-rbac.md`
-- Project isolation invariant from `specs/domain-model.md`
-- Event envelope from `specs/contracts/event-envelope.schema.yaml`
+- Multitenant scope rules from `specs/core/contracts/tenancy-and-rbac.md`
+- Project isolation invariant from `specs/core/domain-model.md`
+- Event envelope from `specs/core/contracts/event-envelope.schema.yaml`
 
 ## Required Capabilities
 

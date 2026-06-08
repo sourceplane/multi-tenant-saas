@@ -1,6 +1,6 @@
 # Notifications
 
-Status: Starter module pending implementation
+Status: Shipped — live on main (trust code over this doc). Owning work epic: see specs/epics/ + specs/roadmap.md.
 
 Primary monorepo targets:
 
@@ -8,8 +8,8 @@ Primary monorepo targets:
 
 Primary dependencies:
 
-- `specs/product-overview.md`
-- `specs/contracts/event-envelope.schema.yaml`
+- `specs/core/product-overview.md`
+- `specs/core/contracts/event-envelope.schema.yaml`
 - `specs/components/02-identity.md`
 - `specs/components/04-organizations-membership.md`
 - `specs/components/09-events-audit-observability.md`
@@ -44,8 +44,8 @@ Own notification preferences, notification templates, and delivery orchestration
 
 ## Hard Contracts To Honor
 
-- Event envelope in `specs/contracts/event-envelope.schema.yaml`
-- Tenant scope rules in `specs/contracts/tenancy-and-rbac.md`
+- Event envelope in `specs/core/contracts/event-envelope.schema.yaml`
+- Tenant scope rules in `specs/core/contracts/tenancy-and-rbac.md`
 - Audit coverage in `specs/components/09-events-audit-observability.md`
 
 ## Required Capabilities

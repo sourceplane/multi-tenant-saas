@@ -1,6 +1,6 @@
 # Organizations And Membership
 
-Status: Ready for implementation
+Status: Shipped — live on main (trust code over this doc). Owning work epic: see specs/epics/ + specs/roadmap.md.
 
 Primary monorepo targets:
 
@@ -8,9 +8,9 @@ Primary monorepo targets:
 
 Primary dependencies:
 
-- `specs/contracts/api-guidelines.md`
-- `specs/contracts/event-envelope.schema.yaml`
-- `specs/contracts/tenancy-and-rbac.md`
+- `specs/core/contracts/api-guidelines.md`
+- `specs/core/contracts/event-envelope.schema.yaml`
+- `specs/core/contracts/tenancy-and-rbac.md`
 - `specs/components/02-identity.md`
 - `specs/components/03-policy-authorization.md`
 
@@ -42,8 +42,8 @@ Own the SaaS tenant boundary: organizations, memberships, invitations, and role 
 
 ## Hard Contracts To Honor
 
-- Organization-scoped tenancy model in `specs/contracts/tenancy-and-rbac.md`
-- Event envelope in `specs/contracts/event-envelope.schema.yaml`
+- Organization-scoped tenancy model in `specs/core/contracts/tenancy-and-rbac.md`
+- Event envelope in `specs/core/contracts/event-envelope.schema.yaml`
 
 ## Required Capabilities
 

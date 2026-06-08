@@ -1,6 +1,6 @@
 # Web Console
 
-Status: Ready for implementation
+Status: Shipped — live on main (trust code over this doc). Owning work epic: see specs/epics/ + specs/roadmap.md.
 
 Primary monorepo targets:
 
@@ -9,9 +9,9 @@ Primary monorepo targets:
 
 Primary dependencies:
 
-- `specs/contracts/api-guidelines.md`
-- `specs/product-overview.md`
-- optional `specs/contracts/component-manifest.schema.yaml`
+- `specs/core/contracts/api-guidelines.md`
+- `specs/core/product-overview.md`
+- optional `specs/core/contracts/component-manifest.schema.yaml`
 - `specs/components/01-edge-api.md`
 - `specs/components/04-organizations-membership.md`
 - `specs/components/05-projects-environments.md`
@@ -49,8 +49,8 @@ Provide the usable SaaS starter console for humans without creating a second, UI
 
 ## Hard Contracts To Honor
 
-- Public API rules in `specs/contracts/api-guidelines.md`
-- Component manifest schema in `specs/contracts/component-manifest.schema.yaml`
+- Public API rules in `specs/core/contracts/api-guidelines.md`
+- Component manifest schema in `specs/core/contracts/component-manifest.schema.yaml`
 
 ## Required Capabilities
 

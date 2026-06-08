@@ -1,0 +1,42 @@
+# Implementation Status — saas-performance
+
+As-built record for the PERF cluster. Design intent + measurement record are in
+`design.md`; the milestone list is in `implementation-plan.md`. Trust the live
+prod numbers (re-measure) over this doc.
+
+## Summary
+
+**PERF1–PERF5 shipped and verified; PERF6 landing; PERF7–9 planned.** The headline
+result: the 2026-06-08 prod re-measurement found the edge rate limiter (a KV
+read-modify-write before auth, twice for org-scoped routes) was ~80% of warm
+server time; PERF5 moved it to an in-isolate limiter + a `RateLimiterDO` Durable
+Object, taking org-scoped reads/writes to ~55–65ms p50 (edge floor, beating the
+<150ms target).
+
+| ID | Status | PR(s) / task |
+|----|--------|--------------|
+| PERF1 | ✅ Shipped | #216 / 0130 |
+| PERF2 | ✅ Shipped | #220 / 0131 |
+| PERF3 | ✅ Shipped (reuse leg reverted) | #221 / 0132; reverted #227; #228 IN-list fix |
+| PERF4 | ✅ Shipped | #230 / 0133 |
+| PERF5 | ✅ Shipped + verified | #245 (Stage A), #246 (Stage B), #247 (verify) |
+| PERF6 | 🛠️ In progress | #248 (edge-gate measurability); AE sink + prober remaining |
+| PERF7 | 🗓️ Planned | — |
+| PERF8 | 🗓️ Planned | — |
+| PERF9 | 🗓️ Planned | — |
+
+## Verified prod numbers (2026-06-08, warm p50)
+
+- Edge floor (preflight / 404): ~56ms.
+- `/health` Hyperdrive DB ping: ~62ms (DB is no longer the bottleneck — Hyperdrive
+  pooling carries it, ~6ms over floor).
+- Org-scoped read: ~320ms → **~55ms** after PERF5.
+- Org-scoped write: ~320ms → **~65ms** after PERF5.
+
+## Open
+
+- **PERF6 tail:** Analytics Engine sink + per-route p50/p95 dashboards + synthetic
+  prober.
+- **PERF9 leftovers:** reverse-lookup index migration; Hyperdrive cache-eligibility
+  audit; read replica at scale.
+- See `risks-and-open-questions.md` for the connection-reuse lesson.

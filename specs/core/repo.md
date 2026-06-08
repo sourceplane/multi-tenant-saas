@@ -224,7 +224,7 @@ When a component outgrows Cloudflare-native storage or queueing:
 
 This repo uses [orun](https://orun-api.sourceplane.ai) for composition-driven
 CI and deployment. The working model is the Orun golden path captured in
-`specs/orun-golden-path.md`, with `aws-admin` as the reference implementation
+`specs/core/orun-golden-path.md`, with `aws-admin` as the reference implementation
 for Terraform, S3 backend, and environment structure.
 
 - **`stack-tectonic/`** is the repo-owned operations catalog. Its Terraform

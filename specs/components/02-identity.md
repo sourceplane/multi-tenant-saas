@@ -1,6 +1,6 @@
 # Identity
 
-Status: Ready for implementation
+Status: Shipped — live on main (trust code over this doc). Owning work epic: see specs/epics/ + specs/roadmap.md.
 
 Primary monorepo targets:
 
@@ -9,9 +9,9 @@ Primary monorepo targets:
 
 Primary dependencies:
 
-- `specs/contracts/api-guidelines.md`
-- `specs/contracts/event-envelope.schema.yaml`
-- `specs/contracts/tenancy-and-rbac.md`
+- `specs/core/contracts/api-guidelines.md`
+- `specs/core/contracts/event-envelope.schema.yaml`
+- `specs/core/contracts/tenancy-and-rbac.md`
 - `specs/components/00-foundation-and-tooling.md`
 
 Platform dependencies:
@@ -46,8 +46,8 @@ Own all facts about who a user is and how an actor proves identity to the platfo
 
 ## Hard Contracts To Honor
 
-- Actor shapes from `specs/contracts/tenancy-and-rbac.md`
-- Public API envelope and auth transport rules from `specs/contracts/api-guidelines.md`
+- Actor shapes from `specs/core/contracts/tenancy-and-rbac.md`
+- Public API envelope and auth transport rules from `specs/core/contracts/api-guidelines.md`
 
 ## Required Capabilities
 
@@ -169,7 +169,7 @@ callers interact only with the API-key surface.
 #### List (`GET /v1/organizations/{orgId}/api-keys`)
 
 Returns all API keys visible to the acting subject within the organization.
-Uses cursor pagination per `specs/contracts/api-guidelines.md`.
+Uses cursor pagination per `specs/core/contracts/api-guidelines.md`.
 
 **List never returns raw key material.** Each entry includes at minimum:
 
@@ -189,9 +189,9 @@ Revocation is irreversible.
   (`api_key.created`, `api_key.revoked`).
 - When organization context exists (always true for these routes), create and
   revoke must also emit normal org-scoped audit/event copies using the shared
-  event envelope from `specs/contracts/event-envelope.schema.yaml`.
+  event envelope from `specs/core/contracts/event-envelope.schema.yaml`.
 - `POST` create must honor the idempotency guidance from
-  `specs/contracts/api-guidelines.md`.
+  `specs/core/contracts/api-guidelines.md`.
 
 Example request body for `POST /v1/auth/login/start`:
 

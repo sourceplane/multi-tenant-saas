@@ -12,7 +12,7 @@ through repo-scoped AWS roles.
 
 ## Golden Path References
 
-- `specs/orun-golden-path.md` explains how agents should reason about Orun
+- `specs/core/orun-golden-path.md` explains how agents should reason about Orun
   repos.
 - `../aws-admin/intent.yaml` is the reference for environment shape:
   `dev`, `stage`, `prod`, promotion gates, `parameterDefaults.terraform`, and

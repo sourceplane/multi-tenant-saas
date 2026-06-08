@@ -1,6 +1,11 @@
-# Development Schedule
+# Development Schedule (ARCHIVED — bootstrap complete)
 
-Status: Planning baseline
+> **ARCHIVED / NON-AUTHORITATIVE.** This is the original 8-week bootstrap plan.
+> The bootstrap is complete (~130 tasks merged). The evergreen delivery rules
+> (Delegation Checklist, Merge Policy, First Extraction Candidates) now live in
+> `specs/core/operating-model.md` — read that, not this. Kept for provenance only.
+
+Status: Planning baseline (historical)
 
 Assumption: 4-6 autopilot coding agents plus 1 human reviewer or lead architect.
 
@@ -18,7 +23,7 @@ Assumption: 4-6 autopilot coding agents plus 1 human reviewer or lead architect.
 
 ### Week 0: Orun repo bootstrap and architecture lock
 
-- Create the repo skeleton from `specs/repo.md`.
+- Create the repo skeleton from `specs/core/repo.md`.
 - Add `intent.yaml`, `kiox.yaml`, `kiox.lock`, `stack-tectonic/`, and `.github/workflows/ci.yml`.
 - Align `intent.yaml`, `kiox.yaml`, and the Terraform composition with the current `aws-admin` Orun golden path.
 - Add starter `component.yaml` files for apps, packages, infra, and test components.
@@ -31,7 +36,7 @@ Assumption: 4-6 autopilot coding agents plus 1 human reviewer or lead architect.
 - Verify local Orun validation, plan, and dry-run execution.
 - Verify GitHub Actions plans once and runs the Orun job matrix.
 - Review and freeze the constitution.
-- Review and freeze `specs/product-overview.md` and `specs/domain-model.md`.
+- Review and freeze `specs/core/product-overview.md` and `specs/core/domain-model.md`.
 - Review and freeze shared contract docs.
 - Confirm Supabase Postgres ownership model, schema namespace rules, and migration strategy.
 - Confirm Cloudflare account layout, Supabase organization, environment naming, and deployment permissions.

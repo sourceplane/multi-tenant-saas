@@ -27,7 +27,7 @@ interface ParsedRequest {
  * Implicit free-tier baseline ("default plan") entitlements.
  *
  * Per `specs/components/11-billing.md` ("Plans drive entitlement defaults") and
- * `specs/product-overview.md` (create-project is a REQUIRED bootstrap flow that
+ * `specs/core/product-overview.md` (create-project is a REQUIRED bootstrap flow that
  * "must not be required for the basic SaaS bootstrap flows to work"), an org
  * with no explicit subscription/override must still be able to perform the
  * baseline bootstrap actions. Billing has no subscription-creation write path

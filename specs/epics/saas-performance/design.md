@@ -1,10 +1,12 @@
-# Performance Epic — Server-Side Latency
+# Performance Epic — Server-Side Latency (design)
 
-Status: Normative direction. This is the detailed companion to the
-**Performance & Caching (PERF)** cluster in `specs/roadmap.md`. The roadmap keeps
-the one-line index per task; this epic owns the measurement record, the
-root-cause analysis, and the per-task plans. Sequencing remains the
-Orchestrator's call.
+Status: Normative direction. This is the **design doc** of the `saas-performance`
+epic (start at [`README.md`](./README.md); milestones in
+[`implementation-plan.md`](./implementation-plan.md); as-built in
+[`IMPLEMENTATION-STATUS.md`](./IMPLEMENTATION-STATUS.md)). It owns the measurement
+record, the root-cause analysis, and the per-task design rationale. The roadmap
+([`../../roadmap.md`](../../roadmap.md)) keeps only the one-line PERF index.
+Sequencing remains the Orchestrator's call.
 
 Last re-measured: **2026-06-08** (live stage + prod, warm, no cold start unless
 noted). Supersedes the stale 2026-06-02 baseline embedded in the roadmap.

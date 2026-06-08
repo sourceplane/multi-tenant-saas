@@ -1,6 +1,6 @@
 # Runtime Orchestration
 
-Status: Optional starter extension
+Status: Optional starter extension — design stage, not yet built. Owning work epic: specs/epics/saas-resources-runtime/.
 
 Primary monorepo targets:
 
@@ -8,9 +8,9 @@ Primary monorepo targets:
 
 Primary dependencies:
 
-- `specs/contracts/resource-contract.schema.yaml`
-- `specs/contracts/component-manifest.schema.yaml`
-- `specs/contracts/event-envelope.schema.yaml`
+- `specs/core/contracts/resource-contract.schema.yaml`
+- `specs/core/contracts/component-manifest.schema.yaml`
+- `specs/core/contracts/event-envelope.schema.yaml`
 - `specs/components/06-resources-and-component-registry.md`
 - `specs/components/07-config-secrets-flags.md`
 - `specs/components/09-events-audit-observability.md`
@@ -46,9 +46,9 @@ Turn desired project-resource state into actual runtime state by executing versi
 
 ## Hard Contracts To Honor
 
-- Resource contract in `specs/contracts/resource-contract.schema.yaml`
-- Component manifest contract in `specs/contracts/component-manifest.schema.yaml`
-- Event envelope in `specs/contracts/event-envelope.schema.yaml`
+- Resource contract in `specs/core/contracts/resource-contract.schema.yaml`
+- Component manifest contract in `specs/core/contracts/component-manifest.schema.yaml`
+- Event envelope in `specs/core/contracts/event-envelope.schema.yaml`
 
 ## Required Capabilities
 

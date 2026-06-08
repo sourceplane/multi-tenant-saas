@@ -1,6 +1,6 @@
 # Billing
 
-Status: Ready for implementation
+Status: Shipped — live on main (trust code over this doc). Owning work epic: see specs/epics/ + specs/roadmap.md.
 
 Primary monorepo targets:
 
@@ -8,7 +8,7 @@ Primary monorepo targets:
 
 Primary dependencies:
 
-- `specs/contracts/event-envelope.schema.yaml`
+- `specs/core/contracts/event-envelope.schema.yaml`
 - `specs/components/04-organizations-membership.md`
 - `specs/components/10-metering.md`
 - `specs/components/03-policy-authorization.md`
@@ -44,7 +44,7 @@ Own organization-level plans, subscriptions, entitlements, invoice state, trials
 
 ## Hard Contracts To Honor
 
-- Event envelope in `specs/contracts/event-envelope.schema.yaml`
+- Event envelope in `specs/core/contracts/event-envelope.schema.yaml`
 - Metering-first dependency rule in `specs/components/10-metering.md`
 
 ## Required Capabilities
