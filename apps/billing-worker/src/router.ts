@@ -7,6 +7,7 @@ import { handleListInvoices } from "./handlers/list-invoices.js";
 import { handleListEntitlements } from "./handlers/list-entitlements.js";
 import { handleCheckEntitlement } from "./handlers/check-entitlement.js";
 import { handleAssignPlan } from "./handlers/assign-plan.js";
+import { handleWebhookIntake } from "./handlers/webhook-intake.js";
 import { errorResponse, notFound, methodNotAllowed } from "./http.js";
 import { generateRequestId, parseOrgPublicId } from "./ids.js";
 
@@ -27,6 +28,9 @@ const INTERNAL_CALLER_RE = /^[a-z][a-z0-9-]{0,63}$/;
 const ALLOWED_INTERNAL_CALLERS: ReadonlySet<string> = new Set([
   "projects-worker",
   "membership-worker",
+  // api-edge forwards verified-at-source-of-truth inbound provider webhooks
+  // (it streams the raw body here; this worker verifies the signature).
+  "api-edge",
 ]);
 
 function isAllowedInternalCaller(value: string | null): value is string {
@@ -114,6 +118,18 @@ export async function route(request: Request, env: Env): Promise<Response> {
         );
       }
       return handleCheckEntitlement(request, env, requestId);
+    }
+
+    // Inbound provider-webhook intake (service-binding only). api-edge forwards
+    // the raw body + signature headers here; this handler verifies the signature
+    // (fails closed) and applies the event. Internal-caller gated like the seams
+    // below; the signature is the real authenticity check.
+    if (url.pathname === "/v1/internal/billing/webhooks/polar") {
+      const caller = request.headers.get(INTERNAL_CALLER_HEADER);
+      if (!isAllowedInternalCaller(caller)) {
+        return errorResponse("unauthorized", "Unauthorized", 403, requestId);
+      }
+      return handleWebhookIntake(request, env, requestId);
     }
 
     // Internal plan-assignment seam (service-binding only). Idempotent create
