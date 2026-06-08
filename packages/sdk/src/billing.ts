@@ -1,6 +1,9 @@
 import type {
   CheckBillingEntitlementRequest,
   CheckBillingEntitlementResponse,
+  CreateCheckoutRequest,
+  CreateCheckoutResponse,
+  CreatePortalSessionResponse,
   GetBillingCustomerResponse,
   GetBillingSummaryResponse,
   GetEntitlementsRequest,
@@ -17,9 +20,10 @@ import type { RequestOptions, Transport } from "./transport.js";
  * Billing resource client.
  *
  * Org-scoped surface served by `apps/billing-worker` via the api-edge
- * `billing-facade`. All endpoints are read-only at the public boundary —
- * subscription create/cancel flows are owned by provider-side checkout/portal
- * handoffs and are intentionally NOT exposed through the SDK.
+ * `billing-facade`. Reads (plans/customer/summary/invoices/entitlements) plus
+ * two provider hand-off writes: `createCheckout` and `createPortalSession`
+ * return hosted, safe-to-display URLs — the actual plan change is applied by
+ * the verified provider webhook, never by the client.
  *
  * `checkEntitlement` targets the entitlement decision seam (POST against the
  * org-scoped entitlements path), letting callers gate product behaviour on a
@@ -132,6 +136,47 @@ export class BillingClient {
         method: "POST",
         path: `/v1/organizations/${encodeURIComponent(orgId)}/billing/entitlements/check`,
         body,
+      },
+      opts,
+    );
+  }
+
+  /**
+   * POST /v1/organizations/:orgId/billing/checkout
+   *
+   * Start a hosted checkout to purchase/upgrade a plan. Returns a checkout URL
+   * to redirect the buyer to; the plan is applied by the provider webhook after
+   * payment, not by this call.
+   */
+  createCheckout(
+    orgId: string,
+    body: CreateCheckoutRequest,
+    opts: RequestOptions = {},
+  ): Promise<CreateCheckoutResponse> {
+    return this.transport.request<CreateCheckoutResponse>(
+      {
+        method: "POST",
+        path: `/v1/organizations/${encodeURIComponent(orgId)}/billing/checkout`,
+        body,
+      },
+      opts,
+    );
+  }
+
+  /**
+   * POST /v1/organizations/:orgId/billing/portal
+   *
+   * Create a hosted customer-portal session for managing the subscription /
+   * payment method. Returns a portal URL to redirect to.
+   */
+  createPortalSession(
+    orgId: string,
+    opts: RequestOptions = {},
+  ): Promise<CreatePortalSessionResponse> {
+    return this.transport.request<CreatePortalSessionResponse>(
+      {
+        method: "POST",
+        path: `/v1/organizations/${encodeURIComponent(orgId)}/billing/portal`,
       },
       opts,
     );

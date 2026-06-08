@@ -143,24 +143,25 @@ describe("api-edge billing facade", () => {
         isBillingRoute("/v1/internal/billing/entitlements"),
       ).toBe(false);
     });
-    it("public billing facade only matches the five Task 0076 read routes", () => {
+    it("public billing facade matches the read routes plus checkout/portal (BP2)", () => {
       // Documents the exact public surface — guards against accidental
       // expansion of the facade. Any new public billing route should require
-      // a deliberate change to this list.
+      // a deliberate change to this list. checkout/portal are the deliberate
+      // BP2 additions (POST, provider hand-off).
       const allowed = [
         "/v1/organizations/org_abc/billing/plans",
         "/v1/organizations/org_abc/billing/customer",
         "/v1/organizations/org_abc/billing/summary",
         "/v1/organizations/org_abc/billing/invoices",
         "/v1/organizations/org_abc/billing/entitlements",
+        "/v1/organizations/org_abc/billing/checkout",
+        "/v1/organizations/org_abc/billing/portal",
       ];
       for (const p of allowed) {
         expect(isBillingRoute(p)).toBe(true);
       }
       const denied = [
         "/v1/organizations/org_abc/billing",
-        "/v1/organizations/org_abc/billing/checkout",
-        "/v1/organizations/org_abc/billing/portal",
         "/v1/organizations/org_abc/billing/subscriptions",
         "/v1/internal/billing/entitlements/check",
         "/v1/internal/billing",
@@ -173,6 +174,21 @@ describe("api-edge billing facade", () => {
   });
 
   describe("handleBillingRoute", () => {
+    it("returns 405 for GET on a write route (checkout)", async () => {
+      const env = createEnv();
+      const req = new Request(
+        "https://api-edge/v1/organizations/org_abc/billing/checkout",
+        { method: "GET", headers: { authorization: "Bearer tok_test" } },
+      );
+      const res = await handleBillingRoute(
+        req,
+        env as never,
+        "req_test",
+        "/v1/organizations/org_abc/billing/checkout",
+      );
+      expect(res.status).toBe(405);
+    });
+
     it("returns 405 for POST", async () => {
       const env = createEnv();
       const req = new Request(
