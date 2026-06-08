@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { PreconditionInsight } from "@/components/precondition/insight";
+import { BillingActions } from "@/components/billing/billing-actions";
 import { wrap } from "@/lib/api";
 import { useSession } from "@/lib/session";
 import { useApiQuery, qk } from "@/lib/query";
@@ -89,6 +90,9 @@ function Inner({ orgId }: { orgId: string }) {
           </CardContent>
         </Card>
       ) : null}
+
+      {/* Manage plan: upgrade checkout + customer portal */}
+      <BillingActions orgId={orgId} activePlanCode={summary.data?.plan?.code ?? null} />
 
       {/* Entitlements */}
       <section className="space-y-2">
