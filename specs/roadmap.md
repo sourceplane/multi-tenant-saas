@@ -31,7 +31,7 @@ The architect-style ground rules:
 |---------|------|--------|--------------|
 | **B** | [`epics/saas-baseline/`](./epics/saas-baseline/) | In progress | B1 auth · B2 notifications · B3 idempotency/rate-limit · B4 SDK/CLI · B5 webhooks · B6 billing UX · B7 audit UX · B8 admin · B9 entitlement observability · B10 SSO/SCIM |
 | **U** | [`epics/saas-console-ux/`](./epics/saas-console-ux/) | In progress | U1 App Router · U2 design system · U3 URL scope · U4 empty states · U5 Cmd-K · U6 forms · U7 upgrade UX · U8 skeleton/optimistic · U9 white-label · U10 SDK client · U11 Vercel-standard completion |
-| **PERF** | [`epics/saas-performance/`](./epics/saas-performance/) | In progress | PERF1–PERF9 latency ladder (PERF1–5 shipped + verified; PERF6 landing; PERF7–9 planned). Measurement record + RCA in the epic's `design.md`. |
+| **PERF** | [`epics/saas-performance/`](./epics/saas-performance/) | In progress | PERF1–PERF9 latency ladder (PERF1–5 + PERF6 core shipped + verified; PERF6b/PERF7–9 planned). Measurement record + RCA + cost notes in the epic's `design.md`. |
 | **P2** | [`epics/saas-resources-runtime/`](./epics/saas-resources-runtime/) | Draft (not started) | The moat: manifest-driven resources + runtime orchestration (components 06 + 08). |
 | **P1, P3–P7** | [`epics/saas-product-areas/`](./epics/saas-product-areas/) | Holding register | P1 promote-flow · P3 observability · P4 notification inbox · P5 marketplace · P6 changelog/status · P7 AI-native. |
 
@@ -55,7 +55,8 @@ see [`README.md`](./README.md).
   platform's defining bet is in P2, but a customer cannot reach P2 without B1–B4
   being credible.
 - **PERF** is orthogonal and ongoing; PERF5 took warm org-scoped reads/writes to
-  ~55–65ms p50 on prod. Next is PERF6 (whole-request observability + dashboards).
+  ~55–65ms p50 on prod and the PERF6 core made the edge gate measurable. Next is
+  PERF7 (cold starts), with PERF6b (AE dashboards) as a cheap follow-on.
 
 ## What this document is not
 
