@@ -156,5 +156,14 @@ export const manifest: MigrationManifest = {
       description:
         "Per-user last-viewed organization preference (nullable slug hint on identity.users) backing the console's cross-device default landing",
     },
+    {
+      id: "170_membership_org_parent",
+      context: "membership",
+      path: "170_membership_org_parent/up.sql",
+      checksum:
+        "8af612994d6ad4f76e416ec034cdcfc9e2e416bed04c4fde405481627b4093b2",
+      description:
+        "Optional parent-organization pointer (nullable parent_org_id on membership.organizations) — the dormant seam for the saas-multi-org-billing epic; NULL = standalone, no behavior change",
+    },
   ],
 };

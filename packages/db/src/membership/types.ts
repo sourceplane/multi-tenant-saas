@@ -21,6 +21,13 @@ export interface Organization {
   slug: string;
   slugLower: string;
   status: string;
+  /**
+   * Optional billing parent (epic `saas-multi-org-billing`, MO1). When set, this
+   * organization rolls its billing up to the referenced (default/parent) org;
+   * NULL means standalone (bills for itself) — the case for every existing org.
+   * Resolve with `effectiveBillingOrgId`.
+   */
+  parentOrgId: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
