@@ -40,4 +40,3 @@ are recorded below; only credentials and two deferred follow-ups remain open. MO
   placeholder `free`/`pro` rows in `plan-catalog.ts`. MO1 must not silently reduce
   a bootstrapped org's limits — apply the D4 grandfather principle to any
   downward change on an in-use plan code.
-</content>

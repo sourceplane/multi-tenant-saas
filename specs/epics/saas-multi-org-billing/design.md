@@ -166,4 +166,3 @@ effectiveBillingOrg(org) = org.parent_org_id ?? org.id
 This and the other product/credential decisions are tracked in
 `risks-and-open-questions.md`; MO1 is safe to build before they are resolved
 (it adds only the dormant seam).
-</content>

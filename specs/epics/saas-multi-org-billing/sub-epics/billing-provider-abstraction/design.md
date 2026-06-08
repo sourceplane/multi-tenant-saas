@@ -122,4 +122,3 @@ That posture is a product decision tracked in the parent epic's risks.
   `hosted_url` validated as a safe display URL (schema already constrains this).
 - Entitlements are never read live from the provider on the request hot path → no
   provider outage can block product gates; deny-by-default preserved.
-</content>

@@ -11,7 +11,7 @@ multi-org model bills through. It also realizes (and generalizes) `saas-baseline
 
 | Field | Value |
 |-------|-------|
-| Status | **Draft — not started** (design locked; BP0/BP1 safe to slice once a provider's creds land) |
+| Status | **In progress** — BP0 (interface + registry) shipped (#254, dormant); BP1 (Polar adapter) blocked on Polar creds |
 | Parent epic | [`saas-multi-org-billing`](../../README.md) |
 | Cluster | **B** (realizes/generalizes B6) |
 | Owner(s) | `apps/billing-worker` + `apps/api-edge` + `packages/contracts`/`sdk` + `web-console-next` |
@@ -57,7 +57,7 @@ the billing-worker already emits — so intake is provider-agnostic and reuses
 
 | ID | Milestone | Status |
 |----|-----------|--------|
-| BP0 | Define `BillingProvider` interface + provider registry + per-env config/secrets + `NormalizedEvent` | 🗓️ Planned |
+| BP0 | Define `BillingProvider` interface + provider registry + per-env config/secrets + `NormalizedEvent` | ✅ Shipped (#254) |
 | BP1 | **Polar adapter** (checkout, customer portal, Standard-Webhooks verify + event map) | 🗓️ Planned |
 | BP2 | Edge + contract + SDK + console surfaces (checkout/portal POSTs, public webhook intake, two SDK write methods, upgrade/manage UI) | 🗓️ Planned |
 | BP3 | **Stripe adapter** (second impl proving the seam) + provider-switch policy | 🗓️ Planned |
@@ -68,4 +68,3 @@ the billing-worker already emits — so intake is provider-agnostic and reuses
 | In scope | Out of scope |
 |----------|--------------|
 | The provider adapter seam, Polar (first) + Stripe (second) impls, checkout/portal/webhook surfaces, normalized intake | What a plan *grants* (stays in `plan-catalog.ts`); the multi-org tenancy model (parent epic); usage-based/metered billing (a future `metering` + provider-meters leg) |
-</content>

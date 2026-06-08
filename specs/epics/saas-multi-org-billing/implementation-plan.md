@@ -6,9 +6,16 @@ hard dependency is **MO1 → everything** (the dormant seam) and **provider
 sub-epic BP0/BP1 → MO2** (you cannot sell multi-org without a checkout). Status
 markers reflect that nothing here is built yet.
 
-## MO1 — Schema + resolution seam + multi-org entitlements — 🗓️ Planned
+## MO1 — Schema + resolution seam + multi-org entitlements — ◐ Schema seam shipped (#253); catalog pending
 
 Add the dormant machinery with **no behavior change**.
+
+> **As-built:** the schema/resolution seam shipped in #253 (migration
+> `170_membership_org_parent` + `Organization.parentOrgId` + `effectiveBillingOrgId`).
+> **Remaining:** the plan-catalog half — add `feature.multi_org` +
+> `limit.organizations` and the decided flat-tier catalog to
+> `billing-worker/src/plan-catalog.ts` (deferred from #253 to keep that PR's
+> blast radius to the schema seam; it ripples into billing tests).
 
 - Migration: nullable `organizations.parent_org_id` + partial index (see
   `design.md` §3); verify schema namespace against `020_membership_core`.
@@ -99,4 +106,3 @@ first **buyer-visible** milestone and needs the provider sub-epic's checkout
 (BP0/BP1) plus the product decisions in `risks-and-open-questions.md`. MO4/MO5
 are the credibility layer; MO6 is the safety net. Prefer landing the provider
 sub-epic's Polar adapter (BP1) in parallel with MO1 since they are independent.
-</content>
