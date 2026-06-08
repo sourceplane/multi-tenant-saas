@@ -160,10 +160,11 @@ measurable" claim is true only for the part of the request that was already chea
 | **PERF4** (0133) | Parallelize authorize∥read on hot reads; `Server-Timing` + structured timing | Shipped — PR #230 |
 | **PERF5 Stage A** | Reads → in-isolate limiter (zero I/O); write buckets parallelized | Shipped & verified — PR #245 |
 | **PERF5 Stage B** | Durable-object write counters (atomic, no KV write on the hot path) | Shipped & verified — PR #246 |
+| **PERF6 (core)** | Edge gate (`edge_ratelimit`/`edge_idem`) in `Server-Timing` + structured log | Shipped & verified — PR #248 |
 
-The roadmap should be read as: **PERF1–PERF5 all shipped.** Only PERF4 originally
-carried a ✅ there; PERF1–3 were mislabelled as pending and PERF5 was scheduled —
-all corrected by this epic.
+The roadmap should be read as: **PERF1–PERF5 all shipped, plus the PERF6 core.**
+Only PERF4 originally carried a ✅; the rest were mislabelled/scheduled — corrected
+here. PERF6's remaining half (Analytics Engine dataset + dashboards) is **PERF6b**.
 
 #### PERF5 — rate limiter off the KV hot path → Durable Objects ✅
 
@@ -196,6 +197,29 @@ Org-scoped reads dropped **~5.5×** and writes **~5×**; both now sit near the
 `X-RateLimit-*` counters, confirming the limiter is both faster and race-free.
 The epic SLO (org read p50 < 150ms) is beaten ~3× and writes now meet it too.
 
+#### PERF6 (core) — the edge gate is now measurable ✅
+
+PERF4 instrumented the facades, but its `createTimings` block starts *inside* the
+`replayOrExecute` thunk — after the gate has run (root cause #5). **PR #248** times
+the gate and appends `edge_ratelimit` (always) + `edge_idem` (idempotency KV
+lookup) to the response `Server-Timing` (without clobbering downstream phases),
+plus a structured `msg:"timing"` gate log. Verified live (prod) — and it
+immediately surfaced cost structure that was previously invisible:
+
+| Path | Observed | Reading |
+| --- | --- | --- |
+| GET (read) | `edge_ratelimit;dur=0` | in-isolate read limiter is **literally 0ms** — Stage A proven |
+| POST, warm bucket | `edge_ratelimit;dur=10–12` | two DO checks in parallel ≈ **~11ms** (vs ~260ms KV) |
+| POST, cold/far bucket | `edge_ratelimit;dur=300–360` | **DO cold/cross-colo tail** on the first write to an idle bucket |
+| idempotent POST | `edge_idem;dur=40–96` | the idempotency replay **KV lookup** is a real ~40–90ms cost |
+
+Newly-logged findings (backlog candidates): the **DO cold/cross-colo tail
+(~300–360ms)** on the first write to an idle `(scope,key)` bucket — writes are
+infrequent and a busy bucket stays warm (~11ms), so it's a write-p99 tail (weigh
+`locationHint` later); and the **idempotency-KV `get` (~40–90ms)** — a candidate
+to move to the Cache API. The remaining PERF6 half (AE dataset + dashboards) is
+tracked as **PERF6b** below.
+
 ### ⛔ Deferred / abandoned
 
 - **Module-scoped DB connection reuse (Task 0134) — abandoned (reverted, PR #227).**
@@ -208,33 +232,28 @@ The epic SLO (org read p50 < 150ms) is beaten ~3× and writes now meet it too.
 - **Hyperdrive cache-eligibility audit** (verify reads are non-transactional +
   parameterized so Hyperdrive query caching engages) — split out of PERF3, never
   shipped. Folded into **PERF9**.
-- **Analytics Engine p50/p95 dashboards** — named as a PERF4 follow-up; folded
-  into **PERF6** so it lands together with closing the Server-Timing blind spot.
+- **Analytics Engine p50/p95 dashboards** — named as a PERF4 follow-up; the PERF6
+  core (PR #248) now emits the metrics, so this is the consumption half → **PERF6b**.
 
 ### 🗓️ Scheduled (new)
 
-Ordered by impact ÷ effort. With PERF5 shipped, **PERF6 is the headline** — it
-makes the gains measurable in prod and closes the PERF4 Server-Timing blind spot.
+Ordered by impact ÷ effort. With PERF5 and the PERF6 core shipped, the next
+headline is **PERF7 (cold starts)** — now the largest remaining latency — with
+**PERF6b** (dashboards) as the cheap observability follow-on.
 
-#### PERF6 — Make the whole edge request measurable + ship p50/p95 dashboards
+#### PERF6b — Aggregate the Server-Timing metrics into dashboards
 
-**Problem:** the rate-limit + idempotency gate is invisible to PERF4's timings
-(root cause #5), and the Server-Timing data is not aggregated anywhere.
+The PERF6 **core shipped** (PR #248): every edge response now carries
+`edge_ratelimit`/`edge_idem` and emits a structured `msg:"timing"` line. The
+**consumption** half remains (not probe-verifiable, hence split out): wire the
+structured line into an **Analytics Engine** dataset (created on first
+`writeDataPoint`, no pre-provisioning) and stand up per-route **p50/p95
+dashboards** (folds in the PERF4 follow-up); add a synthetic prober (cron) hitting
+the isolation probes so the floor / DB / rate-limit / hop costs are trended.
 
-**Plan:**
-- Wrap `enforceRateLimit` and the idempotency lookup in the timing helper and emit
-  `edge_ratelimit` and `edge_idem` phases on the edge `Server-Timing` header, so
-  one response carries the *complete* end-to-end breakdown including the gate.
-- Wire the emitted `Server-Timing` metrics into **Analytics Engine** (already a
-  platform baseline) and stand up per-route **p50/p95 dashboards**. This folds in
-  the deferred PERF4 follow-up.
-- Add a tiny synthetic prober (cron) hitting the isolation probes in this doc so
-  the floor / DB / rate-limit / hop costs are trended over time, not just measured
-  once by hand.
-
-**Owner:** `apps/api-edge` + `packages/contracts/timing` + Analytics Engine sink.
-**Acceptance:** a single prod response's `Server-Timing` sums to its observed TTFB
-within tolerance; dashboards show per-route p50/p95.
+**Owner:** `apps/api-edge` + Analytics Engine. **Acceptance:** dashboards show
+per-route p50/p95 for `edge_ratelimit` / `edge_idem` / total. **New resource:** an
+Analytics Engine dataset binding (see Cost notes).
 
 #### PERF7 — Cold-start reduction (edge + console SSR)
 
@@ -289,6 +308,49 @@ routing behind a flag.
 | Org-scoped write (no-token probe, end-to-end) | ~320ms | **~65ms** ✅ | < 150ms |
 | Edge cold-start p95 | ~0.9–1.6s | ~0.9–1.6s | ≤ 600ms (PERF7) |
 | Console SSR cold TTFB | ~1.4–1.8s | ~1.4–1.8s | ≤ 800ms (PERF7) |
+
+## Cost notes (Cloudflare)
+
+Estimates against Cloudflare **Workers Paid (Standard)** published prices
+(2026-06) — verify against the bill. This stack **requires** the Paid plan
+($5/mo): Durable Objects and Hyperdrive are not on the Free plan, so the Free
+plan's 100k req/day is not an option here.
+
+**Key billing fact:** on the Standard plan, **service-binding subrequests are NOT
+billed as separate requests** — the whole worker chain (edge → projects →
+membership → policy → billing …) is **one request** with **combined CPU time**.
+So our fan-out inflates *CPU*, not request count. (Wall-clock I/O wait on DB /
+subrequests is not CPU and is not billed.)
+
+Included allowances / overage: requests **10M/mo, $0.30/M**; CPU **30M
+CPU-ms/mo, $0.02/M**; KV read **10M, $0.50/M**; KV **write 1M, $5.00/M**; DO
+request **1M, $0.15/M**; DO duration **400k GB-s, $12.50/M GB-s** (DO = 0.125 GB);
+Cache API **free**; Hyperdrive **free** (the DB itself is Supabase — a separate,
+usually larger, recurring cost).
+
+Per end-user request, the billable Cloudflare meters:
+
+| Meter | Read (GET) | Write (POST/PATCH/DELETE) |
+| --- | --- | --- |
+| Workers requests | 1 | 1 |
+| Workers CPU | combined across ~4 workers | combined across ~5 workers + DB tx |
+| KV ops | **0** (rate-limit in-isolate; actor cache = Cache API) | idempotency only: 1 read + on-miss 1 write *if `Idempotency-Key` sent* |
+| DO ops | **0** | 2 requests (org+identity buckets) + duration |
+
+**PERF5 was a cost win, not just latency.** It removed the per-request **KV write
+($5/M)** from the rate-limit path on every request. At 50M req/mo (≈2 buckets/req):
+the old KV limiter ≈ **$540/mo** (≈100M KV writes); the new path ≈ **$1.35/mo** (DO
+requests) → **~99% cut** *and* now race-free.
+
+Free-tier capacity ("how many requests"): the **10M-request** allowance is *not*
+the binding constraint — **CPU and DO-requests** are. Rough model at ~85/15
+read/write and ~10 CPU-ms/request (measure to confirm — CPU is the weakest input):
+CPU caps ≈ **30M ÷ 10 ≈ 3M req/mo**; DO-requests cap ≈ **1M ÷ (2×0.15) ≈ 3.3M
+req/mo**. So **~3M end-user requests/month sit within the included allowances**,
+and the 10M request ceiling is reached well before request-overage matters.
+Beyond that, overage is cheap — marginal Cloudflare cost ≈ **~$4/mo at 10M req**
+and ≈ **~$55/mo at 50M req**, the latter dominated by **idempotency KV writes**
+(another reason to move that lookup to the Cache API — see PERF6 findings).
 
 ## What this document is not
 

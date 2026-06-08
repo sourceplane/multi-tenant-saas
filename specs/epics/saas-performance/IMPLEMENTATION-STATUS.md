@@ -6,7 +6,7 @@ prod numbers (re-measure) over this doc.
 
 ## Summary
 
-**PERF1–PERF5 shipped and verified; PERF6 landing; PERF7–9 planned.** The headline
+**PERF1–PERF5 + the PERF6 core shipped and verified; PERF6b + PERF7–9 planned.** The headline
 result: the 2026-06-08 prod re-measurement found the edge rate limiter (a KV
 read-modify-write before auth, twice for org-scoped routes) was ~80% of warm
 server time; PERF5 moved it to an in-isolate limiter + a `RateLimiterDO` Durable
@@ -20,7 +20,8 @@ Object, taking org-scoped reads/writes to ~55–65ms p50 (edge floor, beating th
 | PERF3 | ✅ Shipped (reuse leg reverted) | #221 / 0132; reverted #227; #228 IN-list fix |
 | PERF4 | ✅ Shipped | #230 / 0133 |
 | PERF5 | ✅ Shipped + verified | #245 (Stage A), #246 (Stage B), #247 (verify) |
-| PERF6 | 🛠️ In progress | #248 (edge-gate measurability); AE sink + prober remaining |
+| PERF6 (core) | ✅ Shipped + verified | #248 (edge-gate measurability) |
+| PERF6b | 🗓️ Planned | AE dataset + dashboards + synthetic prober |
 | PERF7 | 🗓️ Planned | — |
 | PERF8 | 🗓️ Planned | — |
 | PERF9 | 🗓️ Planned | — |
@@ -32,6 +33,12 @@ Object, taking org-scoped reads/writes to ~55–65ms p50 (edge floor, beating th
   pooling carries it, ~6ms over floor).
 - Org-scoped read: ~320ms → **~55ms** after PERF5.
 - Org-scoped write: ~320ms → **~65ms** after PERF5.
+
+PERF6 made the gate measurable in `Server-Timing` (PR #248) and surfaced:
+- reads `edge_ratelimit;dur=0` (in-isolate limiter proven zero-cost);
+- warm-DO writes `edge_ratelimit;dur=10–12` (Stage B win); a **DO cold/cross-colo
+  tail ~300–360ms** on the first write to an idle bucket;
+- idempotency replay `edge_idem;dur=40–96` (KV `get`) on keyed writes.
 
 ## Open
 
