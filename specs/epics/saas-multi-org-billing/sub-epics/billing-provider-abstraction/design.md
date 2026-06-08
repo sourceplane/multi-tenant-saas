@@ -35,6 +35,18 @@ Plan ↔ provider-product mapping is per-env config (e.g. `POLAR_PRODUCT_MAP`
 JSON), so sandbox/prod product ids never enter the DB-of-record and adding a plan
 stays a code change.
 
+Given the decided flat-tier catalog (parent epic `design.md` §3), the mapping is:
+
+| Plan `code` | Polar product |
+|---|---|
+| `free` | none — no provider product; the default plan needs no checkout |
+| `pro` | one fixed-price Polar product (per env) |
+| `business` | one fixed-price Polar product (per env) — the multi-org tier |
+| `enterprise` | none — sold via "contact sales", not self-serve checkout |
+
+So `POLAR_PRODUCT_MAP` carries exactly the `pro` and `business` product ids per
+environment; checkout is only ever created for those two codes.
+
 ### NormalizedEvent
 
 The adapter's `verifyWebhook` returns a small internal union that maps 1:1 onto

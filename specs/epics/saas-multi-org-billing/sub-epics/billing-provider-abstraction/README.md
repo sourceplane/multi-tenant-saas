@@ -17,7 +17,7 @@ multi-org model bills through. It also realizes (and generalizes) `saas-baseline
 | Owner(s) | `apps/billing-worker` + `apps/api-edge` + `packages/contracts`/`sdk` + `web-console-next` |
 | Target branch | `main` |
 | Builds on | `components/11-billing.md` (Extraction Seam: "the payment processor is an adapter behind [the billing Worker], not the source of truth"), `packages/db/.../110_billing_foundation` (already has `provider` / `provider_*_id` columns) |
-| Decisions locked | (1) one `BillingProvider` interface; provider chosen per-env by config (default `polar`); (2) **entitlement decisions never read live from the provider** — provider mutates our state via webhooks, gates read `billing.entitlements`; (3) no provider types/secrets in `packages/contracts`, the DB, `metadata`, or logs; (4) the billing-worker stays the system contract |
+| Decisions locked | (0) **Polar is the first/active provider** (D1, 2026-06-08 — Merchant of Record); Stripe is the second impl that proves the seam; (1) one `BillingProvider` interface; provider chosen per-env by config (default `polar`); (2) **entitlement decisions never read live from the provider** — provider mutates our state via webhooks, gates read `billing.entitlements`; (3) no provider types/secrets in `packages/contracts`, the DB, `metadata`, or logs; (4) the billing-worker stays the system contract |
 
 ## Thesis
 

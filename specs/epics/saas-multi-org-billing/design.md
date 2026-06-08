@@ -62,12 +62,28 @@ CREATE INDEX IF NOT EXISTS idx_org_parent
 `parent_org_id = NULL` (standalone) on day one. No billing table changes at all:
 the parent keeps the `org_id`-scoped customer/subscription it already had.
 
-New entitlement keys in the plan catalog (`billing-worker/src/plan-catalog.ts`):
+### Plan catalog (D5 — flat tiers, decided 2026-06-08)
 
-| Key | Type | Free/default | A multi-org plan |
-|-----|------|--------------|------------------|
-| `feature.multi_org` | boolean | `false` | `true` |
-| `limit.organizations` | quantity | `1` (or absent) | `N` |
+The decided catalog for `billing-worker/src/plan-catalog.ts`. Two new entitlement
+keys (`feature.multi_org`, `limit.organizations`) join the existing
+`limit.projects` / `limit.environments` / `limit.members` / `feature.custom_domains`.
+Per D3, every per-org limit applies to **each** org an account owns; only
+`limit.organizations` is account-level. `null` = unlimited.
+
+| Plan (`code`) | Price/mo | Polar product | `limit.organizations` | `feature.multi_org` | `limit.projects` (per org) | `limit.environments` (per project) | `limit.members` (per org) | `feature.custom_domains` |
+|---|---|---|---|---|---|---|---|---|
+| Free (`free`) | $0 | — (no product) | 1 | false | 3 | 2 | 5 | false |
+| Pro (`pro`) | $20 | fixed-price | 1 | false | 25 | 3 | 20 | true |
+| Business (`business`) | $99 | fixed-price | 5 | **true** | 100 | 5 | 50 | true |
+| Enterprise (`enterprise`) | custom | — (sales; no self-serve product) | `null` (∞) | **true** | `null` (∞) | `null` (∞) | `null` (∞) | true |
+
+- **Multi-org unlocks at Business** (`feature.multi_org=true`, up to 5 orgs);
+  Enterprise is unlimited and sold via "contact sales", not self-serve checkout.
+- **Free/Pro are single-org** (`limit.organizations=1`) so the org-creation gate
+  (MO2) blocks a second org with an upgrade prompt to Business.
+- **MO1 reconciliation:** these supersede the placeholder `free`/`pro` numbers
+  currently in `plan-catalog.ts`; do not silently downgrade an in-use plan code's
+  limits (apply the D4 grandfather principle — see risks).
 
 ## 4. The resolution seam
 

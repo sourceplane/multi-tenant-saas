@@ -17,8 +17,8 @@ existing billing row is migrated.
 | Owner(s) | `apps/membership-worker` + `apps/billing-worker` + `packages/db` + `apps/web-console-next` (+ `packages/contracts`/`sdk`) |
 | Target branch | `main` (PRs merged incrementally) |
 | Builds on | `core/domain-model.md`, `core/constitution.md`, `components/04-organizations-membership.md`, `components/11-billing.md`, `packages/db/.../110_billing_foundation` |
-| Decisions locked | (1) single org is the default and unchanged; (2) the **first/default org is the billing parent**; (3) multi-org is gated by a **plan entitlement** (`feature.multi_org` + `limit.organizations`), not a config flag; (4) **entitlements stay materialized per-org** — the `check-entitlement` seam and every gating caller are untouched; (5) the payment provider stays behind the billing-worker adapter (see the `billing-provider-abstraction` sub-epic) |
-| Gate | Provider creds + the Merchant-of-Record / pooled-vs-per-org-limits / self-serve-vs-sales decisions in `risks-and-open-questions.md` must be answered before MO2 ships paid multi-org. |
+| Decisions locked | Structural: (1) single org is the default and unchanged; (2) the **first/default org is the billing parent**; (3) multi-org is gated by a **plan entitlement** (`feature.multi_org` + `limit.organizations`), not a config flag; (4) **entitlements stay materialized per-org** — the `check-entitlement` seam and every gating caller are untouched; (5) the payment provider stays behind the billing-worker adapter. Product (D1–D5, 2026-06-08): **Polar** (Merchant of Record) · **self-serve checkout** · **per-org inherited limits** · **grandfather + block-new** on downgrade · **flat tiers** (Free/Pro/Business/Enterprise — catalog in `design.md` §3, multi-org unlocks at Business). |
+| Gate | All product decisions resolved; the only remaining blocker for paid multi-org (MO2+) is **Polar credentials** (per env) — see `risks-and-open-questions.md`. MO1 + sub-epic BP0 need nothing. |
 
 ## Thesis
 
