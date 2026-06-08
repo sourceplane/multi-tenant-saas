@@ -18,3 +18,4 @@ export type {
 } from "./types.js";
 
 export { createMembershipRepository } from "./repository.js";
+export { effectiveBillingOrgId } from "./billing-scope.js";

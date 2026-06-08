@@ -112,7 +112,7 @@ function createFakeRepository(): MembershipRepository & { _orgs: Map<string, Org
       if (_orgs.has(input.org.id) || [..._orgs.values()].some((o) => o.slugLower === input.org.slugLower)) {
         return { ok: false, error: { kind: "conflict", entity: "organization" } };
       }
-      const org: Organization = { ...input.org, status: "active", updatedAt: input.org.createdAt };
+      const org: Organization = { ...input.org, status: "active", parentOrgId: null, updatedAt: input.org.createdAt };
       const member: OrganizationMember = { ...input.member, status: "active", updatedAt: input.member.createdAt };
       const roleAssignment: RoleAssignment = { ...input.roleAssignment, scopeRef: input.roleAssignment.scopeRef ?? null, revokedAt: null };
       _orgs.set(org.id, org);
@@ -504,6 +504,7 @@ describe("member-list endpoint", () => {
       slug: "test",
       slugLower: "test",
       status: "active",
+      parentOrgId: null,
       createdAt: fixedNow,
       updatedAt: fixedNow,
     };

@@ -24,6 +24,7 @@ function mapOrganization(row: Record<string, unknown>): Organization {
     slug: row.slug as string,
     slugLower: row.slug_lower as string,
     status: row.status as string,
+    parentOrgId: (row.parent_org_id as string | null) ?? null,
     createdAt: new Date(row.created_at as string),
     updatedAt: new Date(row.updated_at as string),
   };
