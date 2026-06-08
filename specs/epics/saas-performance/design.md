@@ -213,12 +213,15 @@ immediately surfaced cost structure that was previously invisible:
 | POST, cold/far bucket | `edge_ratelimit;dur=300–360` | **DO cold/cross-colo tail** on the first write to an idle bucket |
 | idempotent POST | `edge_idem;dur=40–96` | the idempotency replay **KV lookup** is a real ~40–90ms cost |
 
-Newly-logged findings (backlog candidates): the **DO cold/cross-colo tail
-(~300–360ms)** on the first write to an idle `(scope,key)` bucket — writes are
-infrequent and a busy bucket stays warm (~11ms), so it's a write-p99 tail (weigh
-`locationHint` later); and the **idempotency-KV `get` (~40–90ms)** — a candidate
-to move to the Cache API. The remaining PERF6 half (AE dataset + dashboards) is
-tracked as **PERF6b** below.
+Newly-logged findings: the **DO cold/cross-colo tail (~300–360ms)** on the first
+write to an idle `(scope,key)` bucket — writes are infrequent and a busy bucket
+stays warm (~11ms), so it's a write-p99 tail (weigh `locationHint` later, still
+open); and the **idempotency-KV `get` (~40–90ms)** — **addressed (PR #256):** a
+colo-local **Cache API L1** now sits in front of KV, so same-colo replays drop to
+**~3–4ms** (verified live) while KV stays the global source of truth (cross-colo
+retries / L1 evictions fall through to KV — correctness unchanged). It is a
+*replay* latency win only; KV writes are unchanged by design. The remaining PERF6
+half (AE dataset + dashboards) is tracked as **PERF6b** below.
 
 ### ⛔ Deferred / abandoned
 

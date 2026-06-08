@@ -21,6 +21,7 @@ Object, taking org-scoped reads/writes to ~55–65ms p50 (edge floor, beating th
 | PERF4 | ✅ Shipped | #230 / 0133 |
 | PERF5 | ✅ Shipped + verified | #245 (Stage A), #246 (Stage B), #247 (verify) |
 | PERF6 (core) | ✅ Shipped + verified | #248 (edge-gate measurability) |
+| Idempotency L1 | ✅ Shipped + verified | #256 (Cache API replay L1, tiered over KV) |
 | PERF6b | 🗓️ Planned | AE dataset + dashboards + synthetic prober |
 | PERF7 | 🗓️ Planned | — |
 | PERF8 | 🗓️ Planned | — |
@@ -33,12 +34,16 @@ Object, taking org-scoped reads/writes to ~55–65ms p50 (edge floor, beating th
   pooling carries it, ~6ms over floor).
 - Org-scoped read: ~320ms → **~55ms** after PERF5.
 - Org-scoped write: ~320ms → **~65ms** after PERF5.
+- Idempotency same-colo replay: `edge_idem` **~79ms → ~3–4ms** after the Cache API
+  L1 (PR #256); first request unchanged (KV stays authoritative).
 
 PERF6 made the gate measurable in `Server-Timing` (PR #248) and surfaced:
 - reads `edge_ratelimit;dur=0` (in-isolate limiter proven zero-cost);
 - warm-DO writes `edge_ratelimit;dur=10–12` (Stage B win); a **DO cold/cross-colo
   tail ~300–360ms** on the first write to an idle bucket;
-- idempotency replay `edge_idem;dur=40–96` (KV `get`) on keyed writes.
+- idempotency replay `edge_idem;dur=40–96` (KV `get`) on keyed writes → **addressed
+  for same-colo replays** by a colo-local Cache API L1 in front of KV (PR #256):
+  replays drop to ~3–4ms; first request still consults KV (global correctness).
 
 ## Open
 
