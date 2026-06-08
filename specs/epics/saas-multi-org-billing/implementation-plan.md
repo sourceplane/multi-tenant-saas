@@ -6,16 +6,17 @@ hard dependency is **MO1 → everything** (the dormant seam) and **provider
 sub-epic BP0/BP1 → MO2** (you cannot sell multi-org without a checkout). Status
 markers reflect that nothing here is built yet.
 
-## MO1 — Schema + resolution seam + multi-org entitlements — ◐ Schema seam shipped (#253); catalog pending
+## MO1 — Schema + resolution seam + multi-org entitlements — ✅ Shipped (#253 + #257)
 
 Add the dormant machinery with **no behavior change**.
 
-> **As-built:** the schema/resolution seam shipped in #253 (migration
-> `170_membership_org_parent` + `Organization.parentOrgId` + `effectiveBillingOrgId`).
-> **Remaining:** the plan-catalog half — add `feature.multi_org` +
-> `limit.organizations` and the decided flat-tier catalog to
-> `billing-worker/src/plan-catalog.ts` (deferred from #253 to keep that PR's
-> blast radius to the schema seam; it ripples into billing tests).
+> **As-built:** shipped across two PRs. #253 — the schema/resolution seam
+> (migration `170_membership_org_parent` + `Organization.parentOrgId` +
+> `effectiveBillingOrgId`). #257 — the plan-catalog half: the D5 flat-tier
+> catalog (Free/Pro/Business/Enterprise) + `feature.multi_org` +
+> `limit.organizations` in `billing-worker/src/plan-catalog.ts`. `free` keeps
+> `limit.environments = 3` (no-regress rule). Both dormant — nothing reads the
+> new column/keys until MO2.
 
 - Migration: nullable `organizations.parent_org_id` + partial index (see
   `design.md` §3); verify schema namespace against `020_membership_core`.

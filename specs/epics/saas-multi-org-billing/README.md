@@ -12,7 +12,7 @@ existing billing row is migrated.
 
 | Field | Value |
 |-------|-------|
-| Status | **In progress** — MO1 schema seam (#253) + sub-epic BP0 (#254) shipped (both dormant); MO1 plan-catalog entitlements + MO2+ pending |
+| Status | **In progress** — MO1 (schema seam + flat-tier catalog/entitlements, #253 + #257) and sub-epic BP0 (#254) shipped, all dormant; MO2+ and BP1 gated on Polar creds |
 | Cluster | **B** (billing platform — extends B6 billing UX + B11 entitlements into multi-tenant ownership) |
 | Owner(s) | `apps/membership-worker` + `apps/billing-worker` + `packages/db` + `apps/web-console-next` (+ `packages/contracts`/`sdk`) |
 | Target branch | `main` (PRs merged incrementally) |
@@ -53,7 +53,7 @@ payer; child orgs roll their usage up to it.
 
 | ID | Milestone | Status |
 |----|-----------|--------|
-| MO1 | Schema + resolution seam (`parent_org_id`, `effectiveBillingOrg`) + multi-org entitlements in the plan catalog — **no behavior change** | ◐ Schema seam shipped (#253); plan-catalog entitlements pending |
+| MO1 | Schema + resolution seam (`parent_org_id`, `effectiveBillingOrg`) + multi-org entitlements in the plan catalog — **no behavior change** | ✅ Shipped (#253 seam + #257 catalog) |
 | MO2 | Purchase-gated org creation (`feature.multi_org` + `limit.organizations`) with designed upgrade UX (reuse U7) | 🗓️ Planned |
 | MO3 | Child-org lifecycle + entitlement fan-out (attach/detach; re-fan-out on plan change/cancel) | 🗓️ Planned |
 | MO4 | Consolidated billing + usage rollup at the parent (summary/invoices/usage) | 🗓️ Planned |
