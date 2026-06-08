@@ -1,6 +1,6 @@
 # Config, Secrets, Settings, And Feature Flags
 
-Status: Ready for implementation
+Status: Shipped — live on main (trust code over this doc). Owning work epic: see specs/epics/ + specs/roadmap.md.
 
 Primary monorepo targets:
 
@@ -8,7 +8,7 @@ Primary monorepo targets:
 
 Primary dependencies:
 
-- `specs/contracts/event-envelope.schema.yaml`
+- `specs/core/contracts/event-envelope.schema.yaml`
 - `specs/components/05-projects-environments.md`
 - `specs/components/06-resources-and-component-registry.md`
 
@@ -41,8 +41,8 @@ Provide versioned non-secret configuration, tenant/project settings, encrypted s
 
 ## Hard Contracts To Honor
 
-- Event envelope in `specs/contracts/event-envelope.schema.yaml`
-- Tenant scope rules in `specs/contracts/tenancy-and-rbac.md`
+- Event envelope in `specs/core/contracts/event-envelope.schema.yaml`
+- Tenant scope rules in `specs/core/contracts/tenancy-and-rbac.md`
 
 ## Required Capabilities
 

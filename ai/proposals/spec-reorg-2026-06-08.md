@@ -1,5 +1,11 @@
 # Proposal — Re-arrange `specs/` into Orun-style epics, a `core/` section, and an archive
 
+> **Status: ACCEPTED & EXECUTED (2026-06-08).** The reorg in this proposal was
+> applied on branch `claude/funny-feynman-qTuEW` (this PR) with the conservative
+> defaults: per-milestone ✅ status (no shipped-epic archiving), `saas-console-ux`
+> kept active, and `schedule.md` split (evergreen → `core/operating-model.md`) then
+> archived. This file is kept as the design rationale / record.
+
 ## Found By
 
 Architecture/spec-management review requested 2026-06-08 (rahul.varghese@sourceplane.ai):

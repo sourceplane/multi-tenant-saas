@@ -171,7 +171,7 @@ pnpm --filter @saas/sdk test
 
 ## See also
 
-- `specs/contracts/api-guidelines.md` — error envelope, Idempotency-Key,
+- `specs/core/contracts/api-guidelines.md` — error envelope, Idempotency-Key,
   rate-limit headers, request-id conventions.
 - `specs/roadmap.md` — leg B4 (`packages/sdk` + `packages/cli`).
 - `packages/contracts/src/errors.ts` — canonical `ERROR_CODES`.

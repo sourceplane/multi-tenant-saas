@@ -262,5 +262,5 @@ wrangler hyperdrive list
 
 - [Cloudflare Hyperdrive Docs](https://developers.cloudflare.com/hyperdrive/)
 - [Cloudflare Terraform Provider](https://registry.terraform.io/providers/cloudflare/cloudflare/latest/docs/resources/hyperdrive_config)
-- [Orun Golden Path](../../../specs/orun-golden-path.md)
-- [Constitution Rule 1: Cloudflare-first runtime](../../../specs/constitution.md#1-cloudflare-first-runtime-extraction-safe-data-plane)
+- [Orun Golden Path](../../../specs/core/orun-golden-path.md)
+- [Constitution Rule 1: Cloudflare-first runtime](../../../specs/core/constitution.md#1-cloudflare-first-runtime-extraction-safe-data-plane)

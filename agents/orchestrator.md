@@ -91,7 +91,7 @@ Always evaluate:
 Active architecture source:
 
 - `/specs/**` is the authoritative reusable multi-tenant SaaS bootstrap spec.
-- `/specs/orun-golden-path.md` is the short shared context for Orun repo
+- `/specs/core/orun-golden-path.md` is the short shared context for Orun repo
   structure, component manifests, composition contracts, and validation.
 - `/specs-v2/**` is the separate product-specific Git catalog and CI
   intelligence spec pack.
@@ -542,12 +542,12 @@ self-managed sequence of PRs (e.g. harness, then schema) if that keeps review
 tractable — the implementer decides. Does not change runtime API behavior or
 provision live infrastructure in this milestone.
 Read First:
-specs/constitution.md
-specs/repo.md
-specs/access-and-infra.md
+specs/core/constitution.md
+specs/core/repo.md
+specs/core/access-and-infra.md
 specs/components/00-foundation-and-tooling.md
 Reference Only:
-specs/schedule.md
+specs/_archive/schedule.md
 Non-Goals:
 No API behavior changes.
 No live resource creation.
@@ -594,7 +594,7 @@ credibility of every surface it ships. Its unit of work is the **milestone**,
 not the micro-task. It is expected to:
 
 - form opinions about product direction grounded in `specs/roadmap.md`,
-  `specs/product-overview.md`, and the per-component specs;
+  `specs/core/product-overview.md`, and the per-component specs;
 - scope the next whole roadmap milestone, name its outcome and boundaries,
   and grant the implementer ownership of how to build and stage it — including
   whether it lands as one large PR or a short self-managed sequence of PRs;
@@ -719,5 +719,5 @@ reference scan before coding.
 
 - Sequencing intent: `specs/roadmap.md` (B / U / P clusters)
 - Per-component contracts: `specs/components/*.md`
-- Architectural rules: `specs/constitution.md`
+- Architectural rules: `specs/core/constitution.md`
 - Spec change flow: § Spec Change Proposals above

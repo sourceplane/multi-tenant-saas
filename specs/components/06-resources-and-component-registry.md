@@ -1,6 +1,6 @@
 # Resources And Component Registry
 
-Status: Optional starter extension
+Status: Optional starter extension — design stage, not yet built. Owning work epic: specs/epics/saas-resources-runtime/.
 
 Primary monorepo targets:
 
@@ -8,9 +8,9 @@ Primary monorepo targets:
 
 Primary dependencies:
 
-- `specs/contracts/resource-contract.schema.yaml`
-- `specs/contracts/component-manifest.schema.yaml`
-- `specs/contracts/event-envelope.schema.yaml`
+- `specs/core/contracts/resource-contract.schema.yaml`
+- `specs/core/contracts/component-manifest.schema.yaml`
+- `specs/core/contracts/event-envelope.schema.yaml`
 - `specs/components/05-projects-environments.md`
 
 Platform dependencies:
@@ -44,9 +44,9 @@ Provide an optional project-resource extension: resources backed by versioned co
 
 ## Hard Contracts To Honor
 
-- `specs/contracts/resource-contract.schema.yaml`
-- `specs/contracts/component-manifest.schema.yaml`
-- `specs/contracts/event-envelope.schema.yaml`
+- `specs/core/contracts/resource-contract.schema.yaml`
+- `specs/core/contracts/component-manifest.schema.yaml`
+- `specs/core/contracts/event-envelope.schema.yaml`
 
 ## Required Capabilities
 

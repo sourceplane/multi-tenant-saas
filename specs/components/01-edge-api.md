@@ -1,6 +1,6 @@
 # Edge API Worker
 
-Status: Ready for implementation
+Status: Shipped — live on main (trust code over this doc). Owning work epic: see specs/epics/ + specs/roadmap.md.
 
 Primary monorepo targets:
 
@@ -9,8 +9,8 @@ Primary monorepo targets:
 
 Primary dependencies:
 
-- `specs/contracts/api-guidelines.md`
-- `specs/contracts/tenancy-and-rbac.md`
+- `specs/core/contracts/api-guidelines.md`
+- `specs/core/contracts/tenancy-and-rbac.md`
 - `specs/components/00-foundation-and-tooling.md`
 
 Cloudflare primitives:
@@ -42,8 +42,8 @@ Provide the single public HTTP entry point for the SaaS starter. The edge Worker
 
 ## Hard Contracts To Honor
 
-- Public HTTP contract in `specs/contracts/api-guidelines.md`
-- Tenant and role semantics in `specs/contracts/tenancy-and-rbac.md`
+- Public HTTP contract in `specs/core/contracts/api-guidelines.md`
+- Tenant and role semantics in `specs/core/contracts/tenancy-and-rbac.md`
 
 ## Required Capabilities
 

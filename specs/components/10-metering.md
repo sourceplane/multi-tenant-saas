@@ -1,6 +1,6 @@
 # Metering
 
-Status: Ready for implementation
+Status: Shipped — live on main (trust code over this doc). Owning work epic: see specs/epics/ + specs/roadmap.md.
 
 Primary monorepo targets:
 
@@ -8,7 +8,7 @@ Primary monorepo targets:
 
 Primary dependencies:
 
-- `specs/contracts/event-envelope.schema.yaml`
+- `specs/core/contracts/event-envelope.schema.yaml`
 - `specs/components/06-resources-and-component-registry.md`
 - `specs/components/09-events-audit-observability.md`
 
@@ -42,7 +42,7 @@ Own usage ingestion, normalization, aggregation, quota state, and usage summarie
 
 ## Hard Contracts To Honor
 
-- Event envelope in `specs/contracts/event-envelope.schema.yaml`
+- Event envelope in `specs/core/contracts/event-envelope.schema.yaml`
 - The constitutional rule that billing consumes metering, not the reverse
 
 ## Required Capabilities

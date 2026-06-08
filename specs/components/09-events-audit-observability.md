@@ -1,6 +1,6 @@
 # Events, Audit, And Observability
 
-Status: Ready for implementation
+Status: Shipped — live on main (trust code over this doc). Owning work epic: see specs/epics/ + specs/roadmap.md.
 
 Primary monorepo targets:
 
@@ -8,7 +8,7 @@ Primary monorepo targets:
 
 Primary dependencies:
 
-- `specs/contracts/event-envelope.schema.yaml`
+- `specs/core/contracts/event-envelope.schema.yaml`
 - `specs/components/00-foundation-and-tooling.md`
 
 Platform dependencies:
@@ -44,7 +44,7 @@ needed by all other components.
 
 ## Hard Contracts To Honor
 
-- Event contract in `specs/contracts/event-envelope.schema.yaml`
+- Event contract in `specs/core/contracts/event-envelope.schema.yaml`
 
 ## Required Capabilities
 

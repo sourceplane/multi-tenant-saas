@@ -1,6 +1,6 @@
 # Admin And Support Console
 
-Status: Starter module pending implementation
+Status: Shipped — live on main (trust code over this doc). Owning work epic: see specs/epics/ + specs/roadmap.md.
 
 Primary monorepo targets:
 
@@ -9,8 +9,8 @@ Primary monorepo targets:
 
 Primary dependencies:
 
-- `specs/product-overview.md`
-- `specs/contracts/tenancy-and-rbac.md`
+- `specs/core/product-overview.md`
+- `specs/core/contracts/tenancy-and-rbac.md`
 - `specs/components/02-identity.md`
 - `specs/components/04-organizations-membership.md`
 - `specs/components/09-events-audit-observability.md`
@@ -43,9 +43,9 @@ Provide audited internal support and administration workflows without introducin
 
 ## Hard Contracts To Honor
 
-- Deny-by-default policy in `specs/contracts/tenancy-and-rbac.md`
+- Deny-by-default policy in `specs/core/contracts/tenancy-and-rbac.md`
 - Audit requirements in `specs/components/09-events-audit-observability.md`
-- Secure-by-default rule in `specs/constitution.md`
+- Secure-by-default rule in `specs/core/constitution.md`
 
 ## Required Capabilities
 

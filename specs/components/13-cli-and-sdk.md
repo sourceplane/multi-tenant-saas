@@ -1,6 +1,6 @@
 # CLI And SDK
 
-Status: Ready for implementation
+Status: Shipped — live on main (trust code over this doc). Owning work epic: see specs/epics/ + specs/roadmap.md.
 
 Primary monorepo targets:
 
@@ -9,10 +9,10 @@ Primary monorepo targets:
 
 Primary dependencies:
 
-- `specs/contracts/api-guidelines.md`
-- `specs/product-overview.md`
-- optional `specs/contracts/resource-contract.schema.yaml`
-- optional `specs/contracts/component-manifest.schema.yaml`
+- `specs/core/contracts/api-guidelines.md`
+- `specs/core/product-overview.md`
+- optional `specs/core/contracts/resource-contract.schema.yaml`
+- optional `specs/core/contracts/component-manifest.schema.yaml`
 - `specs/components/01-edge-api.md`
 
 Cloudflare primitives:
@@ -41,7 +41,7 @@ Make the SaaS starter scriptable and automation-friendly through a stable TypeSc
 
 ## Hard Contracts To Honor
 
-- Public API rules in `specs/contracts/api-guidelines.md`
+- Public API rules in `specs/core/contracts/api-guidelines.md`
 - Shared resource and component schemas
 
 ## Required Capabilities

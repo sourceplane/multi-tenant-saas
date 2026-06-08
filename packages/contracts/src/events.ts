@@ -2,7 +2,7 @@
  * Event envelope and audit contract types.
  *
  * These types match the durable event-envelope schema defined in
- * specs/contracts/event-envelope.schema.yaml. They are transport-safe,
+ * specs/core/contracts/event-envelope.schema.yaml. They are transport-safe,
  * package-safe, and contain no platform clients or database row types.
  */
 

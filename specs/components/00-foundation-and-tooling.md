@@ -1,6 +1,6 @@
 # Foundation And Tooling
 
-Status: Ready for implementation
+Status: Shipped — live on main (trust code over this doc). Owning work epic: see specs/epics/ + specs/roadmap.md.
 
 Primary monorepo targets:
 
@@ -13,10 +13,10 @@ Primary monorepo targets:
 
 Primary dependencies:
 
-- `specs/constitution.md`
-- `specs/product-overview.md`
-- `specs/repo.md`
-- `specs/access-and-infra.md`
+- `specs/core/constitution.md`
+- `specs/core/product-overview.md`
+- `specs/core/repo.md`
+- `specs/core/access-and-infra.md`
 
 ## Intent
 
@@ -46,7 +46,7 @@ Bootstrap a production-grade Cloudflare monorepo that all later SaaS starter bou
 
 ## Hard Contracts To Honor
 
-- The repo shape in `specs/repo.md`
+- The repo shape in `specs/core/repo.md`
 - The constitutional rule that bounded contexts must remain extractable
 
 ## Required Capabilities
@@ -110,7 +110,7 @@ Bootstrap a production-grade Cloudflare monorepo that all later SaaS starter bou
 
 - The agent may choose `turbo`, `nx`, or a simpler task graph if it still supports selective execution well.
 - The agent may choose `vitest` or another TypeScript-friendly test runner if Worker support is solid.
-- The agent may choose exact folder helpers and codegen scripts as long as the repo shape remains compatible with `specs/repo.md`.
+- The agent may choose exact folder helpers and codegen scripts as long as the repo shape remains compatible with `specs/core/repo.md`.
 
 ## Acceptance Criteria
 

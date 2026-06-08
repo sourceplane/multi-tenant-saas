@@ -1,6 +1,6 @@
 # Policy And Authorization
 
-Status: Ready for implementation
+Status: Shipped — live on main (trust code over this doc). Owning work epic: see specs/epics/ + specs/roadmap.md.
 
 Primary monorepo targets:
 
@@ -9,8 +9,8 @@ Primary monorepo targets:
 
 Primary dependencies:
 
-- `specs/contracts/tenancy-and-rbac.md`
-- `specs/contracts/event-envelope.schema.yaml`
+- `specs/core/contracts/tenancy-and-rbac.md`
+- `specs/core/contracts/event-envelope.schema.yaml`
 - `specs/components/00-foundation-and-tooling.md`
 
 Platform dependencies:
@@ -42,7 +42,7 @@ Provide a single authorization decision point that every protected starter domai
 
 ## Hard Contracts To Honor
 
-- The request and response shape in `specs/contracts/tenancy-and-rbac.md`
+- The request and response shape in `specs/core/contracts/tenancy-and-rbac.md`
 - Deny-by-default behavior required by the constitution
 
 ## Required Capabilities

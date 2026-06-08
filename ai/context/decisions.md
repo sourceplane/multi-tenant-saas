@@ -11,7 +11,7 @@ Last updated: 2026-05-26
   for this checkout. The orchestrator text uses `/ai/...` paths conceptually,
   while `agents/agent-loop.sh` reads `ai/state.json` and
   `ai/waiting_for_input.md` relative to the workspace.
-- Use `specs/orun-golden-path.md` as the short shared Orun context for all
+- Use `specs/core/orun-golden-path.md` as the short shared Orun context for all
   implementer and verifier agents.
 - Treat `../aws-admin` as the reference repo for Terraform-oriented Orun
   structure and backend behavior. Current code now uses Orun `v2.3.0` with
@@ -106,7 +106,7 @@ Last updated: 2026-05-26
   role changes, add an events/audit persistence seam so those mutations can be
   audited instead of deepening the existing audit gap.
 - Task 0023 establishes the events/audit persistence foundation. Event envelope
-  types in `@saas/contracts` match `specs/contracts/event-envelope.schema.yaml`.
+  types in `@saas/contracts` match `specs/core/contracts/event-envelope.schema.yaml`.
   Migration `030_events_audit_core` owns the `events` schema with `event_log` and
   `audit_entries` tables. `@saas/db/events` provides `createEventsRepository` with
   atomic event+audit append via CTE and cursor-paginated audit queries. The
