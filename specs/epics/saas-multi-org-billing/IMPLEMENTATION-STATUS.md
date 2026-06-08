@@ -5,7 +5,9 @@ the entire `billing-provider-abstraction` sub-epic through **BP2** have shipped
 to `main` — **Polar billing is live end-to-end** (webhook intake → entitlements,
 console upgrade/manage). To exercise the live loop, the Polar webhook endpoint
 must be registered in the dashboard (per env) and a `POLAR_SUCCESS_URL` set
-(optional). Next: **MO2** (purchase-gated org creation, reusing BP2 checkout).
+(optional). Next: **MO3** (child lifecycle + entitlement fan-out) — so an
+additional org created via the MO2 gate inherits the parent's plan and rolls
+billing up, instead of being created standalone on Free.
 This file tracks PR-level as-built state, kept distinct from the design/plan docs.
 
 ## Epic milestones (MO)
@@ -13,7 +15,7 @@ This file tracks PR-level as-built state, kept distinct from the design/plan doc
 | Milestone | Status | PR(s) | Notes |
 |-----------|--------|-------|-------|
 | MO1 — schema + resolution seam + entitlements | ✅ Shipped | #253, #257 | #253: `170_membership_org_parent` (nullable `parent_org_id` + sparse index), `Organization.parentOrgId`, `effectiveBillingOrgId`. #257: the D5 flat-tier catalog (Free/Pro/Business/Enterprise) + `feature.multi_org` / `limit.organizations` entitlements. Dormant — applied cleanly to dev/stage/prod; no behavior change (Free's `limit.environments` kept at 3 per the no-regress rule). |
-| MO2 — purchase-gated org creation | 🗓️ Planned | — | Provider checkout now exists (BP2); next milestone. Gates on `feature.multi_org` + `limit.organizations`, reusing the checkout flow. |
+| MO2 — purchase-gated org creation | ✅ Shipped | #265, #266 | Additional-org gate on `feature.multi_org` + `limit.organizations` (bootstrap exempt) → `412`; console paywall with a Business-checkout "Upgrade" CTA. **Note:** the additional org is still created standalone on Free — parent linkage + entitlement fan-out is MO3. |
 | MO3 — child lifecycle + entitlement fan-out | 🗓️ Planned | — | |
 | MO4 — consolidated billing + usage rollup | 🗓️ Planned | — | |
 | MO5 — console surfaces | 🗓️ Planned | — | |
