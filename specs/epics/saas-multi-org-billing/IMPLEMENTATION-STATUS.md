@@ -1,15 +1,16 @@
 # saas-multi-org-billing — Implementation Status (as-built)
 
-Status: **In progress.** The two human-independent seams (MO1 + sub-epic BP0)
-have shipped to `main`; paid multi-org (MO2+) and the Polar adapter (BP1) are
-gated on Polar credentials (see `risks-and-open-questions.md`). This file tracks
-PR-level as-built state, kept distinct from the design/plan docs.
+Status: **In progress.** All human-independent work has shipped to `main` — MO1
+(schema seam + the full flat-tier catalog/entitlements) and sub-epic BP0 (the
+provider interface), all dormant. Paid multi-org (MO2+) and the Polar adapter
+(BP1) are gated on Polar credentials (see `risks-and-open-questions.md`). This
+file tracks PR-level as-built state, kept distinct from the design/plan docs.
 
 ## Epic milestones (MO)
 
 | Milestone | Status | PR(s) | Notes |
 |-----------|--------|-------|-------|
-| MO1 — schema + resolution seam | ✅ Shipped | #253 | `170_membership_org_parent` (nullable `parent_org_id` + sparse index), `Organization.parentOrgId`, and `effectiveBillingOrgId` resolver. Dormant — applied cleanly to dev/stage/prod; no behavior change. |
+| MO1 — schema + resolution seam + entitlements | ✅ Shipped | #253, #257 | #253: `170_membership_org_parent` (nullable `parent_org_id` + sparse index), `Organization.parentOrgId`, `effectiveBillingOrgId`. #257: the D5 flat-tier catalog (Free/Pro/Business/Enterprise) + `feature.multi_org` / `limit.organizations` entitlements. Dormant — applied cleanly to dev/stage/prod; no behavior change (Free's `limit.environments` kept at 3 per the no-regress rule). |
 | MO2 — purchase-gated org creation | 🗓️ Planned | — | Needs provider checkout (BP1) + Polar creds. |
 | MO3 — child lifecycle + entitlement fan-out | 🗓️ Planned | — | |
 | MO4 — consolidated billing + usage rollup | 🗓️ Planned | — | |
