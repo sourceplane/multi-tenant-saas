@@ -16,7 +16,7 @@ here is built yet.
 - **Done when:** the worker resolves a (stub) provider by config and the
   intake path compiles against `NormalizedEvent`; no public behavior change.
 
-## BP1 — Polar adapter — 🗓️ Planned
+## BP1 — Polar adapter — ✅ Shipped (#260)
 
 - Implement `BillingProvider` for Polar with `@polar-sh/sdk`
   (`server: sandbox|production`): `createCheckout`, `createPortalSession`,
@@ -31,7 +31,7 @@ here is built yet.
 - **Done when:** a Polar **sandbox** checkout → webhook → entitlement
   materialization unlocks a gated action end-to-end.
 
-## BP2 — Edge + contracts + SDK + console — 🗓️ Planned
+## BP2 — Edge + contracts + SDK + console — ✅ Shipped (#261, #262, #263)
 
 - api-edge: org-admin-gated idempotent `POST …/billing/checkout` &
   `…/billing/portal`; public signature-verified raw-body webhook passthrough.

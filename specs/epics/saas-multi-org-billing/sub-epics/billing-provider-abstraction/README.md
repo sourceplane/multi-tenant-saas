@@ -11,7 +11,7 @@ multi-org model bills through. It also realizes (and generalizes) `saas-baseline
 
 | Field | Value |
 |-------|-------|
-| Status | **In progress** — BP0 (interface + registry) shipped (#254, dormant); BP1 (Polar adapter) blocked on Polar creds |
+| Status | **In progress** — BP0 interface (#254), BP1 Polar adapter (#260), and BP2 edge/contracts/SDK/console (#261–#263) shipped. Polar is live end-to-end (pending webhook-endpoint registration in the Polar dashboard). BP3 (Stripe) + BP4 (hardening) remain. |
 | Parent epic | [`saas-multi-org-billing`](../../README.md) |
 | Cluster | **B** (realizes/generalizes B6) |
 | Owner(s) | `apps/billing-worker` + `apps/api-edge` + `packages/contracts`/`sdk` + `web-console-next` |
@@ -58,8 +58,8 @@ the billing-worker already emits — so intake is provider-agnostic and reuses
 | ID | Milestone | Status |
 |----|-----------|--------|
 | BP0 | Define `BillingProvider` interface + provider registry + per-env config/secrets + `NormalizedEvent` | ✅ Shipped (#254) |
-| BP1 | **Polar adapter** (checkout, customer portal, Standard-Webhooks verify + event map) | 🗓️ Planned |
-| BP2 | Edge + contract + SDK + console surfaces (checkout/portal POSTs, public webhook intake, two SDK write methods, upgrade/manage UI) | 🗓️ Planned |
+| BP1 | **Polar adapter** (checkout, customer portal, Standard-Webhooks verify + event map) | ✅ Shipped (#260) |
+| BP2 | Edge + contract + SDK + console surfaces (checkout/portal POSTs, public webhook intake, two SDK write methods, upgrade/manage UI) | ✅ Shipped (#261–#263) |
 | BP3 | **Stripe adapter** (second impl proving the seam) + provider-switch policy | 🗓️ Planned |
 | BP4 | Hardening: idempotent intake, reconciliation/backfill, entitlement-observability counts (B9) | 🗓️ Planned |
 
