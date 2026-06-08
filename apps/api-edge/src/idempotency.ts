@@ -64,6 +64,7 @@ import {
   describeIdempotencyKeyParseError,
   parseIdempotencyKey,
 } from "@saas/contracts/idempotency";
+import { createTimings, appendServerTiming, type Timings } from "@saas/contracts/timing";
 
 import type { Env } from "./env.js";
 import { errorResponse } from "./http.js";
@@ -158,91 +159,121 @@ export async function replayOrExecute(
   routeFamily: RouteFamily,
   downstream: () => Promise<Response>,
 ): Promise<Response> {
+  // PERF6: time the edge gate (rate-limit + idempotency) so a single response
+  // carries the full breakdown. The gate runs BEFORE the facade's own
+  // `createTimings` block, so without this its cost is invisible to
+  // Server-Timing — the exact blind spot that hid the rate limiter's ~264ms.
+  const gate = createTimings();
+
   // Rate-limit gate runs FIRST — before any KV cache lookup, before any
   // cross-binding fetch. Failure-open is handled inside `enforceRateLimit`.
+  const endRateLimit = gate.start("edge_ratelimit");
   const rateDecision = await enforceRateLimit(request, requestId, env, routeFamily);
+  endRateLimit();
+
   if (rateDecision.kind === "denied") {
-    return rateDecision.response;
+    return finishGate(rateDecision.response, requestId, routeFamily, gate);
   }
   const rateHeaders = rateDecision.headers;
 
+  let response: Response;
+
   // Safe methods: never cache, never validate; pass through (still decorated).
   if (!UNSAFE_METHODS.has(request.method)) {
-    return mergeRateLimitHeaders(await downstream(), rateHeaders);
+    response = mergeRateLimitHeaders(await downstream(), rateHeaders);
+  } else {
+    const parsed = parseIdempotencyKey(request.headers.get("idempotency-key"));
+
+    if (!parsed.ok) {
+      response = mergeRateLimitHeaders(
+        errorResponse(
+          "validation_failed",
+          describeIdempotencyKeyParseError(parsed.reason),
+          400,
+          requestId,
+          { header: IDEMPOTENCY_KEY_HEADER, reason: parsed.reason },
+        ),
+        rateHeaders,
+      );
+    } else if (parsed.key === null) {
+      // Header absent on an unsafe method is allowed (Task 0094 contract).
+      response = mergeRateLimitHeaders(await downstream(), rateHeaders);
+    } else if (!env.IDEMPOTENCY_KV) {
+      // KV binding missing → degrade open.
+      response = mergeRateLimitHeaders(await downstream(), rateHeaders);
+    } else {
+      const kv = env.IDEMPOTENCY_KV;
+      const url = new URL(request.url);
+      const cacheKey = await buildCacheKey(parsed.key, url.pathname);
+
+      // --- Cache lookup (timed as edge_idem) ---
+      let stored: StoredEnvelopeV1 | null = null;
+      try {
+        const rawStored = await gate.measure("edge_idem", () => kv.get(cacheKey, "text"));
+        if (rawStored) {
+          stored = parseEnvelope(rawStored);
+        }
+      } catch (err) {
+        // KV read failure is not fatal — log and proceed as if cache-miss.
+        logKvFailure("get", err, requestId);
+      }
+
+      if (stored) {
+        response = mergeRateLimitHeaders(reconstructResponse(stored), rateHeaders);
+      } else {
+        // --- Cache miss: execute downstream, then store. ---
+        const fresh = await downstream();
+
+        // Only cache "successful" final responses (skip 5xx — transient).
+        if (fresh.status < 500) {
+          try {
+            const envelope = await buildEnvelope(fresh, requestId);
+            // `buildEnvelope` operates on a clone, so `fresh` is still streamable.
+            await kv.put(cacheKey, JSON.stringify(envelope), {
+              expirationTtl: KV_TTL_SECONDS,
+            });
+          } catch (err) {
+            // KV write failure is not fatal — caller still gets the real response.
+            logKvFailure("put", err, requestId);
+          }
+        }
+        response = mergeRateLimitHeaders(fresh, rateHeaders);
+      }
+    }
   }
 
-  const raw = request.headers.get("idempotency-key");
-  const parsed = parseIdempotencyKey(raw);
+  return finishGate(response, requestId, routeFamily, gate);
+}
 
-  if (!parsed.ok) {
-    return mergeRateLimitHeaders(
-      errorResponse(
-        "validation_failed",
-        describeIdempotencyKeyParseError(parsed.reason),
-        400,
-        requestId,
-        { header: IDEMPOTENCY_KEY_HEADER, reason: parsed.reason },
-      ),
-      rateHeaders,
+/**
+ * Append the gate's `edge_ratelimit` / `edge_idem` phases to the response's
+ * `Server-Timing` header (without clobbering the facade/worker phases already
+ * there) and emit a structured timing line for the prod observability sink.
+ */
+function finishGate(
+  response: Response,
+  requestId: string,
+  routeFamily: RouteFamily,
+  gate: Timings,
+): Response {
+  const addition = gate.header();
+  if (addition) {
+    response.headers.set(
+      "Server-Timing",
+      appendServerTiming(response.headers.get("Server-Timing"), addition),
     );
   }
-
-  // Header absent on an unsafe method is allowed (Task 0094 contract).
-  // Pass through without any cache touch.
-  if (parsed.key === null) {
-    return mergeRateLimitHeaders(await downstream(), rateHeaders);
-  }
-
-  // KV binding missing → degrade open.
-  const kv = env.IDEMPOTENCY_KV;
-  if (!kv) {
-    return mergeRateLimitHeaders(await downstream(), rateHeaders);
-  }
-
-  const url = new URL(request.url);
-  const cacheKey = await buildCacheKey(parsed.key, url.pathname);
-
-  // --- Cache lookup ---
-  let stored: StoredEnvelopeV1 | null = null;
-  try {
-    const raw = await kv.get(cacheKey, "text");
-    if (raw) {
-      stored = parseEnvelope(raw);
-    }
-  } catch (err) {
-    // KV read failure is not fatal — log and proceed as if cache-miss.
-    logKvFailure("get", err, requestId);
-  }
-
-  if (stored) {
-    return mergeRateLimitHeaders(reconstructResponse(stored), rateHeaders);
-  }
-
-  // --- Cache miss: execute downstream, then store. ---
-  const response = await downstream();
-
-  // Only cache "successful" final responses. Stripe stores both the success
-  // and the stable error response. We replay on any HTTP status because
-  // the same retry deserves the same answer regardless of code; however
-  // we explicitly skip caching 5xx since those represent transient
-  // server errors that the caller should be free to retry against a
-  // real downstream call.
-  if (response.status < 500) {
-    try {
-      const envelope = await buildEnvelope(response, requestId);
-      // We must clone before reading the body when building the envelope.
-      // `buildEnvelope` already operates on a clone, so `response` is still
-      // streamable to the caller.
-      await kv.put(cacheKey, JSON.stringify(envelope), {
-        expirationTtl: KV_TTL_SECONDS,
-      });
-    } catch (err) {
-      // KV write failure is not fatal — caller still gets the real response.
-      logKvFailure("put", err, requestId);
-    }
-  }
-
-  return mergeRateLimitHeaders(response, rateHeaders);
+  // eslint-disable-next-line no-console -- structured timing line for prod observability
+  console.log(
+    JSON.stringify({
+      level: "info",
+      msg: "timing",
+      route: `edge.gate.${routeFamily}`,
+      requestId,
+      phases: gate.toJSON(),
+    }),
+  );
+  return response;
 }
 
 async function buildCacheKey(
