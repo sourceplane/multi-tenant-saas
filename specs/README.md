@@ -17,7 +17,7 @@ tracked work never get confused with each other.
 |------|-----------|---------------|-----------|
 | **Core** | [`core/`](./core/) | The durable architectural foundation: constitution, product overview, domain model, monorepo shape, access/infra, Orun golden path, operating model, and the frozen `contracts/`. | Normative; **never** archived for being "implemented". Changed only via the constitution's change-control. |
 | **Components** | [`components/`](./components/) | One reference spec per bounded context (`00`–`16`). The durable contract each Worker/package must honor. | Stays valid after implementation. `Status:` header reflects code reality + names the owning epic. |
-| **Epics** | [`epics/`](./epics/) | Orun-style work programs (`saas-baseline`, `saas-console-ux`, `saas-performance`, `saas-resources-runtime`, `saas-product-areas`). Each carries a README status table, an `implementation-plan.md` of milestones, and an `IMPLEMENTATION-STATUS.md` as-built record. | Draft → Ready → In progress → Shipped → Closed. |
+| **Epics** | [`epics/`](./epics/) | Orun-style work programs (`saas-baseline`, `saas-console-ux`, `saas-performance`, `saas-resources-runtime`, `saas-multi-org-billing`, `saas-product-areas`). Each carries a README status table, an `implementation-plan.md` of milestones, and an `IMPLEMENTATION-STATUS.md` as-built record. | Draft → Ready → In progress → Shipped → Closed. |
 
 Plus:
 
