@@ -8,12 +8,28 @@
     "ENVIRONMENT": "local",
     "CONSOLE_CUSTOM_DOMAIN": ""
   },
+  "durable_objects": {
+    "bindings": [
+      { "name": "RATE_LIMITER_DO", "class_name": "RateLimiterDO" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["RateLimiterDO"] }
+  ],
   "env": {
     "dev": {
       "vars": {
         "ENVIRONMENT": "dev",
         "CONSOLE_CUSTOM_DOMAIN": ""
-      }
+      },
+      "durable_objects": {
+        "bindings": [
+          { "name": "RATE_LIMITER_DO", "class_name": "RateLimiterDO" }
+        ]
+      },
+      "migrations": [
+        { "tag": "v1", "new_sqlite_classes": ["RateLimiterDO"] }
+      ]
     },
     "stage": {
       "vars": {
@@ -65,6 +81,14 @@
           "binding": "BILLING_WORKER",
           "service": "billing-worker-stage"
         }
+      ],
+      "durable_objects": {
+        "bindings": [
+          { "name": "RATE_LIMITER_DO", "class_name": "RateLimiterDO" }
+        ]
+      },
+      "migrations": [
+        { "tag": "v1", "new_sqlite_classes": ["RateLimiterDO"] }
       ]
     },
     "prod": {
@@ -117,6 +141,14 @@
           "binding": "BILLING_WORKER",
           "service": "billing-worker-prod"
         }
+      ],
+      "durable_objects": {
+        "bindings": [
+          { "name": "RATE_LIMITER_DO", "class_name": "RateLimiterDO" }
+        ]
+      },
+      "migrations": [
+        { "tag": "v1", "new_sqlite_classes": ["RateLimiterDO"] }
       ]
     }
   }

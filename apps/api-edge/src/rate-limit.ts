@@ -25,16 +25,25 @@
 // request is admitted without rate-limit headers (we have no real counters
 // to publish under failure). Logged via `console.warn`.
 //
-// PERF5 Stage A (latency): the KV token bucket does a `get`+`put` per bucket on
-// EVERY request, before auth — measured at ~130ms/bucket, ~264ms for an
-// org-scoped read (org + identity buckets, previously serialized). Two changes
-// take that off the hot path without losing anti-abuse protection:
-//   1. Unsafe (mutating) methods keep the durable KV limiter, but the buckets
-//      are now evaluated CONCURRENTLY (`Promise.all`) instead of serially.
-//   2. Safe (read) methods use a colo-local, in-isolate token bucket with ZERO
-//      network I/O. It is approximate (per-isolate state ⇒ the effective global
-//      limit scales with isolate count), which is acceptable for reads: their
-//      caps are generous and reads are not the abuse vector writes are.
+// PERF5 (latency): the KV token bucket did a `get`+`put` per bucket on EVERY
+// request, before auth — measured at ~130ms/bucket, ~264ms for an org-scoped
+// read (org + identity buckets, serialized). The fix has two stages:
+//
+//   Stage A — take it off the read hot path without losing protection:
+//     1. Unsafe (mutating) methods keep a durable cross-isolate limiter, but the
+//        buckets are evaluated CONCURRENTLY (`Promise.all`) instead of serially.
+//     2. Safe (read) methods use a colo-local, in-isolate token bucket with ZERO
+//        network I/O. Approximate (per-isolate state ⇒ the effective global limit
+//        scales with isolate count) — acceptable for reads: caps are generous and
+//        reads are not the abuse vector writes are.
+//
+//   Stage B — make the durable (write) limiter both faster and CORRECT:
+//     the durable counters move from KV to Durable Objects. Each (scope,key)
+//     bucket maps to one DO instance whose single-threaded execution makes the
+//     read-modify-write atomic (fixing the KV limiter's documented
+//     last-writer-wins race) with no central KV write on the hot path. When the
+//     DO binding is absent (dev/local), the limiter falls back to the Stage A KV
+//     path, then to fail-open — so the change is safe to roll out incrementally.
 
 import type { Env } from "./env.js";
 
@@ -132,7 +141,8 @@ export type RateLimitResult =
   | { kind: "allowed"; headers: Record<string, string> }
   | { kind: "denied"; response: Response };
 
-interface BucketState {
+/** Token-bucket persistence shape: `t` = tokens (float), `r` = refilledAt (epoch s). */
+export interface BucketState {
   t: number;
   r: number;
 }
@@ -144,6 +154,50 @@ interface BucketDecision {
   resetEpoch: number;
   retryAfterSec: number;
   allowed: boolean;
+}
+
+export interface TokenBucketStep {
+  next: BucketState;
+  allowed: boolean;
+  remaining: number;
+  resetEpoch: number;
+  retryAfterSec: number;
+}
+
+/**
+ * Pure token-bucket step — the single source of truth for the refill/consume
+ * math, shared by the KV limiter, the in-isolate read limiter, and the Durable
+ * Object write limiter (PERF5). Given the previous state (or `null` for a fresh
+ * bucket) and the current time, returns the new state and the decision.
+ */
+export function tokenBucketStep(
+  prev: BucketState | null,
+  limit: number,
+  windowSec: number,
+  now: number,
+): TokenBucketStep {
+  const refillRate = limit / windowSec;
+  const base = prev ?? { t: limit, r: now };
+  const elapsed = Math.max(0, now - base.r);
+  const refilled = Math.min(limit, base.t + elapsed * refillRate);
+
+  if (refilled >= 1) {
+    const tokens = refilled - 1;
+    return {
+      next: { t: tokens, r: now },
+      allowed: true,
+      remaining: Math.floor(tokens),
+      resetEpoch: Math.ceil(now + (limit - tokens) / refillRate),
+      retryAfterSec: 0,
+    };
+  }
+  return {
+    next: { t: refilled, r: now },
+    allowed: false,
+    remaining: 0,
+    resetEpoch: Math.ceil(now + (limit - refilled) / refillRate),
+    retryAfterSec: Math.max(1, Math.ceil((1 - refilled) / refillRate)),
+  };
 }
 
 /**
@@ -187,26 +241,46 @@ export async function enforceRateLimit(
   let failureOpen = false;
 
   if (DURABLE_LIMIT_METHODS.has(request.method)) {
-    // Unsafe (mutating) methods → durable, cross-isolate KV limiter.
-    const kv = env.IDEMPOTENCY_KV;
-    // Backend missing → fail open. No counters to publish.
-    if (!kv) {
-      return { kind: "allowed", headers: {} };
+    // Unsafe (mutating) methods → durable, cross-isolate limiter.
+    const ns = env.RATE_LIMITER_DO;
+    if (ns) {
+      // PERF5 Stage B: precise per-(scope,key) counters in Durable Objects.
+      // Each bucket key maps to one DO instance whose single-threaded execution
+      // makes the read-modify-write ATOMIC (no last-writer-wins race, the KV
+      // limiter's documented V1 flaw) and needs no central KV write on the hot
+      // path. Buckets are independent → evaluated concurrently.
+      decisions = await Promise.all(
+        buckets.map(async (b) => {
+          try {
+            return await consumeViaDurableObject(ns, b.key, b.limits, b.scope);
+          } catch (err) {
+            logLimiterFailure("durable_object", err, requestId);
+            failureOpen = true;
+            return fullBucketDecision(b.scope, b.limits);
+          }
+        }),
+      );
+    } else {
+      // Fallback: the durable KV limiter (Stage A) when the DO binding is not
+      // wired (e.g. dev / local). Backend missing entirely → fail open.
+      const kv = env.IDEMPOTENCY_KV;
+      if (!kv) {
+        return { kind: "allowed", headers: {} };
+      }
+      // PERF5 Stage A: buckets are independent keys → evaluate CONCURRENTLY
+      // rather than in a serial await-loop (halves the KV cost on org routes).
+      decisions = await Promise.all(
+        buckets.map(async (b) => {
+          try {
+            return await consumeToken(kv, b.key, b.limits, b.scope);
+          } catch (err) {
+            logLimiterFailure("kv", err, requestId);
+            failureOpen = true;
+            return fullBucketDecision(b.scope, b.limits);
+          }
+        }),
+      );
     }
-    // PERF5 Stage A: the buckets are independent keys, so evaluate them
-    // CONCURRENTLY rather than in a serial await-loop. For an org-scoped route
-    // this roughly halves the KV cost (was two get+put round-trips serialized).
-    decisions = await Promise.all(
-      buckets.map(async (b) => {
-        try {
-          return await consumeToken(kv, b.key, b.limits, b.scope);
-        } catch (err) {
-          logKvFailure(err, requestId);
-          failureOpen = true;
-          return fullBucketDecision(b.scope, b.limits);
-        }
-      }),
-    );
   } else {
     // PERF5 Stage A: safe (read) methods use a colo-local, in-isolate token
     // bucket — ZERO network I/O — so the KV read-modify-write is OFF the read
@@ -368,7 +442,6 @@ function consumeTokenInMemory(
   scope: "org" | "identity",
 ): BucketDecision {
   const now = Date.now() / 1000;
-  const refillRate = limits.limit / limits.windowSec;
   const existing = memBuckets.get(key);
 
   // Bound memory: when the map is full and this is a new key, drop all state.
@@ -378,34 +451,56 @@ function consumeTokenInMemory(
     memBuckets.clear();
   }
 
-  const base: MemBucketState = existing ?? { t: limits.limit, r: now };
-  const elapsed = Math.max(0, now - base.r);
-  const refilled = Math.min(limits.limit, base.t + elapsed * refillRate);
-
-  if (refilled >= 1) {
-    const tokens = refilled - 1;
-    memBuckets.set(key, { t: tokens, r: now });
-    const tokensToFull = limits.limit - tokens;
-    return {
-      scope,
-      limit: limits.limit,
-      remaining: Math.floor(tokens),
-      resetEpoch: Math.ceil(now + tokensToFull / refillRate),
-      retryAfterSec: 0,
-      allowed: true,
-    };
-  }
-
-  memBuckets.set(key, { t: refilled, r: now });
-  const needed = 1 - refilled;
-  const tokensToFull = limits.limit - refilled;
+  const step = tokenBucketStep(existing ?? null, limits.limit, limits.windowSec, now);
+  memBuckets.set(key, step.next);
   return {
     scope,
     limit: limits.limit,
-    remaining: 0,
-    resetEpoch: Math.ceil(now + tokensToFull / refillRate),
-    retryAfterSec: Math.max(1, Math.ceil(needed / refillRate)),
-    allowed: false,
+    remaining: step.remaining,
+    resetEpoch: step.resetEpoch,
+    retryAfterSec: step.retryAfterSec,
+    allowed: step.allowed,
+  };
+}
+
+/**
+ * Consume one token from the per-(scope,key) Durable Object (PERF5 Stage B).
+ * The bucket key maps to a single DO instance via `idFromName`; its
+ * single-threaded execution makes the consume atomic. Throws on a non-OK DO
+ * response so the caller can fail open.
+ */
+async function consumeViaDurableObject(
+  ns: DurableObjectNamespace,
+  key: string,
+  limits: BucketLimits,
+  scope: "org" | "identity",
+): Promise<BucketDecision> {
+  const stub = ns.get(ns.idFromName(key));
+  const res = await stub.fetch("https://rate-limiter.internal/consume", {
+    method: "POST",
+    body: JSON.stringify({
+      limit: limits.limit,
+      windowSec: limits.windowSec,
+      scope,
+    }),
+  });
+  if (!res.ok) {
+    throw new Error(`rate-limiter DO responded ${res.status}`);
+  }
+  const d = (await res.json()) as {
+    limit: number;
+    remaining: number;
+    resetEpoch: number;
+    retryAfterSec: number;
+    allowed: boolean;
+  };
+  return {
+    scope,
+    limit: d.limit,
+    remaining: d.remaining,
+    resetEpoch: d.resetEpoch,
+    retryAfterSec: d.retryAfterSec,
+    allowed: d.allowed,
   };
 }
 
@@ -474,12 +569,17 @@ async function sha256Hex(input: string): Promise<string> {
   return hex;
 }
 
-function logKvFailure(err: unknown, requestId: string): void {
+function logLimiterFailure(
+  backend: "kv" | "durable_object",
+  err: unknown,
+  requestId: string,
+): void {
   const message = err instanceof Error ? err.message : String(err);
   console.warn(
     JSON.stringify({
       level: "warn",
-      msg: "rate_limit.kv_failure",
+      msg: "rate_limit.backend_failure",
+      backend,
       requestId,
       error: message,
     }),
