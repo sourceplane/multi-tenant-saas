@@ -193,3 +193,72 @@ export function decideMembersLimit(
     message: "Your plan's member limit has been reached",
   };
 }
+
+export type OrgCreationGate =
+  | { kind: "allow" }
+  | { kind: "deny"; reason: string; message: string }
+  | { kind: "service_error" };
+
+/**
+ * Pure decision logic for the additional-organization gate (MO2). Combines the
+ * account billing-parent's `feature.multi_org` (must be enabled) with its
+ * `limit.organizations` quantity vs. the number of orgs the account already
+ * owns. Exposed for unit-testing; fails closed on any unexpected shape.
+ *
+ * Semantics:
+ * - feature.multi_org allowed:false → deny (disabled | not_configured) — the
+ *   account isn't on a multi-org plan; CTA → upgrade.
+ * - multi_org enabled, then limit.organizations:
+ *     - allowed:false → deny (its reason)
+ *     - valueType !== "quantity" → deny (malformed_limit)
+ *     - limitValue null → allow (unlimited)
+ *     - currentOrgCount  < limitValue → allow
+ *     - currentOrgCount >= limitValue → deny (limit_reached)
+ */
+export function decideOrgCreationGate(
+  multiOrg: CheckBillingEntitlementResponse,
+  orgsLimit: CheckBillingEntitlementResponse,
+  currentOrgCount: number,
+): OrgCreationGate {
+  if (!multiOrg.allowed) {
+    return {
+      kind: "deny",
+      reason: multiOrg.reason,
+      message:
+        multiOrg.reason === "disabled"
+          ? "Multiple organizations are not included in your current plan"
+          : "Creating additional organizations requires a plan that supports multi-organization",
+    };
+  }
+  if (!orgsLimit.allowed) {
+    return {
+      kind: "deny",
+      reason: orgsLimit.reason,
+      message: "Creating additional organizations is not available for this account",
+    };
+  }
+  if (orgsLimit.valueType !== "quantity") {
+    return { kind: "deny", reason: "malformed_limit", message: "Creating additional organizations is not permitted by your current plan" };
+  }
+  if (orgsLimit.limitValue === null) {
+    return { kind: "allow" };
+  }
+  if (
+    typeof orgsLimit.limitValue !== "number" ||
+    !Number.isFinite(orgsLimit.limitValue) ||
+    orgsLimit.limitValue < 0
+  ) {
+    return { kind: "deny", reason: "malformed_limit", message: "Creating additional organizations is not permitted by your current plan" };
+  }
+  if (!Number.isFinite(currentOrgCount) || currentOrgCount < 0) {
+    return { kind: "service_error" };
+  }
+  if (currentOrgCount < orgsLimit.limitValue) {
+    return { kind: "allow" };
+  }
+  return {
+    kind: "deny",
+    reason: "limit_reached",
+    message: "You've reached the maximum number of organizations for your plan",
+  };
+}
