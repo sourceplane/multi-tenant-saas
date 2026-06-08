@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { ZodForm } from "@/components/ui/zod-form";
 import { PreconditionInsight } from "@/components/precondition/insight";
+import { pickAccountBillingOrg } from "@/components/billing/account-org";
 import { useSession } from "@/lib/session";
 import { readLastOrgSlug, clearLastOrgSlug } from "@/lib/last-org";
 import { useApiQuery, qk, usePrefetch } from "@/lib/query";
@@ -42,6 +43,23 @@ export default function OrgsPage() {
   );
   const [open, setOpen] = React.useState(false);
   const [precondition, setPrecondition] = React.useState<ApiErrorBody | null>(null);
+
+  // Multi-org is gated on the account's billing parent (its earliest-created
+  // org — same choice the membership-worker MO2 gate makes). The paywall's
+  // "Upgrade plan" CTA starts a Business checkout for that org.
+  const billingParent = React.useMemo(
+    () => pickAccountBillingOrg(orgs.data ?? []),
+    [orgs.data],
+  );
+  const onUpgrade = React.useCallback(async () => {
+    if (!billingParent) return;
+    const r = await wrap(() => client.billing.createCheckout(billingParent.id, { planCode: "business" }));
+    if (!r.ok) {
+      toast({ kind: "error", title: "Could not start checkout", description: r.error.message });
+      return;
+    }
+    window.location.assign(r.data.checkoutUrl);
+  }, [billingParent, client, toast]);
 
   // The org list is authoritative: if the remembered org isn't in it anymore,
   // forget it so the default landing doesn't point at an inaccessible org.
@@ -117,6 +135,7 @@ export default function OrgsPage() {
         <PreconditionInsight
           error={precondition}
           resource="organization"
+          onUpgrade={() => void onUpgrade()}
           onDismiss={() => setPrecondition(null)}
         />
       )}
