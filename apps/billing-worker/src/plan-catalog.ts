@@ -42,8 +42,31 @@ export interface PlanDefinition {
 export const DEFAULT_PLAN_CODE = "free";
 
 /**
- * The catalog. Keep the free tier's limit values >= the PR-#209 stopgap so
- * retiring that fallback never regresses a bootstrapped org's limits.
+ * The catalog — the decided flat tiers for the `saas-multi-org-billing` epic
+ * (D5: Free / Pro / Business / Enterprise; see
+ * `specs/epics/saas-multi-org-billing/design.md` §3).
+ *
+ * Two account-level multi-org keys join the per-org limits:
+ *   - `feature.multi_org` (boolean) — may an account own more than one org.
+ *   - `limit.organizations` (quantity) — how many orgs the account may own.
+ * Per D3 (per-org inherited limits), every other key is a per-org limit that
+ * applies to each org the account owns; only `limit.organizations` is
+ * account-level. Multi-org unlocks at Business.
+ *
+ * These keys are materialized like any other entitlement, but **nothing reads
+ * them yet** — the org-creation gate is MO2 — so adding them is behavior-neutral
+ * beyond the rows that get written on plan assignment.
+ *
+ * No-regress rule: never reduce a limit on an in-use plan code (every org is on
+ * `free`). `free` therefore keeps `limit.environments = 3` (its current value)
+ * even though the D5 table proposed 2 — raising the table value, never lowering
+ * the live one. Keep `free`'s values >= the PR-#209 stopgap for the same reason.
+ *
+ * `priceAmountCents` is a nominal display price only; a payment provider is the
+ * source of truth once the provider adapter (billing-provider-abstraction) is
+ * wired. `enterprise` is sold via "contact sales", so it has no self-serve price
+ * (`billingInterval: "none"`, `priceAmountCents: 0`) and no provider product.
+ * For quantity limits, `enabled: true` + `limitValue: null` means unlimited.
  */
 export const PLAN_CATALOG: PlanDefinition[] = [
   {
@@ -59,6 +82,8 @@ export const PLAN_CATALOG: PlanDefinition[] = [
       { entitlementKey: "limit.environments", valueType: "quantity", enabled: true, limitValue: 3 },
       { entitlementKey: "limit.members", valueType: "quantity", enabled: true, limitValue: 5 },
       { entitlementKey: "feature.custom_domains", valueType: "boolean", enabled: false, limitValue: null },
+      { entitlementKey: "feature.multi_org", valueType: "boolean", enabled: false, limitValue: null },
+      { entitlementKey: "limit.organizations", valueType: "quantity", enabled: true, limitValue: 1 },
     ],
   },
   {
@@ -70,10 +95,46 @@ export const PLAN_CATALOG: PlanDefinition[] = [
     priceAmountCents: 2000,
     priceCurrency: "usd",
     entitlements: [
-      { entitlementKey: "limit.projects", valueType: "quantity", enabled: true, limitValue: 50 },
-      { entitlementKey: "limit.environments", valueType: "quantity", enabled: true, limitValue: 50 },
-      { entitlementKey: "limit.members", valueType: "quantity", enabled: true, limitValue: 100 },
+      { entitlementKey: "limit.projects", valueType: "quantity", enabled: true, limitValue: 25 },
+      { entitlementKey: "limit.environments", valueType: "quantity", enabled: true, limitValue: 3 },
+      { entitlementKey: "limit.members", valueType: "quantity", enabled: true, limitValue: 20 },
       { entitlementKey: "feature.custom_domains", valueType: "boolean", enabled: true, limitValue: null },
+      { entitlementKey: "feature.multi_org", valueType: "boolean", enabled: false, limitValue: null },
+      { entitlementKey: "limit.organizations", valueType: "quantity", enabled: true, limitValue: 1 },
+    ],
+  },
+  {
+    id: "plan_business",
+    code: "business",
+    name: "Business",
+    description: "Multi-organization ownership, higher limits, and team scale.",
+    billingInterval: "month",
+    priceAmountCents: 9900,
+    priceCurrency: "usd",
+    entitlements: [
+      { entitlementKey: "limit.projects", valueType: "quantity", enabled: true, limitValue: 100 },
+      { entitlementKey: "limit.environments", valueType: "quantity", enabled: true, limitValue: 5 },
+      { entitlementKey: "limit.members", valueType: "quantity", enabled: true, limitValue: 50 },
+      { entitlementKey: "feature.custom_domains", valueType: "boolean", enabled: true, limitValue: null },
+      { entitlementKey: "feature.multi_org", valueType: "boolean", enabled: true, limitValue: null },
+      { entitlementKey: "limit.organizations", valueType: "quantity", enabled: true, limitValue: 5 },
+    ],
+  },
+  {
+    id: "plan_enterprise",
+    code: "enterprise",
+    name: "Enterprise",
+    description: "Unlimited scale with custom terms. Contact sales.",
+    billingInterval: "none",
+    priceAmountCents: 0,
+    priceCurrency: "usd",
+    entitlements: [
+      { entitlementKey: "limit.projects", valueType: "quantity", enabled: true, limitValue: null },
+      { entitlementKey: "limit.environments", valueType: "quantity", enabled: true, limitValue: null },
+      { entitlementKey: "limit.members", valueType: "quantity", enabled: true, limitValue: null },
+      { entitlementKey: "feature.custom_domains", valueType: "boolean", enabled: true, limitValue: null },
+      { entitlementKey: "feature.multi_org", valueType: "boolean", enabled: true, limitValue: null },
+      { entitlementKey: "limit.organizations", valueType: "quantity", enabled: true, limitValue: null },
     ],
   },
 ];
