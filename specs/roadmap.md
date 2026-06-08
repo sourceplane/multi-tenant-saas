@@ -321,10 +321,12 @@ webhook filter. Treat as separate sub-tasks once P3 and B9 give us the data.
 
 > **Detailed plan, fresh measurements, and per-task design live in
 > `specs/performance-epic.md`.** This section is the one-line index; the epic is
-> normative for detail. PERF1–PERF4 have all shipped (only PERF4 was previously
-> marked ✅ here — corrected below). A 2026-06-08 re-measurement found the latency
-> budget has moved: the dominant remaining cost is the **edge rate limiter's
-> Workers-KV read-modify-write on every request, before auth** — see PERF5.
+> normative for detail. **PERF1–PERF5 have all shipped.** A 2026-06-08
+> re-measurement found the dominant cost was the edge rate limiter's Workers-KV
+> read-modify-write on every request (~264ms/org-scoped read); **PERF5 fixed it**
+> (reads → in-isolate limiter, writes → Durable Objects), taking org-scoped reads
+> and writes to ~55–65ms p50 on prod. Next headline is **PERF6** (make it
+> measurable + dashboards).
 
 Original baseline, measured 2026-06-02 against live stage (server TTFB, warm, no
 cold start): `/auth/profile` ≈ 1.0s, `/organizations` ≈ 1.6s,
@@ -409,15 +411,16 @@ p50/p95 dashboards is left as a follow-up (folded into PERF6).
 `replayOrExecute`, so the ~264ms rate-limiter gate that runs before it is in none
 of the emitted phases. PERF6 closes this.
 
-### PERF5 — Take the rate limiter off the KV read-modify-write hot path 🗓️
-**Headline of the new cluster.** `enforceRateLimit` does a Workers-KV `get`+`put`
-per bucket on every request, before auth, and the two buckets (org + identity)
-serialize → ~264ms on every org-scoped read (~80% of warm server time). Stage A
-(no new infra): parallelize the buckets and rate-limit only unsafe methods, with
-a colo-local approximate limiter for safe GETs. Stage B (end-state): move precise
-counters to **Durable Objects** (atomic, no per-request central write). Owner:
-api-edge. New resource: a Durable Object namespace (Stage B). Full plan in the
-epic. Target: org-scoped read p50 < 150ms.
+### PERF5 — Take the rate limiter off the KV read-modify-write hot path ✅
+`enforceRateLimit` ran a Workers-KV `get`+`put` per bucket on every request,
+before auth, with the org+identity buckets serialized → ~264ms on every
+org-scoped read (~80% of warm server time) plus a last-writer-wins race on
+writes. **Stage A (PR #245):** safe reads use a zero-I/O in-isolate limiter;
+write buckets parallelized. **Stage B (PR #246):** durable write counters moved
+to a `RateLimiterDO` Durable Object — atomic, no KV write on the hot path (first
+DO in the repo). **Verified live (prod p50): org-scoped reads ~320ms → ~55ms,
+writes ~320ms → ~65ms** — both at the edge floor, beating the < 150ms target.
+Fail-open + KV fallback preserved. Full detail in `specs/performance-epic.md`.
 
 ### PERF6 — Whole-request observability + p50/p95 dashboards 🗓️
 Extend the timing helper to cover `enforceRateLimit` + idempotency (emit
