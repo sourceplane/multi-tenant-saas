@@ -30,7 +30,7 @@ Add the dormant machinery with **no behavior change**.
   itself; the two new entitlement keys materialize on plan assign; **no public
   behavior changes** (regression suite green).
 
-## MO2 — Purchase-gated org creation — 🗓️ Planned
+## MO2 — Purchase-gated org creation — ✅ Shipped (#265 gate + #266 console)
 
 Make "create another organization" a paid, entitlement-gated action.
 

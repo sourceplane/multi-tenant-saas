@@ -54,7 +54,7 @@ payer; child orgs roll their usage up to it.
 | ID | Milestone | Status |
 |----|-----------|--------|
 | MO1 | Schema + resolution seam (`parent_org_id`, `effectiveBillingOrg`) + multi-org entitlements in the plan catalog — **no behavior change** | ✅ Shipped (#253 seam + #257 catalog) |
-| MO2 | Purchase-gated org creation (`feature.multi_org` + `limit.organizations`) with designed upgrade UX (reuse U7) | 🗓️ Planned |
+| MO2 | Purchase-gated org creation (`feature.multi_org` + `limit.organizations`) with designed upgrade UX (reuse U7) | ✅ Shipped (#265 gate + #266 console) |
 | MO3 | Child-org lifecycle + entitlement fan-out (attach/detach; re-fan-out on plan change/cancel) | 🗓️ Planned |
 | MO4 | Consolidated billing + usage rollup at the parent (summary/invoices/usage) | 🗓️ Planned |
 | MO5 | Console: account-grouped org switcher, gated "create organization", account billing on the default org | 🗓️ Planned |
