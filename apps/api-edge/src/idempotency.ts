@@ -206,22 +206,39 @@ export async function replayOrExecute(
       const url = new URL(request.url);
       const cacheKey = await buildCacheKey(parsed.key, url.pathname);
 
-      // --- Cache lookup (timed as edge_idem) ---
+      // --- Lookup (timed as edge_idem): colo-local Cache API L1, then KV. ---
+      // KV stays the GLOBAL source of truth (a cross-colo retry must still find
+      // the stored response). The Cache API layer is colo-local and serves
+      // same-colo replays without the ~40-90ms KV `get`. An idempotency envelope
+      // is write-once per key, so L1 can never diverge from KV for a given key.
       let stored: StoredEnvelopeV1 | null = null;
-      try {
-        const rawStored = await gate.measure("edge_idem", () => kv.get(cacheKey, "text"));
-        if (rawStored) {
-          stored = parseEnvelope(rawStored);
+      let backfillL1 = false;
+      const endIdem = gate.start("edge_idem");
+      stored = await idemCacheGet(cacheKey);
+      if (!stored) {
+        try {
+          const rawStored = await kv.get(cacheKey, "text");
+          if (rawStored) {
+            stored = parseEnvelope(rawStored);
+            backfillL1 = stored !== null;
+          }
+        } catch (err) {
+          // KV read failure is not fatal — log and proceed as if cache-miss.
+          logKvFailure("get", err, requestId);
         }
-      } catch (err) {
-        // KV read failure is not fatal — log and proceed as if cache-miss.
-        logKvFailure("get", err, requestId);
+      }
+      endIdem();
+
+      // Backfill L1 from a KV hit so the next same-colo replay skips KV. Off the
+      // timed path — it's a side effect, not part of the lookup the caller waits on.
+      if (backfillL1 && stored) {
+        await idemCachePut(cacheKey, stored);
       }
 
       if (stored) {
         response = mergeRateLimitHeaders(reconstructResponse(stored), rateHeaders);
       } else {
-        // --- Cache miss: execute downstream, then store. ---
+        // --- Cache miss: execute downstream, then store to KV (global) + L1. ---
         const fresh = await downstream();
 
         // Only cache "successful" final responses (skip 5xx — transient).
@@ -232,6 +249,8 @@ export async function replayOrExecute(
             await kv.put(cacheKey, JSON.stringify(envelope), {
               expirationTtl: KV_TTL_SECONDS,
             });
+            // Populate the colo-local L1 for fast same-colo replays.
+            await idemCachePut(cacheKey, envelope);
           } catch (err) {
             // KV write failure is not fatal — caller still gets the real response.
             logKvFailure("put", err, requestId);
@@ -337,6 +356,61 @@ async function sha256Hex(input: string): Promise<string> {
     hex += bytes[i]!.toString(16).padStart(2, "0");
   }
   return hex;
+}
+
+// --- Idempotency replay L1 (colo-local Cache API, in front of the KV store) ---
+//
+// The Cache API (`caches.default`) is colo-local and free — a fast accelerator
+// for same-colo replays. KV remains the global source of truth, so cross-colo
+// retries and L1 evictions fall through to KV (correctness preserved). An
+// envelope is write-once per key, so the L1 copy can never diverge from KV.
+// Best-effort throughout: any error degrades to a miss / no-op, never a 5xx.
+
+type CacheLike = {
+  match(key: string): Promise<Response | undefined>;
+  put(key: string, res: Response): Promise<void>;
+};
+
+function idemCache(): CacheLike | null {
+  return typeof caches !== "undefined" &&
+    (caches as unknown as { default?: CacheLike }).default
+    ? (caches as unknown as { default: CacheLike }).default
+    : null;
+}
+
+/** Cache-API key URL for an idempotency `cacheKey` (hashed to stay URL-safe). */
+async function idemCacheKeyUrl(cacheKey: string): Promise<string> {
+  return `https://idem-cache.internal/v1/${await sha256Hex(cacheKey)}`;
+}
+
+async function idemCacheGet(cacheKey: string): Promise<StoredEnvelopeV1 | null> {
+  const c = idemCache();
+  if (!c) return null;
+  try {
+    const res = await c.match(await idemCacheKeyUrl(cacheKey));
+    if (!res) return null;
+    return parseEnvelope(await res.text());
+  } catch {
+    return null;
+  }
+}
+
+async function idemCachePut(cacheKey: string, envelope: StoredEnvelopeV1): Promise<void> {
+  const c = idemCache();
+  if (!c) return;
+  try {
+    const res = new Response(JSON.stringify(envelope), {
+      status: 200,
+      headers: {
+        "content-type": "application/json",
+        // Cache API honours max-age for TTL; match the KV replay window.
+        "cache-control": `max-age=${KV_TTL_SECONDS}`,
+      },
+    });
+    await c.put(await idemCacheKeyUrl(cacheKey), res);
+  } catch {
+    /* best-effort */
+  }
 }
 
 async function buildEnvelope(
