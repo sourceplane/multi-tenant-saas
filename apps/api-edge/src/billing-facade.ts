@@ -9,6 +9,8 @@ const ORG_BILLING_CUSTOMER_RE = /^\/v1\/organizations\/[^/]+\/billing\/customer$
 const ORG_BILLING_SUMMARY_RE = /^\/v1\/organizations\/[^/]+\/billing\/summary$/;
 const ORG_BILLING_INVOICES_RE = /^\/v1\/organizations\/[^/]+\/billing\/invoices$/;
 const ORG_BILLING_ENTITLEMENTS_RE = /^\/v1\/organizations\/[^/]+\/billing\/entitlements$/;
+const ORG_BILLING_CHECKOUT_RE = /^\/v1\/organizations\/[^/]+\/billing\/checkout$/;
+const ORG_BILLING_PORTAL_RE = /^\/v1\/organizations\/[^/]+\/billing\/portal$/;
 
 const FORWARDED_HEADERS = [
   "content-type",
@@ -17,14 +19,23 @@ const FORWARDED_HEADERS = [
   "idempotency-key",
 ];
 
+// checkout/portal are POST (billing.manage); the rest are GET reads.
+const WRITE_BILLING_RES = [ORG_BILLING_CHECKOUT_RE, ORG_BILLING_PORTAL_RE];
+
 export function isBillingRoute(pathname: string): boolean {
   return (
     ORG_BILLING_PLANS_RE.test(pathname) ||
     ORG_BILLING_CUSTOMER_RE.test(pathname) ||
     ORG_BILLING_SUMMARY_RE.test(pathname) ||
     ORG_BILLING_INVOICES_RE.test(pathname) ||
-    ORG_BILLING_ENTITLEMENTS_RE.test(pathname)
+    ORG_BILLING_ENTITLEMENTS_RE.test(pathname) ||
+    ORG_BILLING_CHECKOUT_RE.test(pathname) ||
+    ORG_BILLING_PORTAL_RE.test(pathname)
   );
+}
+
+function isWriteBillingRoute(pathname: string): boolean {
+  return WRITE_BILLING_RES.some((re) => re.test(pathname));
 }
 
 export async function handleBillingRoute(
@@ -33,7 +44,9 @@ export async function handleBillingRoute(
   requestId: string,
   pathname: string,
 ): Promise<Response> {
-  if (request.method !== "GET") {
+  const isWrite = isWriteBillingRoute(pathname);
+  const expectedMethod = isWrite ? "POST" : "GET";
+  if (request.method !== expectedMethod) {
     return errorResponse("unsupported", "Method not allowed", 405, requestId);
   }
 
@@ -71,10 +84,9 @@ export async function handleBillingRoute(
     const target = new URL(pathname + url.search, "https://billing.internal");
 
     try {
-      const downstream = await timings.measure("edge_downstream", () => env.BILLING_WORKER!.fetch(target.toString(), {
-        method: "GET",
-        headers,
-      }));
+      const init: RequestInit = { method: request.method, headers };
+      if (isWrite) init.body = request.body;
+      const downstream = await timings.measure("edge_downstream", () => env.BILLING_WORKER!.fetch(target.toString(), init));
       const res = new Response(downstream.body, {
         status: downstream.status,
         headers: downstream.headers,

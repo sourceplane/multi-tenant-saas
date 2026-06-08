@@ -11,6 +11,11 @@ export function parseOrgPublicId(value: string): string | null {
   return parsePublicId(value, "org_");
 }
 
+/** Inverse of parseOrgPublicId: hex UUID → public org id (`org_<32-hex>`). */
+export function orgPublicId(hexUuid: string): string {
+  return "org_" + hexUuid.replace(/-/g, "");
+}
+
 export function parseSubscriptionPublicId(value: string): string | null {
   return parsePublicId(value, "sub_");
 }

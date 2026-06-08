@@ -251,3 +251,32 @@ export interface GetBillingSummaryResponse {
   plan: PublicPlan | null;
   entitlements: PublicEntitlement[];
 }
+
+// ---------------------------------------------------------------------------
+// Checkout & customer portal (provider hand-off)
+// ---------------------------------------------------------------------------
+
+/**
+ * Initiate a hosted checkout to purchase/upgrade a plan. Provider-neutral: the
+ * caller names a plan code and the billing-worker resolves it to the active
+ * provider's product, returning a hosted, safe-to-display checkout URL. Only
+ * purchasable plans (those with a configured provider product) are accepted.
+ */
+export interface CreateCheckoutRequest {
+  /** Stable plan code to purchase (e.g. 'pro', 'business'). */
+  planCode: string;
+}
+
+export interface CreateCheckoutResponse {
+  /** Hosted checkout URL to redirect the buyer to. Safe display URL only — no secrets. */
+  checkoutUrl: string;
+}
+
+/**
+ * Create a hosted customer-portal session for managing the existing
+ * subscription/payment method. No body — the org scope is the URL.
+ */
+export interface CreatePortalSessionResponse {
+  /** Hosted customer-portal URL. Safe display URL only — no secrets. */
+  portalUrl: string;
+}

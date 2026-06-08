@@ -8,6 +8,8 @@ import { handleListEntitlements } from "./handlers/list-entitlements.js";
 import { handleCheckEntitlement } from "./handlers/check-entitlement.js";
 import { handleAssignPlan } from "./handlers/assign-plan.js";
 import { handleWebhookIntake } from "./handlers/webhook-intake.js";
+import { handleCreateCheckout } from "./handlers/create-checkout.js";
+import { handleCreatePortal } from "./handlers/create-portal.js";
 import { errorResponse, notFound, methodNotAllowed } from "./http.js";
 import { generateRequestId, parseOrgPublicId } from "./ids.js";
 
@@ -63,8 +65,20 @@ const CUSTOMER_RE = /^\/v1\/organizations\/([^/]+)\/billing\/customer$/;
 const SUMMARY_RE = /^\/v1\/organizations\/([^/]+)\/billing\/summary$/;
 const INVOICES_RE = /^\/v1\/organizations\/([^/]+)\/billing\/invoices$/;
 const ENTITLEMENTS_RE = /^\/v1\/organizations\/([^/]+)\/billing\/entitlements$/;
+const CHECKOUT_RE = /^\/v1\/organizations\/([^/]+)\/billing\/checkout$/;
+const PORTAL_RE = /^\/v1\/organizations\/([^/]+)\/billing\/portal$/;
 
-type RouteKind = "plans" | "customer" | "summary" | "invoices" | "entitlements";
+type RouteKind =
+  | "plans"
+  | "customer"
+  | "summary"
+  | "invoices"
+  | "entitlements"
+  | "checkout"
+  | "portal";
+
+// checkout/portal are POST (provider hand-off writes); the rest are GET reads.
+const WRITE_KINDS: ReadonlySet<RouteKind> = new Set<RouteKind>(["checkout", "portal"]);
 
 interface MatchedRoute {
   kind: RouteKind;
@@ -78,6 +92,8 @@ function matchRoute(pathname: string): MatchedRoute | null {
     [SUMMARY_RE, "summary"],
     [INVOICES_RE, "invoices"],
     [ENTITLEMENTS_RE, "entitlements"],
+    [CHECKOUT_RE, "checkout"],
+    [PORTAL_RE, "portal"],
   ];
   for (const [re, kind] of patterns) {
     const m = pathname.match(re);
@@ -149,7 +165,8 @@ export async function route(request: Request, env: Env): Promise<Response> {
       return notFound(requestId, url.pathname);
     }
 
-    if (request.method !== "GET") {
+    const expectedMethod = WRITE_KINDS.has(matched.kind) ? "POST" : "GET";
+    if (request.method !== expectedMethod) {
       return methodNotAllowed(requestId);
     }
 
@@ -169,6 +186,10 @@ export async function route(request: Request, env: Env): Promise<Response> {
         return handleListInvoices(request, env, requestId, actor, matched.orgId);
       case "entitlements":
         return handleListEntitlements(request, env, requestId, actor, matched.orgId);
+      case "checkout":
+        return handleCreateCheckout(request, env, requestId, actor, matched.orgId);
+      case "portal":
+        return handleCreatePortal(request, env, requestId, actor, matched.orgId);
     }
   } catch {
     return errorResponse("internal_error", "Internal error", 500, requestId);
