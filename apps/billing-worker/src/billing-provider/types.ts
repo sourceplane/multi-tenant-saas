@@ -137,6 +137,13 @@ export interface BillingProvider {
   /** Look up the provider customer mirrored to our org id, or null. */
   getCustomerByExternalId(externalId: string): Promise<ProviderCustomerRef | null>;
   /**
+   * Whether the org's provider customer already has an active subscription.
+   * Determines whether an "upgrade" is a first checkout or a portal-managed plan
+   * change — most providers (incl. Polar) reject a second subscription created
+   * via checkout, so paid→paid changes go through the customer portal.
+   */
+  hasActiveSubscription(externalId: string): Promise<boolean>;
+  /**
    * Verify a webhook signature over the RAW body bytes and normalize it.
    * Implementations MUST fail closed (`invalid_signature`) on any verification
    * failure — never trust an unverified payload.

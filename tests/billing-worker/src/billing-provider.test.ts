@@ -24,6 +24,9 @@ function fakeProvider(id: BillingProvider["id"]): BillingProvider {
     async getCustomerByExternalId(): Promise<ProviderCustomerRef | null> {
       return null;
     },
+    async hasActiveSubscription(): Promise<boolean> {
+      return false;
+    },
     async verifyWebhook(): Promise<VerifyWebhookResult> {
       return { ok: false, reason: "invalid_signature" };
     },

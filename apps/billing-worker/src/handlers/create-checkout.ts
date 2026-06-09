@@ -5,6 +5,7 @@ import { errorResponse, successResponse, validationError } from "../http.js";
 import { authorizeBillingManage } from "../policy.js";
 import { isKnownPlanCode } from "../plan-catalog.js";
 import { orgPublicId } from "../ids.js";
+import { resolveBillingOrgHex } from "../billing-scope.js";
 import { buildBillingProviderRegistry } from "../billing-provider/polar.js";
 import { parsePolarConfig } from "../billing-provider/polar-mapping.js";
 import type { BillingProviderRegistry } from "../billing-provider/registry.js";
@@ -12,14 +13,16 @@ import type { BillingProviderRegistry } from "../billing-provider/registry.js";
 /**
  * POST /v1/organizations/:orgId/billing/checkout (BP2).
  *
- * Authorize `billing.manage`, resolve the plan code to the active provider's
- * product (`POLAR_PRODUCT_MAP`), and return a hosted checkout URL. The org's
- * public id is set as the provider customer's external id so the resulting
- * subscription webhook maps back to this org. Only purchasable plans (those
- * with a configured product) are accepted — free/enterprise are rejected.
+ * Authorize `billing.manage`, resolve the plan to the active provider's product
+ * (`POLAR_PRODUCT_MAP`), and return a URL to redirect to:
+ *   - first purchase (no active subscription) → a hosted **checkout** URL;
+ *   - existing subscriber (plan change) → the customer **portal** URL, since
+ *     providers reject a second subscription via checkout ("You already have an
+ *     active subscription"). `mode` distinguishes the two.
  *
- * This creates no local state; the plan is applied by the verified webhook
- * (BP2 intake) after payment completes.
+ * Binds to the account's billing org (a child resolves to its parent — MO4) and
+ * only accepts purchasable plans (free/enterprise are rejected). Creates no
+ * local state; the plan is applied by the verified webhook (BP2 intake).
  */
 
 export interface CreateCheckoutDeps {
@@ -68,16 +71,28 @@ export async function handleCreateCheckout(
     return errorResponse("provider_unavailable", "Billing provider not configured", 503, requestId);
   }
 
+  // Target the account's billing org (a child's purchase/change is the parent's
+  // single subscription — MO4). Standalone orgs resolve to themselves.
+  const billingOrgPublicId = orgPublicId(await resolveBillingOrgHex(env, orgId, requestId));
+
   try {
+    // If the account already has an active subscription, a plan change can't be
+    // a second checkout (the provider rejects it) — route to the customer portal.
+    if (await resolved.provider.hasActiveSubscription(billingOrgPublicId)) {
+      const portal = await resolved.provider.createPortalSession({ orgId: billingOrgPublicId });
+      const body: CreateCheckoutResponse = { checkoutUrl: portal.portalUrl, mode: "portal" };
+      return successResponse(body, requestId);
+    }
+
     const result = await resolved.provider.createCheckout({
-      orgId: orgPublicId(orgId),
+      orgId: billingOrgPublicId,
       planCode,
       productId,
       successUrl: env.POLAR_SUCCESS_URL ?? "",
     });
-    const body: CreateCheckoutResponse = { checkoutUrl: result.checkoutUrl };
+    const body: CreateCheckoutResponse = { checkoutUrl: result.checkoutUrl, mode: "checkout" };
     return successResponse(body, requestId);
   } catch {
-    return errorResponse("provider_error", "Failed to create checkout session", 502, requestId);
+    return errorResponse("provider_error", "Failed to start plan change", 502, requestId);
   }
 }

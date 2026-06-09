@@ -20,7 +20,7 @@ interface Recorder {
   portal: CreatePortalSessionInput[];
 }
 
-function recordingRegistry(rec: Recorder, opts: { resolveFail?: "not_configured"; throwOn?: "checkout" | "portal" } = {}): BillingProviderRegistry {
+function recordingRegistry(rec: Recorder, opts: { resolveFail?: "not_configured"; throwOn?: "checkout" | "portal"; hasActiveSub?: boolean } = {}): BillingProviderRegistry {
   const provider: BillingProvider = {
     id: "polar",
     createCheckout: async (input) => {
@@ -34,6 +34,7 @@ function recordingRegistry(rec: Recorder, opts: { resolveFail?: "not_configured"
       return { portalUrl: "https://polar.test/portal/abc" };
     },
     getCustomerByExternalId: async () => null,
+    hasActiveSubscription: async () => opts.hasActiveSub ?? false,
     verifyWebhook: async () => ({ ok: false, reason: "invalid_signature" }),
   };
   return {
@@ -67,6 +68,24 @@ describe("handleCreateCheckout", () => {
     expect(rec.checkout[0]!.orgId).toBe(ORG_PUBLIC);
     expect(rec.checkout[0]!.productId).toBe("prod_b");
     expect(rec.checkout[0]!.planCode).toBe("business");
+    const body2 = body as { data: { mode?: string } };
+    expect(body2.data.mode).toBe("checkout");
+  });
+
+  it("routes an existing subscriber's plan change to the portal (no second checkout)", async () => {
+    const rec: Recorder = { checkout: [], portal: [] };
+    const res = await handleCreateCheckout(checkoutReq({ planCode: "business" }), env, "req_t", ACTOR, ORG_HEX, {
+      registry: recordingRegistry(rec, { hasActiveSub: true }),
+      productMap: PRODUCT_MAP,
+      authorize: allow,
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { data: { checkoutUrl: string; mode: string } };
+    expect(body.data.mode).toBe("portal");
+    expect(body.data.checkoutUrl).toBe("https://polar.test/portal/abc");
+    // No checkout was attempted; the portal session was created instead.
+    expect(rec.checkout).toHaveLength(0);
+    expect(rec.portal[0]!.orgId).toBe(ORG_PUBLIC);
   });
 
   it("rejects an unknown plan code (400)", async () => {

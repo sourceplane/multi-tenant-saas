@@ -82,6 +82,7 @@ function fullProvider(verify: VerifyWebhookResult): BillingProvider {
     createCheckout: async () => ({ checkoutUrl: "https://x/checkout" }),
     createPortalSession: async () => ({ portalUrl: "https://x/portal" }),
     getCustomerByExternalId: async () => null,
+    hasActiveSubscription: async () => false,
     verifyWebhook: async () => verify,
   };
 }
