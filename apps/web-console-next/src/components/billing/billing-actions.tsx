@@ -4,7 +4,7 @@ import * as React from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "next-themes";
 import { Loader2 } from "lucide-react";
-import type { PublicPlan } from "@saas/contracts/billing";
+import type { ListPaymentMethodsResponse, PublicPlan } from "@saas/contracts/billing";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useSession } from "@/lib/session";
@@ -24,6 +24,7 @@ const PORTAL_KEY = "__portal__";
 const POLL_ATTEMPTS = 20;
 const POLL_INTERVAL_MS = 1500;
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+const capitalize = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 
 /**
  * "Manage plan" card (BP2 + embedded-checkout UX).
@@ -57,6 +58,14 @@ export function BillingActions({
 
   const upgrades = selectUpgradePlans(plans.data?.plans ?? [], activePlanCode);
   const canManage = hasManageableSubscription(activePlanCode);
+
+  // Card on file — only relevant once there's a paid subscription.
+  const pm = useApiQuery<ListPaymentMethodsResponse>(
+    ["billing", "paymentMethods", orgId],
+    () => wrap(() => client.billing.listPaymentMethods(orgId)),
+    { enabled: canManage },
+  );
+  const card = pm.data?.paymentMethods?.[0] ?? null;
 
   const refreshBilling = React.useCallback(() => {
     void qc.invalidateQueries({ queryKey: qk.billingSummary(orgId) });
@@ -298,14 +307,24 @@ export function BillingActions({
             </Button>
           ))}
           {canManage ? (
-            <Button
-              variant="outline"
-              loading={busy === PORTAL_KEY}
-              disabled={busy !== null || finalizing || canceling}
-              onClick={() => void openPortal()}
-            >
-              Update payment method
-            </Button>
+            <span className="flex items-center gap-2">
+              {card ? (
+                <span className="text-sm text-muted-foreground">
+                  {capitalize(card.brand)} •••• {card.last4}
+                  <span className="text-muted-foreground/70">
+                    {" "}· exp {String(card.expMonth).padStart(2, "0")}/{String(card.expYear).slice(-2)}
+                  </span>
+                </span>
+              ) : null}
+              <Button
+                variant="outline"
+                loading={busy === PORTAL_KEY}
+                disabled={busy !== null || finalizing || canceling}
+                onClick={() => void openPortal()}
+              >
+                {card ? "Update payment method" : "Add payment method"}
+              </Button>
+            </span>
           ) : null}
           {canManage && !confirmCancel ? (
             <Button

@@ -17,6 +17,7 @@ import type {
   CreateCheckoutResult,
   CreatePortalSessionInput,
   CreatePortalSessionResult,
+  ProviderPaymentMethod,
   ProviderCustomerRef,
   ProviderWebhookHeaders,
   VerifyWebhookResult,
@@ -99,6 +100,38 @@ export function createPolarProvider(config: PolarConfig): BillingProvider {
         { id: input.providerSubscriptionId, customerSubscriptionUpdate: { productId: input.productId } },
       );
       return { changed: true };
+    },
+
+    async listPaymentMethods(externalId) {
+      try {
+        const res = await client.customers.listPaymentMethodsExternal({ externalId });
+        const out: ProviderPaymentMethod[] = [];
+        for (const item of res.result.items) {
+          // Read card fields defensively — the SDK item is a union (card |
+          // generic) whose discriminant doesn't narrow cleanly here.
+          const m = item as unknown as {
+            id?: unknown;
+            type?: unknown;
+            methodMetadata?: { brand?: unknown; last4?: unknown; expMonth?: unknown; expYear?: unknown };
+          };
+          if (m.type !== "card" || !m.methodMetadata) continue;
+          const md = m.methodMetadata;
+          if (
+            typeof m.id === "string" &&
+            typeof md.brand === "string" &&
+            typeof md.last4 === "string" &&
+            typeof md.expMonth === "number" &&
+            typeof md.expYear === "number"
+          ) {
+            out.push({ id: m.id, brand: md.brand, last4: md.last4, expMonth: md.expMonth, expYear: md.expYear });
+          }
+        }
+        return out;
+      } catch {
+        // Display-only: a missing customer / provider blip should not error the
+        // billing page — just show no card on file.
+        return [];
+      }
     },
 
     async hasActiveSubscription(externalId: string): Promise<boolean> {

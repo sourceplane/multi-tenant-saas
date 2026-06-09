@@ -94,6 +94,18 @@ export interface ChangeSubscriptionPlanResult {
   changed: boolean;
 }
 
+/** A normalized, safe-to-display saved card. Never carries full PAN or secrets. */
+export interface ProviderPaymentMethod {
+  /** Opaque provider payment-method id. */
+  id: string;
+  /** Card brand, e.g. "visa". */
+  brand: string;
+  /** Last 4 digits only (safe to display). */
+  last4: string;
+  expMonth: number;
+  expYear: number;
+}
+
 /** Provider-specific subset of webhook headers needed for signature verification. */
 export type ProviderWebhookHeaders = Record<string, string>;
 
@@ -195,6 +207,12 @@ export interface BillingProvider {
   changeSubscriptionPlan(
     input: ChangeSubscriptionPlanInput,
   ): Promise<ChangeSubscriptionPlanResult>;
+  /**
+   * List the org's saved cards (safe display fields only). Read server-side with
+   * the org token so no provider session/token reaches the console. Used to show
+   * the card on file next to the (PCI-gated) "Update payment method" deep-link.
+   */
+  listPaymentMethods(externalId: string): Promise<ProviderPaymentMethod[]>;
   /**
    * Verify a webhook signature over the RAW body bytes and normalize it.
    * Implementations MUST fail closed (`invalid_signature`) on any verification

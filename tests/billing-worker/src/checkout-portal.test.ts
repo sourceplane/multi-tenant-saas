@@ -7,6 +7,7 @@ import {
 import { handleCreatePortal } from "@billing-worker/handlers/create-portal";
 import { handleCancelSubscription } from "@billing-worker/handlers/cancel-subscription";
 import { handleChangePlan } from "@billing-worker/handlers/change-plan";
+import { handleListPaymentMethods } from "@billing-worker/handlers/list-payment-methods";
 import type { Env } from "@billing-worker/env";
 import type { ActorContext } from "@billing-worker/router";
 import type { BillingProviderRegistry } from "@billing-worker/billing-provider/registry";
@@ -16,6 +17,7 @@ import type {
   ChangeSubscriptionPlanInput,
   CreateCheckoutInput,
   CreatePortalSessionInput,
+  ProviderPaymentMethod,
 } from "@billing-worker/billing-provider/types";
 
 const ORG_HEX = "2f65ddde-1f5b-4e93-8c0b-80e030e31229";
@@ -31,7 +33,7 @@ interface Recorder {
   change: ChangeSubscriptionPlanInput[];
 }
 
-function recordingRegistry(rec: Recorder, opts: { resolveFail?: "not_configured"; throwOn?: "checkout" | "portal" | "cancel" | "change"; hasActiveSub?: boolean } = {}): BillingProviderRegistry {
+function recordingRegistry(rec: Recorder, opts: { resolveFail?: "not_configured"; throwOn?: "checkout" | "portal" | "cancel" | "change"; hasActiveSub?: boolean; cards?: ProviderPaymentMethod[] } = {}): BillingProviderRegistry {
   const provider: BillingProvider = {
     id: "polar",
     createCheckout: async (input) => {
@@ -56,6 +58,8 @@ function recordingRegistry(rec: Recorder, opts: { resolveFail?: "not_configured"
       if (opts.throwOn === "change") throw new Error("provider down");
       return { changed: true };
     },
+    listPaymentMethods: async () =>
+      opts.cards ?? [{ id: "pm_1", brand: "visa", last4: "4242", expMonth: 8, expYear: 2027 }],
     verifyWebhook: async () => ({ ok: false, reason: "invalid_signature" }),
   };
   return {
@@ -326,6 +330,40 @@ describe("handleCancelSubscription", () => {
       getActiveSubscription: async () => ({ planId: "plan_pro", providerSubscriptionId: "sub_1" }),
     });
     expect(res.status).toBe(502);
+  });
+});
+
+describe("handleListPaymentMethods", () => {
+  function pmReq(): Request {
+    return new Request("https://billing/v1/organizations/x/billing/payment-methods", { method: "GET" });
+  }
+
+  it("returns the saved cards (safe display fields)", async () => {
+    const rec: Recorder = { checkout: [], portal: [], cancel: [], change: [] };
+    const res = await handleListPaymentMethods(pmReq(), env, "req_t", ACTOR, ORG_HEX, {
+      registry: recordingRegistry(rec), authorize: allow,
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { data: { paymentMethods: Array<{ brand: string; last4: string }> } };
+    expect(body.data.paymentMethods[0]).toMatchObject({ brand: "visa", last4: "4242" });
+  });
+
+  it("returns an empty list when the provider is not configured (page still renders)", async () => {
+    const rec: Recorder = { checkout: [], portal: [], cancel: [], change: [] };
+    const res = await handleListPaymentMethods(pmReq(), env, "req_t", ACTOR, ORG_HEX, {
+      registry: recordingRegistry(rec, { resolveFail: "not_configured" }), authorize: allow,
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { data: { paymentMethods: unknown[] } };
+    expect(body.data.paymentMethods).toEqual([]);
+  });
+
+  it("returns the deny response when not authorized", async () => {
+    const rec: Recorder = { checkout: [], portal: [], cancel: [], change: [] };
+    const res = await handleListPaymentMethods(pmReq(), env, "req_t", ACTOR, ORG_HEX, {
+      registry: recordingRegistry(rec), authorize: deny,
+    });
+    expect(res.status).toBe(404);
   });
 });
 
