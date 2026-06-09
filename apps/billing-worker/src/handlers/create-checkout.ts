@@ -1,14 +1,50 @@
 import type { Env } from "../env.js";
 import type { ActorContext } from "../router.js";
 import type { CreateCheckoutResponse } from "@saas/contracts/billing";
+import { createSqlExecutor } from "@saas/db/hyperdrive";
+import { createBillingRepository } from "@saas/db/billing";
 import { errorResponse, successResponse, validationError } from "../http.js";
 import { authorizeBillingManage } from "../policy.js";
-import { isKnownPlanCode } from "../plan-catalog.js";
+import { isKnownPlanCode, getPlanDefinition, DEFAULT_PLAN_CODE } from "../plan-catalog.js";
 import { orgPublicId } from "../ids.js";
 import { resolveBillingOrgHex } from "../billing-scope.js";
 import { buildBillingProviderRegistry } from "../billing-provider/polar.js";
 import { parsePolarConfig } from "../billing-provider/polar-mapping.js";
 import type { BillingProviderRegistry } from "../billing-provider/registry.js";
+
+/** The internal free-plan row id; an active subscription on any other plan means
+ *  the account already subscribes (so plan changes go through the portal). */
+const FREE_PLAN_ID = getPlanDefinition(DEFAULT_PLAN_CODE)?.id ?? "plan_free";
+
+/**
+ * Authoritative "is the account already a paying subscriber?" signal — read from
+ * OUR billing state (what the console shows), not a provider API call. An active
+ * subscription on a non-free plan ⇒ a plan change, which must go through the
+ * customer portal. Fails safe to `false` (→ checkout) if state is unavailable.
+ */
+async function accountHasPaidSubscription(
+  env: Env,
+  billingOrgHex: string,
+  deps: CreateCheckoutDeps,
+): Promise<boolean> {
+  if (deps.getActiveSubscription) {
+    const sub = await deps.getActiveSubscription(billingOrgHex);
+    return sub !== null && sub.planId !== FREE_PLAN_ID;
+  }
+  if (!env.SOURCEPLANE_DB) return false;
+  const executor = createSqlExecutor(env.SOURCEPLANE_DB);
+  try {
+    const repo = createBillingRepository(executor);
+    const res = await repo.getActiveSubscription(billingOrgHex);
+    return res.ok && res.value.planId !== FREE_PLAN_ID;
+  } catch {
+    return false;
+  } finally {
+    if ("dispose" in executor && typeof executor.dispose === "function") {
+      await executor.dispose();
+    }
+  }
+}
 
 /**
  * POST /v1/organizations/:orgId/billing/checkout (BP2).
@@ -29,6 +65,9 @@ export interface CreateCheckoutDeps {
   registry?: BillingProviderRegistry;
   productMap?: Record<string, string>;
   authorize?: typeof authorizeBillingManage;
+  /** Injectable "active subscription for this billing org" lookup (tests); the
+   *  default reads the billing repo. `null` = no active subscription. */
+  getActiveSubscription?: (billingOrgHex: string) => Promise<{ planId: string } | null>;
 }
 
 export async function handleCreateCheckout(
@@ -73,12 +112,18 @@ export async function handleCreateCheckout(
 
   // Target the account's billing org (a child's purchase/change is the parent's
   // single subscription — MO4). Standalone orgs resolve to themselves.
-  const billingOrgPublicId = orgPublicId(await resolveBillingOrgHex(env, orgId, requestId));
+  const billingOrgHex = await resolveBillingOrgHex(env, orgId, requestId);
+  const billingOrgPublicId = orgPublicId(billingOrgHex);
 
   try {
-    // If the account already has an active subscription, a plan change can't be
-    // a second checkout (the provider rejects it) — route to the customer portal.
-    if (await resolved.provider.hasActiveSubscription(billingOrgPublicId)) {
+    // A plan change for an account that already subscribes can't be a second
+    // checkout (the provider rejects it: "You already have an active
+    // subscription") — route to the customer portal. Decide from OUR billing
+    // state primarily; the provider check is a secondary safety net.
+    const alreadySubscribed =
+      (await accountHasPaidSubscription(env, billingOrgHex, deps)) ||
+      (await resolved.provider.hasActiveSubscription(billingOrgPublicId));
+    if (alreadySubscribed) {
       const portal = await resolved.provider.createPortalSession({ orgId: billingOrgPublicId });
       const body: CreateCheckoutResponse = { checkoutUrl: portal.portalUrl, mode: "portal" };
       return successResponse(body, requestId);
