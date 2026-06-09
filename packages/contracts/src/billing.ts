@@ -272,6 +272,13 @@ export interface CreateCheckoutRequest {
    * the provider. Server-validated; ignored if malformed.
    */
   embedOrigin?: string;
+  /**
+   * Root-relative console path (e.g. `/orgs/acme/settings/billing?checkout=complete`)
+   * to return the buyer to after a hosted (non-embedded) checkout. Combined with
+   * `embedOrigin` server-side into a same-origin success URL so the fallback path
+   * still lands back in the console. Server-validated; ignored if malformed.
+   */
+  returnPath?: string;
 }
 
 export interface CreateCheckoutResponse {

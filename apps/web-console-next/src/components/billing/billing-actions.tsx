@@ -88,11 +88,59 @@ export function BillingActions({
     }
   }, [activePlanCode, client, orgId, refreshBilling, toast]);
 
+  // Hosted (non-embedded) fallback return: the provider redirects the buyer back
+  // to this page with `?checkout=complete`. Mirror the embed's finalizing flow —
+  // poll until the (first-purchase) plan goes paid, then refresh — and strip the
+  // flag so a manual refresh doesn't re-trigger it.
+  const handledReturn = React.useRef(false);
+  React.useEffect(() => {
+    if (handledReturn.current) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("checkout") !== "complete") return;
+    handledReturn.current = true;
+    params.delete("checkout");
+    const qs = params.toString();
+    window.history.replaceState(null, "", window.location.pathname + (qs ? `?${qs}` : ""));
+
+    const isPaid = (c: string | null) => c !== null && c !== "free";
+    void (async () => {
+      if (isPaid(activePlanCode)) {
+        refreshBilling();
+        toast({ kind: "success", title: "Upgrade complete", description: "Your new plan is active." });
+        return;
+      }
+      setFinalizing(true);
+      const res = await pollForPlanChange({
+        fromPlanCode: "free", // checkout is always a first purchase (free → paid)
+        attempts: POLL_ATTEMPTS,
+        intervalMs: POLL_INTERVAL_MS,
+        sleep,
+        fetchPlanCode: async () => {
+          const r = await wrap(() => client.billing.getSummary(orgId));
+          return r.ok ? (r.data.plan?.code ?? null) : null;
+        },
+      });
+      refreshBilling();
+      setFinalizing(false);
+      toast(
+        res.changed
+          ? { kind: "success", title: "Upgrade complete", description: "Your new plan is active." }
+          : { kind: "default", title: "Payment received", description: "We're finalizing your upgrade — it'll appear here shortly." },
+      );
+    })();
+  }, [activePlanCode, client, orgId, refreshBilling, toast]);
+
   const startCheckout = React.useCallback(
     async (planCode: string) => {
       setBusy(planCode);
       const r = await wrap(() =>
-        client.billing.createCheckout(orgId, { planCode, embedOrigin: window.location.origin }),
+        client.billing.createCheckout(orgId, {
+          planCode,
+          embedOrigin: window.location.origin,
+          // Where the hosted (non-embedded) fallback returns the buyer: back to
+          // this billing page, flagged so it shows the finalizing state on return.
+          returnPath: `${window.location.pathname}?checkout=complete`,
+        }),
       );
       if (!r.ok) {
         setBusy(null);

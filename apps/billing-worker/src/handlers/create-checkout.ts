@@ -40,6 +40,38 @@ export function validateEmbedOrigin(raw: unknown): string | null {
 }
 
 /**
+ * Validate a client-supplied return path: a root-relative path within the
+ * console (e.g. `/orgs/acme/settings/billing?checkout=complete`). It is appended
+ * to the validated `embedOrigin` to build the provider success URL, so the buyer
+ * returns into the console even on the full-page (non-embedded) fallback. Reject
+ * absolute/protocol-relative/backslash/control-char inputs so it can only ever
+ * be same-origin as `embedOrigin` (no open redirect). Returns the path or null.
+ */
+export function validateReturnPath(raw: unknown): string | null {
+  if (typeof raw !== "string" || raw.length === 0 || raw.length > 512) return null;
+  if (!raw.startsWith("/")) return null; // must be root-relative
+  if (raw.startsWith("//") || raw.startsWith("/\\")) return null; // not protocol-relative
+  if (raw.includes("\\")) return null;
+  if (/[\x00-\x1f\x7f]/.test(raw)) return null; // no control chars
+  return raw;
+}
+
+/**
+ * Build the provider success URL the buyer returns to after a hosted (non-
+ * embedded) checkout. Prefer a same-origin URL from the validated embed origin +
+ * return path so the buyer lands back in the console; fall back to the per-env
+ * `POLAR_SUCCESS_URL`, then to empty (provider default page).
+ */
+export function buildSuccessUrl(
+  embedOrigin: string | null,
+  returnPath: string | null,
+  envSuccessUrl: string | undefined,
+): string {
+  if (embedOrigin && returnPath) return `${embedOrigin}${returnPath}`;
+  return envSuccessUrl ?? "";
+}
+
+/**
  * Authoritative "is the account already a paying subscriber?" signal — read from
  * OUR billing state (what the console shows), not a provider API call. An active
  * subscription on a non-free plan ⇒ a plan change, which must go through the
@@ -120,6 +152,12 @@ export async function handleCreateCheckout(
   const embedOrigin = validateEmbedOrigin(
     (payload as { embedOrigin?: unknown } | null)?.embedOrigin,
   );
+  // Optional: a root-relative console path to return the buyer to after a hosted
+  // (non-embedded) checkout. Combined with embedOrigin into a same-origin success
+  // URL so the buyer lands back in the console; ignored if malformed.
+  const returnPath = validateReturnPath(
+    (payload as { returnPath?: unknown } | null)?.returnPath,
+  );
 
   const productMap = deps.productMap ?? parsePolarConfig(env)?.productMap ?? {};
   const productId = productMap[planCode];
@@ -161,7 +199,7 @@ export async function handleCreateCheckout(
       orgId: billingOrgPublicId,
       planCode,
       productId,
-      successUrl: env.POLAR_SUCCESS_URL ?? "",
+      successUrl: buildSuccessUrl(embedOrigin, returnPath, env.POLAR_SUCCESS_URL),
       ...(embedOrigin ? { embedOrigin } : {}),
     });
     const body: CreateCheckoutResponse = { checkoutUrl: result.checkoutUrl, mode: "checkout" };

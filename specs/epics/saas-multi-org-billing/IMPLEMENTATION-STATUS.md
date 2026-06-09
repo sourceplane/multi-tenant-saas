@@ -28,6 +28,7 @@ This file tracks PR-level as-built state, kept distinct from the design/plan doc
 | BP0 — provider interface + registry | ✅ Shipped | #254 | `BillingProvider` interface + `NormalizedEvent` union + config-driven registry (`BILLING_PROVIDER`, default polar) that fails closed. Dormant — empty adapter map until BP1. |
 | BP1 — Polar adapter | ✅ Shipped | #260 | `@polar-sh/sdk` checkout/portal/customer + Standard-Webhooks `validateEvent` (fails closed) → `NormalizedEvent`. Bundles in workerd (156 KiB gzip). |
 | BP2 — edge + contracts + SDK + console | ✅ Shipped | #261, #262, #263 | Public webhook intake (api-edge → billing-worker → assign-plan/downgrade), checkout/portal endpoints + contracts + SDK, and the console upgrade/manage-billing UI. Polar live end-to-end. |
+| BP2.1 — in-app checkout UX | ✅ Shipped | #277 | Embedded checkout overlay (`@polar-sh/checkout`) so the buyer stays in the console + a "finalizing…" state that polls the summary until the webhook applies the plan. Follow-up adds `embedOrigin`/`returnPath` so the hosted (non-embedded) fallback returns same-origin into the console; `POLAR_SUCCESS_URL` is the per-env last-resort fallback. |
 | BP3 — Stripe adapter + switch policy | 🗓️ Planned | — | |
 | BP4 — hardening (reconcile, observability, dunning) | 🗓️ Planned | — | |
 
