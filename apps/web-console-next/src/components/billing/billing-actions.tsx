@@ -40,9 +40,16 @@ const capitalize = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : 
 export function BillingActions({
   orgId,
   activePlanCode,
+  providerManaged,
 }: {
   orgId: string;
   activePlanCode: string | null;
+  /**
+   * Whether the active subscription is backed by a provider subscription we can
+   * act on. A paid plan assigned administratively (no provider subscription)
+   * can't be changed/canceled/charged here, so those actions are hidden.
+   */
+  providerManaged: boolean;
 }) {
   const { client } = useSession();
   const { toast } = useToast();
@@ -60,13 +67,18 @@ export function BillingActions({
 
   const upgrades = selectUpgradePlans(plans.data?.plans ?? [], activePlanCode);
   const downgrades = selectDowngradePlans(plans.data?.plans ?? [], activePlanCode);
-  const canManage = hasManageableSubscription(activePlanCode);
+  const isPaid = hasManageableSubscription(activePlanCode);
+  // Provider-backed self-serve actions need a provider subscription.
+  const manageable = isPaid && providerManaged;
+  // A paid plan with no provider subscription (e.g. assigned by an admin) — show
+  // an explanation instead of actions that would fail at the provider.
+  const unmanagedPaid = isPaid && !providerManaged;
 
   // Card on file — only relevant once there's a paid subscription.
   const pm = useApiQuery<ListPaymentMethodsResponse>(
     ["billing", "paymentMethods", orgId],
     () => wrap(() => client.billing.listPaymentMethods(orgId)),
-    { enabled: canManage },
+    { enabled: manageable },
   );
   const card = pm.data?.paymentMethods?.[0] ?? null;
 
@@ -152,10 +164,10 @@ export function BillingActions({
     async (planCode: string) => {
       setBusy(planCode);
 
-      // Existing paid subscriber → change the plan natively (no hosted-portal
-      // redirect). The webhook re-materializes the new plan, so poll until it
-      // lands, mirroring the upgrade-finalize flow.
-      if (canManage) {
+      // Existing provider-managed subscriber → change the plan natively (no
+      // hosted-portal redirect). The webhook re-materializes the new plan, so
+      // poll until it lands, mirroring the upgrade-finalize flow.
+      if (manageable) {
         const r = await wrap(() => client.billing.changePlan(orgId, { planCode }));
         if (!r.ok) {
           setBusy(null);
@@ -226,7 +238,7 @@ export function BillingActions({
         window.location.assign(r.data.checkoutUrl);
       }
     },
-    [canManage, activePlanCode, client, orgId, toast, onCheckoutSuccess, resolvedTheme, refreshBilling],
+    [manageable, activePlanCode, client, orgId, toast, onCheckoutSuccess, resolvedTheme, refreshBilling],
   );
 
   // Updating the card is the one PCI-gated action that must stay on the hosted
@@ -277,8 +289,8 @@ export function BillingActions({
     );
   }, [activePlanCode, client, orgId, refreshBilling, toast]);
 
-  // Nothing to offer (e.g. already on the top tier with no portal yet).
-  if (upgrades.length === 0 && downgrades.length === 0 && !canManage) return null;
+  // Nothing to offer (e.g. free with no upgrade and nothing to manage).
+  if (upgrades.length === 0 && downgrades.length === 0 && !isPaid) return null;
 
   return (
     <Card>
@@ -298,18 +310,26 @@ export function BillingActions({
             {statusMsg}
           </div>
         ) : null}
+        {unmanagedPaid ? (
+          <p className="text-sm text-muted-foreground">
+            This plan was assigned by an administrator and isn’t managed through self-serve billing.
+            Contact support to change or cancel it.
+          </p>
+        ) : null}
         <div className="flex flex-wrap items-center gap-3">
-          {upgrades.map((p) => (
-            <Button
-              key={p.code}
-              loading={busy === p.code}
-              disabled={busy !== null || finalizing || canceling}
-              onClick={() => void startCheckout(p.code)}
-            >
-              Upgrade to {p.name} · {formatPlanPrice(p)}
-            </Button>
-          ))}
-          {downgrades.map((p) =>
+          {!unmanagedPaid &&
+            upgrades.map((p) => (
+              <Button
+                key={p.code}
+                loading={busy === p.code}
+                disabled={busy !== null || finalizing || canceling}
+                onClick={() => void startCheckout(p.code)}
+              >
+                Upgrade to {p.name} · {formatPlanPrice(p)}
+              </Button>
+            ))}
+          {manageable &&
+            downgrades.map((p) =>
             confirmChange === p.code ? (
               <span key={p.code} className="flex items-center gap-2 text-sm text-muted-foreground">
                 Switch to {p.name} ({formatPlanPrice(p)})?
@@ -339,7 +359,7 @@ export function BillingActions({
               </Button>
             ),
           )}
-          {canManage ? (
+          {manageable ? (
             <span className="flex items-center gap-2">
               {card ? (
                 <span className="text-sm text-muted-foreground">
@@ -359,7 +379,7 @@ export function BillingActions({
               </Button>
             </span>
           ) : null}
-          {canManage && !confirmCancel ? (
+          {manageable && !confirmCancel ? (
             <Button
               variant="ghost"
               disabled={busy !== null || finalizing || canceling}
@@ -368,7 +388,7 @@ export function BillingActions({
               Cancel plan
             </Button>
           ) : null}
-          {canManage && confirmCancel ? (
+          {manageable && confirmCancel ? (
             <span className="flex items-center gap-2 text-sm text-muted-foreground">
               Cancel your plan and move to Free?
               <Button variant="destructive" loading={canceling} disabled={finalizing} onClick={() => void doCancel()}>

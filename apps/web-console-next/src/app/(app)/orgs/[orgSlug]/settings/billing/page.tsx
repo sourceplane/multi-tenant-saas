@@ -98,7 +98,11 @@ function Inner({ orgId }: { orgId: string }) {
       ) : null}
 
       {/* Manage plan: upgrade checkout + customer portal */}
-      <BillingActions orgId={orgId} activePlanCode={summary.data?.plan?.code ?? null} />
+      <BillingActions
+        orgId={orgId}
+        activePlanCode={summary.data?.plan?.code ?? null}
+        providerManaged={!!summary.data?.activeSubscription?.providerSubscriptionId}
+      />
 
       {/* Entitlements */}
       <section className="space-y-2">
