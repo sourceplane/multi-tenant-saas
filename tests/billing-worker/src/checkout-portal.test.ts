@@ -1,4 +1,9 @@
-import { handleCreateCheckout, validateEmbedOrigin } from "@billing-worker/handlers/create-checkout";
+import {
+  handleCreateCheckout,
+  validateEmbedOrigin,
+  validateReturnPath,
+  buildSuccessUrl,
+} from "@billing-worker/handlers/create-checkout";
 import { handleCreatePortal } from "@billing-worker/handlers/create-portal";
 import type { Env } from "@billing-worker/env";
 import type { ActorContext } from "@billing-worker/router";
@@ -135,6 +140,32 @@ describe("handleCreateCheckout", () => {
     expect(rec.checkout[0]!.embedOrigin).toBeUndefined();
   });
 
+  it("builds a same-origin successUrl from embedOrigin + returnPath", async () => {
+    const rec: Recorder = { checkout: [], portal: [] };
+    await handleCreateCheckout(
+      checkoutReq({
+        planCode: "pro",
+        embedOrigin: "https://app.example.com",
+        returnPath: "/orgs/acme/settings/billing?checkout=complete",
+      }),
+      env, "req_t", ACTOR, ORG_HEX,
+      { registry: recordingRegistry(rec), productMap: PRODUCT_MAP, authorize: allow, getActiveSubscription: async () => ({ planId: "plan_free" }) },
+    );
+    expect(rec.checkout[0]!.successUrl).toBe(
+      "https://app.example.com/orgs/acme/settings/billing?checkout=complete",
+    );
+  });
+
+  it("ignores a malformed returnPath (falls back to env success url, here empty)", async () => {
+    const rec: Recorder = { checkout: [], portal: [] };
+    await handleCreateCheckout(
+      checkoutReq({ planCode: "pro", embedOrigin: "https://app.example.com", returnPath: "https://evil.com/x" }),
+      env, "req_t", ACTOR, ORG_HEX,
+      { registry: recordingRegistry(rec), productMap: PRODUCT_MAP, authorize: allow, getActiveSubscription: async () => ({ planId: "plan_free" }) },
+    );
+    expect(rec.checkout[0]!.successUrl).toBe("");
+  });
+
   it("rejects an unknown plan code (400)", async () => {
     const rec: Recorder = { checkout: [], portal: [] };
     const res = await handleCreateCheckout(checkoutReq({ planCode: "platinum" }), env, "req_t", ACTOR, ORG_HEX, {
@@ -206,6 +237,45 @@ describe("validateEmbedOrigin", () => {
     expect(validateEmbedOrigin("")).toBeNull();
     expect(validateEmbedOrigin(undefined)).toBeNull();
     expect(validateEmbedOrigin(123)).toBeNull();
+  });
+});
+
+describe("validateReturnPath", () => {
+  it("accepts root-relative paths (with query)", () => {
+    expect(validateReturnPath("/orgs/acme/settings/billing")).toBe("/orgs/acme/settings/billing");
+    expect(validateReturnPath("/orgs/acme/settings/billing?checkout=complete")).toBe(
+      "/orgs/acme/settings/billing?checkout=complete",
+    );
+  });
+  it("rejects absolute, protocol-relative, backslash, control-char, and junk", () => {
+    expect(validateReturnPath("https://evil.com/x")).toBeNull();
+    expect(validateReturnPath("//evil.com")).toBeNull();
+    expect(validateReturnPath("/\\evil.com")).toBeNull();
+    expect(validateReturnPath("relative/no-slash")).toBeNull();
+    expect(validateReturnPath("/has\\backslash")).toBeNull();
+    expect(validateReturnPath("/has\nnewline")).toBeNull();
+    expect(validateReturnPath("")).toBeNull();
+    expect(validateReturnPath(undefined)).toBeNull();
+    expect(validateReturnPath(123)).toBeNull();
+  });
+});
+
+describe("buildSuccessUrl", () => {
+  it("combines embedOrigin + returnPath when both present", () => {
+    expect(buildSuccessUrl("https://app.example.com", "/orgs/x/billing", undefined)).toBe(
+      "https://app.example.com/orgs/x/billing",
+    );
+  });
+  it("falls back to the env success url when origin/path missing", () => {
+    expect(buildSuccessUrl(null, "/orgs/x/billing", "https://fallback.example.com/")).toBe(
+      "https://fallback.example.com/",
+    );
+    expect(buildSuccessUrl("https://app.example.com", null, "https://fallback.example.com/")).toBe(
+      "https://fallback.example.com/",
+    );
+  });
+  it("returns empty string when nothing is configured", () => {
+    expect(buildSuccessUrl(null, null, undefined)).toBe("");
   });
 });
 
