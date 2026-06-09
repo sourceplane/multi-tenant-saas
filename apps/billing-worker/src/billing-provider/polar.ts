@@ -73,6 +73,18 @@ export function createPolarProvider(config: PolarConfig): BillingProvider {
       }
     },
 
+    async hasActiveSubscription(externalId: string): Promise<boolean> {
+      try {
+        const res = await client.subscriptions.list({ externalCustomerId: externalId, active: true, limit: 1 });
+        return res.result.items.length > 0;
+      } catch {
+        // Fail toward checkout: if we can't tell, don't block a first purchase.
+        // (A genuinely-subscribed customer would then re-hit the provider's own
+        // "already subscribed" guard — no worse than before this check existed.)
+        return false;
+      }
+    },
+
     async verifyWebhook(
       rawBody: string,
       headers: ProviderWebhookHeaders,

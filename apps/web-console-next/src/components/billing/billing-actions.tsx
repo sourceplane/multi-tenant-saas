@@ -47,6 +47,11 @@ export function BillingActions({
         toast({ kind: "error", title: "Could not start checkout", description: r.error.message });
         return;
       }
+      // Existing subscribers change plans in the customer portal (the provider
+      // forbids a second checkout) — let them know before the redirect.
+      if (r.data.mode === "portal") {
+        toast({ kind: "default", title: "Manage your plan", description: "Opening your billing portal to change your plan." });
+      }
       window.location.assign(r.data.checkoutUrl);
     },
     [client, orgId, toast],

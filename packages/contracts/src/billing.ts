@@ -268,8 +268,15 @@ export interface CreateCheckoutRequest {
 }
 
 export interface CreateCheckoutResponse {
-  /** Hosted checkout URL to redirect the buyer to. Safe display URL only — no secrets. */
+  /** Hosted URL to redirect the buyer to. Safe display URL only — no secrets. */
   checkoutUrl: string;
+  /**
+   * Whether the URL is a fresh `checkout` (first purchase) or the customer
+   * `portal` (plan change for an org that already has an active subscription —
+   * providers manage paid→paid changes there). The client redirects to
+   * `checkoutUrl` regardless; `mode` lets it tailor its copy.
+   */
+  mode?: "checkout" | "portal";
 }
 
 /**
