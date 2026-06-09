@@ -88,6 +88,32 @@ describe("handleCreateCheckout", () => {
     expect(rec.portal[0]!.orgId).toBe(ORG_PUBLIC);
   });
 
+  it("routes to the portal from OUR billing state (paid plan) even if the provider check is false", async () => {
+    const rec: Recorder = { checkout: [], portal: [] };
+    const res = await handleCreateCheckout(checkoutReq({ planCode: "business" }), env, "req_t", ACTOR, ORG_HEX, {
+      registry: recordingRegistry(rec), // provider.hasActiveSubscription → false
+      productMap: PRODUCT_MAP,
+      authorize: allow,
+      getActiveSubscription: async () => ({ planId: "plan_pro" }),
+    });
+    const body = (await res.json()) as { data: { mode: string } };
+    expect(body.data.mode).toBe("portal");
+    expect(rec.checkout).toHaveLength(0);
+  });
+
+  it("checks out a first purchase when the active plan is free", async () => {
+    const rec: Recorder = { checkout: [], portal: [] };
+    const res = await handleCreateCheckout(checkoutReq({ planCode: "pro" }), env, "req_t", ACTOR, ORG_HEX, {
+      registry: recordingRegistry(rec),
+      productMap: PRODUCT_MAP,
+      authorize: allow,
+      getActiveSubscription: async () => ({ planId: "plan_free" }),
+    });
+    const body = (await res.json()) as { data: { mode: string } };
+    expect(body.data.mode).toBe("checkout");
+    expect(rec.checkout).toHaveLength(1);
+  });
+
   it("rejects an unknown plan code (400)", async () => {
     const rec: Recorder = { checkout: [], portal: [] };
     const res = await handleCreateCheckout(checkoutReq({ planCode: "platinum" }), env, "req_t", ACTOR, ORG_HEX, {
