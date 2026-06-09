@@ -142,6 +142,28 @@ describe("handleWebhookIntake", () => {
     expect(state.subscriptions[0]!.orgId).toBe(ORG_HEX);
   });
 
+  it("triggers child refanout after subscription.activated (MO3)", async () => {
+    const state: State = { subscriptions: [], entitlements: [] };
+    const calls: Array<{ org: string; mode: string }> = [];
+    const d = {
+      ...deps(subEvent(), state),
+      syncChildren: async (org: string, mode: "refanout" | "freeze") => { calls.push({ org, mode }); },
+    };
+    await handleWebhookIntake(intakeReq(), env, "req_t", d);
+    expect(calls).toEqual([{ org: ORG_PUBLIC, mode: "refanout" }]);
+  });
+
+  it("triggers child freeze after subscription.canceled (MO3)", async () => {
+    const state: State = { subscriptions: [], entitlements: [] };
+    const calls: Array<{ org: string; mode: string }> = [];
+    const d = {
+      ...deps(subEvent({ type: "subscription.canceled" }), state),
+      syncChildren: async (org: string, mode: "refanout" | "freeze") => { calls.push({ org, mode }); },
+    };
+    await handleWebhookIntake(intakeReq(), env, "req_t", d);
+    expect(calls).toEqual([{ org: ORG_PUBLIC, mode: "freeze" }]);
+  });
+
   it("downgrades to free on subscription.canceled", async () => {
     const state: State = { subscriptions: [], entitlements: [] };
     const verify = subEvent({ type: "subscription.canceled" });

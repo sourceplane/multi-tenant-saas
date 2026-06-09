@@ -155,6 +155,33 @@ export function createMembershipRepository(executor: SqlExecutor): MembershipRep
       }
     },
 
+    async listChildOrganizations(parentOrgId: string): Promise<MembershipResult<Organization[]>> {
+      try {
+        const result = await executor.execute<Record<string, unknown>>(
+          `SELECT * FROM membership.organizations WHERE parent_org_id = $1 ORDER BY created_at ASC`,
+          [parentOrgId],
+        );
+        return { ok: true, value: result.rows.map(mapOrganization) };
+      } catch (err) {
+        return safeError("Failed to list child organizations", err);
+      }
+    },
+
+    async setOrganizationStatus(orgId: string, status: string, updatedAt: Date): Promise<MembershipResult<Organization>> {
+      try {
+        const result = await executor.execute<Record<string, unknown>>(
+          `UPDATE membership.organizations SET status = $2, updated_at = $3 WHERE id = $1 RETURNING *`,
+          [orgId, status, updatedAt.toISOString()],
+        );
+        if (result.rowCount === 0) {
+          return { ok: false, error: { kind: "not_found" } };
+        }
+        return { ok: true, value: mapOrganization(result.rows[0]!) };
+      } catch (err) {
+        return safeError("Failed to set organization status", err);
+      }
+    },
+
     async listOrganizationsForSubject(subjectId: string): Promise<MembershipResult<Organization[]>> {
       try {
         const result = await executor.execute<Record<string, unknown>>(

@@ -56,3 +56,32 @@ export async function fetchAuthorizationContext(
 
   return { ok: true, memberships: typed.memberships };
 }
+
+export type SyncChildrenMode = "refanout" | "freeze";
+
+/**
+ * Ask membership-worker to re-sync a billing parent's child orgs after the
+ * parent's plan changed (MO3): "refanout" re-copies the parent's entitlements
+ * onto each child and reactivates them; "freeze" suspends them. BEST-EFFORT —
+ * a failure never fails webhook intake; children reconcile on the next event.
+ */
+export async function syncAccountChildren(
+  membershipWorker: Fetcher,
+  parentOrgPublicId: string,
+  mode: SyncChildrenMode,
+  requestId: string,
+): Promise<{ ok: boolean }> {
+  try {
+    const response = await membershipWorker.fetch(
+      "http://membership-worker/v1/internal/membership/account/children-sync",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-request-id": requestId },
+        body: JSON.stringify({ parentOrgId: parentOrgPublicId, mode }),
+      },
+    );
+    return { ok: response.ok };
+  } catch {
+    return { ok: false };
+  }
+}
