@@ -1,25 +1,38 @@
 "use client";
 
 import * as React from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Loader2 } from "lucide-react";
 import type { PublicPlan } from "@saas/contracts/billing";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useSession } from "@/lib/session";
 import { useToast } from "@/components/ui/toast";
-import { useApiQuery } from "@/lib/query";
+import { useApiQuery, qk } from "@/lib/query";
 import { wrap } from "@/lib/api";
-import { formatPlanPrice, hasManageableSubscription, selectUpgradePlans } from "./plan-actions";
+import {
+  formatPlanPrice,
+  hasManageableSubscription,
+  selectUpgradePlans,
+  pollForPlanChange,
+} from "./plan-actions";
 
 const PORTAL_KEY = "__portal__";
 
+/** How long to wait for the provider webhook to apply the plan after checkout. */
+const POLL_ATTEMPTS = 20;
+const POLL_INTERVAL_MS = 1500;
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
 /**
- * "Manage plan" card (BP2): self-serve upgrade checkout + customer portal.
+ * "Manage plan" card (BP2 + embedded-checkout UX).
  *
- * Upgrade buttons are derived from the catalog (purchasable plans above/aside
- * the current one); "Manage billing" appears once the org has a paid plan.
- * Both POST to the billing endpoints and redirect the browser to the hosted
- * provider URL. The plan change itself is applied by the verified webhook, not
- * here — so on return the summary reflects the new plan after the webhook lands.
+ * Upgrades open Polar's checkout as an **in-app embedded overlay** (the buyer
+ * never leaves the console). On success the plan is applied asynchronously by
+ * the verified webhook, so we show a "Finalizing your upgrade…" state and poll
+ * the billing summary until the new plan lands, then refresh the page's billing
+ * queries. Existing subscribers' plan changes still hand off to the hosted
+ * customer portal (the provider forbids a second checkout), which is a redirect.
  */
 export function BillingActions({
   orgId,
@@ -30,31 +43,88 @@ export function BillingActions({
 }) {
   const { client } = useSession();
   const { toast } = useToast();
+  const qc = useQueryClient();
   const plans = useApiQuery<{ plans: PublicPlan[] }>(["billing", "plans", orgId], () =>
     wrap(() => client.billing.listPlans(orgId)),
   );
   const [busy, setBusy] = React.useState<string | null>(null);
+  const [finalizing, setFinalizing] = React.useState(false);
 
   const upgrades = selectUpgradePlans(plans.data?.plans ?? [], activePlanCode);
   const canManage = hasManageableSubscription(activePlanCode);
 
+  const refreshBilling = React.useCallback(() => {
+    void qc.invalidateQueries({ queryKey: qk.billingSummary(orgId) });
+    void qc.invalidateQueries({ queryKey: qk.entitlements(orgId) });
+    void qc.invalidateQueries({ queryKey: qk.invoices(orgId) });
+    void qc.invalidateQueries({ queryKey: ["billing", "plans", orgId] });
+  }, [qc, orgId]);
+
+  // After the embedded checkout reports success, wait for the webhook to apply
+  // the plan, then refresh the page so it reflects the new state.
+  const onCheckoutSuccess = React.useCallback(async () => {
+    setFinalizing(true);
+    const result = await pollForPlanChange({
+      fromPlanCode: activePlanCode,
+      attempts: POLL_ATTEMPTS,
+      intervalMs: POLL_INTERVAL_MS,
+      sleep,
+      fetchPlanCode: async () => {
+        const r = await wrap(() => client.billing.getSummary(orgId));
+        return r.ok ? (r.data.plan?.code ?? null) : activePlanCode;
+      },
+    });
+    refreshBilling();
+    setFinalizing(false);
+    setBusy(null);
+    if (result.changed) {
+      toast({ kind: "success", title: "Upgrade complete", description: "Your new plan is active." });
+    } else {
+      toast({
+        kind: "default",
+        title: "Payment received",
+        description: "We're finalizing your upgrade — it'll appear here shortly.",
+      });
+    }
+  }, [activePlanCode, client, orgId, refreshBilling, toast]);
+
   const startCheckout = React.useCallback(
     async (planCode: string) => {
       setBusy(planCode);
-      const r = await wrap(() => client.billing.createCheckout(orgId, { planCode }));
-      setBusy(null);
+      const r = await wrap(() =>
+        client.billing.createCheckout(orgId, { planCode, embedOrigin: window.location.origin }),
+      );
       if (!r.ok) {
+        setBusy(null);
         toast({ kind: "error", title: "Could not start checkout", description: r.error.message });
         return;
       }
-      // Existing subscribers change plans in the customer portal (the provider
-      // forbids a second checkout) — let them know before the redirect.
+
+      // Existing subscribers change plans in the hosted customer portal (the
+      // provider forbids a second checkout) — that path is a redirect.
       if (r.data.mode === "portal") {
         toast({ kind: "default", title: "Manage your plan", description: "Opening your billing portal to change your plan." });
+        window.location.assign(r.data.checkoutUrl);
+        return;
       }
-      window.location.assign(r.data.checkoutUrl);
+
+      // First purchase → embed Polar's checkout in-app. Fall back to a full-page
+      // redirect if the embed can't load (e.g. script/network failure).
+      try {
+        const { PolarEmbedCheckout } = await import("@polar-sh/checkout/embed");
+        const checkout = await PolarEmbedCheckout.create(r.data.checkoutUrl, { theme: "light" });
+        checkout.addEventListener("success", () => {
+          checkout.close();
+          void onCheckoutSuccess();
+        });
+        checkout.addEventListener("close", () => {
+          setBusy((b) => (b === planCode ? null : b));
+        });
+      } catch {
+        window.location.assign(r.data.checkoutUrl);
+      }
     },
-    [client, orgId, toast],
+    [client, orgId, toast, onCheckoutSuccess],
   );
 
   const openPortal = React.useCallback(async () => {
@@ -79,27 +149,38 @@ export function BillingActions({
           Upgrade your plan or manage your subscription and payment method.
         </CardDescription>
       </CardHeader>
-      <CardContent className="flex flex-wrap gap-3">
-        {upgrades.map((p) => (
-          <Button
-            key={p.code}
-            loading={busy === p.code}
-            disabled={busy !== null}
-            onClick={() => void startCheckout(p.code)}
+      <CardContent className="flex flex-col gap-3">
+        {finalizing ? (
+          <div
+            role="status"
+            className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground"
           >
-            Upgrade to {p.name} · {formatPlanPrice(p)}
-          </Button>
-        ))}
-        {canManage ? (
-          <Button
-            variant="outline"
-            loading={busy === PORTAL_KEY}
-            disabled={busy !== null}
-            onClick={() => void openPortal()}
-          >
-            Manage billing
-          </Button>
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Finalizing your upgrade…
+          </div>
         ) : null}
+        <div className="flex flex-wrap gap-3">
+          {upgrades.map((p) => (
+            <Button
+              key={p.code}
+              loading={busy === p.code}
+              disabled={busy !== null || finalizing}
+              onClick={() => void startCheckout(p.code)}
+            >
+              Upgrade to {p.name} · {formatPlanPrice(p)}
+            </Button>
+          ))}
+          {canManage ? (
+            <Button
+              variant="outline"
+              loading={busy === PORTAL_KEY}
+              disabled={busy !== null || finalizing}
+              onClick={() => void openPortal()}
+            >
+              Manage billing
+            </Button>
+          ) : null}
+        </div>
       </CardContent>
     </Card>
   );

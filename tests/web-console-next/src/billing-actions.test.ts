@@ -2,8 +2,11 @@ import {
   selectUpgradePlans,
   formatPlanPrice,
   hasManageableSubscription,
+  pollForPlanChange,
 } from "@web-console-next/components/billing/plan-actions";
 import type { PublicPlan } from "@saas/contracts/billing";
+
+const noSleep = () => Promise.resolve();
 
 function plan(over: Partial<PublicPlan>): PublicPlan {
   return {
@@ -67,5 +70,56 @@ describe("hasManageableSubscription", () => {
     expect(hasManageableSubscription("business")).toBe(true);
     expect(hasManageableSubscription("free")).toBe(false);
     expect(hasManageableSubscription(null)).toBe(false);
+  });
+});
+
+describe("pollForPlanChange", () => {
+  it("resolves changed once the plan code differs from the starting plan", async () => {
+    let calls = 0;
+    const res = await pollForPlanChange({
+      fromPlanCode: "free",
+      attempts: 5,
+      intervalMs: 1,
+      sleep: noSleep,
+      fetchPlanCode: async () => {
+        calls += 1;
+        return calls < 3 ? "free" : "pro"; // webhook lands on the 3rd poll
+      },
+    });
+    expect(res).toEqual({ changed: true, planCode: "pro" });
+    expect(calls).toBe(3);
+  });
+
+  it("gives up after the attempt budget when the plan never changes", async () => {
+    let calls = 0;
+    const res = await pollForPlanChange({
+      fromPlanCode: "free",
+      attempts: 4,
+      intervalMs: 1,
+      sleep: noSleep,
+      fetchPlanCode: async () => {
+        calls += 1;
+        return "free";
+      },
+    });
+    expect(res).toEqual({ changed: false, planCode: "free" });
+    expect(calls).toBe(4);
+  });
+
+  it("swallows transient fetch errors and keeps polling", async () => {
+    let calls = 0;
+    const res = await pollForPlanChange({
+      fromPlanCode: "free",
+      attempts: 5,
+      intervalMs: 1,
+      sleep: noSleep,
+      fetchPlanCode: async () => {
+        calls += 1;
+        if (calls === 1) throw new Error("network blip");
+        return calls >= 3 ? "business" : "free";
+      },
+    });
+    expect(res.changed).toBe(true);
+    expect(res.planCode).toBe("business");
   });
 });

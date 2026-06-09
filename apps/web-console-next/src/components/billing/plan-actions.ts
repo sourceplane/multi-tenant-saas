@@ -44,3 +44,43 @@ export function formatPlanPrice(plan: PublicPlan): string {
 export function hasManageableSubscription(activePlanCode: string | null): boolean {
   return activePlanCode !== null && activePlanCode !== "free";
 }
+
+export interface PollPlanChangeOptions {
+  /** Re-read the current plan code (e.g. from the billing summary). */
+  fetchPlanCode: () => Promise<string | null>;
+  /** The plan the buyer was on before checkout. */
+  fromPlanCode: string | null;
+  /** How many times to poll before giving up. */
+  attempts: number;
+  /** Delay between polls. */
+  intervalMs: number;
+  /** Injectable delay (tests pass a no-op). */
+  sleep: (ms: number) => Promise<void>;
+}
+
+/**
+ * After an embedded checkout succeeds, the plan is applied asynchronously by the
+ * provider webhook (seconds later) — not by the checkout call. Poll the billing
+ * summary until the plan code changes from what the buyer started on (or the
+ * attempt budget is exhausted), so the console can mask the webhook lag with a
+ * "finalizing…" state instead of showing the stale plan. Pure + injectable so
+ * it unit-tests without real timers. Transient fetch errors are swallowed and
+ * retried; a thrown predicate never escapes.
+ */
+export async function pollForPlanChange(
+  opts: PollPlanChangeOptions,
+): Promise<{ changed: boolean; planCode: string | null }> {
+  let planCode = opts.fromPlanCode;
+  for (let i = 0; i < opts.attempts; i++) {
+    await opts.sleep(opts.intervalMs);
+    try {
+      planCode = await opts.fetchPlanCode();
+    } catch {
+      continue; // transient — keep polling
+    }
+    if (planCode !== opts.fromPlanCode) {
+      return { changed: true, planCode };
+    }
+  }
+  return { changed: false, planCode };
+}

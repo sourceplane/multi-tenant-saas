@@ -1,4 +1,4 @@
-import { handleCreateCheckout } from "@billing-worker/handlers/create-checkout";
+import { handleCreateCheckout, validateEmbedOrigin } from "@billing-worker/handlers/create-checkout";
 import { handleCreatePortal } from "@billing-worker/handlers/create-portal";
 import type { Env } from "@billing-worker/env";
 import type { ActorContext } from "@billing-worker/router";
@@ -114,6 +114,27 @@ describe("handleCreateCheckout", () => {
     expect(rec.checkout).toHaveLength(1);
   });
 
+  it("forwards a valid embedOrigin to the provider (enables in-app embedded checkout)", async () => {
+    const rec: Recorder = { checkout: [], portal: [] };
+    await handleCreateCheckout(
+      checkoutReq({ planCode: "pro", embedOrigin: "https://app.example.com" }),
+      env, "req_t", ACTOR, ORG_HEX,
+      { registry: recordingRegistry(rec), productMap: PRODUCT_MAP, authorize: allow, getActiveSubscription: async () => ({ planId: "plan_free" }) },
+    );
+    expect(rec.checkout[0]!.embedOrigin).toBe("https://app.example.com");
+  });
+
+  it("ignores a malformed embedOrigin (still checks out, no embed origin)", async () => {
+    const rec: Recorder = { checkout: [], portal: [] };
+    await handleCreateCheckout(
+      checkoutReq({ planCode: "pro", embedOrigin: "https://evil.example.com/path?x=1" }),
+      env, "req_t", ACTOR, ORG_HEX,
+      { registry: recordingRegistry(rec), productMap: PRODUCT_MAP, authorize: allow, getActiveSubscription: async () => ({ planId: "plan_free" }) },
+    );
+    expect(rec.checkout).toHaveLength(1);
+    expect(rec.checkout[0]!.embedOrigin).toBeUndefined();
+  });
+
   it("rejects an unknown plan code (400)", async () => {
     const rec: Recorder = { checkout: [], portal: [] };
     const res = await handleCreateCheckout(checkoutReq({ planCode: "platinum" }), env, "req_t", ACTOR, ORG_HEX, {
@@ -165,6 +186,26 @@ describe("handleCreateCheckout", () => {
       authorize: allow,
     });
     expect(res.status).toBe(502);
+  });
+});
+
+describe("validateEmbedOrigin", () => {
+  it("accepts a bare https origin", () => {
+    expect(validateEmbedOrigin("https://app.example.com")).toBe("https://app.example.com");
+    expect(validateEmbedOrigin("https://console.acme.io:8443")).toBe("https://console.acme.io:8443");
+  });
+  it("accepts http only for localhost (dev)", () => {
+    expect(validateEmbedOrigin("http://localhost:3000")).toBe("http://localhost:3000");
+    expect(validateEmbedOrigin("http://127.0.0.1:3000")).toBe("http://127.0.0.1:3000");
+  });
+  it("rejects http for non-localhost, paths/queries, and junk", () => {
+    expect(validateEmbedOrigin("http://app.example.com")).toBeNull();
+    expect(validateEmbedOrigin("https://app.example.com/checkout")).toBeNull();
+    expect(validateEmbedOrigin("https://app.example.com?x=1")).toBeNull();
+    expect(validateEmbedOrigin("not a url")).toBeNull();
+    expect(validateEmbedOrigin("")).toBeNull();
+    expect(validateEmbedOrigin(undefined)).toBeNull();
+    expect(validateEmbedOrigin(123)).toBeNull();
   });
 });
 
