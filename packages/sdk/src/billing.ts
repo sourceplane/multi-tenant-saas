@@ -13,6 +13,7 @@ import type {
   GetEntitlementsResponse,
   ListInvoicesRequest,
   ListInvoicesResponse,
+  ListPaymentMethodsResponse,
   ListPlansRequest,
   ListPlansResponse,
 } from "@saas/contracts/billing";
@@ -199,6 +200,20 @@ export class BillingClient {
       {
         method: "POST",
         path: `/v1/organizations/${encodeURIComponent(orgId)}/billing/subscription/cancel`,
+      },
+      opts,
+    );
+  }
+
+  /** GET /v1/organizations/:orgId/billing/payment-methods */
+  listPaymentMethods(
+    orgId: string,
+    opts: RequestOptions = {},
+  ): Promise<ListPaymentMethodsResponse> {
+    return this.transport.request<ListPaymentMethodsResponse>(
+      {
+        method: "GET",
+        path: `/v1/organizations/${encodeURIComponent(orgId)}/billing/payment-methods`,
       },
       opts,
     );

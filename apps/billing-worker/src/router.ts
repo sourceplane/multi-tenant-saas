@@ -13,6 +13,7 @@ import { handleCreateCheckout } from "./handlers/create-checkout.js";
 import { handleCreatePortal } from "./handlers/create-portal.js";
 import { handleCancelSubscription } from "./handlers/cancel-subscription.js";
 import { handleChangePlan } from "./handlers/change-plan.js";
+import { handleListPaymentMethods } from "./handlers/list-payment-methods.js";
 import { errorResponse, notFound, methodNotAllowed } from "./http.js";
 import { generateRequestId, parseOrgPublicId } from "./ids.js";
 
@@ -68,6 +69,7 @@ const CUSTOMER_RE = /^\/v1\/organizations\/([^/]+)\/billing\/customer$/;
 const SUMMARY_RE = /^\/v1\/organizations\/([^/]+)\/billing\/summary$/;
 const INVOICES_RE = /^\/v1\/organizations\/([^/]+)\/billing\/invoices$/;
 const ENTITLEMENTS_RE = /^\/v1\/organizations\/([^/]+)\/billing\/entitlements$/;
+const PAYMENT_METHODS_RE = /^\/v1\/organizations\/([^/]+)\/billing\/payment-methods$/;
 const CHECKOUT_RE = /^\/v1\/organizations\/([^/]+)\/billing\/checkout$/;
 const PORTAL_RE = /^\/v1\/organizations\/([^/]+)\/billing\/portal$/;
 const CANCEL_RE = /^\/v1\/organizations\/([^/]+)\/billing\/subscription\/cancel$/;
@@ -79,6 +81,7 @@ type RouteKind =
   | "summary"
   | "invoices"
   | "entitlements"
+  | "paymentMethods"
   | "checkout"
   | "portal"
   | "cancel"
@@ -99,6 +102,7 @@ function matchRoute(pathname: string): MatchedRoute | null {
     [SUMMARY_RE, "summary"],
     [INVOICES_RE, "invoices"],
     [ENTITLEMENTS_RE, "entitlements"],
+    [PAYMENT_METHODS_RE, "paymentMethods"],
     [CHECKOUT_RE, "checkout"],
     [PORTAL_RE, "portal"],
     [CANCEL_RE, "cancel"],
@@ -206,6 +210,8 @@ export async function route(request: Request, env: Env): Promise<Response> {
         return handleListInvoices(request, env, requestId, actor, matched.orgId);
       case "entitlements":
         return handleListEntitlements(request, env, requestId, actor, matched.orgId);
+      case "paymentMethods":
+        return handleListPaymentMethods(request, env, requestId, actor, matched.orgId);
       case "checkout":
         return handleCreateCheckout(request, env, requestId, actor, matched.orgId);
       case "portal":

@@ -9,6 +9,7 @@ const ORG_BILLING_CUSTOMER_RE = /^\/v1\/organizations\/[^/]+\/billing\/customer$
 const ORG_BILLING_SUMMARY_RE = /^\/v1\/organizations\/[^/]+\/billing\/summary$/;
 const ORG_BILLING_INVOICES_RE = /^\/v1\/organizations\/[^/]+\/billing\/invoices$/;
 const ORG_BILLING_ENTITLEMENTS_RE = /^\/v1\/organizations\/[^/]+\/billing\/entitlements$/;
+const ORG_BILLING_PAYMENT_METHODS_RE = /^\/v1\/organizations\/[^/]+\/billing\/payment-methods$/;
 const ORG_BILLING_CHECKOUT_RE = /^\/v1\/organizations\/[^/]+\/billing\/checkout$/;
 const ORG_BILLING_PORTAL_RE = /^\/v1\/organizations\/[^/]+\/billing\/portal$/;
 const ORG_BILLING_CANCEL_RE = /^\/v1\/organizations\/[^/]+\/billing\/subscription\/cancel$/;
@@ -31,6 +32,7 @@ export function isBillingRoute(pathname: string): boolean {
     ORG_BILLING_SUMMARY_RE.test(pathname) ||
     ORG_BILLING_INVOICES_RE.test(pathname) ||
     ORG_BILLING_ENTITLEMENTS_RE.test(pathname) ||
+    ORG_BILLING_PAYMENT_METHODS_RE.test(pathname) ||
     ORG_BILLING_CHECKOUT_RE.test(pathname) ||
     ORG_BILLING_PORTAL_RE.test(pathname) ||
     ORG_BILLING_CANCEL_RE.test(pathname) ||

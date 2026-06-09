@@ -326,3 +326,22 @@ export interface ChangePlanResponse {
   /** True once the provider accepted the plan change (proration handled provider-side). */
   changed: boolean;
 }
+
+/** A saved card, safe-to-display fields only (never a full PAN or secret). */
+export interface PublicPaymentMethod {
+  id: string;
+  /** Card brand, e.g. "visa". */
+  brand: string;
+  /** Last 4 digits only. */
+  last4: string;
+  expMonth: number;
+  expYear: number;
+}
+
+/**
+ * Saved cards on file for the account, shown next to the (PCI-gated) "Update
+ * payment method" deep-link. Display-only; empty when none / provider blip.
+ */
+export interface ListPaymentMethodsResponse {
+  paymentMethods: PublicPaymentMethod[];
+}

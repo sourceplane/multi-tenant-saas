@@ -33,6 +33,9 @@ function fakeProvider(id: BillingProvider["id"]): BillingProvider {
     async changeSubscriptionPlan(): Promise<{ changed: boolean }> {
       return { changed: true };
     },
+    async listPaymentMethods() {
+      return [];
+    },
     async verifyWebhook(): Promise<VerifyWebhookResult> {
       return { ok: false, reason: "invalid_signature" };
     },
