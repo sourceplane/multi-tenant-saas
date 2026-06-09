@@ -39,6 +39,7 @@ export async function handleListOrganizations(
       id: orgPublicId(org.id),
       name: org.name,
       slug: org.slug,
+      status: org.status,
       createdAt: org.createdAt.toISOString(),
     }));
 

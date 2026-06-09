@@ -2,6 +2,12 @@ export interface PublicOrganization {
   id: string;
   name: string;
   slug: string;
+  /**
+   * Lifecycle status (e.g. 'active', 'suspended'). Optional — populated by the
+   * organization list so the console can surface a frozen-child warning (MO3);
+   * other endpoints may omit it.
+   */
+  status?: string;
   createdAt: string;
 }
 
