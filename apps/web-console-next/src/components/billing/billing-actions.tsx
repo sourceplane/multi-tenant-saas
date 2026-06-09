@@ -15,6 +15,7 @@ import {
   formatPlanPrice,
   hasManageableSubscription,
   selectUpgradePlans,
+  selectDowngradePlans,
   pollForPlanChange,
 } from "./plan-actions";
 
@@ -55,8 +56,10 @@ export function BillingActions({
   const [statusMsg, setStatusMsg] = React.useState("Finalizing your upgrade…");
   const [confirmCancel, setConfirmCancel] = React.useState(false);
   const [canceling, setCanceling] = React.useState(false);
+  const [confirmChange, setConfirmChange] = React.useState<string | null>(null);
 
   const upgrades = selectUpgradePlans(plans.data?.plans ?? [], activePlanCode);
+  const downgrades = selectDowngradePlans(plans.data?.plans ?? [], activePlanCode);
   const canManage = hasManageableSubscription(activePlanCode);
 
   // Card on file — only relevant once there's a paid subscription.
@@ -275,14 +278,14 @@ export function BillingActions({
   }, [activePlanCode, client, orgId, refreshBilling, toast]);
 
   // Nothing to offer (e.g. already on the top tier with no portal yet).
-  if (upgrades.length === 0 && !canManage) return null;
+  if (upgrades.length === 0 && downgrades.length === 0 && !canManage) return null;
 
   return (
     <Card>
       <CardHeader>
         <CardTitle className="text-base">Manage plan</CardTitle>
         <CardDescription>
-          Upgrade your plan or manage your subscription and payment method.
+          Upgrade, downgrade, or manage your subscription and payment method.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
@@ -306,6 +309,36 @@ export function BillingActions({
               Upgrade to {p.name} · {formatPlanPrice(p)}
             </Button>
           ))}
+          {downgrades.map((p) =>
+            confirmChange === p.code ? (
+              <span key={p.code} className="flex items-center gap-2 text-sm text-muted-foreground">
+                Switch to {p.name} ({formatPlanPrice(p)})?
+                <Button
+                  variant="outline"
+                  loading={busy === p.code}
+                  disabled={finalizing || canceling}
+                  onClick={() => {
+                    setConfirmChange(null);
+                    void startCheckout(p.code);
+                  }}
+                >
+                  Confirm
+                </Button>
+                <Button variant="ghost" disabled={busy !== null} onClick={() => setConfirmChange(null)}>
+                  Keep current
+                </Button>
+              </span>
+            ) : (
+              <Button
+                key={p.code}
+                variant="outline"
+                disabled={busy !== null || finalizing || canceling || confirmChange !== null}
+                onClick={() => setConfirmChange(p.code)}
+              >
+                Downgrade to {p.name} · {formatPlanPrice(p)}
+              </Button>
+            ),
+          )}
           {canManage ? (
             <span className="flex items-center gap-2">
               {card ? (
