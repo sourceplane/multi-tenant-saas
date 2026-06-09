@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useTheme } from "next-themes";
 import { Loader2 } from "lucide-react";
 import type { PublicPlan } from "@saas/contracts/billing";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -44,6 +45,7 @@ export function BillingActions({
   const { client } = useSession();
   const { toast } = useToast();
   const qc = useQueryClient();
+  const { resolvedTheme } = useTheme();
   const plans = useApiQuery<{ plans: PublicPlan[] }>(["billing", "plans", orgId], () =>
     wrap(() => client.billing.listPlans(orgId)),
   );
@@ -160,7 +162,9 @@ export function BillingActions({
       // redirect if the embed can't load (e.g. script/network failure).
       try {
         const { PolarEmbedCheckout } = await import("@polar-sh/checkout/embed");
-        const checkout = await PolarEmbedCheckout.create(r.data.checkoutUrl, { theme: "light" });
+        // Match the console's theme so the overlay doesn't clash with the app.
+        const theme = resolvedTheme === "light" ? "light" : "dark";
+        const checkout = await PolarEmbedCheckout.create(r.data.checkoutUrl, { theme });
         checkout.addEventListener("success", () => {
           checkout.close();
           void onCheckoutSuccess();
@@ -172,7 +176,7 @@ export function BillingActions({
         window.location.assign(r.data.checkoutUrl);
       }
     },
-    [client, orgId, toast, onCheckoutSuccess],
+    [client, orgId, toast, onCheckoutSuccess, resolvedTheme],
   );
 
   const openPortal = React.useCallback(async () => {
