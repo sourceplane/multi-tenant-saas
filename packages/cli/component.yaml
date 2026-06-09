@@ -5,6 +5,8 @@ metadata:
   description: First-class TypeScript CLI for the Sourceplane control plane API
 spec:
   type: turbo-package
+  lifecycle: production
+  owner: platform
   domain: starter-cli
   subscribe:
     environments:

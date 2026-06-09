@@ -10,6 +10,8 @@ metadata:
 
 spec:
   type: terraform
+  lifecycle: production
+  owner: platform
   domain: infra
 
   parameters:

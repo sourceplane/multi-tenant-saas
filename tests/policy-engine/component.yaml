@@ -4,6 +4,8 @@ metadata:
   name: policy-engine-tests
 spec:
   type: turbo-package
+  lifecycle: production
+  owner: platform
   domain: starter-tests
   subscribe:
     environments:

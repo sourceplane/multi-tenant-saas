@@ -5,6 +5,8 @@ metadata:
   description: Next.js 15 + opennextjs/cloudflare delivery of the Sourceplane web console (per-environment, Workers + Static Assets)
 spec:
   type: cloudflare-workers-assets-turbo
+  lifecycle: production
+  owner: platform
   domain: starter-ui
   path: apps/web-console-next
   subscribe:

@@ -11,6 +11,8 @@ metadata:
 
 spec:
   type: db-migrate
+  lifecycle: production
+  owner: platform
   domain: infra
 
   dependsOn:

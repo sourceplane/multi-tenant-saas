@@ -5,6 +5,8 @@ metadata:
   description: Cloudflare Worker for the Membership org runtime
 spec:
   type: cloudflare-worker-turbo
+  lifecycle: production
+  owner: platform
   domain: starter-runtime
   path: apps/membership-worker
   dependsOn:

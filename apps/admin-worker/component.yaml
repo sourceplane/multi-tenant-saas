@@ -5,6 +5,8 @@ metadata:
   description: Internal Cloudflare Worker for audited support/administration diagnostics
 spec:
   type: cloudflare-worker-turbo
+  lifecycle: production
+  owner: platform
   domain: starter-runtime
   path: apps/admin-worker
   subscribe:

@@ -4,6 +4,8 @@ metadata:
   name: contracts
 spec:
   type: turbo-package
+  lifecycle: production
+  owner: platform
   domain: starter-contracts
   subscribe:
     environments:

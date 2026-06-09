@@ -4,6 +4,8 @@ metadata:
   name: projects-worker-tests
 spec:
   type: turbo-package
+  lifecycle: production
+  owner: platform
   domain: starter-tests
   path: tests/projects-worker
   subscribe:

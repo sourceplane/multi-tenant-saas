@@ -4,6 +4,8 @@ metadata:
   name: db
 spec:
   type: turbo-package
+  lifecycle: production
+  owner: platform
   domain: starter-data
   subscribe:
     environments:

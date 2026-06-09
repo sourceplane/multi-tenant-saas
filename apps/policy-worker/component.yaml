@@ -5,6 +5,8 @@ metadata:
   description: Cloudflare Worker for policy authorization decisions
 spec:
   type: cloudflare-worker-turbo
+  lifecycle: production
+  owner: platform
   domain: starter-runtime
   path: apps/policy-worker
   subscribe:

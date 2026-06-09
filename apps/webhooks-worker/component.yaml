@@ -5,6 +5,8 @@ metadata:
   description: Cloudflare Worker for webhook endpoint, subscription, and delivery-attempt management
 spec:
   type: cloudflare-worker-turbo
+  lifecycle: production
+  owner: platform
   domain: starter-runtime
   path: apps/webhooks-worker
   dependsOn:
