@@ -80,6 +80,20 @@ export interface CancelSubscriptionResult {
   cancelAtPeriodEnd: boolean;
 }
 
+export interface ChangeSubscriptionPlanInput {
+  /** Public org id of the billing parent (the provider external customer id). */
+  orgId: string;
+  /** Opaque provider subscription id to change (resolved from our mirror). */
+  providerSubscriptionId: string;
+  /** Opaque provider product id of the target plan. */
+  productId: string;
+}
+
+export interface ChangeSubscriptionPlanResult {
+  /** True once the provider accepted the plan change (proration handled provider-side). */
+  changed: boolean;
+}
+
 /** Provider-specific subset of webhook headers needed for signature verification. */
 export type ProviderWebhookHeaders = Record<string, string>;
 
@@ -173,6 +187,14 @@ export interface BillingProvider {
    * hosted portal for cancellation.
    */
   cancelSubscription(input: CancelSubscriptionInput): Promise<CancelSubscriptionResult>;
+  /**
+   * Change the org's subscription to a different product (plan). Proration is
+   * handled provider-side; the authoritative re-materialization arrives via the
+   * webhook. Done natively so plan changes need no hosted-portal redirect.
+   */
+  changeSubscriptionPlan(
+    input: ChangeSubscriptionPlanInput,
+  ): Promise<ChangeSubscriptionPlanResult>;
   /**
    * Verify a webhook signature over the RAW body bytes and normalize it.
    * Implementations MUST fail closed (`invalid_signature`) on any verification

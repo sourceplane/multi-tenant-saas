@@ -84,6 +84,7 @@ function fullProvider(verify: VerifyWebhookResult): BillingProvider {
     getCustomerByExternalId: async () => null,
     hasActiveSubscription: async () => false,
     cancelSubscription: async () => ({ cancelAtPeriodEnd: true }),
+    changeSubscriptionPlan: async () => ({ changed: true }),
     verifyWebhook: async () => verify,
   };
 }

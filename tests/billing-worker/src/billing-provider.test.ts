@@ -30,6 +30,9 @@ function fakeProvider(id: BillingProvider["id"]): BillingProvider {
     async cancelSubscription(): Promise<{ cancelAtPeriodEnd: boolean }> {
       return { cancelAtPeriodEnd: true };
     },
+    async changeSubscriptionPlan(): Promise<{ changed: boolean }> {
+      return { changed: true };
+    },
     async verifyWebhook(): Promise<VerifyWebhookResult> {
       return { ok: false, reason: "invalid_signature" };
     },

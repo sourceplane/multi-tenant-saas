@@ -139,6 +139,41 @@ export function BillingActions({
   const startCheckout = React.useCallback(
     async (planCode: string) => {
       setBusy(planCode);
+
+      // Existing paid subscriber → change the plan natively (no hosted-portal
+      // redirect). The webhook re-materializes the new plan, so poll until it
+      // lands, mirroring the upgrade-finalize flow.
+      if (canManage) {
+        const r = await wrap(() => client.billing.changePlan(orgId, { planCode }));
+        if (!r.ok) {
+          setBusy(null);
+          toast({ kind: "error", title: "Could not change plan", description: r.error.message });
+          return;
+        }
+        setStatusMsg("Updating your plan…");
+        setFinalizing(true);
+        const res = await pollForPlanChange({
+          fromPlanCode: activePlanCode,
+          attempts: POLL_ATTEMPTS,
+          intervalMs: POLL_INTERVAL_MS,
+          sleep,
+          fetchPlanCode: async () => {
+            const r2 = await wrap(() => client.billing.getSummary(orgId));
+            return r2.ok ? (r2.data.plan?.code ?? null) : activePlanCode;
+          },
+        });
+        refreshBilling();
+        setFinalizing(false);
+        setBusy(null);
+        toast(
+          res.changed
+            ? { kind: "success", title: "Plan updated", description: "Your new plan is active." }
+            : { kind: "default", title: "Change received", description: "Your plan update is being processed." },
+        );
+        return;
+      }
+
+      // First purchase → embedded checkout.
       const r = await wrap(() =>
         client.billing.createCheckout(orgId, {
           planCode,
@@ -154,16 +189,15 @@ export function BillingActions({
         return;
       }
 
-      // Existing subscribers change plans in the hosted customer portal (the
-      // provider forbids a second checkout) — that path is a redirect.
+      // Safety net: if the server still routes to the hosted portal (e.g. our
+      // billing state lagged), follow the redirect rather than failing.
       if (r.data.mode === "portal") {
-        toast({ kind: "default", title: "Manage your plan", description: "Opening your billing portal to change your plan." });
         window.location.assign(r.data.checkoutUrl);
         return;
       }
 
-      // First purchase → embed Polar's checkout in-app. Fall back to a full-page
-      // redirect if the embed can't load (e.g. script/network failure).
+      // Embed Polar's checkout in-app. Fall back to a full-page redirect if the
+      // embed can't load (e.g. script/network failure).
       try {
         const { PolarEmbedCheckout } = await import("@polar-sh/checkout/embed");
         // Match the console's theme so the overlay doesn't clash with the app.
@@ -180,7 +214,7 @@ export function BillingActions({
         window.location.assign(r.data.checkoutUrl);
       }
     },
-    [client, orgId, toast, onCheckoutSuccess, resolvedTheme],
+    [canManage, activePlanCode, client, orgId, toast, onCheckoutSuccess, resolvedTheme, refreshBilling],
   );
 
   // Updating the card is the one PCI-gated action that must stay on the hosted
