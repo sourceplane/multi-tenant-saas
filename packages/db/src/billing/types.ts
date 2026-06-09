@@ -245,6 +245,23 @@ export interface ListEntitlementsQuery {
   source?: EntitlementSource;
 }
 
+// ── Provider webhook events (idempotent intake) ─────────────
+
+export interface RecordProviderWebhookEventInput {
+  id: string;
+  /** Opaque adapter id ('polar' | 'stripe'). */
+  provider: string;
+  /** Opaque provider event id (Standard Webhooks webhook-id). */
+  eventId: string;
+  /** Provider event type — observability only. */
+  eventType: string;
+}
+
+export interface RecordProviderWebhookEventResult {
+  /** True when this (provider, event_id) was already recorded — caller must skip. */
+  duplicate: boolean;
+}
+
 // ── Billing summary ─────────────────────────────────────────
 
 export interface BillingSummary {
@@ -310,4 +327,9 @@ export interface BillingRepository {
 
   // Billing summary
   getBillingSummary(orgId: string): Promise<BillingResult<BillingSummary>>;
+
+  // Provider webhook intake (idempotency ledger)
+  recordProviderWebhookEvent(
+    input: RecordProviderWebhookEventInput,
+  ): Promise<BillingResult<RecordProviderWebhookEventResult>>;
 }

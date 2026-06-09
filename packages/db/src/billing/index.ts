@@ -26,6 +26,8 @@ export type {
   UpsertEntitlementInput,
   ListEntitlementsQuery,
   BillingSummary,
+  RecordProviderWebhookEventInput,
+  RecordProviderWebhookEventResult,
   BillingRepository,
 } from "./types.js";
 

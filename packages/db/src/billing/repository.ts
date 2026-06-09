@@ -27,6 +27,8 @@ import type {
   UpsertEntitlementInput,
   ListEntitlementsQuery,
   BillingSummary,
+  RecordProviderWebhookEventInput,
+  RecordProviderWebhookEventResult,
 } from "./types.js";
 
 // ── Row mappers ────────────────────────────────────────────
@@ -687,6 +689,30 @@ export function createBillingRepository(executor: SqlExecutor): BillingRepositor
           entitlements: entRes.value,
         },
       };
+    },
+
+    // ── Provider webhook intake (idempotency ledger) ───────────
+    async recordProviderWebhookEvent(
+      input: RecordProviderWebhookEventInput,
+    ): Promise<BillingResult<RecordProviderWebhookEventResult>> {
+      try {
+        const result = await executor.execute<Record<string, unknown>>(
+          `INSERT INTO billing.provider_webhook_events
+             (id, provider, event_id, event_type, received_at)
+           VALUES ($1, $2, $3, $4, now())
+           ON CONFLICT (provider, event_id) DO NOTHING
+           RETURNING id`,
+          [input.id, input.provider, input.eventId, input.eventType],
+        );
+        // rowCount 0 → the (provider, event_id) pair already existed: a redelivery.
+        return { ok: true, value: { duplicate: result.rowCount === 0 } };
+      } catch (err: unknown) {
+        if (isUniqueViolation(err)) {
+          // Concurrent first-delivery race: the other writer won — treat as dup.
+          return { ok: true, value: { duplicate: true } };
+        }
+        return safeError("Failed to record provider webhook event");
+      }
     },
   };
 }

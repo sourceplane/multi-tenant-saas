@@ -1,5 +1,6 @@
 import type { Env } from "../env.js";
 import type { BillingProvider, BillingProviderId } from "./types.js";
+import { createPolarProvider, type PolarServer } from "./polar.js";
 
 /**
  * Billing-provider registry + config resolution (BP0).
@@ -60,11 +61,31 @@ export function createBillingProviderRegistry(
   };
 }
 
+type PolarEnv = Pick<
+  Env,
+  "POLAR_ACCESS_TOKEN" | "POLAR_WEBHOOK_SECRET" | "POLAR_SERVER"
+>;
+
+/** Build the Polar adapter from env, or null when its secrets are not configured. */
+export function buildPolarProvider(env: PolarEnv): BillingProvider | null {
+  const accessToken = env.POLAR_ACCESS_TOKEN?.trim();
+  const webhookSecret = env.POLAR_WEBHOOK_SECRET?.trim();
+  if (!accessToken || !webhookSecret) return null;
+  const server: PolarServer =
+    env.POLAR_SERVER?.trim() === "production" ? "production" : "sandbox";
+  return createPolarProvider({ accessToken, server, webhookSecret });
+}
+
 /**
- * The production registry. Empty until BP1 registers Polar — intentionally
- * dormant so BP0 changes no public behavior. BP1 replaces the empty map with
- * `{ polar: createPolarProvider(env) }`.
+ * The production registry. Registers the Polar adapter (BP1) whenever its
+ * secrets are present in `env`; otherwise stays empty and resolves to
+ * `not_configured`, exactly as in BP0. Passing no env (or env without Polar
+ * secrets) keeps the registry dormant — no public behavior change until the
+ * human-gated `POLAR_ACCESS_TOKEN` / `POLAR_WEBHOOK_SECRET` are set per env.
  */
-export function createDefaultBillingProviderRegistry(): BillingProviderRegistry {
-  return createBillingProviderRegistry({});
+export function createDefaultBillingProviderRegistry(
+  env?: PolarEnv,
+): BillingProviderRegistry {
+  const polar = env ? buildPolarProvider(env) : null;
+  return createBillingProviderRegistry(polar ? { polar } : {});
 }

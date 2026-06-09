@@ -7,6 +7,7 @@ import { handleListInvoices } from "./handlers/list-invoices.js";
 import { handleListEntitlements } from "./handlers/list-entitlements.js";
 import { handleCheckEntitlement } from "./handlers/check-entitlement.js";
 import { handleAssignPlan } from "./handlers/assign-plan.js";
+import { handleProviderWebhook } from "./handlers/webhook.js";
 import { errorResponse, notFound, methodNotAllowed } from "./http.js";
 import { generateRequestId, parseOrgPublicId } from "./ids.js";
 
@@ -59,6 +60,7 @@ const CUSTOMER_RE = /^\/v1\/organizations\/([^/]+)\/billing\/customer$/;
 const SUMMARY_RE = /^\/v1\/organizations\/([^/]+)\/billing\/summary$/;
 const INVOICES_RE = /^\/v1\/organizations\/([^/]+)\/billing\/invoices$/;
 const ENTITLEMENTS_RE = /^\/v1\/organizations\/([^/]+)\/billing\/entitlements$/;
+const WEBHOOK_RE = /^\/v1\/billing\/webhooks\/([a-z][a-z0-9-]{0,31})$/;
 
 type RouteKind = "plans" | "customer" | "summary" | "invoices" | "entitlements";
 
@@ -126,6 +128,15 @@ export async function route(request: Request, env: Env): Promise<Response> {
         return errorResponse("unauthorized", "Unauthorized", 403, requestId);
       }
       return handleAssignPlan(request, env, requestId);
+    }
+
+    // Public provider-webhook intake (BP1). Trust is the adapter's signature
+    // verification (fail-closed) — NOT an actor identity — so this route
+    // requires no x-actor-* headers. api-edge (BP2) forwards raw body + signature
+    // headers here over the service binding.
+    const webhookMatch = url.pathname.match(WEBHOOK_RE);
+    if (webhookMatch) {
+      return handleProviderWebhook(request, env, requestId, webhookMatch[1]!);
     }
 
     const matched = matchRoute(url.pathname);

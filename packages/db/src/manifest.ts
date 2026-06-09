@@ -165,5 +165,14 @@ export const manifest: MigrationManifest = {
       description:
         "Optional parent-organization pointer (nullable parent_org_id on membership.organizations) — the dormant seam for the saas-multi-org-billing epic; NULL = standalone, no behavior change",
     },
+    {
+      id: "180_billing_provider_webhook_events",
+      context: "billing",
+      path: "180_billing_provider_webhook_events/up.sql",
+      checksum:
+        "dccd42aedfa5cc8a87eab9376d42e1e1cbec0e3ba3fbf78baf725022de3cb820",
+      description:
+        "Idempotent billing-provider webhook intake ledger — unique (provider, event_id) dedupe key for at-most-once webhook materialization (BP1)",
+    },
   ],
 };

@@ -45,6 +45,21 @@ interface EventActor {
   id: string;
 }
 
+/**
+ * Optional payment-provider linkage stamped onto the billing customer +
+ * subscription when materialization is driven by a verified provider webhook
+ * (BP1). Absent for the internal bootstrap path (org → free plan), which runs
+ * once at org creation before any checkout, so it never wipes a provider link.
+ */
+export interface ProviderLink {
+  /** Opaque adapter id, e.g. "polar". */
+  id: string;
+  customerId?: string | null;
+  subscriptionId?: string | null;
+  currentPeriodStart?: Date | null;
+  currentPeriodEnd?: Date | null;
+}
+
 export function parseAssignPlanBody(body: unknown): ParsedAssign | { error: string } {
   if (!body || typeof body !== "object") {
     return { error: "request body must be a JSON object" };
@@ -102,9 +117,15 @@ export async function assignPlanWithRepos(
   events: EventsRepoSlice | null,
   parsed: ParsedAssign,
   def: PlanDefinition,
-  opts: { now: Date; genId: () => string; actor: EventActor; requestId: string },
+  opts: {
+    now: Date;
+    genId: () => string;
+    actor: EventActor;
+    requestId: string;
+    provider?: ProviderLink;
+  },
 ): Promise<AssignPlanResult> {
-  const { now, genId, actor, requestId } = opts;
+  const { now, genId, actor, requestId, provider } = opts;
 
   // 1. Ensure the catalog plan rows exist (idempotent).
   for (const p of PLAN_CATALOG) {
@@ -126,11 +147,16 @@ export async function assignPlanWithRepos(
   if (!planRes.ok) return { kind: "repo_error" };
   const plan = planRes.value;
 
-  // 2. Ensure a billing customer for the org (upsert by org_id).
+  // 2. Ensure a billing customer for the org (upsert by org_id). When a verified
+  //    provider webhook drives this, stamp the opaque provider linkage so the
+  //    customer mirrors the payment-provider record.
   const custRes = await repo.upsertBillingCustomer({
     id: genId(),
     orgId: parsed.orgId,
     status: "active",
+    ...(provider
+      ? { provider: provider.id, providerCustomerId: provider.customerId ?? null }
+      : {}),
   });
   if (!custRes.ok) return { kind: "repo_error" };
   const customerId = custRes.value.id;
@@ -163,7 +189,14 @@ export async function assignPlanWithRepos(
       billingCustomerId: customerId,
       planId: plan.id,
       status: "active",
-      currentPeriodStart: now,
+      currentPeriodStart: provider?.currentPeriodStart ?? now,
+      ...(provider
+        ? {
+            currentPeriodEnd: provider.currentPeriodEnd ?? null,
+            provider: provider.id,
+            providerSubscriptionId: provider.subscriptionId ?? null,
+          }
+        : {}),
     });
     if (!createRes.ok) return { kind: "repo_error" };
     subscription = createRes.value;
