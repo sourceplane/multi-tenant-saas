@@ -12,6 +12,7 @@ import { handleRevokeInvitation } from "./handlers/revoke-invitation.js";
 import { handleAcceptInvitation } from "./handlers/accept-invitation.js";
 import { handleAuthorizationContext } from "./handlers/authorization-context.js";
 import { handleSyncAccountChildren } from "./handlers/sync-account-children.js";
+import { handleResolveBillingParent } from "./handlers/resolve-billing-parent.js";
 import { handleCreateServicePrincipalBinding, handleListServicePrincipalBindings, handleRevokeServicePrincipalBinding } from "./handlers/service-principal-bindings.js";
 import { errorResponse, notFound, methodNotAllowed } from "./http.js";
 import { generateRequestId } from "./ids.js";
@@ -67,6 +68,15 @@ export async function route(request: Request, env: Env): Promise<Response> {
     if (url.pathname === "/v1/internal/membership/account/children-sync") {
       if (request.method === "POST") {
         return handleSyncAccountChildren(request, env, requestId);
+      }
+      return methodNotAllowed(requestId);
+    }
+
+    // Internal billing-parent resolution (MO4): billing-worker resolves a child
+    // org to the parent whose subscription covers it. Service-binding only.
+    if (url.pathname === "/v1/internal/membership/organizations/billing-parent") {
+      if (request.method === "POST") {
+        return handleResolveBillingParent(request, env, requestId);
       }
       return methodNotAllowed(requestId);
     }

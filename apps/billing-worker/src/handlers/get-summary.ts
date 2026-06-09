@@ -6,6 +6,7 @@ import { createSqlExecutor } from "@saas/db/hyperdrive";
 import { createBillingRepository } from "@saas/db/billing";
 import { errorResponse, successResponse, withTimings } from "../http.js";
 import { authorizeBillingRead } from "../policy.js";
+import { resolveBillingOrgHex } from "../billing-scope.js";
 import { createTimings } from "@saas/contracts/timing";
 import {
   mapBillingCustomerToPublic,
@@ -36,18 +37,21 @@ export async function handleGetBillingSummary(
   const repo = deps?.repo ?? createBillingRepository(executor!);
   try {
     // PERF4 (task 0133): authorization (membership context + policy) and the
-    // billing read are independent — the read does not depend on the authz result
-    // for WHAT to read, only WHETHER to return it. Run them concurrently, then
-    // apply the decision and discard the read on deny (deny-by-default).
-    const [auth, result] = await Promise.all([
+    // MO4 billing-parent resolution are independent — run them concurrently.
+    // The read targets the resolved (effective) billing org: a child's summary
+    // is the account's single subscription on the parent (deps.repo path skips
+    // resolution — no MEMBERSHIP_WORKER — and reads the queried org as before).
+    const [auth, billingOrgId] = await Promise.all([
       timings.measure("authz", () => authorizeBillingRead(env, actor, orgId, requestId)),
-      timings.measure("db", () => repo.getBillingSummary(orgId)),
+      timings.measure("resolve", () => resolveBillingOrgHex(env, orgId, requestId)),
     ]);
 
     if (!auth.ok) {
       endTotal();
       return withTimings(auth.response, requestId, "billing.summary", timings);
     }
+
+    const result = await timings.measure("db", () => repo.getBillingSummary(billingOrgId));
     if (!result.ok) {
       endTotal();
       return withTimings(errorResponse("internal_error", "Failed to get billing summary", 503, requestId), requestId, "billing.summary", timings);
