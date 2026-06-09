@@ -144,6 +144,11 @@ export function getPlanDefinition(code: string): PlanDefinition | null {
   return PLAN_CATALOG.find((p) => p.code === code) ?? null;
 }
 
+/** Look up a plan definition by its row id (e.g. "plan_pro"). */
+export function getPlanById(planId: string): PlanDefinition | null {
+  return PLAN_CATALOG.find((p) => p.id === planId) ?? null;
+}
+
 /** Whether a code names a known catalog plan. */
 export function isKnownPlanCode(code: string): boolean {
   return PLAN_CATALOG.some((p) => p.code === code);

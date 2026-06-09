@@ -12,6 +12,7 @@ import { handleWebhookIntake } from "./handlers/webhook-intake.js";
 import { handleCreateCheckout } from "./handlers/create-checkout.js";
 import { handleCreatePortal } from "./handlers/create-portal.js";
 import { handleCancelSubscription } from "./handlers/cancel-subscription.js";
+import { handleChangePlan } from "./handlers/change-plan.js";
 import { errorResponse, notFound, methodNotAllowed } from "./http.js";
 import { generateRequestId, parseOrgPublicId } from "./ids.js";
 
@@ -70,6 +71,7 @@ const ENTITLEMENTS_RE = /^\/v1\/organizations\/([^/]+)\/billing\/entitlements$/;
 const CHECKOUT_RE = /^\/v1\/organizations\/([^/]+)\/billing\/checkout$/;
 const PORTAL_RE = /^\/v1\/organizations\/([^/]+)\/billing\/portal$/;
 const CANCEL_RE = /^\/v1\/organizations\/([^/]+)\/billing\/subscription\/cancel$/;
+const CHANGE_RE = /^\/v1\/organizations\/([^/]+)\/billing\/subscription\/change$/;
 
 type RouteKind =
   | "plans"
@@ -79,10 +81,11 @@ type RouteKind =
   | "entitlements"
   | "checkout"
   | "portal"
-  | "cancel";
+  | "cancel"
+  | "change";
 
-// checkout/portal/cancel are POST writes; the rest are GET reads.
-const WRITE_KINDS: ReadonlySet<RouteKind> = new Set<RouteKind>(["checkout", "portal", "cancel"]);
+// checkout/portal/cancel/change are POST writes; the rest are GET reads.
+const WRITE_KINDS: ReadonlySet<RouteKind> = new Set<RouteKind>(["checkout", "portal", "cancel", "change"]);
 
 interface MatchedRoute {
   kind: RouteKind;
@@ -99,6 +102,7 @@ function matchRoute(pathname: string): MatchedRoute | null {
     [CHECKOUT_RE, "checkout"],
     [PORTAL_RE, "portal"],
     [CANCEL_RE, "cancel"],
+    [CHANGE_RE, "change"],
   ];
   for (const [re, kind] of patterns) {
     const m = pathname.match(re);
@@ -208,6 +212,8 @@ export async function route(request: Request, env: Env): Promise<Response> {
         return handleCreatePortal(request, env, requestId, actor, matched.orgId);
       case "cancel":
         return handleCancelSubscription(request, env, requestId, actor, matched.orgId);
+      case "change":
+        return handleChangePlan(request, env, requestId, actor, matched.orgId);
     }
   } catch {
     return errorResponse("internal_error", "Internal error", 500, requestId);

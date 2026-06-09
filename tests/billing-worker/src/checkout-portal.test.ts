@@ -6,12 +6,14 @@ import {
 } from "@billing-worker/handlers/create-checkout";
 import { handleCreatePortal } from "@billing-worker/handlers/create-portal";
 import { handleCancelSubscription } from "@billing-worker/handlers/cancel-subscription";
+import { handleChangePlan } from "@billing-worker/handlers/change-plan";
 import type { Env } from "@billing-worker/env";
 import type { ActorContext } from "@billing-worker/router";
 import type { BillingProviderRegistry } from "@billing-worker/billing-provider/registry";
 import type {
   BillingProvider,
   CancelSubscriptionInput,
+  ChangeSubscriptionPlanInput,
   CreateCheckoutInput,
   CreatePortalSessionInput,
 } from "@billing-worker/billing-provider/types";
@@ -26,9 +28,10 @@ interface Recorder {
   checkout: CreateCheckoutInput[];
   portal: CreatePortalSessionInput[];
   cancel: CancelSubscriptionInput[];
+  change: ChangeSubscriptionPlanInput[];
 }
 
-function recordingRegistry(rec: Recorder, opts: { resolveFail?: "not_configured"; throwOn?: "checkout" | "portal" | "cancel"; hasActiveSub?: boolean } = {}): BillingProviderRegistry {
+function recordingRegistry(rec: Recorder, opts: { resolveFail?: "not_configured"; throwOn?: "checkout" | "portal" | "cancel" | "change"; hasActiveSub?: boolean } = {}): BillingProviderRegistry {
   const provider: BillingProvider = {
     id: "polar",
     createCheckout: async (input) => {
@@ -47,6 +50,11 @@ function recordingRegistry(rec: Recorder, opts: { resolveFail?: "not_configured"
       rec.cancel.push(input);
       if (opts.throwOn === "cancel") throw new Error("provider down");
       return { cancelAtPeriodEnd: true };
+    },
+    changeSubscriptionPlan: async (input) => {
+      rec.change.push(input);
+      if (opts.throwOn === "change") throw new Error("provider down");
+      return { changed: true };
     },
     verifyWebhook: async () => ({ ok: false, reason: "invalid_signature" }),
   };
@@ -69,7 +77,7 @@ function checkoutReq(body: unknown): Request {
 
 describe("handleCreateCheckout", () => {
   it("creates a checkout bound to the org public id and returns the url", async () => {
-    const rec: Recorder = { checkout: [], portal: [], cancel: [] };
+    const rec: Recorder = { checkout: [], portal: [], cancel: [], change: [] };
     const res = await handleCreateCheckout(checkoutReq({ planCode: "business" }), env, "req_t", ACTOR, ORG_HEX, {
       registry: recordingRegistry(rec),
       productMap: PRODUCT_MAP,
@@ -86,7 +94,7 @@ describe("handleCreateCheckout", () => {
   });
 
   it("routes an existing subscriber's plan change to the portal (no second checkout)", async () => {
-    const rec: Recorder = { checkout: [], portal: [], cancel: [] };
+    const rec: Recorder = { checkout: [], portal: [], cancel: [], change: [] };
     const res = await handleCreateCheckout(checkoutReq({ planCode: "business" }), env, "req_t", ACTOR, ORG_HEX, {
       registry: recordingRegistry(rec, { hasActiveSub: true }),
       productMap: PRODUCT_MAP,
@@ -102,7 +110,7 @@ describe("handleCreateCheckout", () => {
   });
 
   it("routes to the portal from OUR billing state (paid plan) even if the provider check is false", async () => {
-    const rec: Recorder = { checkout: [], portal: [], cancel: [] };
+    const rec: Recorder = { checkout: [], portal: [], cancel: [], change: [] };
     const res = await handleCreateCheckout(checkoutReq({ planCode: "business" }), env, "req_t", ACTOR, ORG_HEX, {
       registry: recordingRegistry(rec), // provider.hasActiveSubscription → false
       productMap: PRODUCT_MAP,
@@ -115,7 +123,7 @@ describe("handleCreateCheckout", () => {
   });
 
   it("checks out a first purchase when the active plan is free", async () => {
-    const rec: Recorder = { checkout: [], portal: [], cancel: [] };
+    const rec: Recorder = { checkout: [], portal: [], cancel: [], change: [] };
     const res = await handleCreateCheckout(checkoutReq({ planCode: "pro" }), env, "req_t", ACTOR, ORG_HEX, {
       registry: recordingRegistry(rec),
       productMap: PRODUCT_MAP,
@@ -128,7 +136,7 @@ describe("handleCreateCheckout", () => {
   });
 
   it("forwards a valid embedOrigin to the provider (enables in-app embedded checkout)", async () => {
-    const rec: Recorder = { checkout: [], portal: [], cancel: [] };
+    const rec: Recorder = { checkout: [], portal: [], cancel: [], change: [] };
     await handleCreateCheckout(
       checkoutReq({ planCode: "pro", embedOrigin: "https://app.example.com" }),
       env, "req_t", ACTOR, ORG_HEX,
@@ -138,7 +146,7 @@ describe("handleCreateCheckout", () => {
   });
 
   it("ignores a malformed embedOrigin (still checks out, no embed origin)", async () => {
-    const rec: Recorder = { checkout: [], portal: [], cancel: [] };
+    const rec: Recorder = { checkout: [], portal: [], cancel: [], change: [] };
     await handleCreateCheckout(
       checkoutReq({ planCode: "pro", embedOrigin: "https://evil.example.com/path?x=1" }),
       env, "req_t", ACTOR, ORG_HEX,
@@ -149,7 +157,7 @@ describe("handleCreateCheckout", () => {
   });
 
   it("builds a same-origin successUrl from embedOrigin + returnPath", async () => {
-    const rec: Recorder = { checkout: [], portal: [], cancel: [] };
+    const rec: Recorder = { checkout: [], portal: [], cancel: [], change: [] };
     await handleCreateCheckout(
       checkoutReq({
         planCode: "pro",
@@ -165,7 +173,7 @@ describe("handleCreateCheckout", () => {
   });
 
   it("ignores a malformed returnPath (falls back to env success url, here empty)", async () => {
-    const rec: Recorder = { checkout: [], portal: [], cancel: [] };
+    const rec: Recorder = { checkout: [], portal: [], cancel: [], change: [] };
     await handleCreateCheckout(
       checkoutReq({ planCode: "pro", embedOrigin: "https://app.example.com", returnPath: "https://evil.com/x" }),
       env, "req_t", ACTOR, ORG_HEX,
@@ -175,7 +183,7 @@ describe("handleCreateCheckout", () => {
   });
 
   it("rejects an unknown plan code (400)", async () => {
-    const rec: Recorder = { checkout: [], portal: [], cancel: [] };
+    const rec: Recorder = { checkout: [], portal: [], cancel: [], change: [] };
     const res = await handleCreateCheckout(checkoutReq({ planCode: "platinum" }), env, "req_t", ACTOR, ORG_HEX, {
       registry: recordingRegistry(rec),
       productMap: PRODUCT_MAP,
@@ -186,7 +194,7 @@ describe("handleCreateCheckout", () => {
   });
 
   it("rejects a non-purchasable plan with no product (free) (400)", async () => {
-    const rec: Recorder = { checkout: [], portal: [], cancel: [] };
+    const rec: Recorder = { checkout: [], portal: [], cancel: [], change: [] };
     const res = await handleCreateCheckout(checkoutReq({ planCode: "free" }), env, "req_t", ACTOR, ORG_HEX, {
       registry: recordingRegistry(rec),
       productMap: PRODUCT_MAP,
@@ -197,7 +205,7 @@ describe("handleCreateCheckout", () => {
   });
 
   it("returns the deny response when not authorized", async () => {
-    const rec: Recorder = { checkout: [], portal: [], cancel: [] };
+    const rec: Recorder = { checkout: [], portal: [], cancel: [], change: [] };
     const res = await handleCreateCheckout(checkoutReq({ planCode: "pro" }), env, "req_t", ACTOR, ORG_HEX, {
       registry: recordingRegistry(rec),
       productMap: PRODUCT_MAP,
@@ -208,7 +216,7 @@ describe("handleCreateCheckout", () => {
   });
 
   it("returns 503 when the provider is not configured", async () => {
-    const rec: Recorder = { checkout: [], portal: [], cancel: [] };
+    const rec: Recorder = { checkout: [], portal: [], cancel: [], change: [] };
     const res = await handleCreateCheckout(checkoutReq({ planCode: "pro" }), env, "req_t", ACTOR, ORG_HEX, {
       registry: recordingRegistry(rec, { resolveFail: "not_configured" }),
       productMap: PRODUCT_MAP,
@@ -218,7 +226,7 @@ describe("handleCreateCheckout", () => {
   });
 
   it("returns 502 when the provider call fails", async () => {
-    const rec: Recorder = { checkout: [], portal: [], cancel: [] };
+    const rec: Recorder = { checkout: [], portal: [], cancel: [], change: [] };
     const res = await handleCreateCheckout(checkoutReq({ planCode: "pro" }), env, "req_t", ACTOR, ORG_HEX, {
       registry: recordingRegistry(rec, { throwOn: "checkout" }),
       productMap: PRODUCT_MAP,
@@ -254,7 +262,7 @@ describe("handleCancelSubscription", () => {
   }
 
   it("cancels the active paid subscription via the provider sub id", async () => {
-    const rec: Recorder = { checkout: [], portal: [], cancel: [] };
+    const rec: Recorder = { checkout: [], portal: [], cancel: [], change: [] };
     const res = await handleCancelSubscription(cancelReq(), env, "req_t", ACTOR, ORG_HEX, {
       registry: recordingRegistry(rec),
       authorize: allow,
@@ -268,7 +276,7 @@ describe("handleCancelSubscription", () => {
   });
 
   it("409 when there is no paid subscription (free / none)", async () => {
-    const rec: Recorder = { checkout: [], portal: [], cancel: [] };
+    const rec: Recorder = { checkout: [], portal: [], cancel: [], change: [] };
     const free = await handleCancelSubscription(cancelReq(), env, "req_t", ACTOR, ORG_HEX, {
       registry: recordingRegistry(rec), authorize: allow,
       getActiveSubscription: async () => ({ planId: "plan_free", providerSubscriptionId: null }),
@@ -283,7 +291,7 @@ describe("handleCancelSubscription", () => {
   });
 
   it("409 when a paid plan has no provider subscription id (not cancelable here)", async () => {
-    const rec: Recorder = { checkout: [], portal: [], cancel: [] };
+    const rec: Recorder = { checkout: [], portal: [], cancel: [], change: [] };
     const res = await handleCancelSubscription(cancelReq(), env, "req_t", ACTOR, ORG_HEX, {
       registry: recordingRegistry(rec), authorize: allow,
       getActiveSubscription: async () => ({ planId: "plan_pro", providerSubscriptionId: null }),
@@ -293,7 +301,7 @@ describe("handleCancelSubscription", () => {
   });
 
   it("returns the deny response when not authorized", async () => {
-    const rec: Recorder = { checkout: [], portal: [], cancel: [] };
+    const rec: Recorder = { checkout: [], portal: [], cancel: [], change: [] };
     const res = await handleCancelSubscription(cancelReq(), env, "req_t", ACTOR, ORG_HEX, {
       registry: recordingRegistry(rec), authorize: deny,
       getActiveSubscription: async () => ({ planId: "plan_pro", providerSubscriptionId: "sub_1" }),
@@ -303,7 +311,7 @@ describe("handleCancelSubscription", () => {
   });
 
   it("503 when the provider is not configured", async () => {
-    const rec: Recorder = { checkout: [], portal: [], cancel: [] };
+    const rec: Recorder = { checkout: [], portal: [], cancel: [], change: [] };
     const res = await handleCancelSubscription(cancelReq(), env, "req_t", ACTOR, ORG_HEX, {
       registry: recordingRegistry(rec, { resolveFail: "not_configured" }), authorize: allow,
       getActiveSubscription: async () => ({ planId: "plan_pro", providerSubscriptionId: "sub_1" }),
@@ -312,9 +320,92 @@ describe("handleCancelSubscription", () => {
   });
 
   it("502 when the provider cancel call fails", async () => {
-    const rec: Recorder = { checkout: [], portal: [], cancel: [] };
+    const rec: Recorder = { checkout: [], portal: [], cancel: [], change: [] };
     const res = await handleCancelSubscription(cancelReq(), env, "req_t", ACTOR, ORG_HEX, {
       registry: recordingRegistry(rec, { throwOn: "cancel" }), authorize: allow,
+      getActiveSubscription: async () => ({ planId: "plan_pro", providerSubscriptionId: "sub_1" }),
+    });
+    expect(res.status).toBe(502);
+  });
+});
+
+describe("handleChangePlan", () => {
+  function changeReq(body: unknown): Request {
+    return new Request("https://billing/v1/organizations/x/billing/subscription/change", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  }
+
+  it("changes an existing paid subscription to the target product", async () => {
+    const rec: Recorder = { checkout: [], portal: [], cancel: [], change: [] };
+    const res = await handleChangePlan(changeReq({ planCode: "business" }), env, "req_t", ACTOR, ORG_HEX, {
+      registry: recordingRegistry(rec), productMap: PRODUCT_MAP, authorize: allow,
+      getActiveSubscription: async () => ({ planId: "plan_pro", providerSubscriptionId: "sub_1" }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { data: { changed: boolean } };
+    expect(body.data.changed).toBe(true);
+    expect(rec.change[0]!.orgId).toBe(ORG_PUBLIC);
+    expect(rec.change[0]!.providerSubscriptionId).toBe("sub_1");
+    expect(rec.change[0]!.productId).toBe("prod_b");
+  });
+
+  it("409 when there is no paid/provider-linked subscription (first purchase is checkout)", async () => {
+    const rec: Recorder = { checkout: [], portal: [], cancel: [], change: [] };
+    const free = await handleChangePlan(changeReq({ planCode: "business" }), env, "req_t", ACTOR, ORG_HEX, {
+      registry: recordingRegistry(rec), productMap: PRODUCT_MAP, authorize: allow,
+      getActiveSubscription: async () => ({ planId: "plan_free", providerSubscriptionId: null }),
+    });
+    expect(free.status).toBe(409);
+    const unlinked = await handleChangePlan(changeReq({ planCode: "business" }), env, "req_t", ACTOR, ORG_HEX, {
+      registry: recordingRegistry(rec), productMap: PRODUCT_MAP, authorize: allow,
+      getActiveSubscription: async () => ({ planId: "plan_pro", providerSubscriptionId: null }),
+    });
+    expect(unlinked.status).toBe(409);
+    expect(rec.change).toHaveLength(0);
+  });
+
+  it("409 when changing to the plan already active (no-op)", async () => {
+    const rec: Recorder = { checkout: [], portal: [], cancel: [], change: [] };
+    const res = await handleChangePlan(changeReq({ planCode: "pro" }), env, "req_t", ACTOR, ORG_HEX, {
+      registry: recordingRegistry(rec), productMap: PRODUCT_MAP, authorize: allow,
+      getActiveSubscription: async () => ({ planId: "plan_pro", providerSubscriptionId: "sub_1" }),
+    });
+    expect(res.status).toBe(409);
+    expect(rec.change).toHaveLength(0);
+  });
+
+  it("400 for an unknown / non-purchasable plan", async () => {
+    const rec: Recorder = { checkout: [], portal: [], cancel: [], change: [] };
+    const bad = await handleChangePlan(changeReq({ planCode: "platinum" }), env, "req_t", ACTOR, ORG_HEX, {
+      registry: recordingRegistry(rec), productMap: PRODUCT_MAP, authorize: allow,
+      getActiveSubscription: async () => ({ planId: "plan_pro", providerSubscriptionId: "sub_1" }),
+    });
+    expect(bad.status).toBe(400);
+    const free = await handleChangePlan(changeReq({ planCode: "free" }), env, "req_t", ACTOR, ORG_HEX, {
+      registry: recordingRegistry(rec), productMap: PRODUCT_MAP, authorize: allow,
+      getActiveSubscription: async () => ({ planId: "plan_pro", providerSubscriptionId: "sub_1" }),
+    });
+    expect(free.status).toBe(400); // free has no product in the map
+    expect(rec.change).toHaveLength(0);
+  });
+
+  it("returns the deny response when not authorized", async () => {
+    const rec: Recorder = { checkout: [], portal: [], cancel: [], change: [] };
+    const res = await handleChangePlan(changeReq({ planCode: "business" }), env, "req_t", ACTOR, ORG_HEX, {
+      registry: recordingRegistry(rec), productMap: PRODUCT_MAP, authorize: deny,
+      getActiveSubscription: async () => ({ planId: "plan_pro", providerSubscriptionId: "sub_1" }),
+    });
+    expect(res.status).toBe(404);
+    expect(rec.change).toHaveLength(0);
+  });
+
+  it("502 when the provider change call fails", async () => {
+    const rec: Recorder = { checkout: [], portal: [], cancel: [], change: [] };
+    const res = await handleChangePlan(changeReq({ planCode: "business" }), env, "req_t", ACTOR, ORG_HEX, {
+      registry: recordingRegistry(rec, { throwOn: "change" }), productMap: PRODUCT_MAP, authorize: allow,
       getActiveSubscription: async () => ({ planId: "plan_pro", providerSubscriptionId: "sub_1" }),
     });
     expect(res.status).toBe(502);
@@ -366,7 +457,7 @@ describe("handleCreatePortal", () => {
   }
 
   it("creates a portal session for the org public id and returns the url", async () => {
-    const rec: Recorder = { checkout: [], portal: [], cancel: [] };
+    const rec: Recorder = { checkout: [], portal: [], cancel: [], change: [] };
     const res = await handleCreatePortal(portalReq(), env, "req_t", ACTOR, ORG_HEX, {
       registry: recordingRegistry(rec),
       authorize: allow,
@@ -378,7 +469,7 @@ describe("handleCreatePortal", () => {
   });
 
   it("returns the deny response when not authorized", async () => {
-    const rec: Recorder = { checkout: [], portal: [], cancel: [] };
+    const rec: Recorder = { checkout: [], portal: [], cancel: [], change: [] };
     const res = await handleCreatePortal(portalReq(), env, "req_t", ACTOR, ORG_HEX, {
       registry: recordingRegistry(rec),
       authorize: deny,

@@ -89,6 +89,18 @@ export function createPolarProvider(config: PolarConfig): BillingProvider {
       return { cancelAtPeriodEnd: true };
     },
 
+    async changeSubscriptionPlan(input) {
+      // Same customer-session pattern as cancel: change the product natively via
+      // the Customer Portal API (Polar prorates). The re-materialization to the
+      // new plan flows back through the subscription webhook.
+      const session = await client.customerSessions.create({ externalCustomerId: input.orgId });
+      await client.customerPortal.subscriptions.update(
+        { customerSession: session.token },
+        { id: input.providerSubscriptionId, customerSubscriptionUpdate: { productId: input.productId } },
+      );
+      return { changed: true };
+    },
+
     async hasActiveSubscription(externalId: string): Promise<boolean> {
       try {
         const res = await client.subscriptions.list({ externalCustomerId: externalId, active: true, limit: 1 });

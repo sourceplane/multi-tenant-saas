@@ -1,5 +1,7 @@
 import type {
   CancelSubscriptionResponse,
+  ChangePlanRequest,
+  ChangePlanResponse,
   CheckBillingEntitlementRequest,
   CheckBillingEntitlementResponse,
   CreateCheckoutRequest,
@@ -197,6 +199,27 @@ export class BillingClient {
       {
         method: "POST",
         path: `/v1/organizations/${encodeURIComponent(orgId)}/billing/subscription/cancel`,
+      },
+      opts,
+    );
+  }
+
+  /**
+   * POST /v1/organizations/:orgId/billing/subscription/change
+   *
+   * Change an existing paid subscription to another plan natively (no redirect).
+   * First purchases go through `createCheckout`, not this method.
+   */
+  changePlan(
+    orgId: string,
+    body: ChangePlanRequest,
+    opts: RequestOptions = {},
+  ): Promise<ChangePlanResponse> {
+    return this.transport.request<ChangePlanResponse>(
+      {
+        method: "POST",
+        path: `/v1/organizations/${encodeURIComponent(orgId)}/billing/subscription/change`,
+        body,
       },
       opts,
     );

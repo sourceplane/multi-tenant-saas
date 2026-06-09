@@ -311,3 +311,18 @@ export interface CancelSubscriptionResponse {
   /** True when the provider scheduled cancellation at period end (vs. immediate). */
   cancelAtPeriodEnd: boolean;
 }
+
+/**
+ * Change an existing paid subscription to another plan natively (no hosted-portal
+ * redirect). The re-materialization arrives via the webhook; the response is the
+ * acknowledged intent. First purchases go through checkout, not this endpoint.
+ */
+export interface ChangePlanRequest {
+  /** Target plan code (must be a known, purchasable plan). */
+  planCode: string;
+}
+
+export interface ChangePlanResponse {
+  /** True once the provider accepted the plan change (proration handled provider-side). */
+  changed: boolean;
+}
