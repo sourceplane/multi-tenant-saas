@@ -45,6 +45,21 @@ interface EventActor {
   id: string;
 }
 
+/**
+ * Opaque payment-provider linkage stamped onto the billing customer +
+ * subscription when a verified provider webhook drives the assignment. Absent
+ * for the internal bootstrap path (org → free) and admin assignments, which have
+ * no provider subscription. Without this, real subscriptions would have no
+ * `provider_subscription_id` and thus couldn't be changed/canceled/charged.
+ */
+export interface ProviderLink {
+  id: string;
+  customerId?: string | null;
+  subscriptionId?: string | null;
+  currentPeriodStart?: Date | null;
+  currentPeriodEnd?: Date | null;
+}
+
 export function parseAssignPlanBody(body: unknown): ParsedAssign | { error: string } {
   if (!body || typeof body !== "object") {
     return { error: "request body must be a JSON object" };
@@ -102,9 +117,15 @@ export async function assignPlanWithRepos(
   events: EventsRepoSlice | null,
   parsed: ParsedAssign,
   def: PlanDefinition,
-  opts: { now: Date; genId: () => string; actor: EventActor; requestId: string },
+  opts: {
+    now: Date;
+    genId: () => string;
+    actor: EventActor;
+    requestId: string;
+    provider?: ProviderLink;
+  },
 ): Promise<AssignPlanResult> {
-  const { now, genId, actor, requestId } = opts;
+  const { now, genId, actor, requestId, provider } = opts;
 
   // 1. Ensure the catalog plan rows exist (idempotent).
   for (const p of PLAN_CATALOG) {
@@ -126,11 +147,16 @@ export async function assignPlanWithRepos(
   if (!planRes.ok) return { kind: "repo_error" };
   const plan = planRes.value;
 
-  // 2. Ensure a billing customer for the org (upsert by org_id).
+  // 2. Ensure a billing customer for the org (upsert by org_id). When a verified
+  //    provider webhook drives this, stamp the opaque provider linkage so the
+  //    customer mirrors the provider record (and back-fills earlier rows).
   const custRes = await repo.upsertBillingCustomer({
     id: genId(),
     orgId: parsed.orgId,
     status: "active",
+    ...(provider
+      ? { provider: provider.id, providerCustomerId: provider.customerId ?? null }
+      : {}),
   });
   if (!custRes.ok) return { kind: "repo_error" };
   const customerId = custRes.value.id;
@@ -145,8 +171,21 @@ export async function assignPlanWithRepos(
   let changed = false;
 
   if (active && active.planId === plan.id) {
-    // Same plan already active → idempotent re-materialization only.
+    // Same plan already active → idempotent re-materialization. Still refresh the
+    // provider linkage + billing period from the webhook (renewals; and back-fill
+    // a subscription created before provider linkage was recorded).
     subscription = active;
+    if (provider) {
+      const upd = await repo.updateSubscription(parsed.orgId, active.id, {
+        status: "active",
+        provider: provider.id,
+        providerSubscriptionId: provider.subscriptionId ?? null,
+        ...(provider.currentPeriodStart ? { currentPeriodStart: provider.currentPeriodStart } : {}),
+        ...(provider.currentPeriodEnd ? { currentPeriodEnd: provider.currentPeriodEnd } : {}),
+      });
+      if (upd.ok) subscription = upd.value;
+      else if (upd.error.kind === "internal") return { kind: "repo_error" };
+    }
   } else {
     if (active) {
       // Plan change → cancel the prior active subscription.
@@ -163,7 +202,14 @@ export async function assignPlanWithRepos(
       billingCustomerId: customerId,
       planId: plan.id,
       status: "active",
-      currentPeriodStart: now,
+      currentPeriodStart: provider?.currentPeriodStart ?? now,
+      ...(provider
+        ? {
+            provider: provider.id,
+            providerSubscriptionId: provider.subscriptionId ?? null,
+            currentPeriodEnd: provider.currentPeriodEnd ?? null,
+          }
+        : {}),
     });
     if (!createRes.ok) return { kind: "repo_error" };
     subscription = createRes.value;

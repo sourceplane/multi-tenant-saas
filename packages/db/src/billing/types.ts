@@ -146,6 +146,10 @@ export interface UpdateSubscriptionInput {
   trialEnd?: Date | null;
   cancelAt?: Date | null;
   canceledAt?: Date | null;
+  /** Opaque payment-provider id (e.g. 'polar'); set when linking a provider sub. */
+  provider?: string | null;
+  /** Opaque provider subscription id; set/backfilled from verified webhooks. */
+  providerSubscriptionId?: string | null;
   metadata?: Record<string, unknown> | null;
 }
 
