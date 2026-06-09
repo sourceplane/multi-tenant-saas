@@ -6,6 +6,8 @@ metadata:
 
 spec:
   type: publish-stack
+  lifecycle: production
+  owner: platform
   domain: platform-stack
   subscribe:
     environments:

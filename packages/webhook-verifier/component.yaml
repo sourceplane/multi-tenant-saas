@@ -4,6 +4,8 @@ metadata:
   name: webhook-verifier
 spec:
   type: turbo-package
+  lifecycle: production
+  owner: platform
   domain: starter-shared
   subscribe:
     environments:

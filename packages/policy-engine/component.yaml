@@ -4,6 +4,8 @@ metadata:
   name: policy-engine
 spec:
   type: turbo-package
+  lifecycle: production
+  owner: platform
   domain: starter-shared
   subscribe:
     environments:

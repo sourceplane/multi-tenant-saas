@@ -5,6 +5,8 @@ metadata:
   description: Cloudflare Worker for the Config read-only API surface
 spec:
   type: cloudflare-worker-turbo
+  lifecycle: production
+  owner: platform
   domain: starter-runtime
   path: apps/config-worker
   dependsOn:

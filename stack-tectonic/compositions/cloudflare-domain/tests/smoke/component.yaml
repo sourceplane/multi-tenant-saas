@@ -10,6 +10,8 @@ metadata:
 
 spec:
   type: cloudflare-domain
+  lifecycle: production
+  owner: platform
   domain: infra
 
   parameters:

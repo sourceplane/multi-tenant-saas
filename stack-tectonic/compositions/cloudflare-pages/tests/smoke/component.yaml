@@ -6,6 +6,8 @@ metadata:
 
 spec:
   type: cloudflare-pages
+  lifecycle: production
+  owner: platform
   domain: platform-docs
   path: website
   subscribe:

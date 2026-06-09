@@ -4,6 +4,8 @@ metadata:
   name: config-worker-tests
 spec:
   type: turbo-package
+  lifecycle: production
+  owner: platform
   domain: starter-tests
   path: tests/config-worker
   subscribe:
