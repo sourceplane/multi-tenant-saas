@@ -336,7 +336,10 @@ describe("MembershipRepository", () => {
 
       expect(queries[0]!.text).toContain("$1");
       expect(queries[0]!.text).toContain("$18");
-      expect(queries[0]!.params.length).toBe(18);
+      // $19 = parent_org_id (MO3); standalone bootstrap passes null.
+      expect(queries[0]!.text).toContain("parent_org_id");
+      expect(queries[0]!.params.length).toBe(19);
+      expect(queries[0]!.params[18]).toBeNull();
     });
 
     it("returns conflict if organization already exists", async () => {

@@ -126,6 +126,41 @@ export async function assignPlan(
   }
 }
 
+export type FanOutResult = { kind: "ok" } | { kind: "service_error" };
+
+/**
+ * Fan out a billing parent's plan entitlements onto a freshly-created child org
+ * via billing-worker's internal seam (MO3). BEST-EFFORT by contract: any failure
+ * surfaces as `service_error` and the caller proceeds — the child still exists,
+ * and a later re-fan-out (on the next parent plan event) reconciles it.
+ */
+export async function fanOutPlan(
+  billingWorker: Fetcher,
+  parentOrgPublicId: string,
+  childOrgPublicId: string,
+  requestId: string,
+  actor?: { id: string; type: string },
+): Promise<FanOutResult> {
+  try {
+    const headers: Record<string, string> = {
+      "content-type": "application/json",
+      "x-request-id": requestId,
+      [INTERNAL_CALLER_HEADER]: INTERNAL_CALLER,
+    };
+    if (actor) {
+      headers["x-actor-subject-id"] = actor.id;
+      headers["x-actor-subject-type"] = actor.type;
+    }
+    const response = await billingWorker.fetch(
+      "http://billing-worker/v1/internal/billing/plan/fan-out",
+      { method: "POST", headers, body: JSON.stringify({ parentOrgId: parentOrgPublicId, childOrgId: childOrgPublicId }) },
+    );
+    return response.ok ? { kind: "ok" } : { kind: "service_error" };
+  } catch {
+    return { kind: "service_error" };
+  }
+}
+
 export type MembersEntitlementGate =
   | { kind: "allow" }
   | { kind: "deny"; reason: string; message: string }
