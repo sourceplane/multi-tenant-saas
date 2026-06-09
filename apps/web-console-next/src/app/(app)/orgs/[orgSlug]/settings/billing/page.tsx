@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useParams } from "next/navigation";
-import { Receipt } from "lucide-react";
+import { Receipt, ExternalLink } from "lucide-react";
 import { OrgScope } from "@/components/shell/org-scope";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -56,39 +56,45 @@ function Inner({ orgId }: { orgId: string }) {
           </Card>
         )
       ) : summary.data ? (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">
-              {summary.data.plan ? summary.data.plan.name : "No active plan"}
-            </CardTitle>
-            <CardDescription>
-              {summary.data.activeSubscription
-                ? `Subscription · ${summary.data.activeSubscription.status}`
-                : "No active subscription"}
-              {summary.data.customer?.provider ? ` · ${summary.data.customer.provider}` : ""}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
-              <Stat
-                label="Plan code"
-                value={summary.data.plan?.code ?? "—"}
-              />
-              <Stat
-                label="Interval"
-                value={summary.data.plan?.billingInterval ?? "—"}
-              />
-              <Stat
-                label="Customer"
-                value={summary.data.customer?.displayName ?? summary.data.customer?.email ?? "—"}
-              />
-              <Stat
-                label="Status"
-                value={summary.data.activeSubscription?.status ?? "—"}
-              />
-            </div>
-          </CardContent>
-        </Card>
+        (() => {
+          const plan = summary.data.plan;
+          const sub = summary.data.activeSubscription;
+          const paidActive =
+            !!sub && (sub.status === "active" || sub.status === "trialing") && (plan?.priceAmountCents ?? 0) > 0;
+          const nextCharge =
+            paidActive && plan && sub?.currentPeriodEnd
+              ? `${formatMoney(plan.priceAmountCents, plan.priceCurrency)} on ${formatDate(sub.currentPeriodEnd)}`
+              : null;
+          return (
+            <Card>
+              <CardHeader>
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <CardTitle className="text-base">{plan ? plan.name : "No active plan"}</CardTitle>
+                    <CardDescription>{plan ? planPriceLabel(plan) : "No active subscription"}</CardDescription>
+                  </div>
+                  {sub ? <Badge variant={statusVariant(sub.status)}>{sub.status}</Badge> : null}
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+                  <Stat label="Started" value={formatDate(sub?.currentPeriodStart ?? null)} />
+                  <Stat label="Renews on" value={formatDate(sub?.currentPeriodEnd ?? null)} />
+                  <Stat label="Next charge" value={nextCharge ?? "—"} />
+                  <Stat
+                    label="Billing contact"
+                    value={summary.data.customer?.displayName ?? summary.data.customer?.email ?? "—"}
+                  />
+                </div>
+                {nextCharge ? (
+                  <p className="text-xs text-muted-foreground">
+                    Estimated — applicable taxes are calculated at billing.
+                  </p>
+                ) : null}
+              </CardContent>
+            </Card>
+          );
+        })()
       ) : null}
 
       {/* Manage plan: upgrade checkout + customer portal */}
@@ -177,6 +183,7 @@ function Inner({ orgId }: { orgId: string }) {
                   <TableHead>Due</TableHead>
                   <TableHead>Paid</TableHead>
                   <TableHead>Issued</TableHead>
+                  <TableHead className="text-right">Receipt</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -192,14 +199,22 @@ function Inner({ orgId }: { orgId: string }) {
                         {i.status}
                       </Badge>
                     </TableCell>
-                    <TableCell>
-                      {(i.amountDueCents / 100).toFixed(2)} {i.currency.toUpperCase()}
-                    </TableCell>
-                    <TableCell>
-                      {(i.amountPaidCents / 100).toFixed(2)} {i.currency.toUpperCase()}
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {i.issuedAt ? new Date(i.issuedAt).toLocaleDateString() : "—"}
+                    <TableCell>{formatMoney(i.amountDueCents, i.currency)}</TableCell>
+                    <TableCell>{formatMoney(i.amountPaidCents, i.currency)}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{formatDate(i.issuedAt)}</TableCell>
+                    <TableCell className="text-right">
+                      {i.hostedUrl ? (
+                        <a
+                          href={i.hostedUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                        >
+                          View <ExternalLink className="h-3 w-3" />
+                        </a>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -219,4 +234,36 @@ function Stat({ label, value }: { label: string; value: string }) {
       <div className="font-medium truncate">{value}</div>
     </div>
   );
+}
+
+/** Locale date, or an em dash when absent. */
+function formatDate(iso: string | null): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? "—"
+    : d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+}
+
+/** Money from minor units, e.g. (2000, "usd") → "$20.00". */
+function formatMoney(cents: number | null, currency: string): string {
+  if (cents == null) return "—";
+  const symbol = currency.toLowerCase() === "usd" ? "$" : `${currency.toUpperCase()} `;
+  return `${symbol}${(cents / 100).toFixed(2)}`;
+}
+
+/** Plan price with interval, e.g. "$20.00 / month". Free/contact tiers read plainly. */
+function planPriceLabel(plan: { priceAmountCents: number | null; priceCurrency: string; billingInterval: string }): string {
+  if (plan.billingInterval === "none") return "Custom — contact sales";
+  if (!plan.priceAmountCents) return "Free";
+  const per = plan.billingInterval === "year" ? "year" : "month";
+  return `${formatMoney(plan.priceAmountCents, plan.priceCurrency)} / ${per}`;
+}
+
+/** Badge variant for a subscription status. */
+function statusVariant(status: string): "success" | "warning" | "secondary" | "destructive" {
+  if (status === "active" || status === "trialing") return "success";
+  if (status === "past_due") return "warning";
+  if (status === "canceled" || status === "expired") return "destructive";
+  return "secondary";
 }
