@@ -83,6 +83,7 @@ function fullProvider(verify: VerifyWebhookResult): BillingProvider {
     createPortalSession: async () => ({ portalUrl: "https://x/portal" }),
     getCustomerByExternalId: async () => null,
     hasActiveSubscription: async () => false,
+    cancelSubscription: async () => ({ cancelAtPeriodEnd: true }),
     verifyWebhook: async () => verify,
   };
 }

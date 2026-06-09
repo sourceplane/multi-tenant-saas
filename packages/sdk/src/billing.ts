@@ -1,4 +1,5 @@
 import type {
+  CancelSubscriptionResponse,
   CheckBillingEntitlementRequest,
   CheckBillingEntitlementResponse,
   CreateCheckoutRequest,
@@ -177,6 +178,25 @@ export class BillingClient {
       {
         method: "POST",
         path: `/v1/organizations/${encodeURIComponent(orgId)}/billing/portal`,
+      },
+      opts,
+    );
+  }
+
+  /**
+   * POST /v1/organizations/:orgId/billing/subscription/cancel
+   *
+   * Cancel the account's paid subscription natively (no hosted-portal redirect).
+   * The downgrade is applied by the provider webhook after this returns.
+   */
+  cancelSubscription(
+    orgId: string,
+    opts: RequestOptions = {},
+  ): Promise<CancelSubscriptionResponse> {
+    return this.transport.request<CancelSubscriptionResponse>(
+      {
+        method: "POST",
+        path: `/v1/organizations/${encodeURIComponent(orgId)}/billing/subscription/cancel`,
       },
       opts,
     );

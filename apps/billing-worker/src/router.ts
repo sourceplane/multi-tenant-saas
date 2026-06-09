@@ -11,6 +11,7 @@ import { handleFanOutPlan } from "./handlers/fan-out.js";
 import { handleWebhookIntake } from "./handlers/webhook-intake.js";
 import { handleCreateCheckout } from "./handlers/create-checkout.js";
 import { handleCreatePortal } from "./handlers/create-portal.js";
+import { handleCancelSubscription } from "./handlers/cancel-subscription.js";
 import { errorResponse, notFound, methodNotAllowed } from "./http.js";
 import { generateRequestId, parseOrgPublicId } from "./ids.js";
 
@@ -68,6 +69,7 @@ const INVOICES_RE = /^\/v1\/organizations\/([^/]+)\/billing\/invoices$/;
 const ENTITLEMENTS_RE = /^\/v1\/organizations\/([^/]+)\/billing\/entitlements$/;
 const CHECKOUT_RE = /^\/v1\/organizations\/([^/]+)\/billing\/checkout$/;
 const PORTAL_RE = /^\/v1\/organizations\/([^/]+)\/billing\/portal$/;
+const CANCEL_RE = /^\/v1\/organizations\/([^/]+)\/billing\/subscription\/cancel$/;
 
 type RouteKind =
   | "plans"
@@ -76,10 +78,11 @@ type RouteKind =
   | "invoices"
   | "entitlements"
   | "checkout"
-  | "portal";
+  | "portal"
+  | "cancel";
 
-// checkout/portal are POST (provider hand-off writes); the rest are GET reads.
-const WRITE_KINDS: ReadonlySet<RouteKind> = new Set<RouteKind>(["checkout", "portal"]);
+// checkout/portal/cancel are POST writes; the rest are GET reads.
+const WRITE_KINDS: ReadonlySet<RouteKind> = new Set<RouteKind>(["checkout", "portal", "cancel"]);
 
 interface MatchedRoute {
   kind: RouteKind;
@@ -95,6 +98,7 @@ function matchRoute(pathname: string): MatchedRoute | null {
     [ENTITLEMENTS_RE, "entitlements"],
     [CHECKOUT_RE, "checkout"],
     [PORTAL_RE, "portal"],
+    [CANCEL_RE, "cancel"],
   ];
   for (const [re, kind] of patterns) {
     const m = pathname.match(re);
@@ -202,6 +206,8 @@ export async function route(request: Request, env: Env): Promise<Response> {
         return handleCreateCheckout(request, env, requestId, actor, matched.orgId);
       case "portal":
         return handleCreatePortal(request, env, requestId, actor, matched.orgId);
+      case "cancel":
+        return handleCancelSubscription(request, env, requestId, actor, matched.orgId);
     }
   } catch {
     return errorResponse("internal_error", "Internal error", 500, requestId);
