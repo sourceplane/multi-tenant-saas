@@ -6,6 +6,7 @@ import { Building2, Plus } from "lucide-react";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
@@ -140,6 +141,21 @@ export default function OrgsPage() {
         />
       )}
 
+      {(orgs.data ?? []).some((o) => o.status === "suspended") && (
+        <Card className="border-warning/40 bg-warning/5">
+          <CardHeader>
+            <CardTitle className="text-base">Some organizations are suspended</CardTitle>
+            <CardDescription>
+              One or more organizations are frozen because your account plan no longer includes
+              multiple organizations. Upgrade to restore access to them.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button onClick={() => void onUpgrade()}>Upgrade plan</Button>
+          </CardContent>
+        </Card>
+      )}
+
       {orgs.loading ? (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {Array.from({ length: 3 }).map((_, i) => (
@@ -193,10 +209,13 @@ export default function OrgsPage() {
                     </div>
                   </div>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="space-y-2">
                   <div className="text-xs text-muted-foreground">
                     Created {new Date(o.createdAt).toLocaleDateString()}
                   </div>
+                  {o.status === "suspended" ? (
+                    <Badge variant="destructive">Suspended</Badge>
+                  ) : null}
                 </CardContent>
               </Card>
             </Link>
