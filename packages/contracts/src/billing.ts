@@ -265,6 +265,13 @@ export interface GetBillingSummaryResponse {
 export interface CreateCheckoutRequest {
   /** Stable plan code to purchase (e.g. 'pro', 'business'). */
   planCode: string;
+  /**
+   * Origin of the page that will embed the checkout (the console's
+   * `window.location.origin`). When present and valid, the returned checkout can
+   * be loaded as an in-app embedded overlay instead of a full-page redirect to
+   * the provider. Server-validated; ignored if malformed.
+   */
+  embedOrigin?: string;
 }
 
 export interface CreateCheckoutResponse {

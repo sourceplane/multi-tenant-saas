@@ -17,6 +17,29 @@ import type { BillingProviderRegistry } from "../billing-provider/registry.js";
 const FREE_PLAN_ID = getPlanDefinition(DEFAULT_PLAN_CODE)?.id ?? "plan_free";
 
 /**
+ * Validate a client-supplied embed origin: it must be a bare origin (scheme +
+ * host, no path/query/fragment) over https — or http only for localhost dev.
+ * This value only governs which origin may iframe the hosted checkout (it is not
+ * a redirect target), but we still constrain it so a malformed value can't reach
+ * the provider. Returns the normalized origin or null.
+ */
+export function validateEmbedOrigin(raw: unknown): string | null {
+  if (typeof raw !== "string" || raw.length === 0 || raw.length > 253) return null;
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return null;
+  }
+  if (url.origin !== raw) return null; // reject anything with a path/query/fragment
+  if (url.protocol === "https:") return url.origin;
+  if (url.protocol === "http:" && (url.hostname === "localhost" || url.hostname === "127.0.0.1")) {
+    return url.origin;
+  }
+  return null;
+}
+
+/**
  * Authoritative "is the account already a paying subscriber?" signal — read from
  * OUR billing state (what the console shows), not a provider API call. An active
  * subscription on a non-free plan ⇒ a plan change, which must go through the
@@ -92,6 +115,11 @@ export async function handleCreateCheckout(
   if (typeof planCode !== "string" || !isKnownPlanCode(planCode)) {
     return validationError(requestId, "planCode is required and must be a known plan");
   }
+  // Optional: the console's origin, enabling an in-app embedded checkout. A
+  // malformed value is ignored (the checkout still works as a full-page redirect).
+  const embedOrigin = validateEmbedOrigin(
+    (payload as { embedOrigin?: unknown } | null)?.embedOrigin,
+  );
 
   const productMap = deps.productMap ?? parsePolarConfig(env)?.productMap ?? {};
   const productId = productMap[planCode];
@@ -134,6 +162,7 @@ export async function handleCreateCheckout(
       planCode,
       productId,
       successUrl: env.POLAR_SUCCESS_URL ?? "",
+      ...(embedOrigin ? { embedOrigin } : {}),
     });
     const body: CreateCheckoutResponse = { checkoutUrl: result.checkoutUrl, mode: "checkout" };
     return successResponse(body, requestId);

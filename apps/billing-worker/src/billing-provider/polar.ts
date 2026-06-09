@@ -48,6 +48,9 @@ export function createPolarProvider(config: PolarConfig): BillingProvider {
         // customer/subscription carries it back as `customer.externalId`.
         externalCustomerId: input.orgId,
         successUrl: input.successUrl || config.successUrl || undefined,
+        // When the console embeds the checkout, Polar requires the embedding
+        // origin so the hosted page may be iframed there (in-app checkout).
+        ...(input.embedOrigin ? { embedOrigin: input.embedOrigin } : {}),
         metadata: { plan_code: input.planCode, org_id: input.orgId },
       });
       return { checkoutUrl: checkout.url };

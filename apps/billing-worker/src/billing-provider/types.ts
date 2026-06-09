@@ -36,6 +36,13 @@ export interface CreateCheckoutInput {
   productId: string;
   /** Where the provider returns the buyer after a successful checkout. */
   successUrl: string;
+  /**
+   * Origin of the page embedding the checkout (e.g. the console's
+   * `window.location.origin`). When set, the provider allows its hosted checkout
+   * to be loaded in an iframe from that origin — enabling an in-app embedded
+   * checkout instead of a full-page redirect. Validated by the caller.
+   */
+  embedOrigin?: string;
 }
 
 export interface CreateCheckoutResult {
