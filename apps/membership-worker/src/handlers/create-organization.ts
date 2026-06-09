@@ -12,7 +12,9 @@ import {
   assignPlan,
   checkBillingEntitlement,
   decideOrgCreationGate,
+  fanOutPlan,
   type AssignPlanResult,
+  type FanOutResult,
 } from "../billing-client.js";
 
 /** Plan code assigned to every organization at bootstrap. Stable contract with
@@ -50,7 +52,16 @@ export interface CreateOrganizationDeps {
   checkEntitlement?: typeof checkBillingEntitlement;
   /** Injectable "orgs this subject belongs to" lookup for the gate (tests). */
   listOrgsForSubject?: (subjectId: string) => Promise<MembershipResult<Organization[]>>;
+  /** Injectable child entitlement fan-out seam for tests (MO3). */
+  fanOut?: (parentOrgPublicId: string, childOrgPublicId: string) => Promise<FanOutResult>;
 }
+
+/** Outcome of the MO2/MO3 gate: proceed standalone, proceed as a child of a
+ * billing parent (MO3), or block with a Response. */
+type GateOutcome =
+  | { kind: "allow" }
+  | { kind: "allow_child"; parentOrgIdHex: string }
+  | { kind: "block"; response: Response };
 
 /**
  * MO2 gate: creating an *additional* org (the account already owns ≥1) requires
@@ -59,7 +70,8 @@ export interface CreateOrganizationDeps {
  * parent is the account's earliest-created org (resolved through
  * `effectiveBillingOrgId`). Fails closed (503) on any service/repo error.
  *
- * Returns a Response to short-circuit on deny/error, or null to proceed.
+ * Returns `allow` (bootstrap/standalone), `allow_child` (additional org → link
+ * to the billing parent and fan out its plan, MO3), or `block` (deny/error).
  */
 async function gateAdditionalOrg(
   env: Env,
@@ -67,51 +79,77 @@ async function gateAdditionalOrg(
   requestId: string,
   deps: CreateOrganizationDeps | undefined,
   gateRepo: Pick<MembershipRepository, "listOrganizationsForSubject"> | null,
-): Promise<Response | null> {
+): Promise<GateOutcome> {
   // Skip the gate for the legacy deps path that doesn't opt into billing.
-  if (deps && !deps.checkEntitlement) return null;
+  if (deps && !deps.checkEntitlement) return { kind: "allow" };
 
   const listFn =
     deps?.listOrgsForSubject ??
     (gateRepo ? (sid: string) => gateRepo.listOrganizationsForSubject(sid) : null);
-  if (!listFn) return null; // no way to read the account; treat as bootstrap-safe
+  if (!listFn) return { kind: "allow" }; // no way to read the account; bootstrap-safe
 
   const orgsRes = await listFn(actor.subjectId);
   if (!orgsRes.ok) {
-    return errorResponse("internal_error", "Service unavailable", 503, requestId);
+    return { kind: "block", response: errorResponse("internal_error", "Service unavailable", 503, requestId) };
   }
   const existing = orgsRes.value;
-  if (existing.length === 0) return null; // first/bootstrap org — always allowed
+  if (existing.length === 0) return { kind: "allow" }; // first/bootstrap org — always allowed
 
   const entitlementFn = deps?.checkEntitlement ?? checkBillingEntitlement;
   const billingBinding = env.BILLING_WORKER;
   if (!billingBinding && !deps?.checkEntitlement) {
-    return errorResponse("internal_error", "Service unavailable", 503, requestId);
+    return { kind: "block", response: errorResponse("internal_error", "Service unavailable", 503, requestId) };
   }
 
   // Billing parent = the account's earliest-created org, via effectiveBillingOrgId.
   const parent = existing.reduce((a, b) =>
     a.createdAt.getTime() <= b.createdAt.getTime() ? a : b,
   );
-  const parentPublicId = orgPublicId(effectiveBillingOrgId(parent));
+  const parentOrgIdHex = effectiveBillingOrgId(parent);
+  const parentPublicId = orgPublicId(parentOrgIdHex);
 
   const multiOrg = await entitlementFn(billingBinding as Fetcher, parentPublicId, MULTI_ORG_FEATURE_KEY, requestId);
   if (multiOrg.kind === "service_error") {
-    return errorResponse("internal_error", "Service unavailable", 503, requestId);
+    return { kind: "block", response: errorResponse("internal_error", "Service unavailable", 503, requestId) };
   }
   const orgsLimit = await entitlementFn(billingBinding as Fetcher, parentPublicId, ORGANIZATIONS_LIMIT_KEY, requestId);
   if (orgsLimit.kind === "service_error") {
-    return errorResponse("internal_error", "Service unavailable", 503, requestId);
+    return { kind: "block", response: errorResponse("internal_error", "Service unavailable", 503, requestId) };
   }
 
   const gate = decideOrgCreationGate(multiOrg.decision, orgsLimit.decision, existing.length);
   if (gate.kind === "service_error") {
-    return errorResponse("internal_error", "Service unavailable", 503, requestId);
+    return { kind: "block", response: errorResponse("internal_error", "Service unavailable", 503, requestId) };
   }
   if (gate.kind === "deny") {
-    return errorResponse("precondition_failed", gate.message, 412, requestId, { reason: gate.reason });
+    return { kind: "block", response: errorResponse("precondition_failed", gate.message, 412, requestId, { reason: gate.reason }) };
   }
-  return null;
+  return { kind: "allow_child", parentOrgIdHex };
+}
+
+/**
+ * Best-effort: fan out the billing parent's plan entitlements onto a new child
+ * org (MO3). NEVER fails creation — a transient failure is reconciled by the
+ * next parent plan event (re-fan-out) and the check-entitlement free-tier
+ * safety net keeps required flows working meanwhile.
+ */
+async function tryFanOut(
+  env: Env,
+  parentOrgIdHex: string,
+  childOrgIdHex: string,
+  actor: ActorContext,
+  requestId: string,
+): Promise<void> {
+  const binding = env.BILLING_WORKER;
+  if (!binding) return;
+  try {
+    await fanOutPlan(binding as Fetcher, orgPublicId(parentOrgIdHex), orgPublicId(childOrgIdHex), requestId, {
+      id: actor.subjectId,
+      type: actor.subjectType,
+    });
+  } catch {
+    /* best-effort */
+  }
 }
 
 /**
@@ -211,17 +249,20 @@ export async function handleCreateOrganization(
   const slugLower = slug.toLowerCase();
 
   const bootstrapInput = {
-    org: { id: orgId, name: orgName, slug, slugLower, createdAt: now },
+    org: { id: orgId, name: orgName, slug, slugLower, parentOrgId: null as string | null, createdAt: now },
     member: { id: memberId, orgId, subjectId: actor.subjectId, subjectType: actor.subjectType, createdAt: now },
     roleAssignment: { id: roleAssignmentId, orgId, subjectId: actor.subjectId, subjectType: actor.subjectType, role: "owner", scopeKind: "organization", scopeRef: null, createdAt: now },
   };
 
   const executor = deps ? null : createSqlExecutor(env.SOURCEPLANE_DB!);
   try {
-    // MO2: gate creation of an *additional* organization (bootstrap is exempt).
+    // MO2 gate / MO3 child linkage: an *additional* org is gated, then linked to
+    // and fanned out from the account's billing parent. Bootstrap is exempt.
     const gateRepo = executor ? createMembershipRepository(executor) : null;
-    const gateResponse = await gateAdditionalOrg(env, actor, requestId, deps, gateRepo);
-    if (gateResponse) return gateResponse;
+    const gate = await gateAdditionalOrg(env, actor, requestId, deps, gateRepo);
+    if (gate.kind === "block") return gate.response;
+    const parentOrgIdHex = gate.kind === "allow_child" ? gate.parentOrgIdHex : null;
+    if (parentOrgIdHex) bootstrapInput.org.parentOrgId = parentOrgIdHex;
 
     if (executor && "transaction" in executor) {
       const result = await executor.transaction(async (txExec) => {
@@ -297,7 +338,12 @@ export async function handleCreateOrganization(
       }
 
       const { org, roleAssignment } = result.bootstrapResult.value;
-      await tryAssignFreePlan(env, org.id, actor, requestId);
+      // A child inherits the parent's plan (fan-out); a standalone org gets free.
+      if (parentOrgIdHex) {
+        await tryFanOut(env, parentOrgIdHex, org.id, actor, requestId);
+      } else {
+        await tryAssignFreePlan(env, org.id, actor, requestId);
+      }
       return successResponse(
         {
           organization: { id: orgPublicId(org.id), name: org.name, slug: org.slug, createdAt: org.createdAt.toISOString() },
@@ -374,7 +420,13 @@ export async function handleCreateOrganization(
     }
 
     const { org, member, roleAssignment } = bootstrapResult.value;
-    if (deps?.assignPlan) {
+    if (parentOrgIdHex && deps?.fanOut) {
+      try {
+        await deps.fanOut(orgPublicId(parentOrgIdHex), orgPublicId(org.id));
+      } catch {
+        /* best-effort */
+      }
+    } else if (deps?.assignPlan) {
       try {
         await deps.assignPlan(orgPublicId(org.id));
       } catch {

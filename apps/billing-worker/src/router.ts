@@ -7,6 +7,7 @@ import { handleListInvoices } from "./handlers/list-invoices.js";
 import { handleListEntitlements } from "./handlers/list-entitlements.js";
 import { handleCheckEntitlement } from "./handlers/check-entitlement.js";
 import { handleAssignPlan } from "./handlers/assign-plan.js";
+import { handleFanOutPlan } from "./handlers/fan-out.js";
 import { handleWebhookIntake } from "./handlers/webhook-intake.js";
 import { handleCreateCheckout } from "./handlers/create-checkout.js";
 import { handleCreatePortal } from "./handlers/create-portal.js";
@@ -158,6 +159,17 @@ export async function route(request: Request, env: Env): Promise<Response> {
         return errorResponse("unauthorized", "Unauthorized", 403, requestId);
       }
       return handleAssignPlan(request, env, requestId);
+    }
+
+    // Internal entitlement fan-out seam (service-binding only, MO3). Copies a
+    // billing parent's plan entitlements onto a child org. Called by
+    // membership-worker right after a child org is created.
+    if (url.pathname === "/v1/internal/billing/plan/fan-out") {
+      const caller = request.headers.get(INTERNAL_CALLER_HEADER);
+      if (!isAllowedInternalCaller(caller)) {
+        return errorResponse("unauthorized", "Unauthorized", 403, requestId);
+      }
+      return handleFanOutPlan(request, env, requestId);
     }
 
     const matched = matchRoute(url.pathname);

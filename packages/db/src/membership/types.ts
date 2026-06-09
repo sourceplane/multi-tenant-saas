@@ -73,6 +73,8 @@ export interface CreateOrganizationInput {
   name: string;
   slug: string;
   slugLower: string;
+  /** Optional billing parent (MO3). NULL/absent = standalone org. */
+  parentOrgId?: string | null;
   createdAt: Date;
 }
 

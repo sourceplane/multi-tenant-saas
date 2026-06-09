@@ -3,7 +3,7 @@ import { decideOrgCreationGate } from "@membership-worker/billing-client";
 import type { Env } from "@membership-worker/env";
 import type { ActorContext } from "@membership-worker/router";
 import type { CheckBillingEntitlementResponse } from "@saas/contracts/billing";
-import type { Organization, MembershipResult } from "@saas/db/membership";
+import type { Organization, MembershipResult, BootstrapOrganizationInput } from "@saas/db/membership";
 
 const ACTOR: ActorContext = { subjectId: "usr_1", subjectType: "user" };
 const env = { ENVIRONMENT: "test" } as Env;
@@ -132,5 +132,41 @@ describe("handleCreateOrganization — MO2 additional-org gate", () => {
     const res = await handleCreateOrganization(req(), env, "req_t", ACTOR, deps);
     expect(res.status).toBe(412);
     expect(JSON.stringify(await res.json())).toContain("limit_reached");
+  });
+
+  it("links an allowed additional org as a child and fans out the parent plan (MO3)", async () => {
+    const PARENT_HEX = "00000000-0000-0000-0000-0000000000a1";
+    let capturedParentOrgId: string | null | undefined;
+    const fanOutCalls: Array<{ parent: string; child: string }> = [];
+    const deps = {
+      repo: {
+        bootstrapOrganization: async (input: BootstrapOrganizationInput) => {
+          capturedParentOrgId = input.org.parentOrgId;
+          return {
+            ok: true as const,
+            value: {
+              org: org("00000000-0000-0000-0000-0000000000bb", "2026-06-01T00:00:00Z"),
+              member: { id: "m", orgId: "o", subjectId: "usr_1", subjectType: "user", status: "active", createdAt: new Date(), updatedAt: new Date() },
+              roleAssignment: { id: "r", orgId: "o", subjectId: "usr_1", subjectType: "user", role: "owner", scopeKind: "organization", scopeRef: null, createdAt: new Date(), revokedAt: null },
+            },
+          };
+        },
+      },
+      listOrgsForSubject: async () => ({ ok: true as const, value: [org(PARENT_HEX, "2026-01-01T00:00:00Z")] }),
+      checkEntitlement: async (_b: Fetcher, _o: string, key: string) => ({
+        kind: "decision" as const,
+        decision: key === MULTI ? allowed(MULTI, "boolean", null) : allowed(LIMIT, "quantity", 5),
+      }),
+      fanOut: async (parent: string, child: string) => {
+        fanOutCalls.push({ parent, child });
+        return { kind: "ok" as const };
+      },
+    };
+    const res = await handleCreateOrganization(req(), env, "req_t", ACTOR, deps);
+    expect(res.status).toBe(201);
+    expect(capturedParentOrgId).toBe(PARENT_HEX);
+    expect(fanOutCalls).toHaveLength(1);
+    expect(fanOutCalls[0]!.parent).toBe("org_000000000000000000000000000000a1");
+    expect(fanOutCalls[0]!.child).toBe("org_000000000000000000000000000000bb");
   });
 });

@@ -208,8 +208,8 @@ export function createMembershipRepository(executor: SqlExecutor): MembershipRep
       try {
         const result = await executor.execute<Record<string, unknown>>(
           `WITH new_org AS (
-            INSERT INTO membership.organizations (id, name, slug, slug_lower, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $5)
+            INSERT INTO membership.organizations (id, name, slug, slug_lower, parent_org_id, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $19, $5, $5)
             ON CONFLICT (id) DO NOTHING
             RETURNING *
           ),
@@ -238,6 +238,7 @@ export function createMembershipRepository(executor: SqlExecutor): MembershipRep
             input.org.id, input.org.name, input.org.slug, input.org.slugLower, input.org.createdAt.toISOString(),
             input.member.id, input.member.orgId, input.member.subjectId, input.member.subjectType, input.member.createdAt.toISOString(),
             input.roleAssignment.id, input.roleAssignment.orgId, input.roleAssignment.subjectId, input.roleAssignment.subjectType, input.roleAssignment.role, input.roleAssignment.scopeKind, input.roleAssignment.scopeRef ?? null, input.roleAssignment.createdAt.toISOString(),
+            input.org.parentOrgId ?? null,
           ],
         );
         if (result.rowCount === 0) {
