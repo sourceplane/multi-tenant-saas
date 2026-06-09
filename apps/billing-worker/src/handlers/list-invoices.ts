@@ -6,6 +6,7 @@ import { createSqlExecutor } from "@saas/db/hyperdrive";
 import { createBillingRepository } from "@saas/db/billing";
 import { errorResponse, listResponse, validationError } from "../http.js";
 import { authorizeBillingRead } from "../policy.js";
+import { resolveBillingOrgHex } from "../billing-scope.js";
 import { mapInvoiceToPublic } from "../mappers.js";
 import { parseSubscriptionPublicId } from "../ids.js";
 
@@ -90,10 +91,13 @@ export async function handleListInvoices(
   const auth = await authorizeBillingRead(env, actor, orgId, requestId);
   if (!auth.ok) return auth.response;
 
+  // MO4: a child org's invoices resolve to the account's billing parent.
+  const billingOrgId = await resolveBillingOrgHex(env, orgId, requestId);
+
   const executor = createSqlExecutor(env.SOURCEPLANE_DB);
   const repo = createBillingRepository(executor);
 
-  const query: ListInvoicesQuery = { orgId, ...(status ? { status } : {}), ...(subscriptionId ? { subscriptionId } : {}) };
+  const query: ListInvoicesQuery = { orgId: billingOrgId, ...(status ? { status } : {}), ...(subscriptionId ? { subscriptionId } : {}) };
   const result = await repo.listInvoices(query, { limit, cursor });
   if (!result.ok) {
     return errorResponse("internal_error", "Failed to list invoices", 503, requestId);

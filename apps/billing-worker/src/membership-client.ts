@@ -85,3 +85,32 @@ export async function syncAccountChildren(
     return { ok: false };
   }
 }
+
+/**
+ * Resolve an org to the org whose subscription/customer covers it (MO4): its
+ * billing parent for a child, otherwise itself. Returns the effective billing
+ * org's public id, or `{ ok: false }` on any error so callers can fail safe.
+ */
+export async function resolveBillingParent(
+  membershipWorker: Fetcher,
+  orgPublicId: string,
+  requestId: string,
+): Promise<{ ok: true; billingOrgPublicId: string } | { ok: false }> {
+  try {
+    const response = await membershipWorker.fetch(
+      "http://membership-worker/v1/internal/membership/organizations/billing-parent",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-request-id": requestId },
+        body: JSON.stringify({ orgId: orgPublicId }),
+      },
+    );
+    if (!response.ok) return { ok: false };
+    const parsed = (await response.json()) as { data?: { billingOrgId?: unknown } };
+    const billingOrgId = parsed?.data?.billingOrgId;
+    if (typeof billingOrgId !== "string") return { ok: false };
+    return { ok: true, billingOrgPublicId: billingOrgId };
+  } catch {
+    return { ok: false };
+  }
+}
