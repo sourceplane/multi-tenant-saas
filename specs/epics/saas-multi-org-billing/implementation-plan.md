@@ -45,7 +45,12 @@ Make "create another organization" a paid, entitlement-gated action.
 - **Done when:** a free-tier user is blocked from a 2nd org with the upgrade
   prompt; a multi-org-plan user can create up to `limit.organizations`.
 
-## MO3 — Child lifecycle + entitlement fan-out — 🗓️ Planned
+## MO3 — Child lifecycle + entitlement fan-out — ✅ Shipped (#268, #269, #270)
+
+> **As-built:** inherit-on-create (#268), re-fan-out on plan change + freeze
+> children on cancel (#269), console suspended-org warning (#270). Per the
+> chosen policy, downgrade **freezes** children (`status=suspended`, flag-only;
+> access enforcement deferred) rather than detaching them to Free.
 
 Make children inherit, stay in sync, and detach cleanly.
 
