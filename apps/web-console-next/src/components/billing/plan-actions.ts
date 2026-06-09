@@ -30,6 +30,31 @@ export function selectUpgradePlans(
     .sort((a, b) => (a.priceAmountCents ?? 0) - (b.priceAmountCents ?? 0));
 }
 
+/**
+ * The lower **paid** plans an existing subscriber can downgrade to: active,
+ * recurring, priced strictly below the current plan but still > 0. Excludes Free
+ * (that's "Cancel plan") and Enterprise (contact sales). Sorted by price desc, so
+ * the nearest-lower tier comes first. Empty for free/unpriced current plans.
+ */
+export function selectDowngradePlans(
+  plans: PublicPlan[],
+  activePlanCode: string | null,
+): PublicPlan[] {
+  const current = activePlanCode ? plans.find((p) => p.code === activePlanCode) : undefined;
+  const currentPrice = current?.priceAmountCents ?? 0;
+  if (currentPrice <= 0) return []; // free/unpriced has no paid tier below it
+  return plans
+    .filter(
+      (p) =>
+        p.status === "active" &&
+        p.billingInterval !== "none" &&
+        (p.priceAmountCents ?? 0) > 0 &&
+        p.code !== activePlanCode &&
+        (p.priceAmountCents ?? 0) < currentPrice,
+    )
+    .sort((a, b) => (b.priceAmountCents ?? 0) - (a.priceAmountCents ?? 0));
+}
+
 /** Short human price, e.g. "$20/mo". Empty string when unpriced. */
 export function formatPlanPrice(plan: PublicPlan): string {
   if (plan.priceAmountCents == null) return "";

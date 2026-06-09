@@ -1,5 +1,6 @@
 import {
   selectUpgradePlans,
+  selectDowngradePlans,
   formatPlanPrice,
   hasManageableSubscription,
   pollForPlanChange,
@@ -46,6 +47,21 @@ describe("selectUpgradePlans", () => {
 
   it("returns nothing to upgrade to when on the top tier", () => {
     expect(selectUpgradePlans(CATALOG, "business").map((p) => p.code)).toEqual([]);
+  });
+});
+
+describe("selectDowngradePlans", () => {
+  it("returns lower paid tiers (excludes free/enterprise/archived/current), sorted by price desc", () => {
+    expect(selectDowngradePlans(CATALOG, "business").map((p) => p.code)).toEqual(["pro"]);
+  });
+
+  it("returns nothing from the lowest paid tier", () => {
+    expect(selectDowngradePlans(CATALOG, "pro")).toEqual([]);
+  });
+
+  it("returns nothing for a free/unpriced current plan (that's an upgrade, not a downgrade)", () => {
+    expect(selectDowngradePlans(CATALOG, "free")).toEqual([]);
+    expect(selectDowngradePlans(CATALOG, null)).toEqual([]);
   });
 });
 
