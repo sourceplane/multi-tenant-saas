@@ -66,7 +66,7 @@ Make children inherit, stay in sync, and detach cleanly.
   the parent propagates within one webhook/assign cycle; detach restores
   standalone billing — all without touching `check-entitlement`.
 
-## MO4 — Consolidated billing + usage rollup — 🗓️ Planned
+## MO4 — Consolidated billing + usage rollup — ◐ Billing reads shipped (#272); usage rollup pending
 
 One bill, parent-scoped; usage attributable per child.
 

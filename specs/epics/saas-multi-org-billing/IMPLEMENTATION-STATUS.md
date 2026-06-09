@@ -17,7 +17,7 @@ This file tracks PR-level as-built state, kept distinct from the design/plan doc
 | MO1 — schema + resolution seam + entitlements | ✅ Shipped | #253, #257 | #253: `170_membership_org_parent` (nullable `parent_org_id` + sparse index), `Organization.parentOrgId`, `effectiveBillingOrgId`. #257: the D5 flat-tier catalog (Free/Pro/Business/Enterprise) + `feature.multi_org` / `limit.organizations` entitlements. Dormant — applied cleanly to dev/stage/prod; no behavior change (Free's `limit.environments` kept at 3 per the no-regress rule). |
 | MO2 — purchase-gated org creation | ✅ Shipped | #265, #266 | Additional-org gate on `feature.multi_org` + `limit.organizations` (bootstrap exempt) → `412`; console paywall with a Business-checkout "Upgrade" CTA. **Note:** the additional org is still created standalone on Free — parent linkage + entitlement fan-out is MO3. |
 | MO3 — child lifecycle + entitlement fan-out | ✅ Shipped | #268, #269, #270 | Child linkage + fan-out on create (#268); re-fan-out + freeze on parent plan change/cancel (#269); console suspended-org warning (#270). Freeze is **flag-only** (status=suspended) — access enforcement of frozen orgs deferred. Detach-to-standalone not built (freeze policy chosen instead). |
-| MO4 — consolidated billing + usage rollup | 🗓️ Planned | — | |
+| MO4 — consolidated billing + usage rollup | ◐ In progress | #272 | Billing reads (summary/invoices/customer) for a child resolve to the parent's single subscription via a membership billing-parent lookup (fail-safe to self). **Remaining:** usage rollup (sum children's metering at the parent, "Overall vs Individual"). |
 | MO5 — console surfaces | 🗓️ Planned | — | |
 | MO6 — migration + reversibility | 🗓️ Planned | — | |
 
