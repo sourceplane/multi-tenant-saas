@@ -33,6 +33,9 @@ function fakeProvider(id: BillingProvider["id"]): BillingProvider {
     async changeSubscriptionPlan(): Promise<{ changed: boolean }> {
       return { changed: true };
     },
+    async getActiveSubscription() {
+      return null;
+    },
     async listPaymentMethods() {
       return [];
     },

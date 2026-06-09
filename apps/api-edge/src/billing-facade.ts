@@ -14,6 +14,7 @@ const ORG_BILLING_CHECKOUT_RE = /^\/v1\/organizations\/[^/]+\/billing\/checkout$
 const ORG_BILLING_PORTAL_RE = /^\/v1\/organizations\/[^/]+\/billing\/portal$/;
 const ORG_BILLING_CANCEL_RE = /^\/v1\/organizations\/[^/]+\/billing\/subscription\/cancel$/;
 const ORG_BILLING_CHANGE_RE = /^\/v1\/organizations\/[^/]+\/billing\/subscription\/change$/;
+const ORG_BILLING_RECONCILE_RE = /^\/v1\/organizations\/[^/]+\/billing\/reconcile$/;
 
 const FORWARDED_HEADERS = [
   "content-type",
@@ -23,7 +24,7 @@ const FORWARDED_HEADERS = [
 ];
 
 // checkout/portal/cancel/change are POST (billing.manage); the rest are GET reads.
-const WRITE_BILLING_RES = [ORG_BILLING_CHECKOUT_RE, ORG_BILLING_PORTAL_RE, ORG_BILLING_CANCEL_RE, ORG_BILLING_CHANGE_RE];
+const WRITE_BILLING_RES = [ORG_BILLING_CHECKOUT_RE, ORG_BILLING_PORTAL_RE, ORG_BILLING_CANCEL_RE, ORG_BILLING_CHANGE_RE, ORG_BILLING_RECONCILE_RE];
 
 export function isBillingRoute(pathname: string): boolean {
   return (
@@ -36,7 +37,8 @@ export function isBillingRoute(pathname: string): boolean {
     ORG_BILLING_CHECKOUT_RE.test(pathname) ||
     ORG_BILLING_PORTAL_RE.test(pathname) ||
     ORG_BILLING_CANCEL_RE.test(pathname) ||
-    ORG_BILLING_CHANGE_RE.test(pathname)
+    ORG_BILLING_CHANGE_RE.test(pathname) ||
+    ORG_BILLING_RECONCILE_RE.test(pathname)
   );
 }
 

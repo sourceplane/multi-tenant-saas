@@ -327,6 +327,17 @@ export interface ChangePlanResponse {
   changed: boolean;
 }
 
+/**
+ * Reconcile our billing state from the provider (self-heal a missed/dropped
+ * webhook). `reconciled: false` (with a reason) is a normal outcome, not an
+ * error — e.g. there's no provider subscription to link.
+ */
+export interface ReconcileResponse {
+  reconciled: boolean;
+  planCode?: string;
+  reason?: string;
+}
+
 /** A saved card, safe-to-display fields only (never a full PAN or secret). */
 export interface PublicPaymentMethod {
   id: string;
