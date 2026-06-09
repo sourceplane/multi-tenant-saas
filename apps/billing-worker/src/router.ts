@@ -14,6 +14,7 @@ import { handleCreatePortal } from "./handlers/create-portal.js";
 import { handleCancelSubscription } from "./handlers/cancel-subscription.js";
 import { handleChangePlan } from "./handlers/change-plan.js";
 import { handleListPaymentMethods } from "./handlers/list-payment-methods.js";
+import { handleReconcile } from "./handlers/reconcile.js";
 import { errorResponse, notFound, methodNotAllowed } from "./http.js";
 import { generateRequestId, parseOrgPublicId } from "./ids.js";
 
@@ -74,6 +75,7 @@ const CHECKOUT_RE = /^\/v1\/organizations\/([^/]+)\/billing\/checkout$/;
 const PORTAL_RE = /^\/v1\/organizations\/([^/]+)\/billing\/portal$/;
 const CANCEL_RE = /^\/v1\/organizations\/([^/]+)\/billing\/subscription\/cancel$/;
 const CHANGE_RE = /^\/v1\/organizations\/([^/]+)\/billing\/subscription\/change$/;
+const RECONCILE_RE = /^\/v1\/organizations\/([^/]+)\/billing\/reconcile$/;
 
 type RouteKind =
   | "plans"
@@ -85,10 +87,11 @@ type RouteKind =
   | "checkout"
   | "portal"
   | "cancel"
-  | "change";
+  | "change"
+  | "reconcile";
 
-// checkout/portal/cancel/change are POST writes; the rest are GET reads.
-const WRITE_KINDS: ReadonlySet<RouteKind> = new Set<RouteKind>(["checkout", "portal", "cancel", "change"]);
+// checkout/portal/cancel/change/reconcile are POST writes; the rest are GET reads.
+const WRITE_KINDS: ReadonlySet<RouteKind> = new Set<RouteKind>(["checkout", "portal", "cancel", "change", "reconcile"]);
 
 interface MatchedRoute {
   kind: RouteKind;
@@ -107,6 +110,7 @@ function matchRoute(pathname: string): MatchedRoute | null {
     [PORTAL_RE, "portal"],
     [CANCEL_RE, "cancel"],
     [CHANGE_RE, "change"],
+    [RECONCILE_RE, "reconcile"],
   ];
   for (const [re, kind] of patterns) {
     const m = pathname.match(re);
@@ -220,6 +224,8 @@ export async function route(request: Request, env: Env): Promise<Response> {
         return handleCancelSubscription(request, env, requestId, actor, matched.orgId);
       case "change":
         return handleChangePlan(request, env, requestId, actor, matched.orgId);
+      case "reconcile":
+        return handleReconcile(request, env, requestId, actor, matched.orgId);
     }
   } catch {
     return errorResponse("internal_error", "Internal error", 500, requestId);

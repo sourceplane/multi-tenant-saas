@@ -102,6 +102,29 @@ export function createPolarProvider(config: PolarConfig): BillingProvider {
       return { changed: true };
     },
 
+    async getActiveSubscription(externalId) {
+      try {
+        const res = await client.subscriptions.list({
+          externalCustomerId: externalId,
+          active: true,
+          limit: 1,
+        });
+        const s = res.result.items[0];
+        if (!s) return null;
+        const iso = (d: unknown): string | null =>
+          d instanceof Date ? d.toISOString() : typeof d === "string" && d ? d : null;
+        return {
+          providerSubscriptionId: s.id,
+          providerCustomerId: s.customerId ?? null,
+          productId: s.productId ?? null,
+          currentPeriodStart: iso(s.currentPeriodStart),
+          currentPeriodEnd: iso(s.currentPeriodEnd),
+        };
+      } catch {
+        return null;
+      }
+    },
+
     async listPaymentMethods(externalId) {
       try {
         const res = await client.customers.listPaymentMethodsExternal({ externalId });

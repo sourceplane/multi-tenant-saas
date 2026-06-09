@@ -16,6 +16,7 @@ import type {
   ListPaymentMethodsResponse,
   ListPlansRequest,
   ListPlansResponse,
+  ReconcileResponse,
 } from "@saas/contracts/billing";
 
 import type { RequestOptions, Transport } from "./transport.js";
@@ -200,6 +201,22 @@ export class BillingClient {
       {
         method: "POST",
         path: `/v1/organizations/${encodeURIComponent(orgId)}/billing/subscription/cancel`,
+      },
+      opts,
+    );
+  }
+
+  /**
+   * POST /v1/organizations/:orgId/billing/reconcile
+   *
+   * Self-heal billing state from the provider (backfill a missed webhook).
+   * `{ reconciled: false }` is a normal outcome (e.g. no provider subscription).
+   */
+  reconcile(orgId: string, opts: RequestOptions = {}): Promise<ReconcileResponse> {
+    return this.transport.request<ReconcileResponse>(
+      {
+        method: "POST",
+        path: `/v1/organizations/${encodeURIComponent(orgId)}/billing/reconcile`,
       },
       opts,
     );

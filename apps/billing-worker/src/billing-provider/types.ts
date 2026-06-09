@@ -94,6 +94,16 @@ export interface ChangeSubscriptionPlanResult {
   changed: boolean;
 }
 
+/** The org's current active provider subscription, for reconciliation/backfill. */
+export interface ProviderActiveSubscription {
+  providerSubscriptionId: string;
+  providerCustomerId: string | null;
+  /** Opaque provider product id → resolved to a plan code by the caller. */
+  productId: string | null;
+  currentPeriodStart: string | null;
+  currentPeriodEnd: string | null;
+}
+
 /** A normalized, safe-to-display saved card. Never carries full PAN or secrets. */
 export interface ProviderPaymentMethod {
   /** Opaque provider payment-method id. */
@@ -192,6 +202,12 @@ export interface BillingProvider {
    * via checkout, so paid→paid changes go through the customer portal.
    */
   hasActiveSubscription(externalId: string): Promise<boolean>;
+  /**
+   * Fetch the org's current active provider subscription (for reconciliation —
+   * backfilling our row when a webhook was missed/dropped), or null. Read with
+   * the org token; safe fields only.
+   */
+  getActiveSubscription(externalId: string): Promise<ProviderActiveSubscription | null>;
   /**
    * Cancel the org's subscription (provider decides immediate vs. period-end).
    * The authoritative downgrade still flows through the webhook; this only asks

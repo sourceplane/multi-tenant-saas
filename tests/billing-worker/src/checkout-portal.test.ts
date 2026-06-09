@@ -8,6 +8,9 @@ import { handleCreatePortal } from "@billing-worker/handlers/create-portal";
 import { handleCancelSubscription } from "@billing-worker/handlers/cancel-subscription";
 import { handleChangePlan } from "@billing-worker/handlers/change-plan";
 import { handleListPaymentMethods } from "@billing-worker/handlers/list-payment-methods";
+import { handleReconcile } from "@billing-worker/handlers/reconcile";
+import { PLAN_CATALOG } from "@billing-worker/plan-catalog";
+import type { BillingRepository, BillingResult, Plan, BillingCustomer, Subscription, Entitlement } from "@saas/db/billing";
 import type { Env } from "@billing-worker/env";
 import type { ActorContext } from "@billing-worker/router";
 import type { BillingProviderRegistry } from "@billing-worker/billing-provider/registry";
@@ -17,6 +20,7 @@ import type {
   ChangeSubscriptionPlanInput,
   CreateCheckoutInput,
   CreatePortalSessionInput,
+  ProviderActiveSubscription,
   ProviderPaymentMethod,
 } from "@billing-worker/billing-provider/types";
 
@@ -33,7 +37,7 @@ interface Recorder {
   change: ChangeSubscriptionPlanInput[];
 }
 
-function recordingRegistry(rec: Recorder, opts: { resolveFail?: "not_configured"; throwOn?: "checkout" | "portal" | "cancel" | "change"; hasActiveSub?: boolean; cards?: ProviderPaymentMethod[] } = {}): BillingProviderRegistry {
+function recordingRegistry(rec: Recorder, opts: { resolveFail?: "not_configured"; throwOn?: "checkout" | "portal" | "cancel" | "change"; hasActiveSub?: boolean; cards?: ProviderPaymentMethod[]; activeSub?: ProviderActiveSubscription | null } = {}): BillingProviderRegistry {
   const provider: BillingProvider = {
     id: "polar",
     createCheckout: async (input) => {
@@ -58,6 +62,7 @@ function recordingRegistry(rec: Recorder, opts: { resolveFail?: "not_configured"
       if (opts.throwOn === "change") throw new Error("provider down");
       return { changed: true };
     },
+    getActiveSubscription: async () => opts.activeSub ?? null,
     listPaymentMethods: async () =>
       opts.cards ?? [{ id: "pm_1", brand: "visa", last4: "4242", expMonth: 8, expYear: 2027 }],
     verifyWebhook: async () => ({ ok: false, reason: "invalid_signature" }),
@@ -447,6 +452,103 @@ describe("handleChangePlan", () => {
       getActiveSubscription: async () => ({ planId: "plan_pro", providerSubscriptionId: "sub_1" }),
     });
     expect(res.status).toBe(502);
+  });
+});
+
+describe("handleReconcile", () => {
+  function recReq(): Request {
+    return new Request("https://billing/v1/organizations/x/billing/reconcile", { method: "POST" });
+  }
+
+  // Minimal billing repo covering the assignPlanWithRepos slice; captures the
+  // subscription created so the test can assert provider linkage was applied.
+  function fakeRepo() {
+    const subs: Subscription[] = [];
+    return {
+      created: subs,
+      repo: {
+        createPlan: async (i): Promise<BillingResult<Plan>> => ({ ok: true, value: { id: i.id, code: i.code } as Plan }),
+        getPlanByCode: async (code): Promise<BillingResult<Plan>> => {
+          const def = PLAN_CATALOG.find((p) => p.code === code)!;
+          return { ok: true, value: { id: def.id, code: def.code } as Plan };
+        },
+        upsertBillingCustomer: async (i): Promise<BillingResult<BillingCustomer>> => ({ ok: true, value: { id: "cus_x", orgId: i.orgId } as BillingCustomer }),
+        getActiveSubscription: async (): Promise<BillingResult<Subscription>> => ({ ok: false, error: { kind: "not_found" } }),
+        createSubscription: async (i): Promise<BillingResult<Subscription>> => {
+          const s = { id: i.id, orgId: i.orgId, planId: i.planId, status: "active", provider: i.provider ?? null, providerSubscriptionId: i.providerSubscriptionId ?? null } as Subscription;
+          subs.push(s);
+          return { ok: true, value: s };
+        },
+        updateSubscription: async (): Promise<BillingResult<Subscription>> => ({ ok: true, value: subs[0]! }),
+        upsertEntitlement: async (i): Promise<BillingResult<Entitlement>> => ({ ok: true, value: { id: i.id } as Entitlement }),
+      } satisfies Pick<
+        BillingRepository,
+        | "createPlan"
+        | "getPlanByCode"
+        | "upsertBillingCustomer"
+        | "getActiveSubscription"
+        | "createSubscription"
+        | "updateSubscription"
+        | "upsertEntitlement"
+      >,
+    };
+  }
+
+  const PROV_SUB: ProviderActiveSubscription = {
+    providerSubscriptionId: "sub_polar_9",
+    providerCustomerId: "cus_polar_9",
+    productId: "prod_b",
+    currentPeriodStart: "2026-06-01T00:00:00Z",
+    currentPeriodEnd: "2026-07-01T00:00:00Z",
+  };
+
+  it("links the provider subscription found at the provider (back-fill)", async () => {
+    const rec: Recorder = { checkout: [], portal: [], cancel: [], change: [] };
+    const f = fakeRepo();
+    const res = await handleReconcile(recReq(), env, "req_t", ACTOR, ORG_HEX, {
+      registry: recordingRegistry(rec, { activeSub: PROV_SUB }),
+      productMap: PRODUCT_MAP,
+      authorize: allow,
+      repoFactory: () => f.repo,
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { data: { reconciled: boolean; planCode?: string } };
+    expect(body.data.reconciled).toBe(true);
+    expect(body.data.planCode).toBe("business");
+    expect(f.created[0]!.providerSubscriptionId).toBe("sub_polar_9");
+    expect(f.created[0]!.provider).toBe("polar");
+  });
+
+  it("reconciled:false when the provider has no active subscription", async () => {
+    const rec: Recorder = { checkout: [], portal: [], cancel: [], change: [] };
+    const res = await handleReconcile(recReq(), env, "req_t", ACTOR, ORG_HEX, {
+      registry: recordingRegistry(rec, { activeSub: null }),
+      productMap: PRODUCT_MAP,
+      authorize: allow,
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { data: { reconciled: boolean; reason?: string } };
+    expect(body.data.reconciled).toBe(false);
+    expect(body.data.reason).toBe("no_provider_subscription");
+  });
+
+  it("reconciled:false when the provider is not configured", async () => {
+    const rec: Recorder = { checkout: [], portal: [], cancel: [], change: [] };
+    const res = await handleReconcile(recReq(), env, "req_t", ACTOR, ORG_HEX, {
+      registry: recordingRegistry(rec, { resolveFail: "not_configured" }),
+      authorize: allow,
+    });
+    const body = (await res.json()) as { data: { reconciled: boolean } };
+    expect(body.data.reconciled).toBe(false);
+  });
+
+  it("returns the deny response when not authorized", async () => {
+    const rec: Recorder = { checkout: [], portal: [], cancel: [], change: [] };
+    const res = await handleReconcile(recReq(), env, "req_t", ACTOR, ORG_HEX, {
+      registry: recordingRegistry(rec, { activeSub: PROV_SUB }),
+      authorize: deny,
+    });
+    expect(res.status).toBe(404);
   });
 });
 

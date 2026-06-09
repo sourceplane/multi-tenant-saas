@@ -64,6 +64,7 @@ export function BillingActions({
   const [confirmCancel, setConfirmCancel] = React.useState(false);
   const [canceling, setCanceling] = React.useState(false);
   const [confirmChange, setConfirmChange] = React.useState<string | null>(null);
+  const [reconciling, setReconciling] = React.useState(false);
 
   const upgrades = selectUpgradePlans(plans.data?.plans ?? [], activePlanCode);
   const downgrades = selectDowngradePlans(plans.data?.plans ?? [], activePlanCode);
@@ -88,6 +89,22 @@ export function BillingActions({
     void qc.invalidateQueries({ queryKey: qk.invoices(orgId) });
     void qc.invalidateQueries({ queryKey: ["billing", "plans", orgId] });
   }, [qc, orgId]);
+
+  // Self-heal: a paid plan with no provider link locally (missed/dropped webhook)
+  // — ask the server to reconcile from the provider once; on success refresh so
+  // the management actions appear. If there's genuinely no provider subscription,
+  // reconcile is a no-op and the admin-assigned note shows.
+  const reconcileTried = React.useRef(false);
+  React.useEffect(() => {
+    if (!unmanagedPaid || reconcileTried.current) return;
+    reconcileTried.current = true;
+    setReconciling(true);
+    void (async () => {
+      const r = await wrap(() => client.billing.reconcile(orgId));
+      if (r.ok && r.data.reconciled) refreshBilling();
+      setReconciling(false);
+    })();
+  }, [unmanagedPaid, client, orgId, refreshBilling]);
 
   // After the embedded checkout reports success, wait for the webhook to apply
   // the plan, then refresh the page so it reflects the new state.
@@ -310,7 +327,16 @@ export function BillingActions({
             {statusMsg}
           </div>
         ) : null}
-        {unmanagedPaid ? (
+        {unmanagedPaid && reconciling ? (
+          <div
+            role="status"
+            className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground"
+          >
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Checking your subscription…
+          </div>
+        ) : null}
+        {unmanagedPaid && !reconciling ? (
           <p className="text-sm text-muted-foreground">
             This plan was assigned by an administrator and isn’t managed through self-serve billing.
             Contact support to change or cancel it.
