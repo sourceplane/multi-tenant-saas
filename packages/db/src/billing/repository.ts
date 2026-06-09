@@ -434,6 +434,9 @@ export function createBillingRepository(executor: SqlExecutor): BillingRepositor
         if (input.cancelAt !== undefined) push("cancel_at", isoOrNull(input.cancelAt));
         if (input.canceledAt !== undefined)
           push("canceled_at", isoOrNull(input.canceledAt));
+        if (input.provider !== undefined) push("provider", input.provider);
+        if (input.providerSubscriptionId !== undefined)
+          push("provider_subscription_id", input.providerSubscriptionId);
         if (input.metadata !== undefined) push("metadata", jsonOrNull(input.metadata));
 
         if (sets.length === 0) {

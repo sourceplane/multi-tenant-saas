@@ -59,13 +59,23 @@ function fakeRepo(state: State): RepoSlice {
       return s ? { ok: true, value: s } : { ok: false, error: { kind: "not_found" } };
     },
     createSubscription: async (i): Promise<BillingResult<Subscription>> => {
-      const sub = { id: i.id, orgId: i.orgId, planId: i.planId, status: "active" } as Subscription;
+      const sub = {
+        id: i.id,
+        orgId: i.orgId,
+        planId: i.planId,
+        status: "active",
+        provider: i.provider ?? null,
+        providerSubscriptionId: i.providerSubscriptionId ?? null,
+        currentPeriodEnd: i.currentPeriodEnd ?? null,
+      } as Subscription;
       state.subscriptions.push(sub);
       return { ok: true, value: sub };
     },
     updateSubscription: async (orgId, sid, patch): Promise<BillingResult<Subscription>> => {
       const s = state.subscriptions.find((x) => x.orgId === orgId && x.id === sid)!;
       if (patch.status) s.status = patch.status;
+      if (patch.provider !== undefined) s.provider = patch.provider;
+      if (patch.providerSubscriptionId !== undefined) s.providerSubscriptionId = patch.providerSubscriptionId;
       return { ok: true, value: s };
     },
     upsertEntitlement: async (i): Promise<BillingResult<Entitlement>> => {
@@ -144,6 +154,28 @@ describe("handleWebhookIntake", () => {
     expect(body.data.handled).toBe("assigned:business");
     expect(state.subscriptions[0]!.planId).toBe("plan_business");
     expect(state.subscriptions[0]!.orgId).toBe(ORG_HEX);
+    // The provider linkage must be persisted so the sub is manageable later.
+    expect(state.subscriptions[0]!.provider).toBe("polar");
+    expect(state.subscriptions[0]!.providerSubscriptionId).toBe("sub_1");
+  });
+
+  it("back-fills provider linkage on a same-plan subscription.updated", async () => {
+    // Seed an existing business sub created without provider linkage (the bug).
+    const state: State = {
+      subscriptions: [
+        { id: "sub_old", orgId: ORG_HEX, planId: "plan_business", status: "active", provider: null, providerSubscriptionId: null } as Subscription,
+      ],
+      entitlements: [],
+    };
+    await handleWebhookIntake(
+      intakeReq(),
+      env,
+      "req_t",
+      deps(subEvent({ type: "subscription.updated" }), state),
+    );
+    const sub = state.subscriptions.find((s) => s.id === "sub_old")!;
+    expect(sub.provider).toBe("polar");
+    expect(sub.providerSubscriptionId).toBe("sub_1");
   });
 
   it("triggers child refanout after subscription.activated (MO3)", async () => {

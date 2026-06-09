@@ -9,6 +9,7 @@ import {
   assignPlanWithRepos,
   parseAssignPlanBody,
   type AssignPlanResult,
+  type ProviderLink,
 } from "./assign-plan.js";
 import { buildBillingProviderRegistry } from "../billing-provider/polar.js";
 import { syncAccountChildren } from "../membership-client.js";
@@ -108,7 +109,16 @@ async function applyEvent(
       if (!event.orgId) return "noop:no-org";
       const planCode = planCodeForProduct(productMap, event.productId);
       if (!planCode) return "noop:unknown-product";
-      const result = await assignFor(env, event.orgId, planCode, deps, requestId);
+      // Persist the provider linkage so the subscription is manageable
+      // (change/cancel/payment) and the period shows in the console.
+      const provider: ProviderLink = {
+        id: event.provider,
+        customerId: event.providerCustomerId,
+        subscriptionId: event.providerSubscriptionId,
+        currentPeriodStart: parseDate(event.currentPeriodStart),
+        currentPeriodEnd: parseDate(event.currentPeriodEnd),
+      };
+      const result = await assignFor(env, event.orgId, planCode, deps, requestId, provider);
       // Plan changed on the (billing parent) org → propagate to its children.
       if (result !== "repo_error") await triggerChildSync(env, event.orgId, "refanout", deps, requestId);
       return result;
@@ -148,19 +158,27 @@ async function triggerChildSync(
   }
 }
 
+/** Parse an ISO timestamp from a normalized event into a Date (or null). */
+function parseDate(iso: string | null | undefined): Date | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 async function assignFor(
   env: Env,
   publicOrgId: string,
   planCode: string,
   deps: WebhookIntakeDeps,
   requestId: string,
+  provider?: ProviderLink,
 ): Promise<string> {
   const parsed = parseAssignPlanBody({ orgId: publicOrgId, planCode });
   if ("error" in parsed) return "noop:bad-org"; // malformed external id → ack, don't retry
   const def = getPlanDefinition(parsed.planCode)!; // validated in parse
   const now = deps.now ? deps.now() : new Date();
   const genId = deps.generateId ?? generateUuid;
-  const opts = { now, genId, actor: WEBHOOK_ACTOR, requestId };
+  const opts = { now, genId, actor: WEBHOOK_ACTOR, requestId, ...(provider ? { provider } : {}) };
 
   let outcome: AssignPlanResult;
   if (deps.repoFactory) {
