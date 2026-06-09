@@ -301,3 +301,13 @@ export interface CreatePortalSessionResponse {
   /** Hosted customer-portal URL. Safe display URL only — no secrets. */
   portalUrl: string;
 }
+
+/**
+ * Cancel the account's paid subscription natively (no hosted-portal redirect).
+ * No body — the org scope is the URL. The authoritative downgrade still arrives
+ * via the provider webhook; the response is just the acknowledged intent.
+ */
+export interface CancelSubscriptionResponse {
+  /** True when the provider scheduled cancellation at period end (vs. immediate). */
+  cancelAtPeriodEnd: boolean;
+}

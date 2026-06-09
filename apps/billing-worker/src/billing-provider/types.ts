@@ -64,6 +64,22 @@ export interface CreatePortalSessionResult {
   portalUrl: string;
 }
 
+export interface CancelSubscriptionInput {
+  /** Public org id of the billing parent (the provider external customer id). */
+  orgId: string;
+  /** Opaque provider subscription id to cancel (resolved from our mirror). */
+  providerSubscriptionId: string;
+}
+
+export interface CancelSubscriptionResult {
+  /**
+   * True when the provider scheduled the cancellation (vs. immediate). The
+   * authoritative state change still arrives via webhook; this is just the
+   * acknowledged intent so the console can show optimistic copy.
+   */
+  cancelAtPeriodEnd: boolean;
+}
+
 /** Provider-specific subset of webhook headers needed for signature verification. */
 export type ProviderWebhookHeaders = Record<string, string>;
 
@@ -150,6 +166,13 @@ export interface BillingProvider {
    * via checkout, so paid→paid changes go through the customer portal.
    */
   hasActiveSubscription(externalId: string): Promise<boolean>;
+  /**
+   * Cancel the org's subscription (provider decides immediate vs. period-end).
+   * The authoritative downgrade still flows through the webhook; this only asks
+   * the provider to cancel. Done natively so the console need not redirect to the
+   * hosted portal for cancellation.
+   */
+  cancelSubscription(input: CancelSubscriptionInput): Promise<CancelSubscriptionResult>;
   /**
    * Verify a webhook signature over the RAW body bytes and normalize it.
    * Implementations MUST fail closed (`invalid_signature`) on any verification

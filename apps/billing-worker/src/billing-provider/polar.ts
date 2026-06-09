@@ -76,6 +76,19 @@ export function createPolarProvider(config: PolarConfig): BillingProvider {
       }
     },
 
+    async cancelSubscription(input) {
+      // A customer-session token authenticates the Customer Portal API, so we can
+      // cancel on the customer's behalf natively (no hosted-portal redirect).
+      const session = await client.customerSessions.create({ externalCustomerId: input.orgId });
+      await client.customerPortal.subscriptions.cancel(
+        { customerSession: session.token },
+        { id: input.providerSubscriptionId },
+      );
+      // Polar cancels at period end by default; the authoritative state change
+      // (downgrade) arrives via the subscription webhook.
+      return { cancelAtPeriodEnd: true };
+    },
+
     async hasActiveSubscription(externalId: string): Promise<boolean> {
       try {
         const res = await client.subscriptions.list({ externalCustomerId: externalId, active: true, limit: 1 });
