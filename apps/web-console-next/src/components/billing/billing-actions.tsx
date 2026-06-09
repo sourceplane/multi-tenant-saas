@@ -51,6 +51,9 @@ export function BillingActions({
   );
   const [busy, setBusy] = React.useState<string | null>(null);
   const [finalizing, setFinalizing] = React.useState(false);
+  const [statusMsg, setStatusMsg] = React.useState("Finalizing your upgrade…");
+  const [confirmCancel, setConfirmCancel] = React.useState(false);
+  const [canceling, setCanceling] = React.useState(false);
 
   const upgrades = selectUpgradePlans(plans.data?.plans ?? [], activePlanCode);
   const canManage = hasManageableSubscription(activePlanCode);
@@ -65,6 +68,7 @@ export function BillingActions({
   // After the embedded checkout reports success, wait for the webhook to apply
   // the plan, then refresh the page so it reflects the new state.
   const onCheckoutSuccess = React.useCallback(async () => {
+    setStatusMsg("Finalizing your upgrade…");
     setFinalizing(true);
     const result = await pollForPlanChange({
       fromPlanCode: activePlanCode,
@@ -179,6 +183,8 @@ export function BillingActions({
     [client, orgId, toast, onCheckoutSuccess, resolvedTheme],
   );
 
+  // Updating the card is the one PCI-gated action that must stay on the hosted
+  // portal (card details never touch our servers) — a brief deep-link out.
   const openPortal = React.useCallback(async () => {
     setBusy(PORTAL_KEY);
     const r = await wrap(() => client.billing.createPortalSession(orgId));
@@ -189,6 +195,41 @@ export function BillingActions({
     }
     window.location.assign(r.data.portalUrl);
   }, [client, orgId, toast]);
+
+  // Native cancellation — no hosted-portal redirect. The provider schedules the
+  // cancel; the verified webhook applies the downgrade, so we poll until the plan
+  // changes (mirrors the upgrade-finalize flow).
+  const doCancel = React.useCallback(async () => {
+    setCanceling(true);
+    const r = await wrap(() => client.billing.cancelSubscription(orgId));
+    if (!r.ok) {
+      setCanceling(false);
+      setConfirmCancel(false);
+      toast({ kind: "error", title: "Could not cancel", description: r.error.message });
+      return;
+    }
+    setConfirmCancel(false);
+    setStatusMsg("Updating your plan…");
+    setFinalizing(true);
+    const res = await pollForPlanChange({
+      fromPlanCode: activePlanCode,
+      attempts: POLL_ATTEMPTS,
+      intervalMs: POLL_INTERVAL_MS,
+      sleep,
+      fetchPlanCode: async () => {
+        const r2 = await wrap(() => client.billing.getSummary(orgId));
+        return r2.ok ? (r2.data.plan?.code ?? null) : activePlanCode;
+      },
+    });
+    refreshBilling();
+    setFinalizing(false);
+    setCanceling(false);
+    toast(
+      res.changed
+        ? { kind: "success", title: "Subscription canceled", description: "You've moved to the Free plan." }
+        : { kind: "default", title: "Cancellation received", description: "Your plan change is being processed." },
+    );
+  }, [activePlanCode, client, orgId, refreshBilling, toast]);
 
   // Nothing to offer (e.g. already on the top tier with no portal yet).
   if (upgrades.length === 0 && !canManage) return null;
@@ -208,15 +249,15 @@ export function BillingActions({
             className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground"
           >
             <Loader2 className="h-4 w-4 animate-spin" />
-            Finalizing your upgrade…
+            {statusMsg}
           </div>
         ) : null}
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           {upgrades.map((p) => (
             <Button
               key={p.code}
               loading={busy === p.code}
-              disabled={busy !== null || finalizing}
+              disabled={busy !== null || finalizing || canceling}
               onClick={() => void startCheckout(p.code)}
             >
               Upgrade to {p.name} · {formatPlanPrice(p)}
@@ -226,11 +267,31 @@ export function BillingActions({
             <Button
               variant="outline"
               loading={busy === PORTAL_KEY}
-              disabled={busy !== null || finalizing}
+              disabled={busy !== null || finalizing || canceling}
               onClick={() => void openPortal()}
             >
-              Manage billing
+              Update payment method
             </Button>
+          ) : null}
+          {canManage && !confirmCancel ? (
+            <Button
+              variant="ghost"
+              disabled={busy !== null || finalizing || canceling}
+              onClick={() => setConfirmCancel(true)}
+            >
+              Cancel plan
+            </Button>
+          ) : null}
+          {canManage && confirmCancel ? (
+            <span className="flex items-center gap-2 text-sm text-muted-foreground">
+              Cancel your plan and move to Free?
+              <Button variant="destructive" loading={canceling} disabled={finalizing} onClick={() => void doCancel()}>
+                Yes, cancel
+              </Button>
+              <Button variant="ghost" disabled={canceling} onClick={() => setConfirmCancel(false)}>
+                Keep plan
+              </Button>
+            </span>
           ) : null}
         </div>
       </CardContent>
