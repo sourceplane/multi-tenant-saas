@@ -7,6 +7,7 @@ import { Loader2 } from "lucide-react";
 import type { ListPaymentMethodsResponse, PublicPlan } from "@saas/contracts/billing";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useSession } from "@/lib/session";
 import { useToast } from "@/components/ui/toast";
 import { useApiQuery, qk } from "@/lib/query";
@@ -101,8 +102,15 @@ export function BillingActions({
     setReconciling(true);
     void (async () => {
       const r = await wrap(() => client.billing.reconcile(orgId));
-      if (r.ok && r.data.reconciled) refreshBilling();
-      setReconciling(false);
+      if (r.ok && r.data.reconciled) {
+        // Keep the loading state until the refreshed summary flips this org to
+        // provider-managed (the manage UI then renders) — avoids a note→buttons
+        // flash. Safety net clears it if the flip never arrives.
+        refreshBilling();
+        setTimeout(() => setReconciling(false), 8000);
+      } else {
+        setReconciling(false);
+      }
     })();
   }, [unmanagedPaid, client, orgId, refreshBilling]);
 
@@ -328,20 +336,19 @@ export function BillingActions({
           </div>
         ) : null}
         {unmanagedPaid && reconciling ? (
-          <div
-            role="status"
-            className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground"
-          >
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Checking your subscription…
+          // Settling: a paid plan whose provider link is being reconciled. Show a
+          // skeleton (not a message) until it resolves to either the manage
+          // actions or the admin-assigned note — no intermediate flash.
+          <div className="flex flex-wrap items-center gap-3" aria-busy="true">
+            <Skeleton className="h-9 w-44 rounded-md" />
+            <Skeleton className="h-9 w-40 rounded-md" />
           </div>
-        ) : null}
-        {unmanagedPaid && !reconciling ? (
+        ) : unmanagedPaid ? (
           <p className="text-sm text-muted-foreground">
             This plan was assigned by an administrator and isn’t managed through self-serve billing.
             Contact support to change or cancel it.
           </p>
-        ) : null}
+        ) : (
         <div className="flex flex-wrap items-center gap-3">
           {!unmanagedPaid &&
             upgrades.map((p) => (
@@ -426,6 +433,7 @@ export function BillingActions({
             </span>
           ) : null}
         </div>
+        )}
       </CardContent>
     </Card>
   );
