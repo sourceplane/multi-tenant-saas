@@ -4,6 +4,9 @@ import {
   formatPlanPrice,
   hasManageableSubscription,
   pollForPlanChange,
+  orderedPlans,
+  planChangeAction,
+  planFeatureLines,
 } from "@web-console-next/components/billing/plan-actions";
 import type { PublicPlan } from "@saas/contracts/billing";
 
@@ -62,6 +65,42 @@ describe("selectDowngradePlans", () => {
   it("returns nothing for a free/unpriced current plan (that's an upgrade, not a downgrade)", () => {
     expect(selectDowngradePlans(CATALOG, "free")).toEqual([]);
     expect(selectDowngradePlans(CATALOG, null)).toEqual([]);
+  });
+});
+
+describe("orderedPlans", () => {
+  it("orders Free → paid asc → contact-sales last, excluding archived", () => {
+    expect(orderedPlans(CATALOG).map((p) => p.code)).toEqual(["free", "pro", "business", "enterprise"]);
+  });
+});
+
+describe("planChangeAction", () => {
+  const byCode = (c: string) => CATALOG.find((p) => p.code === c)!;
+  it("same plan → current", () => {
+    expect(planChangeAction({ target: byCode("pro"), currentCode: "pro", manageable: true })).toBe("current");
+  });
+  it("contact-sales plan → contact", () => {
+    expect(planChangeAction({ target: byCode("enterprise"), currentCode: "pro", manageable: true })).toBe("contact");
+  });
+  it("→ free → cancel", () => {
+    expect(planChangeAction({ target: byCode("free"), currentCode: "pro", manageable: true })).toBe("cancel");
+  });
+  it("paid target with a managed sub → change", () => {
+    expect(planChangeAction({ target: byCode("business"), currentCode: "pro", manageable: true })).toBe("change");
+  });
+  it("paid target from free (no managed sub) → checkout", () => {
+    expect(planChangeAction({ target: byCode("pro"), currentCode: "free", manageable: false })).toBe("checkout");
+  });
+  it("defaults current to free when null", () => {
+    expect(planChangeAction({ target: byCode("pro"), currentCode: null, manageable: false })).toBe("checkout");
+  });
+});
+
+describe("planFeatureLines", () => {
+  it("returns bullets for known plans, empty for unknown", () => {
+    expect(planFeatureLines("pro").length).toBeGreaterThan(0);
+    expect(planFeatureLines("free").length).toBeGreaterThan(0);
+    expect(planFeatureLines("nope")).toEqual([]);
   });
 });
 

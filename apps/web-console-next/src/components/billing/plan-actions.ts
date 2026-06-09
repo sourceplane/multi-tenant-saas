@@ -70,6 +70,52 @@ export function hasManageableSubscription(activePlanCode: string | null): boolea
   return activePlanCode !== null && activePlanCode !== "free";
 }
 
+/**
+ * All active plans ordered for the change-plan grid: Free → paid (price asc) →
+ * contact-sales (`billingInterval: "none"`) last.
+ */
+export function orderedPlans(plans: PublicPlan[]): PublicPlan[] {
+  const rank = (p: PublicPlan) => (p.billingInterval === "none" ? Number.MAX_SAFE_INTEGER : p.priceAmountCents ?? 0);
+  return plans.filter((p) => p.status === "active").sort((a, b) => rank(a) - rank(b));
+}
+
+export type PlanChangeAction = "current" | "checkout" | "change" | "cancel" | "contact";
+
+/**
+ * What selecting `targetCode` does, given the current plan. First purchase →
+ * checkout; an existing provider-managed paid sub switching plans → change;
+ * moving to Free → cancel; a contact-sales plan → contact; same plan → current.
+ */
+export function planChangeAction(opts: {
+  target: PublicPlan;
+  currentCode: string | null;
+  /** True when there's a provider-managed paid subscription we can change/cancel. */
+  manageable: boolean;
+}): PlanChangeAction {
+  const current = opts.currentCode ?? "free";
+  if (opts.target.code === current) return "current";
+  if (opts.target.billingInterval === "none") return "contact";
+  const targetIsFree = (opts.target.priceAmountCents ?? 0) === 0;
+  if (targetIsFree) return "cancel";
+  return opts.manageable ? "change" : "checkout";
+}
+
+/** Curated, safe-to-display feature bullets per plan code for the change-plan cards. */
+export function planFeatureLines(code: string): string[] {
+  switch (code) {
+    case "free":
+      return ["Up to 3 projects", "Up to 5 members", "Community support"];
+    case "pro":
+      return ["Up to 25 projects", "Up to 20 members", "Custom domains", "Priority support"];
+    case "business":
+      return ["Up to 100 projects", "Up to 50 members", "Multiple organizations", "Custom domains"];
+    case "enterprise":
+      return ["Unlimited projects & members", "SSO & advanced security", "Dedicated support"];
+    default:
+      return [];
+  }
+}
+
 export interface PollPlanChangeOptions {
   /** Re-read the current plan code (e.g. from the billing summary). */
   fetchPlanCode: () => Promise<string | null>;
