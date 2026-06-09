@@ -11,6 +11,7 @@ import { handleListInvitations } from "./handlers/list-invitations.js";
 import { handleRevokeInvitation } from "./handlers/revoke-invitation.js";
 import { handleAcceptInvitation } from "./handlers/accept-invitation.js";
 import { handleAuthorizationContext } from "./handlers/authorization-context.js";
+import { handleSyncAccountChildren } from "./handlers/sync-account-children.js";
 import { handleCreateServicePrincipalBinding, handleListServicePrincipalBindings, handleRevokeServicePrincipalBinding } from "./handlers/service-principal-bindings.js";
 import { errorResponse, notFound, methodNotAllowed } from "./http.js";
 import { generateRequestId } from "./ids.js";
@@ -56,6 +57,16 @@ export async function route(request: Request, env: Env): Promise<Response> {
     if (url.pathname === "/v1/internal/membership/authorization-context") {
       if (request.method === "POST") {
         return handleAuthorizationContext(request, env, requestId);
+      }
+      return methodNotAllowed(requestId);
+    }
+
+    // Internal child re-sync (MO3): billing-worker calls this after a billing
+    // parent's plan changes to re-fan-out (upgrade) or freeze (downgrade) its
+    // children. Service-binding only — not routed by api-edge.
+    if (url.pathname === "/v1/internal/membership/account/children-sync") {
+      if (request.method === "POST") {
+        return handleSyncAccountChildren(request, env, requestId);
       }
       return methodNotAllowed(requestId);
     }

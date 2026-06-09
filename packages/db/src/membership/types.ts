@@ -145,6 +145,10 @@ export interface MembershipRepository {
   createOrganization(input: CreateOrganizationInput): Promise<MembershipResult<Organization>>;
   getOrganizationById(id: string): Promise<MembershipResult<Organization>>;
   getOrganizationBySlug(slugLower: string): Promise<MembershipResult<Organization>>;
+  /** Child orgs whose billing parent is `parentOrgId` (MO3), oldest first. */
+  listChildOrganizations(parentOrgId: string): Promise<MembershipResult<Organization[]>>;
+  /** Set an org's lifecycle status (e.g. freeze a child to 'suspended', MO3). */
+  setOrganizationStatus(orgId: string, status: string, updatedAt: Date): Promise<MembershipResult<Organization>>;
   listOrganizationsForSubject(subjectId: string): Promise<MembershipResult<Organization[]>>;
   listOrganizationsForSubjectPaged(subjectId: string, params: PageQueryParams): Promise<MembershipResult<PagedResult<Organization>>>;
 

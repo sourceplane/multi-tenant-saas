@@ -11,6 +11,7 @@ import {
   type AssignPlanResult,
 } from "./assign-plan.js";
 import { buildBillingProviderRegistry } from "../billing-provider/polar.js";
+import { syncAccountChildren } from "../membership-client.js";
 import { parsePolarConfig, planCodeForProduct } from "../billing-provider/polar-mapping.js";
 import type { BillingProviderRegistry } from "../billing-provider/registry.js";
 import type { NormalizedEvent } from "../billing-provider/types.js";
@@ -45,6 +46,8 @@ export interface WebhookIntakeDeps {
   eventsFactory?: (env: Env) => EventsRepoSlice;
   now?: () => Date;
   generateId?: () => string;
+  /** Injectable child re-sync trigger (MO3) for tests; defaults to membership-worker. */
+  syncChildren?: (parentOrgPublicId: string, mode: "refanout" | "freeze") => Promise<void>;
 }
 
 function headerRecord(request: Request): Record<string, string> {
@@ -105,15 +108,43 @@ async function applyEvent(
       if (!event.orgId) return "noop:no-org";
       const planCode = planCodeForProduct(productMap, event.productId);
       if (!planCode) return "noop:unknown-product";
-      return assignFor(env, event.orgId, planCode, deps, requestId);
+      const result = await assignFor(env, event.orgId, planCode, deps, requestId);
+      // Plan changed on the (billing parent) org → propagate to its children.
+      if (result !== "repo_error") await triggerChildSync(env, event.orgId, "refanout", deps, requestId);
+      return result;
     }
     case "subscription.canceled": {
       if (!event.orgId) return "noop:no-org";
-      return assignFor(env, event.orgId, DEFAULT_PLAN_CODE, deps, requestId);
+      const result = await assignFor(env, event.orgId, DEFAULT_PLAN_CODE, deps, requestId);
+      // Downgraded below multi-org → freeze children (flag-only, per policy).
+      if (result !== "repo_error") await triggerChildSync(env, event.orgId, "freeze", deps, requestId);
+      return result;
     }
     default:
       // invoice.recorded / invoice.paid / payment.failed / ignored: ack only.
       return `noop:${event.type}`;
+  }
+}
+
+/** Best-effort: ask membership-worker to re-sync the account's children. Never
+ * fails intake — children reconcile on the next plan event. */
+async function triggerChildSync(
+  env: Env,
+  parentOrgPublicId: string,
+  mode: "refanout" | "freeze",
+  deps: WebhookIntakeDeps,
+  requestId: string,
+): Promise<void> {
+  try {
+    if (deps.syncChildren) {
+      await deps.syncChildren(parentOrgPublicId, mode);
+      return;
+    }
+    if (env.MEMBERSHIP_WORKER) {
+      await syncAccountChildren(env.MEMBERSHIP_WORKER as Fetcher, parentOrgPublicId, mode, requestId);
+    }
+  } catch {
+    /* best-effort */
   }
 }
 
