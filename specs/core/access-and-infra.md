@@ -184,10 +184,10 @@ unless they are emitted by an Orun composition job.
 Required validation for infrastructure changes:
 
 ```bash
-/Users/irinelinson/.local/bin/kiox -- orun validate --intent intent.yaml
-/Users/irinelinson/.local/bin/kiox -- orun plan --intent intent.yaml --view dag
-/Users/irinelinson/.local/bin/kiox -- orun plan --intent intent.yaml --output plan.json
-/Users/irinelinson/.local/bin/kiox -- orun run --plan plan.json --dry-run --runner github-actions
+kiox -- orun validate --intent intent.yaml
+kiox -- orun plan --intent intent.yaml --view dag
+kiox -- orun plan --intent intent.yaml --output plan.json
+kiox -- orun run --plan plan.json --dry-run --runner github-actions
 ```
 
 Use `--changed` when proving PR scoping, and use full plans when validating
@@ -195,9 +195,9 @@ environment promotion or cross-component dependency behavior.
 
 ## Acceptance Criteria
 
-- `multi-tenant-saas` uses the repo's current verified Orun runtime
-  (`v2.3.0`, verified by Task 0009) while continuing to follow
-  `aws-admin` for Terraform component and backend structure.
+- `multi-tenant-saas` uses the Orun runtime pinned in `kiox.yaml`
+  (authoritative; `kiox.lock` records the resolved digest) while continuing to
+  follow `aws-admin` for Terraform component and backend structure.
 - `intent.yaml` uses the `dev`, `stage`, `prod` environment shape and
   Terraform parameter defaults from the AWS-admin pattern.
 - Terraform state uses S3 buckets `sourceplane-<env>` and the AWS-admin state
