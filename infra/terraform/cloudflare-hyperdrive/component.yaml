@@ -14,6 +14,11 @@ spec:
   owner: platform
   domain: infra
 
+  # Hyperdrive's origin is the Supabase Postgres connection that `supabase`
+  # writes to AWS Secrets Manager; it must run after that secret exists.
+  dependsOn:
+    - component: supabase
+
   parameters:
     orgName: sourceplane
     stackName: cloudflare-hyperdrive

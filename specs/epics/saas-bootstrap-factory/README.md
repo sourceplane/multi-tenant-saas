@@ -62,7 +62,7 @@ that quality into reuse.
 | ID | Milestone | Human help? | Status |
 |----|-----------|-------------|--------|
 | BF0 | Truth pass: docs match code reality | No | ✅ Shipped |
-| BF1 | Encode the real infra dependency DAG | No | 🗓️ Planned |
+| BF1 | Encode the real infra dependency DAG | No | ✅ Shipped |
 | BF2 | Parameterize the Terraform + stack identity surface | No | 🗓️ Planned |
 | BF3 | App identity via config indirection | No | 🗓️ Planned |
 | BF4 | Generalize runtime binding names | No | 🗓️ Planned |

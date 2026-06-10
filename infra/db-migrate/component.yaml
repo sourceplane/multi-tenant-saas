@@ -17,6 +17,8 @@ spec:
 
   dependsOn:
     - component: db
+    # Migrations read the Supabase connection from the secret `supabase` writes.
+    - component: supabase
 
   path: packages/db/src/migrations
 

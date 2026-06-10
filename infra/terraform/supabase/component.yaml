@@ -14,6 +14,11 @@ spec:
   owner: platform
   domain: infra
 
+  # Supabase provisioning writes credentials to AWS Secrets Manager and stores
+  # Terraform state in S3; both are proven by `bootstrap` first.
+  dependsOn:
+    - component: bootstrap
+
   parameters:
     orgName: sourceplane
     stackName: supabase
