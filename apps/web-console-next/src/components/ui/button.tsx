@@ -52,8 +52,24 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         aria-busy={loading || undefined}
         {...props}
       >
-        {showSpinner ? <Loader2 className="animate-spin" aria-hidden /> : null}
-        {children}
+        {/*
+          When `asChild`, `Comp` is Radix `Slot`, which requires exactly ONE
+          React element child (it runs `React.Children.only`). A
+          `{showSpinner ? … : null}` sibling counts as a second child even when
+          it renders `null`, so emitting it in the Slot case throws
+          "React.Children.only expected to receive a single React element child"
+          at render time. The spinner is already suppressed for `asChild` (see
+          `showSpinner`), so pass the single child straight through; only the
+          real <button> gets the optional leading spinner.
+        */}
+        {asChild ? (
+          children
+        ) : (
+          <>
+            {showSpinner ? <Loader2 className="animate-spin" aria-hidden /> : null}
+            {children}
+          </>
+        )}
       </Comp>
     );
   },
