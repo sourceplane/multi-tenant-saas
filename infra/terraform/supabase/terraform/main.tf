@@ -103,11 +103,23 @@ variable "terraformVersion" {
   default = "1.15.3"
 }
 
+# Supabase target identity — supplied as TF_VAR_supabaseOrgId / TF_VAR_supabaseRegion
+# from the component's `spec.parameters` (see infra/terraform/supabase/component.yaml).
+# Required (no default) so a missing value fails plan loudly instead of silently
+# pointing at the wrong Supabase organization or region.
+variable "supabaseOrgId" {
+  type = string
+}
+
+variable "supabaseRegion" {
+  type = string
+}
+
 # --- Locals ---
 
 locals {
-  supabase_org_id = "dwazxcrywsdbxpuouifa"
-  supabase_region = "ap-southeast-1"
+  supabase_org_id = var.supabaseOrgId
+  supabase_region = var.supabaseRegion
   project_name    = "multi-tenant-saas-${var.environment}"
   secret_name     = "${var.orgName}/multi-tenant-saas/supabase/${var.environment}"
 

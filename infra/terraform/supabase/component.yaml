@@ -24,6 +24,10 @@ spec:
     stackName: supabase
     terraformDir: terraform
     terraformVersion: "1.15.3"
+    # Supabase target identity (surfaced to Terraform as TF_VAR_supabaseOrgId /
+    # TF_VAR_supabaseRegion by the terraform composition's parameter→TF_VAR loop).
+    supabaseOrgId: dwazxcrywsdbxpuouifa
+    supabaseRegion: ap-southeast-1
 
   env:
     AWS_EC2_METADATA_DISABLED: "true"
