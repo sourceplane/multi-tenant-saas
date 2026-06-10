@@ -34,6 +34,7 @@ The architect-style ground rules:
 | **PERF** | [`epics/saas-performance/`](./epics/saas-performance/) | In progress | PERF1–PERF9 latency ladder (PERF1–5 + PERF6 core shipped + verified; PERF6b/PERF7–9 planned). Measurement record + RCA + cost notes in the epic's `design.md`. |
 | **P2** | [`epics/saas-resources-runtime/`](./epics/saas-resources-runtime/) | Draft (not started) | The moat: manifest-driven resources + runtime orchestration (components 06 + 08). |
 | **B** (billing platform) | [`epics/saas-multi-org-billing/`](./epics/saas-multi-org-billing/) | In progress | Datadog-style multi-org ownership (default single org; more orgs purchased; billing from the default/parent org) + the `billing-provider-abstraction` sub-epic (Polar first, Stripe/others by config). Extends B6 + B11. |
+| **BF** | [`epics/saas-bootstrap-factory/`](./epics/saas-bootstrap-factory/) | Draft (not started) | Make the starter instantiable: BF0–BF2 truth + typed params · BF3–BF6 config indirection + deploy-time wiring (no committed resource IDs) · BF7–BF9 domain/foundation/preflight · BF10–BF12 OCI stack + Blueprint/Instance contracts + instantiator · BF13–BF14 acme rehearsal + upgrade path. |
 | **P1, P3–P7** | [`epics/saas-product-areas/`](./epics/saas-product-areas/) | Holding register | P1 promote-flow · P3 observability · P4 notification inbox · P5 marketplace · P6 changelog/status · P7 AI-native. |
 
 For the status legend (`Draft → In progress → ✅ Shipped → ⛔ Blocked → Closed`),
@@ -66,6 +67,14 @@ see [`README.md`](./README.md).
 - **PERF** is orthogonal and ongoing; PERF5 took warm org-scoped reads/writes to
   ~55–65ms p50 on prod and the PERF6 core made the edge gate measurable. Next is
   PERF7 (cold starts), with PERF6b (AE dashboards) as a cheap follow-on.
+- **BF (bootstrap factory)** is orthogonal to B/U/P and mostly human-independent:
+  BF0–BF2 (docs truth, infra `dependsOn` edges, parameterizing the Terraform +
+  stack identity surface) are safe to schedule any time and improve this
+  instance on their own. The keystone is BF5/BF6 (Terraform wiring manifest +
+  deploy-time binding resolution — removes all committed resource IDs). Only
+  BF8 (fresh-account foundation) and BF13 (acme rehearsal) are human-gated; park
+  them per the deferred-decision protocol until the epic's human-help register
+  is supplied.
 
 ## What this document is not
 
