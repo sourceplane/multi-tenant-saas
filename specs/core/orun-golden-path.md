@@ -37,11 +37,14 @@ execution contracts; Orun compiles those inputs into an explicit plan DAG.
 
 Use the `aws-admin` repo as the strongest current reference for Orun-shaped
 Terraform component structure, S3 backend shape, environment defaults, and
-README/component style. For runtime version, this repo currently leads with the
-Task 0009-verified Orun `v2.3.0` path:
+README/component style. The pinned Orun runtime is the single source of truth in
+`kiox.yaml`; do not hard-code a version anywhere else:
 
-- `kiox.yaml` pins `ghcr.io/sourceplane/orun:v2.3.0`.
-- GitHub Actions uses `sourceplane/orun-action@v1.2.0` with `version: v2.3.0`.
+- `kiox.yaml` pins the Orun provider image (`ghcr.io/sourceplane/orun:<version>`)
+  and `kiox.lock` records the resolved digest. This is the authority — quote it,
+  don't restate the version in prose.
+- `.github/workflows/ci.yml` uses `sourceplane/orun-action@<action-version>` with
+  `version:` matching the `kiox.yaml` pin.
 - `intent.yaml` declares composition sources and type bindings centrally.
 - Environments are `dev`, `stage`, and `prod`; `stage` promotes from `dev`,
   and `prod` promotes from `stage`.
@@ -50,10 +53,10 @@ Task 0009-verified Orun `v2.3.0` path:
 - Component docs sit next to the component and explain resources, parameters,
   outputs, dependencies, and local verification.
 
-If `aws-admin` still pins an older Orun runtime, treat that as temporary
-reference-repo drift. Follow `aws-admin` for structure and this repo's verified
-`v2.3.0` runtime for new local work until a separate `aws-admin` alignment task
-lands.
+When bumping the runtime, update `kiox.yaml`/`kiox.lock` and the `ci.yml`
+`version:` together in one PR; no other doc should pin a literal version. If
+`aws-admin` pins a different Orun runtime, treat that as reference-repo drift:
+follow `aws-admin` for structure and this repo's `kiox.yaml` pin for runtime.
 
 ## Component Manifest Rules
 
@@ -117,12 +120,12 @@ Before editing, identify:
 Then validate with the cheapest command that proves the change:
 
 ```bash
-/Users/irinelinson/.local/bin/kiox -- orun compositions --intent intent.yaml --long
-/Users/irinelinson/.local/bin/kiox -- orun validate --intent intent.yaml
-/Users/irinelinson/.local/bin/kiox -- orun component --intent intent.yaml --long
-/Users/irinelinson/.local/bin/kiox -- orun plan --intent intent.yaml --view dag
-/Users/irinelinson/.local/bin/kiox -- orun plan --intent intent.yaml --output plan.json
-/Users/irinelinson/.local/bin/kiox -- orun run --plan plan.json --dry-run --runner github-actions
+kiox -- orun compositions --intent intent.yaml --long
+kiox -- orun validate --intent intent.yaml
+kiox -- orun component --intent intent.yaml --long
+kiox -- orun plan --intent intent.yaml --view dag
+kiox -- orun plan --intent intent.yaml --output plan.json
+kiox -- orun run --plan plan.json --dry-run --runner github-actions
 ```
 
 Use `--changed` for PR scoping checks. Use a full plan when changing

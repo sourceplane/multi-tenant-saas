@@ -122,10 +122,10 @@ Bootstrap a production-grade Cloudflare monorepo that all later SaaS starter bou
 - Local verification passes:
 
 ```bash
-/Users/irinelinson/.local/bin/kiox -- orun compositions lock --intent intent.yaml
-/Users/irinelinson/.local/bin/kiox -- orun validate --intent intent.yaml
-/Users/irinelinson/.local/bin/kiox -- orun plan --changed --intent intent.yaml --output plan.json
-/Users/irinelinson/.local/bin/kiox -- orun run --plan plan.json --dry-run --runner github-actions
+kiox -- orun compositions lock --intent intent.yaml
+kiox -- orun validate --intent intent.yaml
+kiox -- orun plan --changed --intent intent.yaml --output plan.json
+kiox -- orun run --plan plan.json --dry-run --runner github-actions
 ```
 
 - GitHub Actions uses the same Orun plan/run model and executes at least one test component.

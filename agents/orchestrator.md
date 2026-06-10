@@ -400,11 +400,11 @@ Must:
 - run the required Orun verification for the changed components
 - create PR
 - write report
-- run `/Users/irinelinson/.local/bin/kiox -- orun validate --intent intent.yaml`
+- run `kiox -- orun validate --intent intent.yaml`
   when `intent.yaml` exists
-- run `/Users/irinelinson/.local/bin/kiox -- orun plan --changed --intent intent.yaml --output plan.json`
+- run `kiox -- orun plan --changed --intent intent.yaml --output plan.json`
   when Orun is scaffolded
-- run `/Users/irinelinson/.local/bin/kiox -- orun run --plan plan.json --dry-run --runner github-actions`
+- run `kiox -- orun run --plan plan.json --dry-run --runner github-actions`
   when a plan is produced, recording no-op results when the plan has no jobs
 
 Report:
@@ -456,10 +456,10 @@ Recommended Next Move
 
 Verifier Merge Protocol:
 
-- Prefer `/Users/irinelinson/.local/bin/kiox` when `kiox` is not on `PATH`
-- Run `/Users/irinelinson/.local/bin/kiox -- orun validate --intent intent.yaml` when `intent.yaml` exists
-- Run `/Users/irinelinson/.local/bin/kiox -- orun plan --changed --intent intent.yaml --output plan.json` when Orun is scaffolded
-- Run `/Users/irinelinson/.local/bin/kiox -- orun run --plan plan.json --dry-run --runner github-actions` when a plan is produced; if no jobs are planned, record the no-op result
+- Prefer `kiox` when `kiox` is not on `PATH`
+- Run `kiox -- orun validate --intent intent.yaml` when `intent.yaml` exists
+- Run `kiox -- orun plan --changed --intent intent.yaml --output plan.json` when Orun is scaffolded
+- Run `kiox -- orun run --plan plan.json --dry-run --runner github-actions` when a plan is produced; if no jobs are planned, record the no-op result
 - When a task creates or updates Cloudflare, Supabase, AWS IAM, S3, or Secrets Manager resources, verify the resulting resources directly with provider CLIs/APIs, Terraform state, or GitHub Actions logs and include non-secret observed resource state in the verifier report
 - Check PR CI logs with `gh`, including successful jobs, to confirm expected commands actually ran
 - Verify PR CI logs show `orun plan --changed --intent intent.yaml --output plan.json` and `orun run --plan plan.json --runner github-actions --remote-state` when applicable
