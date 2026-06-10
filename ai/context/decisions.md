@@ -56,6 +56,17 @@ Last updated: 2026-05-26
   non-blocking Orun/spec limitation for now because the components subscribe to
   different environments. Proposal `ai/proposals/task-0007.1-spec-update.md`
   records the deferred follow-up.
+- BF1 (saas-bootstrap-factory): the real infra ordering is now encoded as
+  `dependsOn` edges — `supabase → bootstrap`, `cloudflare-hyperdrive →
+  supabase`, and `db-migrate → supabase` (in addition to the existing
+  `db-migrate → db`). `cloudflare-kv` stays independent. The cross-environment
+  `dependsOn` limitation does **not** bite these edges: Orun resolves them
+  per-environment, so `supabase.{stage,prod}` depending on
+  `bootstrap.{dev,stage,prod}` correctly produces stage→stage and prod→prod
+  edges and ignores `bootstrap.dev` (which has no dependent). Verified with
+  `orun validate` + `orun plan --view dag` (no cycle; edges present in both
+  stage and prod). The limitation is specific to components with **no
+  overlapping** environments (as with `db`/`db-tests`).
 - Task 0008 is complete and verified. PR #35 merged and post-merge CI run
   `26229865114` applied the baseline migration to both stage and prod.
 - Task 0009 Hyperdrive implementation is verified PASS after PR #36 and
