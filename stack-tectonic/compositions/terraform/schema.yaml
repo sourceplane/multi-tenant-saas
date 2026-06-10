@@ -25,6 +25,9 @@ spec:
           - terraformDir
           - terraformVersion
         properties:
+          awsAccountId:
+            type: string
+            description: AWS account ID hosting the GitHub-OIDC role this component assumes
           awsRegion:
             type: string
           lane:
