@@ -1,13 +1,15 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useOrgBySlug } from "@/lib/use-org";
 import { readLastOrgSlug, clearLastOrgSlug } from "@/lib/last-org";
-import { AlertTriangle } from "lucide-react";
+import { buildBreadcrumbs } from "./breadcrumbs";
+import { AlertTriangle, ChevronRight } from "lucide-react";
 
 /**
  * Shared wrapper for per-org pages: resolves slug → org, surfaces
@@ -79,11 +81,49 @@ export function OrgScope({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-2">
-        <Badge variant="secondary">{org.slug}</Badge>
-        <span className="text-sm text-muted-foreground">{org.name}</span>
-      </div>
+      <OrgBreadcrumbs orgSlug={org.slug} orgName={org.name} />
       {children(org)}
     </div>
+  );
+}
+
+/**
+ * Persistent wayfinding: a real breadcrumb `<nav>` derived from the URL (the
+ * source of truth for scope), replacing the old `slug-chip + name` echo.
+ */
+function OrgBreadcrumbs({ orgSlug, orgName }: { orgSlug: string; orgName: string }) {
+  const pathname = usePathname();
+  const crumbs = buildBreadcrumbs({ orgSlug, orgName, pathname });
+
+  return (
+    <nav aria-label="Breadcrumb">
+      <ol className="flex flex-wrap items-center gap-1 text-sm">
+        {crumbs.map((crumb, i) => {
+          const last = i === crumbs.length - 1;
+          return (
+            <li key={`${crumb.label}-${i}`} className="flex min-w-0 items-center gap-1">
+              {i > 0 && (
+                <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" aria-hidden />
+              )}
+              {crumb.href && !last ? (
+                <Link
+                  href={crumb.href}
+                  className="truncate text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  {crumb.label}
+                </Link>
+              ) : (
+                <span
+                  aria-current={last ? "page" : undefined}
+                  className={last ? "truncate font-medium" : "truncate text-muted-foreground"}
+                >
+                  {crumb.label}
+                </span>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
   );
 }
