@@ -33,34 +33,10 @@ export async function handleListSettings(
     return validationError(requestId, { [pageResult.field]: [pageResult.reason] });
   }
 
-  const contextResult = await fetchAuthorizationContext(
-    env.MEMBERSHIP_WORKER,
-    actor.subjectId,
-    actor.subjectType,
-    scope.orgId,
-    requestId,
-  );
-  if (!contextResult.ok) {
-    return errorResponse("not_found", "Not found", 404, requestId);
-  }
-
   const policyAction = scope.kind === "organization" ? "organization.config.read" : "project.config.read";
   const resource: PolicyResource = { kind: scope.kind === "organization" ? "organization" : "project", orgId: scope.orgId };
   if ("projectId" in scope) {
     resource.projectId = scope.projectId;
-  }
-
-  const policyResult = await authorizeViaPolicy(
-    env.POLICY_WORKER,
-    actor.subjectId,
-    actor.subjectType,
-    policyAction,
-    resource,
-    contextResult.memberships,
-    requestId,
-  );
-  if (!policyResult.allow) {
-    return errorResponse("not_found", "Not found", 404, requestId);
   }
 
   const { limit, cursor } = pageResult.value;
@@ -69,7 +45,35 @@ export async function handleListSettings(
   const executor = createSqlExecutor(env.SOURCEPLANE_DB);
   try {
     const repo = createConfigRepository(executor);
-    const result = await repo.listSettings(scope, { limit, cursor: dbCursor });
+    // PERF12: the authorization-context fetch (membership) and the read are
+    // independent — run them concurrently, evaluate policy from the fetched
+    // facts, and discard the speculatively read rows on deny (deny-by-default).
+    const [contextResult, result] = await Promise.all([
+      fetchAuthorizationContext(
+        env.MEMBERSHIP_WORKER,
+        actor.subjectId,
+        actor.subjectType,
+        scope.orgId,
+        requestId,
+      ),
+      repo.listSettings(scope, { limit, cursor: dbCursor }),
+    ]);
+    if (!contextResult.ok) {
+      return errorResponse("not_found", "Not found", 404, requestId);
+    }
+
+    const policyResult = await authorizeViaPolicy(
+      env.POLICY_WORKER,
+      actor.subjectId,
+      actor.subjectType,
+      policyAction,
+      resource,
+      contextResult.memberships,
+      requestId,
+    );
+    if (!policyResult.allow) {
+      return errorResponse("not_found", "Not found", 404, requestId);
+    }
 
     if (!result.ok) {
       return errorResponse("internal_error", "Service unavailable", 503, requestId);
