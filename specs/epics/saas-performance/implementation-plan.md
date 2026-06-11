@@ -80,13 +80,20 @@ chunk via browserslist; review the two largest chunks. Done when repeat visits
 issue zero asset revalidations and entry JS < ~170 KiB gzip. Owner:
 web-console-next.
 
-## PERF11 — Console client-cache completion — 🗓️ Planned
-Move the six audited manual-fetch spots onto `useApiQuery` shared cache keys:
-sidebar org switcher (duplicate org-list fetches), scope switcher (3 uncached
-calls/mount), account/profile, account/security, usage page, webhook delivery
-history. Done when revisits paint instantly from cache (background revalidate)
-and no `useEffect`/`useAsync` data fetches remain on those surfaces. Owner:
-web-console-next.
+## PERF11 — Console client-cache completion (shell + profile) — ✅ Shipped (PR pending)
+Moved the three highest-traffic non-paginated manual-fetch spots onto
+`useApiQuery` shared cache keys: sidebar org switcher (was firing a duplicate
+org-list fetch every shell mount), scope switcher (was 3 uncached org→project→env
+calls/mount), and account/profile (was an uncached `useEffect`). These reuse the
+page query caches so the shell paints from cache and dedupes in-flight requests;
+profile save writes back to the cache via `setQueryData`. Owner: web-console-next.
+
+## PERF11b — Console client-cache: paginated surfaces — 🗓️ Planned
+The three cursor-paginated surfaces deferred from PERF11 (each needs first-page
+caching kept compatible with "load more" accumulation): account/security,
+usage (summary + violations), webhook delivery history. Done when the first
+page paints from cache on revisit while pagination beyond it still works.
+Owner: web-console-next.
 
 ## PERF12 — Server read-path parallelization completion + identity JOIN — 🗓️ Planned
 Apply the PERF4 authctx∥db pattern to the 10 remaining serial read handlers

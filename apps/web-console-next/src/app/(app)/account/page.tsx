@@ -9,7 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AccountTabs } from "@/components/account/account-tabs";
+import { useQueryClient } from "@tanstack/react-query";
 import { wrap } from "@/lib/api";
+import { useApiQuery, qk } from "@/lib/query";
 import { useSession } from "@/lib/session";
 import { useUnsavedChangesGuard } from "@/lib/use-unsaved-guard";
 import { useToast } from "@/components/ui/toast";
@@ -25,29 +27,25 @@ export default function AccountPage() {
   const { client, setToken } = useSession();
   const router = useRouter();
   const { toast } = useToast();
+  const qc = useQueryClient();
 
-  const [user, setUser] = React.useState<AuthUser | null>(null);
-  const [loading, setLoading] = React.useState(true);
-  const [error, setError] = React.useState<string | null>(null);
+  // PERF11: profile is read through react-query so revisits paint instantly from
+  // cache (stale-while-revalidate) instead of a manual uncached refetch.
+  const profile = useApiQuery(qk.profile(), () =>
+    wrap(async () => (await client.auth.getProfile()).user),
+  );
+  const user: AuthUser | null = profile.data;
+  const loading = profile.loading;
+  const error = profile.error?.message ?? null;
   const [name, setName] = React.useState("");
   const [saving, setSaving] = React.useState(false);
 
+  // Seed the editable field from the (cached) profile. Keyed on the saved
+  // displayName so a user's in-progress edit is never clobbered by a background
+  // revalidation; a successful save updates the cache and re-seeds to the new value.
   React.useEffect(() => {
-    let cancelled = false;
-    void wrap(() => client.auth.getProfile()).then((r) => {
-      if (cancelled) return;
-      if (r.ok) {
-        setUser(r.data.user);
-        setName(r.data.user.displayName ?? "");
-      } else {
-        setError(r.error.message);
-      }
-      setLoading(false);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [client]);
+    if (user) setName(user.displayName ?? "");
+  }, [user?.id, user?.displayName]);
 
   const nameValid = validateDisplayName(name);
   const dirty = user ? buildProfilePatch(user.displayName, name) !== null : false;
@@ -64,8 +62,9 @@ export default function AccountPage() {
       toast({ kind: "error", title: "Save failed", description: r.error.message });
       return;
     }
-    setUser(r.data.user);
-    setName(r.data.user.displayName ?? "");
+    // Write the saved user back to the shared cache (instant, no refetch); the
+    // seed effect re-syncs `name` to the persisted displayName.
+    qc.setQueryData(qk.profile(), r.data.user);
     toast({ kind: "success", title: "Profile updated" });
   };
 
