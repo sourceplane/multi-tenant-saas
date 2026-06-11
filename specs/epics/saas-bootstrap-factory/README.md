@@ -66,7 +66,7 @@ that quality into reuse.
 | BF2 | Parameterize the Terraform + stack identity surface | No | ✅ Shipped |
 | BF3 | App identity via config indirection | No | ✅ Shipped |
 | BF4 | Generalize runtime binding names | No | ✅ Shipped |
-| BF5 | Wiring manifest from Terraform outputs | No | 🗓️ Planned |
+| BF5 | Wiring manifest from Terraform outputs | No | ✅ Shipped |
 | BF6 | Deploy-time wiring in worker compositions (keystone) | Deploy approvals only | 🗓️ Planned |
 | BF7 | Finish cloudflare-domain v5 re-import (0085b) | Deploy approvals; registrar access if DNS changes | 🗓️ Planned |
 | BF8 | Foundation component for fresh AWS accounts | **Yes — AWS admin creds (one-time)** | 🗓️ Planned |

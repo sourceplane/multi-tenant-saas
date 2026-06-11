@@ -56,6 +56,14 @@ Last updated: 2026-05-26
   non-blocking Orun/spec limitation for now because the components subscribe to
   different environments. Proposal `ai/proposals/task-0007.1-spec-update.md`
   records the deferred follow-up.
+- BF5 (saas-bootstrap-factory): infra components publish their consumable
+  outputs ("wiring manifest") to AWS Secrets Manager at their conventional
+  `<org>/<repo>/<component>/<env>` path, as Terraform-owned resources (stable
+  container + rotating version). cloudflare-hyperdrive publishes
+  hyperdrive_id/name; cloudflare-kv publishes the api-edge idempotency KV
+  id/title. Consumers (BF6 deploy-time wiring) assemble per-component paths at
+  read time. No new `/wiring/` namespace — the existing convention + IAM
+  write scope (`sourceplane/multi-tenant-saas/*`) already cover it.
 - BF4 (saas-bootstrap-factory): the Hyperdrive binding name is `PLATFORM_DB`
   (was `SOURCEPLANE_DB`; epic decision D1). Renamed atomically across all 12
   DB-bound workers' wrangler configs + code in one PR with **no alias period**:
