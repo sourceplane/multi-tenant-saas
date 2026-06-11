@@ -19,6 +19,13 @@ B5 outbound webhooks, B11 entitlements, console shell).
 
 ## Notes
 
+- 2026-06-11: IG0 deploy follow-up — the first main-push deploy failed
+  attaching the worker's cron schedule: the Cloudflare account is at its
+  **5-cron-trigger limit** (webhooks-worker + metering-worker × stage/prod).
+  Cron removed from `wrangler.jsonc` (the IG0 worker is dormant and does not
+  need it). **The IG2 inbox drain requires a cron slot** — operator must
+  upgrade the Workers plan or free a slot before IG2 ships.
+
 - 2026-06-11: IG0 (#307, task 0138) landed the bounded context with zero live
   behavior. No public route beyond `/health`; provider credentials are
   per-environment worker secrets (all unset — worker reports
