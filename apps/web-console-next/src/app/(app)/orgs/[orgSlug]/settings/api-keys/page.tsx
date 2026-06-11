@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import {
   Dialog,
   DialogContent,
@@ -50,8 +51,11 @@ function Inner({ orgId }: { orgId: string }) {
   const [precondition, setPrecondition] = React.useState<ApiErrorBody | null>(null);
   const [copied, setCopied] = React.useState(false);
 
-  const revokeKey = async (id: string, label: string) => {
-    if (!confirm(`Revoke API key “${label}”?`)) return;
+  const [pendingRevoke, setPendingRevoke] = React.useState<{ id: string; label: string } | null>(
+    null,
+  );
+
+  const revokeKey = async (id: string) => {
     const r = await wrap(() => client.apiKeys.revoke(orgId, id));
     if (!r.ok) {
       toast({ kind: "error", title: "Revoke failed", description: r.error.message });
@@ -63,6 +67,15 @@ function Inner({ orgId }: { orgId: string }) {
 
   return (
     <div className="space-y-5">
+      <ConfirmDialog
+        open={pendingRevoke !== null}
+        onOpenChange={(open) => !open && setPendingRevoke(null)}
+        title="Revoke API key"
+        description="Requests authenticated with this key start failing immediately. This cannot be undone."
+        resourceName={pendingRevoke?.label}
+        confirmLabel="Revoke key"
+        onConfirm={() => (pendingRevoke ? revokeKey(pendingRevoke.id) : undefined)}
+      />
       <header className="flex items-end justify-between gap-4">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">API keys</h1>
@@ -179,7 +192,7 @@ function Inner({ orgId }: { orgId: string }) {
                   {k.revokedAt ? (
                     <Badge variant="destructive">revoked</Badge>
                   ) : (
-                    <Button size="sm" variant="ghost" onClick={() => revokeKey(k.id, k.label)}>
+                    <Button size="sm" variant="ghost" onClick={() => setPendingRevoke({ id: k.id, label: k.label })}>
                       Revoke
                     </Button>
                   )}
@@ -224,7 +237,7 @@ function Inner({ orgId }: { orgId: string }) {
                     </TableCell>
                     <TableCell className="text-right">
                       {!k.revokedAt && (
-                        <Button size="sm" variant="ghost" onClick={() => revokeKey(k.id, k.label)}>
+                        <Button size="sm" variant="ghost" onClick={() => setPendingRevoke({ id: k.id, label: k.label })}>
                           Revoke
                         </Button>
                       )}

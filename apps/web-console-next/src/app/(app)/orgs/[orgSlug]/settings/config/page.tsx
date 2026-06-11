@@ -45,9 +45,11 @@ export default function ConfigPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Settings</CardTitle>
+              <CardTitle className="text-base">Settings, feature flags & secrets</CardTitle>
               <CardDescription>
-                Org-scoped settings will appear here as more contracts surface in @saas/contracts.
+                The config API is live today — manage org, project, and environment scoped
+                settings, feature flags, and secrets via the SDK (<code>client.config</code>) or
+                CLI. The console surface for them ships next.
               </CardDescription>
             </CardHeader>
           </Card>

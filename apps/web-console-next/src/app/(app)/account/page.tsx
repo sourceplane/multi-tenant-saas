@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { AccountTabs } from "@/components/account/account-tabs";
 import { wrap } from "@/lib/api";
 import { useSession } from "@/lib/session";
+import { useUnsavedChangesGuard } from "@/lib/use-unsaved-guard";
 import { useToast } from "@/components/ui/toast";
 import {
   buildProfilePatch,
@@ -50,6 +51,7 @@ export default function AccountPage() {
 
   const nameValid = validateDisplayName(name);
   const dirty = user ? buildProfilePatch(user.displayName, name) !== null : false;
+  useUnsavedChangesGuard(dirty && !saving);
 
   const save = async () => {
     if (!user || !nameValid.ok) return;

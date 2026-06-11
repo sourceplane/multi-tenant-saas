@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { wrap } from "@/lib/api";
 import { useSession } from "@/lib/session";
 import { useApiQuery, qk } from "@/lib/query";
@@ -28,8 +29,11 @@ function Inner({ orgId }: { orgId: string }) {
     wrap(async () => (await client.memberships.listMembers(orgId)).members),
   );
 
-  const removeMember = async (id: string, subjectId: string) => {
-    if (!confirm(`Remove ${subjectId}?`)) return;
+  const [pendingRemove, setPendingRemove] = React.useState<{ id: string; subjectId: string } | null>(
+    null,
+  );
+
+  const removeMember = async (id: string) => {
     const r = await wrap(() => client.memberships.removeMember(orgId, id));
     if (!r.ok) {
       toast({ kind: "error", title: "Remove failed", description: r.error.message });
@@ -41,6 +45,15 @@ function Inner({ orgId }: { orgId: string }) {
 
   return (
     <div className="space-y-5">
+      <ConfirmDialog
+        open={pendingRemove !== null}
+        onOpenChange={(open) => !open && setPendingRemove(null)}
+        title="Remove member"
+        description="They immediately lose access to this organization and all of its projects. You can re-invite them later."
+        resourceName={pendingRemove?.subjectId}
+        confirmLabel="Remove member"
+        onConfirm={() => (pendingRemove ? removeMember(pendingRemove.id) : undefined)}
+      />
       <header>
         <h1 className="text-xl font-semibold tracking-tight">Members</h1>
         <p className="text-sm text-muted-foreground">Users and service principals attached to this organization.</p>
@@ -82,7 +95,7 @@ function Inner({ orgId }: { orgId: string }) {
                       <Badge variant={m.status === "active" ? "success" : "warning"}>{m.status}</Badge>
                     </div>
                   </div>
-                  <Button size="sm" variant="ghost" onClick={() => removeMember(m.id, m.subjectId)}>
+                  <Button size="sm" variant="ghost" onClick={() => setPendingRemove({ id: m.id, subjectId: m.subjectId })}>
                     Remove
                   </Button>
                 </div>
@@ -138,7 +151,7 @@ function Inner({ orgId }: { orgId: string }) {
                       {new Date(m.joinedAt).toLocaleDateString()}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button size="sm" variant="ghost" onClick={() => removeMember(m.id, m.subjectId)}>
+                      <Button size="sm" variant="ghost" onClick={() => setPendingRemove({ id: m.id, subjectId: m.subjectId })}>
                         Remove
                       </Button>
                     </TableCell>
