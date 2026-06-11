@@ -175,13 +175,14 @@ export function createAuthService(deps: AuthServiceDeps) {
     }
 
     const tokenHash = await hashSha256(parsed.secret);
-    const sessionResult = await repo.getSessionByTokenHash(tokenHash);
+    // PERF12d: one JOIN (session + user) instead of two serial queries.
+    const sessionResult = await repo.getSessionWithUserByTokenHash(tokenHash);
 
     if (!sessionResult.ok) {
       return { error: "unauthenticated", message: "Session not found" };
     }
 
-    const session = sessionResult.value;
+    const { session, user } = sessionResult.value;
     if (session.revokedAt !== null) {
       return { error: "unauthenticated", message: "Session has been revoked" };
     }
@@ -189,12 +190,6 @@ export function createAuthService(deps: AuthServiceDeps) {
       return { error: "unauthenticated", message: "Session has expired" };
     }
 
-    const userResult = await repo.getUserById(session.userId);
-    if (!userResult.ok) {
-      return { error: "unauthenticated", message: "User not found" };
-    }
-
-    const user = userResult.value;
     return {
       session: { id: sessionPublicId(session.id), expiresAt: session.expiresAt, createdAt: session.createdAt },
       user: {

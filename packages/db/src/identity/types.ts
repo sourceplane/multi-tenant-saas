@@ -228,6 +228,12 @@ export interface IdentityRepository {
 
   createSession(input: CreateSessionInput): Promise<IdentityResult<Session>>;
   getSessionByTokenHash(tokenHash: string): Promise<IdentityResult<Session>>;
+  /**
+   * Session lookup folded with its user fetch into a single JOIN (PERF12d), so a
+   * bearer-cache miss costs one DB round-trip instead of two. Same filters and
+   * `not_found`/`expired` semantics as `getSessionByTokenHash`.
+   */
+  getSessionWithUserByTokenHash(tokenHash: string): Promise<IdentityResult<{ session: Session; user: User }>>;
   revokeSession(id: string, revokedAt: Date): Promise<IdentityResult<Session>>;
 
   recordSecurityEvent(input: CreateSecurityEventInput): Promise<IdentityResult<SecurityEvent>>;

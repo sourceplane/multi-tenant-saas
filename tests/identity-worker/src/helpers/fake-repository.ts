@@ -183,6 +183,21 @@ export function createFakeRepository(): IdentityRepository & {
       return { ok: false, error: { kind: "not_found" } };
     },
 
+    async getSessionWithUserByTokenHash(
+      tokenHash: string,
+    ): Promise<IdentityResult<{ session: Session; user: User }>> {
+      // Mirrors getSessionByTokenHash (no revoked/expired filter — the service
+      // applies those) + getUserById, as one folded lookup (PERF12d).
+      for (const s of sessions.values()) {
+        if (s.tokenHash === tokenHash) {
+          const user = users.get(s.userId);
+          if (!user) return { ok: false, error: { kind: "not_found" } };
+          return { ok: true, value: { session: s, user } };
+        }
+      }
+      return { ok: false, error: { kind: "not_found" } };
+    },
+
     async revokeSession(id: string, revokedAt: Date): Promise<IdentityResult<Session>> {
       const s = sessions.get(id);
       if (!s) return { ok: false, error: { kind: "not_found" } };
