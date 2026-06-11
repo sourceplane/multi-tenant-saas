@@ -30,6 +30,14 @@ spec:
     pnpmVersion: "10.12.1"
     workspaceDir: ../..
     appDir: .
+    # BF6: identity/role inputs for the deploy lane's wire-credentials step.
+    # Inert until this worker gets a wrangler template (fleet rollout, BF6b).
+    awsAccountId: "306024784101"
+    awsRegion: us-east-1
+    orgName: sourceplane
+    owner: sourceplane
+    repo: multi-tenant-saas
+
     turboFilter: "@saas/policy-worker"
     wranglerConfig: wrangler.jsonc
     installCommand: pnpm install --frozen-lockfile
