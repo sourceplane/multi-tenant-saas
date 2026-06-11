@@ -57,7 +57,7 @@ makes the instance worth wanting.**
 |----|-----------|--------|
 | PX1 | Console truth & papercuts pass (designed 404/error, designed confirms, loading states, wayfinding) | ✅ Shipped |
 | PX2 | Config surface: settings, feature flags, secrets UI over the live facade | ✅ Shipped |
-| PX3 | Notification preferences end to end (edge facade + console page) | In progress |
+| PX3 | Notification preferences end to end (edge facade + console page) | ✅ Shipped |
 | PX4 | Rename/update lifecycle (PATCH org/project/environment + inline edit) | Ready |
 | PX5 | First-run onboarding: guided path to the first API call | Ready |
 | PX6 | Resource search in Cmd-K | Ready |

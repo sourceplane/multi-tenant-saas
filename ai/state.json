@@ -1,10 +1,10 @@
 {
   "goal": "Supabase/Postgres-backed multi-organization Orun SaaS control plane",
-  "active_milestone": "IG0",
-  "current_task": "0138",
-  "last_verified": "2026-06-11T05:00:00Z",
+  "active_milestone": null,
+  "current_task": null,
+  "last_verified": "2026-06-11T05:35:00Z",
   "repo_health": "green",
-  "next_focus": "IG cluster (specs/epics/saas-integrations, promoted via #302): IG0 foundation shipped dormant as #307 (task 0138). Next: IG1 connect flow — provider registry + GitHub adapter, signed single-use state, edge setup ingress, minimal console Integrations surface. Human-independent IG1 parts can proceed now; the LIVE connect path parks on D1 (GitHub App registered per environment) + D2 (App permission set) + D4 (plan placement for feature.integrations.github / limit.repo_links). PX cluster continues in parallel (PX4-PX6 remain).",
+  "next_focus": "PX4 (rename/update lifecycle: PATCH org/project/environment + API/SDK/CLI/UI parity) is the next ready PX milestone; PX5 onboarding and PX6 Cmd-K resource search follow. See specs/epics/saas-product-experience/. NOTE: a parallel session is active on PERF (PERF10/11 merged 2026-06-11) and a new saas-integrations epic \u2014 coordinate console-file changes to avoid races. Residual: full-fleet worker convergence (membership/events/webhooks/metering/projects/policy still on pre-#280 deploys \u2014 re-touch when next changed, or run a dedicated convergence task); SECRET_ENCRYPTION_KEY escrow to AWS Secrets Manager (BF deploy-time wiring follow-up).",
   "deferred": [
     "0085b",
     "notifications-provider-swap",
@@ -164,13 +164,15 @@
   "reverted": [
     "0134"
   ],
-  "task_agent": "ai/reports/task-0138-implementer.md",
+  "task_agent": "ai/reports/task-0137-implementer.md",
   "waiting_for_input": "false",
   "notes": [
     "2026-06-01: ai/ working tree compacted. Historical task prompts (ai/tasks/), implementer/verifier reports (ai/reports/), spec proposals (ai/proposals/), the task ledger (ai/context/task-ledger.md), and the orchestrator journal/brief were removed from the working tree to keep a minimal context surface. ALL remain recoverable from git history (see ai/context/current.md for retrieval). Live boot surface kept: this file, ai/context/current.md (compact summary), ai/context/decisions.md, ai/context/open-risks.md, ai/deferred.md, ai/waiting_for_input.md.",
     "2026-06-01: Task 0126 (B5 manual webhook delivery replay) DONE \u2014 implemented and merged as PR #181, squash 63886a6, now main HEAD. State files previously lagged reality (said 0126 only scoped). No active task; orchestrator must re-survey to scope the next leg.",
     "2026-06-02: Task 0134 (connection reuse) REVERTED. The module-scoped postgres client pool (#224/#225) broke on stage \u2014 Cloudflare Workers cannot reuse a socket opened in a different request ('Cannot perform I/O on behalf of a different request'); membership 500, billing flaky 503, self-heal retry insufficient. Rolled back via PR #227 (squash 2f5f4fc) to per-request executor + dispose(). Lesson: any cross-request connection reuse on Workers must go through Hyperdrive-supported patterns and be canaried before retry.",
     "2026-06-02: While verifying the 0134 revert on stage, found members list returning a hard 500 (billing recovered fine). Root cause was NOT connection reuse but a PERF3 (#221) regression: `membership.role_assignments ... subject_id = ANY($2)` passed a JS array param, which fails to bind because the executor uses `fetch_types:false` (postgres can't resolve the array element-type OID). Fixed in packages/db by using a scalar parameterized IN-list; the connection-reuse stage test had misattributed this to its own change. Lesson: array params are unsafe with fetch_types:false \u2014 prefer scalar IN-lists; and verify ALL DB-backed endpoints (not just billing/orgs) after perf changes.",
-    "2026-06-11: PX epic opened (saas-product-experience). PX1 (#299) + PX2 (#300) shipped & live-verified on stage. LIVE VERIFICATION FOUND BACKEND DRIFT: no successful backend convergence since failed #280 main run (cascade dependency-wait timeouts; --changed planning means console-only merges never redeployed workers). PX3 PR redeploys api-edge + config-worker + notifications-worker and provisions SECRET_ENCRYPTION_KEY via config-worker preDeployCommand. FOLLOW-UP NEEDED: full-fleet worker re-touch convergence + re-check #280's real failures (api-edge-tests dev, policy-worker dev)."
+    "2026-06-11: PX epic opened (saas-product-experience). PX1 (#299) + PX2 (#300) shipped & live-verified on stage. LIVE VERIFICATION FOUND BACKEND DRIFT: no successful backend convergence since failed #280 main run (cascade dependency-wait timeouts; --changed planning means console-only merges never redeployed workers). PX3 PR redeploys api-edge + config-worker + notifications-worker and provisions SECRET_ENCRYPTION_KEY via config-worker preDeployCommand. FOLLOW-UP NEEDED: full-fleet worker re-touch convergence + re-check #280's real failures (api-edge-tests dev, policy-worker dev).",
+    "2026-06-11: PX1 (#299), PX2 (#300+#303+#304), PX3 (#303+#304) ALL SHIPPED AND LIVE-VERIFIED on stage (authenticated Playwright + API probes; prod smoked). Two latent platform bugs found and fixed by live verification: (1) backend non-convergence since failed #280 run \u2014 api-edge/config-worker/notifications-worker redeployed, SECRET_ENCRYPTION_KEY provisioned for stage+prod via config-worker preDeployCommand; (2) SDK<->worker drift: config item routes address by public id (set_/flg_/sec_), not key \u2014 SDK params/docs and console fixed (#304). Config settings/flags/secrets + notification preferences are now fully working product surfaces.",
+    "2026-06-11: PX1 (#299), PX2 (#300/#303/#304), PX3 (#303/#304) ALL SHIPPED AND LIVE-VERIFIED on stage (authenticated Playwright + API probes; prod smoked). Two latent platform bugs found+fixed by live verification: (1) backend non-convergence since failed #280 run \u2014 api-edge/config-worker/notifications-worker redeployed, SECRET_ENCRYPTION_KEY provisioned for stage+prod via config-worker preDeployCommand (escrow to AWS SM = BF follow-up); (2) SDK<->worker drift: config item routes address by public id (set_/flg_/sec_), not key \u2014 SDK params/docs + console fixed (#304). RESIDUAL: membership/events/webhooks/metering/projects/policy workers still on pre-#280 deploys \u2014 convergence follow-up. NEXT PX: PX4 rename lifecycle, PX5 onboarding, PX6 Cmd-K resource search (specs/epics/saas-product-experience)."
   ]
 }
