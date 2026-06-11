@@ -13,6 +13,12 @@ import { isMeteringRoute, handleMeteringRoute } from "./metering-facade";
 import { isBillingRoute, handleBillingRoute } from "./billing-facade";
 import { isBillingWebhookRoute, handleBillingWebhookRoute } from "./billing-webhooks-facade";
 import { isNotificationsRoute, handleNotificationsRoute } from "./notifications-facade";
+import {
+  isIntegrationsRoute,
+  isIntegrationsIngressRoute,
+  handleIntegrationsRoute,
+  handleIntegrationsIngressRoute,
+} from "./integrations-facade";
 
 // Durable Object class backing the PERF5 Stage B rate-limit counters. Must be
 // exported from the Worker entry so the runtime can instantiate it for the
@@ -37,6 +43,12 @@ export default {
       response = await handleAuditRoute(request, env, requestId, url.pathname);
     } else if (isConfigRoute(url.pathname)) {
       response = await handleConfigRoute(request, env, requestId, url.pathname);
+    } else if (isIntegrationsIngressRoute(url.pathname)) {
+      // Public install-callback ingress (no session) — authenticated by the
+      // signed single-use state verified in integrations-worker.
+      response = await handleIntegrationsIngressRoute(request, env, requestId, url.pathname);
+    } else if (isIntegrationsRoute(url.pathname)) {
+      response = await handleIntegrationsRoute(request, env, requestId, url.pathname);
     } else if (isBillingWebhookRoute(url.pathname)) {
       // Public inbound provider webhook (no session) — matched before the
       // authenticated webhooks/billing facades.

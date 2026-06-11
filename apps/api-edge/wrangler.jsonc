@@ -84,6 +84,10 @@
         {
           "binding": "NOTIFICATIONS_WORKER",
           "service": "notifications-worker-stage"
+        },
+        {
+          "binding": "INTEGRATIONS_WORKER",
+          "service": "integrations-worker-stage"
         }
       ],
       "durable_objects": {
@@ -148,6 +152,10 @@
         {
           "binding": "NOTIFICATIONS_WORKER",
           "service": "notifications-worker-prod"
+        },
+        {
+          "binding": "INTEGRATIONS_WORKER",
+          "service": "integrations-worker-prod"
         }
       ],
       "durable_objects": {

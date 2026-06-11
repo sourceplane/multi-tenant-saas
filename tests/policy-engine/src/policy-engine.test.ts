@@ -686,7 +686,7 @@ describe("listEffectivePermissions", () => {
     expect(result.derivedScope.orgId).toBe("org_1");
 
     const allowed = result.permissions.filter((p) => p.allow);
-    expect(allowed.length).toBe(27);
+    expect(allowed.length).toBe(30);
   });
 
   it("returns limited permissions for viewer", () => {
@@ -699,6 +699,7 @@ describe("listEffectivePermissions", () => {
     const allowed = result.permissions.filter((p) => p.allow);
     expect(allowed.map((p) => p.action).sort()).toEqual([
       "organization.config.read",
+      "organization.integration.read",
       "organization.metering.read",
       "organization.read",
       "organization.webhook.read",
@@ -936,4 +937,45 @@ describe("service-principal binding actions", () => {
       expect(result.allow).toBe(false);
     });
   }
+});
+
+describe("integration actions (saas-integrations IG1)", () => {
+  const ORG = "org-1";
+
+  it("owner and admin can read, connect, and manage integrations", () => {
+    for (const role of ["owner", "admin"]) {
+      for (const action of [
+        "organization.integration.read",
+        "organization.integration.connect",
+        "organization.integration.manage",
+      ]) {
+        expect(authorize(authReq(action, ORG, [orgFact(role, ORG)])).allow).toBe(true);
+      }
+    }
+  });
+
+  it("builder and viewer can only read integrations", () => {
+    for (const role of ["builder", "viewer"]) {
+      expect(
+        authorize(authReq("organization.integration.read", ORG, [orgFact(role, ORG)])).allow,
+      ).toBe(true);
+      expect(
+        authorize(authReq("organization.integration.connect", ORG, [orgFact(role, ORG)])).allow,
+      ).toBe(false);
+      expect(
+        authorize(authReq("organization.integration.manage", ORG, [orgFact(role, ORG)])).allow,
+      ).toBe(false);
+    }
+  });
+
+  it("denies integration actions across org boundaries and for project roles", () => {
+    expect(
+      authorize(authReq("organization.integration.connect", ORG, [orgFact("owner", "org-2")])).allow,
+    ).toBe(false);
+    expect(
+      authorize(
+        authReq("organization.integration.connect", ORG, [projectFact("project_admin", ORG, "p1")]),
+      ).allow,
+    ).toBe(false);
+  });
 });

@@ -22,6 +22,7 @@ import {
   Bell,
   Gauge,
   User2,
+  Plug,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
@@ -47,6 +48,7 @@ const ICONS: Record<string, LucideIcon> = {
   Bell,
   Gauge,
   User2,
+  Plug,
 };
 
 /**
