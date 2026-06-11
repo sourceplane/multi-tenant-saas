@@ -10,6 +10,19 @@ export function generateRequestId(): string {
   return `req_${hex}`;
 }
 
+/** RFC-4122 v4 UUID for new rows and event ids. */
+export function generateUuid(): string {
+  const buf = new Uint8Array(16);
+  crypto.getRandomValues(buf);
+  buf[6] = (buf[6]! & 0x0f) | 0x40;
+  buf[8] = (buf[8]! & 0x3f) | 0x80;
+  let hex = "";
+  for (let i = 0; i < buf.length; i++) {
+    hex += buf[i]!.toString(16).padStart(2, "0");
+  }
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
 export function parseOrgPublicId(publicId: string): Uuid | null {
   return uuidFromPublicId(publicId, "org");
 }

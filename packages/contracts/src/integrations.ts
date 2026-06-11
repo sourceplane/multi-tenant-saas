@@ -44,7 +44,7 @@ export interface PublicConnection {
   externalAccountType: string | null;
   /** Provider-side repo grant: "all" | "selected" (GitHub semantics). */
   repositorySelection: string | null;
-  /** Actor public id that initiated the connect flow. */
+  /** Opaque id of the actor that initiated the connect flow. */
   createdBy: string | null;
   /** ISO-8601; set when the provider-side install is verified and bound. */
   connectedAt: string | null;

@@ -15,6 +15,7 @@ spec:
     - component: config-worker
     - component: webhooks-worker
     - component: billing-worker
+    - component: integrations-worker
   subscribe:
     environments:
       - name: dev

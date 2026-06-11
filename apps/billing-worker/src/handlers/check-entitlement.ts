@@ -55,6 +55,11 @@ const DEFAULT_TIER_ENTITLEMENTS: Record<string, number> = {
   "limit.projects": 3,
   "limit.environments": 3,
   "limit.members": 5,
+  // saas-integrations D4 default recommendation (activation-friendly,
+  // Vercel-style): GitHub integration available on the default tier with one
+  // repo link. Catalog rows override these the moment plans configure them.
+  "feature.integrations.github": 1,
+  "limit.repo_links": 1,
 };
 
 

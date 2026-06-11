@@ -66,20 +66,37 @@ describe("integrations-worker router (IG0 — dormant)", () => {
     expect(raw).not.toContain("12345");
   });
 
-  it("returns 404 for any non-health route (no public surface in IG0)", async () => {
-    const env = createFakeEnv();
-    const paths = [
-      "/",
-      "/v1/organizations/org_11111111111111111111111111111111/integrations",
-      "/ingress/github/webhook",
-      "/ingress/github/setup",
-    ];
+  it("returns 404 for unknown routes presented by an authenticated caller", async () => {
+    const env = createFakeEnv({
+      MEMBERSHIP_WORKER: {} as unknown,
+      POLICY_WORKER: {} as unknown,
+    });
+    const paths = ["/", "/ingress/github/webhook", "/v1/unknown"];
     for (const path of paths) {
-      const response = await route(new Request(`https://worker.test${path}`), env);
+      const response = await route(
+        new Request(`https://worker.test${path}`, {
+          headers: { "x-actor-subject-id": "usr_a", "x-actor-subject-type": "user" },
+        }),
+        env,
+      );
       expect(response.status).toBe(404);
       const body = await json(response);
       expect((body.error as Record<string, unknown>).code).toBe("not_found");
     }
+  });
+
+  it("requires an actor on the org integrations surface", async () => {
+    const env = createFakeEnv({
+      MEMBERSHIP_WORKER: {} as unknown,
+      POLICY_WORKER: {} as unknown,
+    });
+    const response = await route(
+      new Request(
+        "https://worker.test/v1/organizations/org_11111111111111111111111111111111/integrations",
+      ),
+      env,
+    );
+    expect(response.status).toBe(401);
   });
 
   it("echoes a well-formed x-request-id and generates one otherwise", async () => {

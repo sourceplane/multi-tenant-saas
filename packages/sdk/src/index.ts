@@ -12,6 +12,7 @@
 
 import { ApiKeysClient } from "./apiKeys.js";
 import { AuthClient } from "./auth.js";
+import { IntegrationsClient } from "./integrations.js";
 import { BillingClient } from "./billing.js";
 import { ConfigClient } from "./config.js";
 import { EnvironmentsClient } from "./environments.js";
@@ -39,6 +40,7 @@ export class Sourceplane {
   readonly config: ConfigClient;
   readonly notifications: NotificationsClient;
   readonly auth: AuthClient;
+  readonly integrations: IntegrationsClient;
   /** Underlying HTTP transport. Exposed for advanced extension. */
   readonly transport: Transport;
 
@@ -57,6 +59,7 @@ export class Sourceplane {
     this.config = new ConfigClient(this.transport);
     this.notifications = new NotificationsClient(this.transport);
     this.auth = new AuthClient(this.transport);
+    this.integrations = new IntegrationsClient(this.transport);
   }
 }
 
@@ -94,6 +97,7 @@ export {
 export { ConfigClient, type ConfigScope } from "./config.js";
 export { NotificationsClient } from "./notifications.js";
 export { AuthClient } from "./auth.js";
+export { IntegrationsClient } from "./integrations.js";
 
 // Transport surface.
 export {

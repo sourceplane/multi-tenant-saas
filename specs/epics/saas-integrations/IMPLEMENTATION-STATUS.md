@@ -9,7 +9,7 @@ B5 outbound webhooks, B11 entitlements, console shell).
 | ID | Status |
 |----|--------|
 | IG0 | ✅ Shipped (#307) — dormant foundation: spec 17, contracts, `180_integrations_foundation`, repo layer, worker skeleton; stage `/health` + migration apply verified post-merge |
-| IG1 | 🗓️ Planned — human-independent parts can proceed; live connect path gated on D1 (GitHub App per environment) |
+| IG1 | ✅ Code complete (task 0139) — full connect machinery + console surface; live path 412-parks on D1 (GitHub App per environment) and unparks via secrets only, no code changes |
 | IG2 | 🗓️ Planned |
 | IG3 | 🗓️ Planned |
 | IG4 | 🗓️ Planned |
