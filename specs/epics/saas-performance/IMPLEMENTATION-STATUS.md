@@ -26,10 +26,12 @@ Object, taking org-scoped reads/writes to ~55–65ms p50 (edge floor, beating th
 | PERF7 | 🗓️ Planned | — (re-measured: console SSR spikes 1.0–2.6s; edge cold ~0.7s) |
 | PERF8 | 🗓️ Planned | — |
 | PERF9 | 🗓️ Planned | — |
-| PERF10 | 🗓️ Planned | second audit: immutable `_next/static` headers + bundle trim |
-| PERF11 | 🗓️ Planned | second audit: 6 console surfaces still bypass react-query |
-| PERF12 | 🗓️ Planned | second audit: 10 serial read handlers + identity JOIN fold |
-| PERF13 | 🗓️ Planned | second audit: authz-context + near-static micro-caches |
+| PERF10 | ✅ Shipped + verified | #305 (immutable `_next/static` headers; live cache-control confirmed) |
+| PERF11 | ✅ Shipped (shell + profile) | #306 (sidebar/scope switchers + account profile → react-query) |
+| PERF11b | 🗓️ Planned | paginated console surfaces (account/security, usage, webhook deliveries) |
+| PERF12 | ✅ Shipped (a/b/c); 12d remaining | #308 billing · #310 config · #312 webhooks (authz∥read, deny-by-default) |
+| PERF12d | 🗓️ Planned | identity resolve: fold session→user (and api-key→principal) into one JOIN |
+| PERF13 | 🗓️ Planned (needs TTL decision) | authz-context + near-static micro-caches — revocation latency = TTL |
 | PERF14 | 🗓️ Planned | second audit: Server-Timing coverage + timing-log sampling |
 
 ## Verified prod numbers (2026-06-08, warm p50)
