@@ -35,7 +35,7 @@ function fakeExecutor(respond: SqlResponder): { executor: SqlExecutor; queries: 
 function createEnv(overrides?: Partial<Record<string, unknown>>): Env {
   return {
     ENVIRONMENT: "test",
-    SOURCEPLANE_DB: { connectionString: "postgres://fake" },
+    PLATFORM_DB: { connectionString: "postgres://fake" },
     GITHUB_APP_ID: "4242",
     GITHUB_APP_SLUG: "sourceplane-test",
     GITHUB_APP_PRIVATE_KEY: "-----BEGIN PRIVATE KEY-----\nirrelevant\n-----END PRIVATE KEY-----",

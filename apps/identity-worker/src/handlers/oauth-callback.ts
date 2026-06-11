@@ -108,11 +108,11 @@ export async function handleOAuthCallback(
     return redirectToConsole(state.r, "error=oauth_failed");
   }
 
-  if (!deps?.repo && !env.SOURCEPLANE_DB) {
+  if (!deps?.repo && !env.PLATFORM_DB) {
     return redirectToConsole(state.r, "error=server_error");
   }
 
-  const executor = deps?.repo ? null : createSqlExecutor(env.SOURCEPLANE_DB!);
+  const executor = deps?.repo ? null : createSqlExecutor(env.PLATFORM_DB!);
   try {
     const repo = deps?.repo ?? createIdentityRepository(executor!);
     const ctx = extractRequestContext(request, requestId);

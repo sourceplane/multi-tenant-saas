@@ -11,11 +11,11 @@ export async function handleSession(request: Request, env: Env, requestId: strin
     return errorResponse("unauthenticated", "Missing or invalid Authorization header", 401, requestId);
   }
 
-  if (!env.SOURCEPLANE_DB) {
+  if (!env.PLATFORM_DB) {
     return errorResponse("internal_error", "Database not configured", 503, requestId);
   }
 
-  const executor = createSqlExecutor(env.SOURCEPLANE_DB);
+  const executor = createSqlExecutor(env.PLATFORM_DB);
   // PERF14b: the `resolve` phase times the DB-backed session+user lookup (a
   // single JOINed query since PERF12d).
   const timings = createTimings();

@@ -133,14 +133,14 @@ export async function materializeRecentRollups(
  * Scheduled entry point: opens an executor against the Hyperdrive binding,
  * runs the recent-window materialization, and logs bounded counts only.
  *
- * Fails closed when `SOURCEPLANE_DB` is missing — does not throw.
+ * Fails closed when `PLATFORM_DB` is missing — does not throw.
  */
 export async function runScheduledMaterialization(env: Env): Promise<void> {
-  if (!env.SOURCEPLANE_DB) {
-    console.error("[scheduled] SOURCEPLANE_DB binding missing");
+  if (!env.PLATFORM_DB) {
+    console.error("[scheduled] PLATFORM_DB binding missing");
     return;
   }
-  const executor = createSqlExecutor(env.SOURCEPLANE_DB);
+  const executor = createSqlExecutor(env.PLATFORM_DB);
   const repo = createMeteringRepository(executor);
   const result = await materializeRecentRollups(repo);
   for (const w of result.windows) {

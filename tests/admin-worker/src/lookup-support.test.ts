@@ -14,7 +14,7 @@ import type {
 function createFakeEnv(): Env {
   return {
     ENVIRONMENT: "test",
-    SOURCEPLANE_DB: { connectionString: "postgres://fake" } as unknown as Hyperdrive,
+    PLATFORM_DB: { connectionString: "postgres://fake" } as unknown as Hyperdrive,
   };
 }
 

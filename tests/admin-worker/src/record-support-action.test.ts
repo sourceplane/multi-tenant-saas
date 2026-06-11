@@ -10,7 +10,7 @@ import type {
 function createFakeEnv(overrides: Partial<Env> = {}): Env {
   return {
     ENVIRONMENT: "test",
-    SOURCEPLANE_DB: { connectionString: "postgres://fake" } as unknown as Hyperdrive,
+    PLATFORM_DB: { connectionString: "postgres://fake" } as unknown as Hyperdrive,
     ...overrides,
   };
 }

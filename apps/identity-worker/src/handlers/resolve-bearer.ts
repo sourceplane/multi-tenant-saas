@@ -11,11 +11,11 @@ export async function handleResolveBearer(request: Request, env: Env, requestId:
     return errorResponse("unauthenticated", "Missing or invalid Authorization header", 401, requestId);
   }
 
-  if (!env.SOURCEPLANE_DB) {
+  if (!env.PLATFORM_DB) {
     return errorResponse("internal_error", "Database not configured", 503, requestId);
   }
 
-  const executor = createSqlExecutor(env.SOURCEPLANE_DB);
+  const executor = createSqlExecutor(env.PLATFORM_DB);
   // PERF14b: the `resolve` phase times the DB-backed resolution (a single
   // JOINed query since PERF12d) — the cost of every edge bearer-cache miss.
   const timings = createTimings();

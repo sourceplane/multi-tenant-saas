@@ -1,4 +1,4 @@
 export interface Env {
-  SOURCEPLANE_DB?: Hyperdrive;
+  PLATFORM_DB?: Hyperdrive;
   ENVIRONMENT: string;
 }

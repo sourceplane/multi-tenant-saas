@@ -14,10 +14,10 @@ export async function handleGetNotification(
   publicId: string,
   deps?: GetNotificationDeps,
 ): Promise<Response> {
-  if (!deps?.repo && !env.SOURCEPLANE_DB) {
+  if (!deps?.repo && !env.PLATFORM_DB) {
     return errorResponse("internal_error", "Database not configured", 503, requestId);
   }
-  const executor = deps?.repo ? null : createSqlExecutor(env.SOURCEPLANE_DB!);
+  const executor = deps?.repo ? null : createSqlExecutor(env.PLATFORM_DB!);
   try {
     const repo = deps?.repo ?? createNotificationsRepository(executor!);
     const result = await getNotificationByPublicId(repo, publicId);

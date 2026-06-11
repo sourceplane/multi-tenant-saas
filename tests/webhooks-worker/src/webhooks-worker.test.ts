@@ -55,7 +55,7 @@ function createMockFetcher(responseBody: unknown, status = 200): Fetcher & { fet
 
 function createFakeEnv(overrides?: Record<string, unknown>): Env {
   const base: Record<string, unknown> = {
-    SOURCEPLANE_DB: { connectionString: "postgres://fake" },
+    PLATFORM_DB: { connectionString: "postgres://fake" },
     MEMBERSHIP_WORKER: createMockFetcher({ data: { memberships: [{ kind: "role_assignment", role: "admin", scope: { kind: "organization", orgId: TEST_ORG_UUID } }] } }),
     POLICY_WORKER: createMockFetcher({ data: { allow: true, reason: "org_admin", policyVersion: 1, derivedScope: { orgId: TEST_ORG_UUID } } }),
     ENVIRONMENT: "test",
@@ -319,8 +319,8 @@ describe("router", () => {
     expect(body.data).toHaveProperty("service", "webhooks-worker");
   });
 
-  it("returns 503 when SOURCEPLANE_DB is missing", async () => {
-    const env = createFakeEnv({ SOURCEPLANE_DB: undefined });
+  it("returns 503 when PLATFORM_DB is missing", async () => {
+    const env = createFakeEnv({ PLATFORM_DB: undefined });
     const req = makeRequest("GET", `/v1/organizations/${TEST_ORG_PUBLIC}/webhooks/endpoints`);
     const res = await route(req, env);
     expect(res.status).toBe(503);

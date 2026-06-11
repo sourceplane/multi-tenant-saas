@@ -23,7 +23,7 @@ export async function handleListProjects(
   orgId: Uuid,
   deps?: HandleListProjectsDeps,
 ): Promise<Response> {
-  if (!env.SOURCEPLANE_DB) {
+  if (!env.PLATFORM_DB) {
     return errorResponse("internal_error", "Service unavailable", 503, requestId);
   }
   if (!env.MEMBERSHIP_WORKER) {
@@ -44,7 +44,7 @@ export async function handleListProjects(
 
   const timings = createTimings();
   const endTotal = timings.start("total");
-  const executor = createSqlExecutor(env.SOURCEPLANE_DB);
+  const executor = createSqlExecutor(env.PLATFORM_DB);
   try {
     const repo = deps?.projectsRepo ?? createProjectsRepository(executor);
 

@@ -75,7 +75,7 @@ export async function handleGetDeliveryAttempt(
   orgId: string,
   attemptId: string,
 ): Promise<Response> {
-  const executor = createSqlExecutor(env.SOURCEPLANE_DB!);
+  const executor = createSqlExecutor(env.PLATFORM_DB!);
   // PERF14b: phase timings — `authz` and `db` run concurrently (PERF12c), so
   // their overlap is directly visible in the Server-Timing breakdown.
   const timings = createTimings();
@@ -121,7 +121,7 @@ export async function handleListDeliveryAttempts(
   const { limit, cursor } = pageResult.value;
   const dbCursor = cursor ? { createdAt: cursor.createdAt, id: cursor.id } : null;
 
-  const executor = createSqlExecutor(env.SOURCEPLANE_DB!);
+  const executor = createSqlExecutor(env.PLATFORM_DB!);
   // PERF14b: phase timings — `authz` and `db` run concurrently (PERF12c), so
   // their overlap is directly visible in the Server-Timing breakdown.
   const timings = createTimings();
@@ -190,7 +190,7 @@ export async function handleReplayDeliveryAttempt(
   const denied = await authorizeWebhookAction(env, actor, orgId, "organization.webhook.write", requestId);
   if (denied) return denied;
 
-  const executor = createSqlExecutor(env.SOURCEPLANE_DB!);
+  const executor = createSqlExecutor(env.PLATFORM_DB!);
   try {
     const repo = createWebhookRepository(executor);
     const eventsRepo = createEventsRepository(executor);

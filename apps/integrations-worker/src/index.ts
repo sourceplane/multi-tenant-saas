@@ -14,10 +14,10 @@ export default {
   // account is at its 5-cron limit (see the epic IMPLEMENTATION-STATUS) —
   // so this handler is ready but idle until a slot frees.
   async scheduled(_controller: ScheduledController, env: Env, _ctx: ExecutionContext): Promise<void> {
-    if (!env.SOURCEPLANE_DB) {
+    if (!env.PLATFORM_DB) {
       return;
     }
-    const executor = createSqlExecutor(env.SOURCEPLANE_DB);
+    const executor = createSqlExecutor(env.PLATFORM_DB);
     try {
       const summary = await drainInboundDeliveries(executor, env);
       if (summary.processed > 0) {

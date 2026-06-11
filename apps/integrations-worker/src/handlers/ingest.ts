@@ -34,7 +34,7 @@ export async function handleGithubWebhookIngest(
   requestId: string,
   deps?: IngestDeps,
 ): Promise<Response> {
-  if (!env.SOURCEPLANE_DB) {
+  if (!env.PLATFORM_DB) {
     return errorResponse("internal_error", "Service unavailable", 503, requestId);
   }
   // No webhook secret for this environment yet (D1) → nothing can verify.
@@ -89,7 +89,7 @@ export async function handleGithubWebhookIngest(
 
   const action = typeof payload.action === "string" ? payload.action : null;
 
-  const executor = deps?.executor ?? createSqlExecutor(env.SOURCEPLANE_DB);
+  const executor = deps?.executor ?? createSqlExecutor(env.PLATFORM_DB);
   const owned = !deps?.executor;
   try {
     const repo = createIntegrationsRepository(executor);

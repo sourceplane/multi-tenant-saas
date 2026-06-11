@@ -87,7 +87,7 @@ export async function handleListDeliveries(
     });
   }
 
-  const executor = deps?.executor ?? createSqlExecutor(env.SOURCEPLANE_DB!);
+  const executor = deps?.executor ?? createSqlExecutor(env.PLATFORM_DB!);
   const owned = !deps?.executor;
   try {
     const repo = createIntegrationsRepository(executor);
@@ -146,7 +146,7 @@ export async function handleReplayDelivery(
   );
   if (denied) return denied;
 
-  const executor = deps?.executor ?? createSqlExecutor(env.SOURCEPLANE_DB!);
+  const executor = deps?.executor ?? createSqlExecutor(env.PLATFORM_DB!);
   const owned = !deps?.executor;
   try {
     const repo = createIntegrationsRepository(executor);

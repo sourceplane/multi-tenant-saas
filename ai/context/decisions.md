@@ -56,6 +56,12 @@ Last updated: 2026-05-26
   non-blocking Orun/spec limitation for now because the components subscribe to
   different environments. Proposal `ai/proposals/task-0007.1-spec-update.md`
   records the deferred follow-up.
+- BF4 (saas-bootstrap-factory): the Hyperdrive binding name is `PLATFORM_DB`
+  (was `SOURCEPLANE_DB`; epic decision D1). Renamed atomically across all 12
+  DB-bound workers' wrangler configs + code in one PR with **no alias period**:
+  a Worker's binding config and code bundle ship in a single `wrangler deploy`,
+  so config/code skew within a worker cannot occur. Historical `ai/reports/`
+  mentions are frozen as-is.
 - BF1 (saas-bootstrap-factory): the real infra ordering is now encoded as
   `dependsOn` edges — `supabase → bootstrap`, `cloudflare-hyperdrive →
   supabase`, and `db-migrate → supabase` (in addition to the existing

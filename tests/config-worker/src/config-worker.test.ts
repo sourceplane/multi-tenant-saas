@@ -56,7 +56,7 @@ function createMockFetcherThatThrows(): Fetcher {
 
 function createFakeEnv(overrides?: Record<string, unknown>): Env {
   const base: Record<string, unknown> = {
-    SOURCEPLANE_DB: { connectionString: "postgres://fake" },
+    PLATFORM_DB: { connectionString: "postgres://fake" },
     MEMBERSHIP_WORKER: createMockFetcher({ data: { memberships: [{ kind: "role_assignment", role: "admin", scope: { kind: "organization", orgId: TEST_ORG_UUID } }] } }),
     POLICY_WORKER: createMockFetcher({ data: { allow: true, reason: "org_admin", policyVersion: 1, derivedScope: { orgId: TEST_ORG_UUID } } }),
     ENVIRONMENT: "test",
@@ -403,7 +403,7 @@ describe("config-worker router", () => {
     const env = createFakeEnv();
     const req = makeRequest("GET", `/v1/organizations/${TEST_ORG_PUBLIC}/config/settings`);
     const res = await route(req, env);
-    // Will get 503 because SOURCEPLANE_DB is a fake object, but route matched (not 404)
+    // Will get 503 because PLATFORM_DB is a fake object, but route matched (not 404)
     expect([200, 503]).toContain(res.status);
   });
 
@@ -464,8 +464,8 @@ describe("config-worker router", () => {
   });
 
   // Service unavailability tests
-  it("returns 503 when SOURCEPLANE_DB is missing", async () => {
-    const env = createFakeEnv({ SOURCEPLANE_DB: undefined });
+  it("returns 503 when PLATFORM_DB is missing", async () => {
+    const env = createFakeEnv({ PLATFORM_DB: undefined });
     const req = makeRequest("GET", `/v1/organizations/${TEST_ORG_PUBLIC}/config/settings`);
     const res = await route(req, env);
     expect(res.status).toBe(503);

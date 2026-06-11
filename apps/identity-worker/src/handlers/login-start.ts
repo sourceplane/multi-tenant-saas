@@ -29,7 +29,7 @@ const SYSTEM_ORG_ID = "00000000-0000-0000-0000-000000000000";
 export interface HandleLoginStartDeps {
   /**
    * Injectable repository for unit tests. When omitted, a real
-   * `createSqlExecutor(env.SOURCEPLANE_DB)` + `createIdentityRepository`
+   * `createSqlExecutor(env.PLATFORM_DB)` + `createIdentityRepository`
    * pair is used (production path).
    */
   repo?: IdentityRepository;
@@ -63,11 +63,11 @@ export async function handleLoginStart(
     return validationError(requestId, { email: ["A valid email address is required"] });
   }
 
-  if (!deps?.repo && !env.SOURCEPLANE_DB) {
+  if (!deps?.repo && !env.PLATFORM_DB) {
     return errorResponse("internal_error", "Database not configured", 503, requestId);
   }
 
-  const executor = deps?.repo ? null : createSqlExecutor(env.SOURCEPLANE_DB!);
+  const executor = deps?.repo ? null : createSqlExecutor(env.PLATFORM_DB!);
   try {
     const repo = deps?.repo ?? createIdentityRepository(executor!);
     const ctx = extractRequestContext(request, requestId);

@@ -86,8 +86,8 @@ async function accountHasPaidSubscription(
     const sub = await deps.getActiveSubscription(billingOrgHex);
     return sub !== null && sub.planId !== FREE_PLAN_ID;
   }
-  if (!env.SOURCEPLANE_DB) return false;
-  const executor = createSqlExecutor(env.SOURCEPLANE_DB);
+  if (!env.PLATFORM_DB) return false;
+  const executor = createSqlExecutor(env.PLATFORM_DB);
   try {
     const repo = createBillingRepository(executor);
     const res = await repo.getActiveSubscription(billingOrgHex);

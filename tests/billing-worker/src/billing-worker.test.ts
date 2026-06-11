@@ -49,7 +49,7 @@ function createMockFetcher(
 
 function createFakeEnv(overrides?: Record<string, unknown>): Env {
   const base: Record<string, unknown> = {
-    SOURCEPLANE_DB: { connectionString: "postgres://fake" },
+    PLATFORM_DB: { connectionString: "postgres://fake" },
     MEMBERSHIP_WORKER: createMockFetcher({
       data: {
         memberships: [
@@ -148,8 +148,8 @@ describe("router", () => {
     expect(body.data.status).toBe("ok");
   });
 
-  it("GET /health returns 503 when SOURCEPLANE_DB missing", async () => {
-    const env = createFakeEnv({ SOURCEPLANE_DB: undefined });
+  it("GET /health returns 503 when PLATFORM_DB missing", async () => {
+    const env = createFakeEnv({ PLATFORM_DB: undefined });
     const req = new Request("https://billing-worker/health", { method: "GET" });
     const res = await route(req, env);
     expect(res.status).toBe(503);
@@ -371,7 +371,7 @@ describe("router", () => {
   it("internal entitlement-check route does NOT require x-actor headers", async () => {
     // Caller is a service binding from another bounded-context Worker, not an
     // end user. With DB missing we expect 503 (misconfiguration), NOT 401.
-    const env = createFakeEnv({ SOURCEPLANE_DB: undefined });
+    const env = createFakeEnv({ PLATFORM_DB: undefined });
     const req = new Request(
       "https://billing-worker/v1/internal/billing/entitlements/check",
       {
@@ -501,7 +501,7 @@ describe("router", () => {
     // membership-worker is the second allow-listed internal caller. With DB
     // missing we expect 503 (downstream misconfig), NOT 403 — proving the
     // allow-list lets the caller through before repository access.
-    const env = createFakeEnv({ SOURCEPLANE_DB: undefined });
+    const env = createFakeEnv({ PLATFORM_DB: undefined });
     const req = new Request(
       "https://billing-worker/v1/internal/billing/entitlements/check",
       {

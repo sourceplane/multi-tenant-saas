@@ -63,10 +63,10 @@ export async function handleCreateSuppression(
   const orgUuid = parseOrgIdInput(input.orgId);
   if (!orgUuid) return validationError(requestId, { orgId: ["Invalid org id"] });
 
-  if (!deps?.repo && !env.SOURCEPLANE_DB) {
+  if (!deps?.repo && !env.PLATFORM_DB) {
     return errorResponse("internal_error", "Database not configured", 503, requestId);
   }
-  const executor = deps?.repo ? null : createSqlExecutor(env.SOURCEPLANE_DB!);
+  const executor = deps?.repo ? null : createSqlExecutor(env.PLATFORM_DB!);
   try {
     const repo = deps?.repo ?? createNotificationsRepository(executor!);
     const now = deps?.now ? deps.now() : new Date();

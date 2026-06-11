@@ -91,7 +91,7 @@ export async function handleAcceptInvitation(
 
   const validToken = token as string;
 
-  if (!deps && !env.SOURCEPLANE_DB) {
+  if (!deps && !env.PLATFORM_DB) {
     return errorResponse("internal_error", "Database not configured", 503, requestId);
   }
 
@@ -103,7 +103,7 @@ export async function handleAcceptInvitation(
   const roleAssignmentId = crypto.randomUUID();
   const genId = deps?.generateId ?? (() => randomHex(16));
 
-  const executor = deps ? null : createSqlExecutor(env.SOURCEPLANE_DB!);
+  const executor = deps ? null : createSqlExecutor(env.PLATFORM_DB!);
   try {
     if (executor && "transaction" in executor) {
       const txResult = await executor.transaction(async (txExec) => {

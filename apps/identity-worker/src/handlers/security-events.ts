@@ -92,7 +92,7 @@ export async function handleSecurityEvents(
     return errorResponse("unauthenticated", "Missing or invalid Authorization header", 401, requestId);
   }
 
-  if (!env.SOURCEPLANE_DB) {
+  if (!env.PLATFORM_DB) {
     return errorResponse("internal_error", "Database not configured", 503, requestId);
   }
 
@@ -102,7 +102,7 @@ export async function handleSecurityEvents(
     return validationError(requestId, { [pageResult.field]: [pageResult.reason] });
   }
 
-  const executor = deps?.repo ? null : createSqlExecutor(env.SOURCEPLANE_DB);
+  const executor = deps?.repo ? null : createSqlExecutor(env.PLATFORM_DB);
   try {
     const repo = deps?.repo ?? createIdentityRepository(executor!);
     const auth = createAuthService({ repo, now: () => new Date() });

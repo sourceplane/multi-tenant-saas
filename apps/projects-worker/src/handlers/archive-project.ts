@@ -25,7 +25,7 @@ export async function handleArchiveProject(
   projectId: Uuid,
   deps?: HandleArchiveProjectDeps,
 ): Promise<Response> {
-  if (!env.SOURCEPLANE_DB) {
+  if (!env.PLATFORM_DB) {
     return errorResponse("internal_error", "Service unavailable", 503, requestId);
   }
   if (!env.MEMBERSHIP_WORKER) {
@@ -59,7 +59,7 @@ export async function handleArchiveProject(
     return errorResponse("not_found", "Not found", 404, requestId);
   }
 
-  const executor = deps?.projectsRepo && deps?.eventsRepo ? null : createSqlExecutor(env.SOURCEPLANE_DB);
+  const executor = deps?.projectsRepo && deps?.eventsRepo ? null : createSqlExecutor(env.PLATFORM_DB);
   try {
     const eventId = crypto.randomUUID();
     const auditId = crypto.randomUUID();

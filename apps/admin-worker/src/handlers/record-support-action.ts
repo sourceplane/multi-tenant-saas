@@ -166,11 +166,11 @@ export async function handleRecordSupportAction(
   }
 
   // Production path: requires DB.
-  if (!env.SOURCEPLANE_DB) {
+  if (!env.PLATFORM_DB) {
     return errorResponse("internal_error", "Database not configured", 503, requestId);
   }
 
-  const executor = createSqlExecutor(env.SOURCEPLANE_DB);
+  const executor = createSqlExecutor(env.PLATFORM_DB);
   try {
     // Write the support-action row and append the audit event inside one
     // transaction — they commit or roll back together (mirrors membership-worker
@@ -270,8 +270,8 @@ export async function emitAccessDenied(env: Env, input: AccessDeniedInput): Prom
 
   // Production path: best-effort audit of the denial. A missing DB must not turn
   // a (correct) 403 into a 500 — the denial decision stands regardless.
-  if (!env.SOURCEPLANE_DB) return;
-  const executor = createSqlExecutor(env.SOURCEPLANE_DB);
+  if (!env.PLATFORM_DB) return;
+  const executor = createSqlExecutor(env.PLATFORM_DB);
   try {
     const eventsRepo = createEventsRepository(executor);
     await appendSupportEvent(eventsRepo, eventInput, input.genId);

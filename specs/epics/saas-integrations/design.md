@@ -31,7 +31,7 @@ New worker `apps/integrations-worker`, new schema `integrations`, new component
 contract `components/17-integrations.md` (authored in IG0). It follows the
 standard worker anatomy (router, handlers, ids, http; service bindings to
 MEMBERSHIP_WORKER / POLICY_WORKER / BILLING_WORKER; Hyperdrive to
-SOURCEPLANE_DB; cron trigger like webhooks-worker).
+PLATFORM_DB; cron trigger like webhooks-worker).
 
 Why not extend `webhooks-worker`: spec 15 declares inbound third-party OAuth
 flows out of scope, and its data ownership (customer endpoints, outbound
