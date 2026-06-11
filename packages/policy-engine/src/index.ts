@@ -55,6 +55,7 @@ const ORG_ROLE_PERMISSIONS: Record<OrganizationRole, readonly string[]> = {
     "organization.integration.read",
     "organization.integration.connect",
     "organization.integration.manage",
+    "project.repo_link.write",
   ],
   admin: [
     "organization.read",
@@ -94,6 +95,7 @@ const ORG_ROLE_PERMISSIONS: Record<OrganizationRole, readonly string[]> = {
     "organization.integration.read",
     "organization.integration.connect",
     "organization.integration.manage",
+    "project.repo_link.write",
   ],
   builder: [
     "organization.read",
@@ -132,6 +134,7 @@ const ORG_ROLE_PERMISSIONS: Record<OrganizationRole, readonly string[]> = {
 
 const PROJECT_ROLE_PERMISSIONS: Record<ProjectRole, readonly string[]> = {
   project_admin: [
+    "project.repo_link.write",
     "project.read",
     "project.update",
     "project.delete",
@@ -179,6 +182,7 @@ const VALID_PROJECT_ROLES: ReadonlySet<string> = new Set([
 ]);
 
 const PROJECT_SCOPED_ACTIONS: ReadonlySet<string> = new Set([
+  "project.repo_link.write",
   "project.read",
   "project.update",
   "project.delete",
@@ -239,6 +243,7 @@ const ALL_KNOWN_ACTIONS: ReadonlySet<string> = new Set([
   "organization.integration.read",
   "organization.integration.connect",
   "organization.integration.manage",
+  "project.repo_link.write",
 ]);
 
 function isOrgRole(role: string): role is OrganizationRole {

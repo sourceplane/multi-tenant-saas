@@ -165,3 +165,108 @@ export async function deleteInstallation(
     return false;
   }
 }
+
+// ── Installation tokens + repository listing (IG3) ──────────
+
+export interface MintedInstallationToken {
+  token: string;
+  expiresAt: string;
+  permissions: Record<string, unknown> | null;
+}
+
+/**
+ * POST /app/installations/{id}/access_tokens — mint an installation token
+ * for the PLATFORM'S OWN calls (repo listing, connection health). Brokered
+ * tenant tokens (IG4) are scoped down per request and never cached; this one
+ * is cached encrypted with its natural ~1h expiry.
+ */
+export async function createInstallationToken(
+  jwt: string,
+  installationId: number,
+  fetchImpl: FetchLike = fetch,
+): Promise<MintedInstallationToken | null> {
+  let res: Response;
+  try {
+    res = await fetchImpl(`${API_BASE}/app/installations/${installationId}/access_tokens`, {
+      method: "POST",
+      headers: appHeaders(jwt),
+    });
+  } catch {
+    return null;
+  }
+  if (res.status !== 201) return null;
+  let data: Record<string, unknown>;
+  try {
+    data = (await res.json()) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+  if (typeof data.token !== "string" || typeof data.expires_at !== "string") return null;
+  return {
+    token: data.token,
+    expiresAt: data.expires_at,
+    permissions: (data.permissions as Record<string, unknown>) ?? null,
+  };
+}
+
+export interface InstallationRepository {
+  externalId: string;
+  fullName: string;
+  defaultBranch: string | null;
+  private: boolean;
+}
+
+const REPOSITORIES_PER_PAGE = 100;
+const REPOSITORIES_MAX_PAGES = 3;
+
+/**
+ * GET /installation/repositories — repositories visible to the installation,
+ * fetched with the installation token. Returns up to 300 repos plus a
+ * truncation flag; finer search happens platform-side over the fetched set.
+ */
+export async function listInstallationRepositories(
+  installationToken: string,
+  fetchImpl: FetchLike = fetch,
+): Promise<{ repositories: InstallationRepository[]; truncated: boolean } | null> {
+  const repositories: InstallationRepository[] = [];
+  let totalCount = 0;
+  for (let page = 1; page <= REPOSITORIES_MAX_PAGES; page++) {
+    let res: Response;
+    try {
+      res = await fetchImpl(
+        `${API_BASE}/installation/repositories?per_page=${REPOSITORIES_PER_PAGE}&page=${page}`,
+        {
+          method: "GET",
+          headers: {
+            authorization: `token ${installationToken}`,
+            accept: "application/vnd.github+json",
+            "user-agent": USER_AGENT,
+          },
+        },
+      );
+    } catch {
+      return null;
+    }
+    if (!res.ok) return null;
+    let data: Record<string, unknown>;
+    try {
+      data = (await res.json()) as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+    totalCount = typeof data.total_count === "number" ? data.total_count : totalCount;
+    const batch = Array.isArray(data.repositories) ? data.repositories : [];
+    for (const r of batch) {
+      const repo = r as Record<string, unknown>;
+      if (typeof repo.id !== "number" || typeof repo.full_name !== "string") continue;
+      repositories.push({
+        externalId: String(repo.id),
+        fullName: repo.full_name,
+        defaultBranch: typeof repo.default_branch === "string" ? repo.default_branch : null,
+        private: repo.private === true,
+      });
+    }
+    if (batch.length < REPOSITORIES_PER_PAGE) break;
+  }
+  return { repositories, truncated: repositories.length < totalCount };
+}

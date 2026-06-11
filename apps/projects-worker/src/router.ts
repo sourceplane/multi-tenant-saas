@@ -6,6 +6,7 @@ import { handleListProjects } from "./handlers/list-projects.js";
 import { handleArchiveProject } from "./handlers/archive-project.js";
 import { handleCreateEnvironment } from "./handlers/create-environment.js";
 import { handleListEnvironments } from "./handlers/list-environments.js";
+import { handleInternalListEnvironments } from "./handlers/internal-environments.js";
 import { handleGetEnvironment } from "./handlers/get-environment.js";
 import { handleArchiveEnvironment } from "./handlers/archive-environment.js";
 import { errorResponse, notFound, methodNotAllowed } from "./http.js";
@@ -43,6 +44,12 @@ export async function route(request: Request, env: Env): Promise<Response> {
   try {
     if (url.pathname === "/health" && request.method === "GET") {
       return handleHealth(env, requestId);
+    }
+
+    // Internal worker-to-worker seam (service-binding-only; never edge-routed).
+    if (url.pathname === "/v1/internal/projects/environments") {
+      if (request.method !== "GET") return methodNotAllowed(requestId);
+      return handleInternalListEnvironments(request, env, requestId);
     }
 
     const envIdMatch = url.pathname.match(ORG_PROJECT_ENVIRONMENT_ID_RE);

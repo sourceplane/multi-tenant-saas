@@ -50,6 +50,10 @@
         {
           "binding": "BILLING_WORKER",
           "service": "billing-worker-stage"
+        },
+        {
+          "binding": "PROJECTS_WORKER",
+          "service": "projects-worker-stage"
         }
       ]
     },
@@ -77,6 +81,10 @@
         {
           "binding": "BILLING_WORKER",
           "service": "billing-worker-prod"
+        },
+        {
+          "binding": "PROJECTS_WORKER",
+          "service": "projects-worker-prod"
         }
       ]
     }

@@ -547,6 +547,36 @@ export function createIntegrationsRepository(executor: SqlExecutor): Integration
       }
     },
 
+    async listActiveRepoLinksForRepo(
+      orgId: Uuid,
+      repoExternalId: string,
+    ): Promise<IntegrationsResult<RepoLink[]>> {
+      try {
+        const result = await executor.execute<Record<string, unknown>>(
+          `SELECT * FROM integrations.repo_links
+            WHERE org_id = $1 AND repo_external_id = $2 AND status = 'active'
+            ORDER BY created_at ASC, id ASC`,
+          [orgId, repoExternalId],
+        );
+        return { ok: true, value: result.rows.map(mapRepoLink) };
+      } catch {
+        return safeError("Failed to list repo links for repo");
+      }
+    },
+
+    async countActiveRepoLinks(orgId: Uuid): Promise<IntegrationsResult<number>> {
+      try {
+        const result = await executor.execute<Record<string, unknown>>(
+          `SELECT COUNT(*)::int AS count FROM integrations.repo_links
+            WHERE org_id = $1 AND status = 'active'`,
+          [orgId],
+        );
+        return { ok: true, value: Number(result.rows[0]?.count ?? 0) };
+      } catch {
+        return safeError("Failed to count repo links");
+      }
+    },
+
     // ── Inbound deliveries ──────────────────────────────────
 
     async insertInboundDelivery(

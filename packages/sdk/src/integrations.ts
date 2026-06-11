@@ -1,5 +1,12 @@
 import type {
   ConnectIntegrationRequest,
+  CreateRepoLinkRequest,
+  CreateRepoLinkResponse,
+  DeleteRepoLinkResponse,
+  ListRepoLinksResponse,
+  ListRepositoriesResponse,
+  UpdateRepoLinkRequest,
+  UpdateRepoLinkResponse,
   ConnectIntegrationResponse,
   GetIntegrationResponse,
   ListIntegrationsResponse,
@@ -95,6 +102,89 @@ export class IntegrationsClient {
         method: "POST",
         path: `/v1/organizations/${encodeURIComponent(orgId)}/integrations/${encodeURIComponent(connectionId)}/deliveries/${encodeURIComponent(deliveryId)}/replay`,
         body: {},
+      },
+      opts,
+    );
+  }
+
+  /** GET .../integrations/:connectionId/repositories?query= */
+  listRepositories(
+    orgId: string,
+    connectionId: string,
+    query?: string,
+    opts: RequestOptions = {},
+  ): Promise<ListRepositoriesResponse> {
+    const qs = query ? `?query=${encodeURIComponent(query)}` : "";
+    return this.transport.request<ListRepositoriesResponse>(
+      {
+        method: "GET",
+        path: `/v1/organizations/${encodeURIComponent(orgId)}/integrations/${encodeURIComponent(connectionId)}/repositories${qs}`,
+      },
+      opts,
+    );
+  }
+
+  /** GET /v1/organizations/:orgId/projects/:projectId/repo-links */
+  listRepoLinks(
+    orgId: string,
+    projectId: string,
+    opts: RequestOptions = {},
+  ): Promise<ListRepoLinksResponse> {
+    return this.transport.request<ListRepoLinksResponse>(
+      {
+        method: "GET",
+        path: `/v1/organizations/${encodeURIComponent(orgId)}/projects/${encodeURIComponent(projectId)}/repo-links`,
+      },
+      opts,
+    );
+  }
+
+  /** POST /v1/organizations/:orgId/projects/:projectId/repo-links */
+  createRepoLink(
+    orgId: string,
+    projectId: string,
+    body: CreateRepoLinkRequest,
+    opts: RequestOptions = {},
+  ): Promise<CreateRepoLinkResponse> {
+    return this.transport.request<CreateRepoLinkResponse>(
+      {
+        method: "POST",
+        path: `/v1/organizations/${encodeURIComponent(orgId)}/projects/${encodeURIComponent(projectId)}/repo-links`,
+        body,
+      },
+      opts,
+    );
+  }
+
+  /** PATCH .../repo-links/:repoLinkId */
+  updateRepoLink(
+    orgId: string,
+    projectId: string,
+    repoLinkId: string,
+    body: UpdateRepoLinkRequest,
+    opts: RequestOptions = {},
+  ): Promise<UpdateRepoLinkResponse> {
+    return this.transport.request<UpdateRepoLinkResponse>(
+      {
+        method: "PATCH",
+        path: `/v1/organizations/${encodeURIComponent(orgId)}/projects/${encodeURIComponent(projectId)}/repo-links/${encodeURIComponent(repoLinkId)}`,
+        body,
+      },
+      opts,
+    );
+  }
+
+  /** DELETE .../repo-links/:repoLinkId (soft unlink) */
+  unlinkRepoLink(
+    orgId: string,
+    projectId: string,
+    repoLinkId: string,
+    opts: RequestOptions = {},
+  ): Promise<DeleteRepoLinkResponse> {
+    return this.transport.request<DeleteRepoLinkResponse>(
+      {
+        method: "DELETE",
+        path: `/v1/organizations/${encodeURIComponent(orgId)}/projects/${encodeURIComponent(projectId)}/repo-links/${encodeURIComponent(repoLinkId)}`,
       },
       opts,
     );

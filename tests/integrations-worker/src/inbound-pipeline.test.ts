@@ -308,6 +308,45 @@ describe("inbox drain — attribute, lifecycle, normalize, emit", () => {
     expect(eventInsert!.params[9]).toBe(ORG_UUID); // org attribution from the connection
   });
 
+  it("emits per-project events with the environment resolved from the branch map (IG3)", async () => {
+    const PROJECT_UUID = "44444444-4444-4444-8444-444444444444";
+    const { ctx, queries } = drainCtx((text) => {
+      if (text.includes("FROM integrations.github_installations WHERE installation_id"))
+        return [installationRow()];
+      if (text.includes("FROM integrations.connections WHERE id = $1")) return [connectionRow()];
+      if (text.includes("FROM integrations.repo_links"))
+        return [
+          {
+            id: "ln1",
+            org_id: ORG_UUID,
+            project_id: PROJECT_UUID,
+            connection_id: CONNECTION_UUID,
+            repo_external_id: "777001",
+            repo_full_name: "acme/storefront",
+            default_branch: "main",
+            branch_env_map: { main: "prod" },
+            status: "active",
+            created_by: null,
+            created_at: NOW.toISOString(),
+            updated_at: NOW.toISOString(),
+          },
+        ];
+      if (text.includes("events.event_log")) return [EVENT_ROW];
+      if (text.includes("UPDATE integrations.inbound_deliveries"))
+        return [deliveryRow({ status: "emitted" })];
+      return [];
+    });
+
+    const outcome = await processDelivery(ctx, mapDelivery(deliveryRow()));
+    expect(outcome).toEqual({ kind: "emitted", eventType: "scm.push" });
+
+    const eventInsert = queries.find((q) => q.text.includes("events.event_log"));
+    expect(eventInsert!.params[10]).toBe(PROJECT_UUID); // event row project_id
+    const payload = JSON.parse(eventInsert!.params[19] as string) as Record<string, unknown>;
+    expect(payload.projectId).toBe(`prj_${PROJECT_UUID.replace(/-/g, "")}`);
+    expect(payload.environment).toBe("prod"); // branch "main" resolved via map
+  });
+
   it("skips unattributed installations and records them as orphaned", async () => {
     const { ctx, queries } = drainCtx((text) => {
       if (text.includes("FROM integrations.github_installations WHERE installation_id")) return [];

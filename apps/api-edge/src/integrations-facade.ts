@@ -6,6 +6,8 @@ import { resolveActor } from "./resolve-actor.js";
 
 // Authenticated org-scoped integration routes → integrations-worker.
 const ORG_INTEGRATIONS_RE = /^\/v1\/organizations\/[^/]+\/integrations(\/.*)?$/;
+// Project-scoped repo links (IG3) live in the integrations bounded context.
+const PROJECT_REPO_LINKS_RE = /^\/v1\/organizations\/[^/]+\/projects\/[^/]+\/repo-links(\/.*)?$/;
 
 // Public install-callback ingress (design §5): GitHub redirects the installing
 // user's BROWSER here after an App install. There is no bearer token — the
@@ -36,7 +38,7 @@ const FORWARDED_HEADERS = [
 ];
 
 export function isIntegrationsRoute(pathname: string): boolean {
-  return ORG_INTEGRATIONS_RE.test(pathname);
+  return ORG_INTEGRATIONS_RE.test(pathname) || PROJECT_REPO_LINKS_RE.test(pathname);
 }
 
 export function isIntegrationsIngressRoute(pathname: string): boolean {
@@ -129,7 +131,7 @@ export async function handleIntegrationsRoute(
   requestId: string,
   pathname: string,
 ): Promise<Response> {
-  const allowedMethods = ["GET", "POST", "DELETE"];
+  const allowedMethods = ["GET", "POST", "PATCH", "DELETE"];
   if (!allowedMethods.includes(request.method)) {
     return errorResponse("unsupported", "Method not allowed", 405, requestId);
   }
@@ -178,7 +180,7 @@ export async function handleIntegrationsRoute(
         method: request.method,
         headers,
       };
-      if (request.method === "POST") {
+      if (request.method === "POST" || request.method === "PATCH") {
         fetchInit.body = request.body;
       }
       const downstream = await env.INTEGRATIONS_WORKER.fetch(target.toString(), fetchInit);

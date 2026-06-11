@@ -20,7 +20,7 @@ import {
 import { createEventsRepository, type EventsRepository } from "@saas/db/events";
 import type { SqlExecutor } from "@saas/db/hyperdrive";
 import { asUuid } from "@saas/db/ids";
-import { generateUuid, inboundDeliveryPublicId, orgPublicId } from "./ids.js";
+import { generateUuid, inboundDeliveryPublicId, orgPublicId, projectPublicId } from "./ids.js";
 import {
   installationIdFromPayload,
   LIFECYCLE_EVENT_TYPES,
@@ -336,15 +336,112 @@ export async function processDelivery(
     });
   }
 
-  return emitAndMark(
-    ctx,
-    delivery,
-    connection.value,
-    normalized.type,
-    { kind: "repository", id: normalized.repo.externalId, name: normalized.repo.fullName },
-    normalized.payload,
-    `${normalized.type} on ${normalized.repo.fullName}`,
+  // IG3 enrichment: a repo matching active links emits per linked project
+  // with projectId + the environment resolved from the branch map; an
+  // unlinked repo emits org-scoped only (design §6).
+  const links = await ctx.repo.listActiveRepoLinksForRepo(
+    asUuid(connection.value.orgId),
+    normalized.repo.externalId,
   );
+  const targets: Array<{ projectId: string | null; environment: string | null }> =
+    links.ok && links.value.length > 0
+      ? links.value.map((link) => ({
+          projectId: link.projectId,
+          environment: resolveEnvironment(link.branchEnvMap, normalized.payload),
+        }))
+      : [{ projectId: null, environment: null }];
+
+  return emitScmEvents(ctx, delivery, connection.value, normalized, targets);
+}
+
+/** Branch the event refers to, for environment resolution. */
+function eventBranch(payload: Record<string, unknown>): string | null {
+  if (typeof payload.branch === "string" && payload.branch) return payload.branch;
+  // Pull requests resolve against their TARGET branch.
+  if (typeof payload.targetBranch === "string" && payload.targetBranch) return payload.targetBranch;
+  return null;
+}
+
+function resolveEnvironment(
+  branchEnvMap: Record<string, string>,
+  payload: Record<string, unknown>,
+): string | null {
+  const branch = eventBranch(payload);
+  if (!branch) return null;
+  return branchEnvMap[branch] ?? null;
+}
+
+/**
+ * Emit the normalized event once per target (org-scoped, or per linked
+ * project) and mark the delivery `emitted` — all in one transaction when the
+ * executor supports it.
+ */
+async function emitScmEvents(
+  ctx: ProcessCtx,
+  delivery: InboundDelivery,
+  connection: IntegrationConnection,
+  normalized: { type: ScmEventType; payload: Record<string, unknown>; repo: { externalId: string; fullName: string } },
+  targets: Array<{ projectId: string | null; environment: string | null }>,
+): Promise<DeliveryOutcome> {
+  const firstEventId = generateUuid();
+  const build = async (events: EventsRepository, repo: IntegrationsRepository): Promise<void> => {
+    for (let i = 0; i < targets.length; i++) {
+      const target = targets[i]!;
+      const appended = await events.appendEventWithAudit({
+        event: {
+          id: i === 0 ? firstEventId : generateUuid(),
+          type: normalized.type,
+          version: 1,
+          source: "integrations-worker",
+          occurredAt: ctx.now(),
+          actorType: "system",
+          actorId: "integrations-worker",
+          orgId: connection.orgId,
+          projectId: target.projectId,
+          subjectKind: "repository",
+          subjectId: normalized.repo.externalId,
+          subjectName: normalized.repo.fullName,
+          requestId: inboundDeliveryPublicId(delivery.id),
+          payload: {
+            ...normalized.payload,
+            projectId: target.projectId ? projectPublicId(target.projectId) : null,
+            environment: target.environment,
+          },
+        },
+        audit: {
+          id: generateUuid(),
+          category: "integrations",
+          description: `${normalized.type} on ${normalized.repo.fullName}`,
+          projectId: target.projectId,
+        },
+      });
+      if (!appended.ok) throw new Error("event_append_failed");
+    }
+    const marked = await repo.markInboundDelivery(asUuid(delivery.id), {
+      status: "emitted",
+      orgId: asUuid(connection.orgId),
+      connectionId: asUuid(connection.id),
+      emittedEventId: asUuid(firstEventId),
+      failureReason: null,
+    });
+    if (!marked.ok) throw new Error("delivery_mark_failed");
+  };
+
+  try {
+    const executor = ctx.executor as SqlExecutor & {
+      transaction?: <T>(fn: (tx: SqlExecutor) => Promise<T>) => Promise<T>;
+    };
+    if (typeof executor.transaction === "function") {
+      await executor.transaction(async (tx) => {
+        await build(createEventsRepository(tx), createIntegrationsRepository(tx));
+      });
+    } else {
+      await build(ctx.events, ctx.repo);
+    }
+    return { kind: "emitted", eventType: normalized.type };
+  } catch {
+    return markRetryOrFail(ctx, delivery, "emit_failed");
+  }
 }
 
 /** One cron tick: claim due inbox rows oldest-first and process each. */
