@@ -1,4 +1,20 @@
 import type { ErrorCode } from "@saas/contracts/errors";
+import { shouldEmitTimingLog, type Timings } from "@saas/contracts/timing";
+
+/** Attach a `Server-Timing` header (when phases exist) and emit a structured
+ *  timing log line. PERF14b: the header is always set; the log line is sampled
+ *  (always emit slow ≥1s, else 1-in-10) to bound Workers Logs ingestion cost.
+ *  Returns the same response for chaining. */
+export function withTimings(response: Response, requestId: string, route: string, timings: Timings): Response {
+  const header = timings.header();
+  if (header) response.headers.set("Server-Timing", header);
+  const phases = timings.toJSON();
+  if (shouldEmitTimingLog(phases)) {
+    // eslint-disable-next-line no-console -- structured timing line for prod observability
+    console.log(JSON.stringify({ level: "info", msg: "timing", route, requestId, phases }));
+  }
+  return response;
+}
 
 export function successResponse<T>(data: T, requestId: string, status = 200): Response {
   return Response.json(

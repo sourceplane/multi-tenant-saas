@@ -523,6 +523,39 @@ describe("config-worker router", () => {
     expect(res.status).toBe(404);
   });
 
+  // PERF14b: the list handlers emit Server-Timing phases; the parallel
+  // authz_ctx/db pair (PERF12b) must be visible even on non-200 paths.
+  it("deny path still carries Server-Timing phases (PERF14b)", async () => {
+    const env = createFakeEnv({
+      POLICY_WORKER: createMockFetcher({ data: { allow: false, reason: "denied", policyVersion: 1, derivedScope: { orgId: TEST_ORG_UUID } } }),
+    });
+    const req = makeRequest("GET", `/v1/organizations/${TEST_ORG_PUBLIC}/config/settings`);
+    const res = await route(req, env);
+    expect(res.status).toBe(404);
+    const timing = res.headers.get("Server-Timing");
+    expect(timing).toBeTruthy();
+    for (const phase of ["authz_ctx", "db", "policy", "total"]) {
+      expect(timing).toContain(phase);
+    }
+  });
+
+  it("read-failure path still carries Server-Timing phases (PERF14b)", async () => {
+    // Fake DB connection string -> the read resolves not-ok -> 503 with timings.
+    const env = createFakeEnv();
+    const req = makeRequest("GET", `/v1/organizations/${TEST_ORG_PUBLIC}/config/secrets`);
+    const res = await route(req, env);
+    if (res.status === 503) {
+      const timing = res.headers.get("Server-Timing");
+      expect(timing).toBeTruthy();
+      expect(timing).toContain("authz_ctx");
+      expect(timing).toContain("total");
+    } else {
+      // Environment with a reachable DB: success must carry timings too.
+      expect(res.status).toBe(200);
+      expect(res.headers.get("Server-Timing")).toBeTruthy();
+    }
+  });
+
   it("fails closed when policy returns malformed envelope", async () => {
     const env = createFakeEnv({ POLICY_WORKER: createMockFetcher({ wrong: "shape" }) });
     const req = makeRequest("GET", `/v1/organizations/${TEST_ORG_PUBLIC}/config/secrets`);

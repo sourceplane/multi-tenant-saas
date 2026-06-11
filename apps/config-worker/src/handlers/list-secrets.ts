@@ -5,7 +5,8 @@ import { createConfigRepository } from "@saas/db/config";
 import { createSqlExecutor } from "@saas/db/hyperdrive";
 import { fetchAuthorizationContext } from "../membership-client.js";
 import { authorizeViaPolicy } from "../policy-client.js";
-import { errorResponse, listResponse, validationError } from "../http.js";
+import { errorResponse, listResponse, validationError, withTimings } from "../http.js";
+import { createTimings } from "@saas/contracts/timing";
 import { toPublicSecretMetadata } from "../mappers.js";
 import { parsePageParams, encodeCursor } from "../pagination.js";
 import type { PolicyResource } from "@saas/contracts/policy";
@@ -43,6 +44,11 @@ export async function handleListSecrets(
   const dbCursor = cursor ? { createdAt: cursor.createdAt, id: cursor.id } : null;
 
   const executor = createSqlExecutor(env.SOURCEPLANE_DB);
+  // PERF14b: phase timings — `authz_ctx` and `db` run concurrently (PERF12b),
+  // so their overlap is directly visible in the Server-Timing breakdown.
+  const timings = createTimings();
+  const endTotal = timings.start("total");
+  const route = "config.secrets.list";
   try {
     const repo = createConfigRepository(executor);
     // PERF12: the authorization-context fetch (membership) and the read are
@@ -50,34 +56,41 @@ export async function handleListSecrets(
     // facts, and discard the speculatively read rows on deny (deny-by-default).
     // This reads secret METADATA only (names/timestamps), never secret values.
     const [contextResult, result] = await Promise.all([
-      fetchAuthorizationContext(
-        env.MEMBERSHIP_WORKER,
-        actor.subjectId,
-        actor.subjectType,
-        scope.orgId,
-        requestId,
+      timings.measure("authz_ctx", () =>
+        fetchAuthorizationContext(
+          env.MEMBERSHIP_WORKER!,
+          actor.subjectId,
+          actor.subjectType,
+          scope.orgId,
+          requestId,
+        ),
       ),
-      repo.listSecretMetadata(scope, { limit, cursor: dbCursor }),
+      timings.measure("db", () => repo.listSecretMetadata(scope, { limit, cursor: dbCursor })),
     ]);
     if (!contextResult.ok) {
-      return errorResponse("not_found", "Not found", 404, requestId);
+      endTotal();
+      return withTimings(errorResponse("not_found", "Not found", 404, requestId), requestId, route, timings);
     }
 
-    const policyResult = await authorizeViaPolicy(
-      env.POLICY_WORKER,
-      actor.subjectId,
-      actor.subjectType,
-      policyAction,
-      resource,
-      contextResult.memberships,
-      requestId,
+    const policyResult = await timings.measure("policy", () =>
+      authorizeViaPolicy(
+        env.POLICY_WORKER!,
+        actor.subjectId,
+        actor.subjectType,
+        policyAction,
+        resource,
+        contextResult.memberships,
+        requestId,
+      ),
     );
     if (!policyResult.allow) {
-      return errorResponse("not_found", "Not found", 404, requestId);
+      endTotal();
+      return withTimings(errorResponse("not_found", "Not found", 404, requestId), requestId, route, timings);
     }
 
     if (!result.ok) {
-      return errorResponse("internal_error", "Service unavailable", 503, requestId);
+      endTotal();
+      return withTimings(errorResponse("internal_error", "Service unavailable", 503, requestId), requestId, route, timings);
     }
 
     const secrets = result.value.items.map(toPublicSecretMetadata);
@@ -85,7 +98,8 @@ export async function handleListSecrets(
       ? encodeCursor(result.value.nextCursor.createdAt, result.value.nextCursor.id)
       : null;
 
-    return listResponse({ secrets }, requestId, nextCursor);
+    endTotal();
+    return withTimings(listResponse({ secrets }, requestId, nextCursor), requestId, route, timings);
   } catch {
     return errorResponse("internal_error", "Service unavailable", 503, requestId);
   } finally {
