@@ -10,6 +10,8 @@ spec:
   domain: starter-runtime
   path: apps/api-edge
   dependsOn:
+    - component: cloudflare-hyperdrive
+    - component: cloudflare-kv
     - component: projects-worker
     - component: events-worker
     - component: config-worker
@@ -41,6 +43,20 @@ spec:
 
     turboFilter: "@saas/api-edge"
     wranglerConfig: wrangler.jsonc
+
+    # BF6 deploy-time wiring (pilot): wrangler.jsonc is rendered, never
+    # committed. Verify lanes render from wiring.fixture.json (offline);
+    # deploy lanes resolve real IDs from the Secrets Manager wiring manifest
+    # published by the named infra components (BF5).
+    wranglerTemplate: wrangler.template.jsonc
+    wiringComponents: "cloudflare-hyperdrive,cloudflare-kv"
+    wiringEnvs: "stage,prod"
+    wiringFixture: wiring.fixture.json
+    awsAccountId: "306024784101"
+    awsRegion: us-east-1
+    orgName: sourceplane
+    owner: sourceplane
+    repo: multi-tenant-saas
 
     installCommand: pnpm install --frozen-lockfile
     buildCommand: pnpm exec turbo run build --filter=@saas/api-edge

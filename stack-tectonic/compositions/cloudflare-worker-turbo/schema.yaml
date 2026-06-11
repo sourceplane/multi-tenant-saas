@@ -49,6 +49,36 @@ spec:
             type: string
             default: wrangler.jsonc
 
+          # --- BF6 deploy-time wiring (all optional; empty wranglerTemplate = legacy committed config) ---
+          wranglerTemplate:
+            type: string
+            default: ""
+            description: Committed wrangler template with @@wiring(...)@@ tokens; when set, wranglerConfig is rendered, never committed
+          wiringComponents:
+            type: string
+            default: ""
+            description: Comma-separated infra components whose Secrets Manager wiring documents resolve the template tokens
+          wiringEnvs:
+            type: string
+            default: "stage,prod"
+            description: Comma-separated environments fetched by wire-live (template may reference several env sections)
+          wiringFixture:
+            type: string
+            default: wiring.fixture.json
+            description: Committed placeholder wiring map used for offline verify/dry-run rendering
+          awsAccountId:
+            type: string
+            description: AWS account ID hosting the GitHub-OIDC role wire-live assumes to read wiring secrets
+          awsRegion:
+            type: string
+            default: us-east-1
+          orgName:
+            type: string
+          owner:
+            type: string
+          repo:
+            type: string
+
           installCommand:
             type: string
             default: pnpm install --frozen-lockfile

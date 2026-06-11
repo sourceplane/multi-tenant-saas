@@ -19,3 +19,6 @@ crash.log
 # orun per-job staged workspaces
 .orun/runs/
 .orun/*
+
+# BF6: rendered wrangler configs for wiring-templated workers (api-edge pilot)
+apps/api-edge/wrangler.jsonc

@@ -56,6 +56,16 @@ Last updated: 2026-05-26
   non-blocking Orun/spec limitation for now because the components subscribe to
   different environments. Proposal `ai/proposals/task-0007.1-spec-update.md`
   records the deferred follow-up.
+- BF6 pilot (saas-bootstrap-factory): Worker binding IDs are resolved at
+  deploy time, never committed. Pattern (piloted on api-edge): committed
+  `wrangler.template.jsonc` with `@@wiring(<component>/<env>:<key>)@@` tokens +
+  committed `wiring.fixture.json` for offline verify/dry-run; rendered
+  `wrangler.jsonc` is gitignored. The cloudflare-worker-turbo composition owns
+  `wire-fixture` (verify lanes, offline) and `wire-credentials`/`wire-live`
+  (deploy lanes, OIDC plan role reads the BF5 wiring secrets).
+  `verify-structure` rejects committed 32-hex IDs in templates. All 13 worker
+  components carry the role-identity params so the shared deploy profile's
+  use-step renders a valid ARN even for not-yet-templated workers.
 - BF5 (saas-bootstrap-factory): infra components publish their consumable
   outputs ("wiring manifest") to AWS Secrets Manager at their conventional
   `<org>/<repo>/<component>/<env>` path, as Terraform-owned resources (stable
