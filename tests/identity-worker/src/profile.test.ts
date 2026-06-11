@@ -87,6 +87,19 @@ describe("GET /v1/auth/profile", () => {
     expect(json.data.user.id).toBeDefined();
     expect(json.meta.requestId).toBe("req_p3");
   });
+
+  it("carries Server-Timing phases on GET (PERF14b)", async () => {
+    const repo = createFakeRepository();
+    const { token } = await setupAuthenticatedUser(repo);
+
+    const response = await handleProfile(makeGetRequest(token), makeEnv(), "req_p4", { repo });
+    expect(response.status).toBe(200);
+    const timing = response.headers.get("Server-Timing");
+    expect(timing).toBeTruthy();
+    for (const phase of ["resolve", "total"]) {
+      expect(timing).toContain(phase);
+    }
+  });
 });
 
 describe("PATCH /v1/auth/profile", () => {
