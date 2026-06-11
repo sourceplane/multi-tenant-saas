@@ -1,6 +1,18 @@
 # Current Context (compact)
 
-Last updated: 2026-06-01.
+Last updated: 2026-06-11.
+
+## Active: PX cluster (saas-product-experience epic)
+
+Opened 2026-06-11 from a verified-live audit (authenticated Playwright
+walkthrough of stage + edge API probes; evidence in the epic's
+IMPLEMENTATION-STATUS.md). Finding: backends are ahead of surfaces — the
+config facade (settings/flags/secrets) is live on api-edge while the console
+Config page is a stub; notification preferences need only one edge facade;
+no rename anywhere; native confirm()s and the unbranded Next 404 are
+reachable. Epic: `specs/epics/saas-product-experience/` (PX1–PX6, all
+human-independent). Active task: 0135 = PX1 (console truth & papercuts).
+PX3 will unpark the deferred U11 notification-preferences slice.
 
 > **Working-tree compaction (2026-06-01).** To keep a minimal context surface,
 > the bulky historical AI artifacts were removed from the working tree:
