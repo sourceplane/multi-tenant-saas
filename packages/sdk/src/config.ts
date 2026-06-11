@@ -74,17 +74,17 @@ export class ConfigClient {
     );
   }
 
-  /** PATCH <scope>/config/settings/:settingKey */
+  /** PATCH <scope>/config/settings/:settingId — addressed by public id (`set_…`), not key. */
   updateSetting(
     scope: ConfigScope,
-    settingKey: string,
+    settingId: string,
     body: UpdateSettingRequest,
     opts: RequestOptions = {},
   ): Promise<UpdateSettingResponse> {
     return this.transport.request<UpdateSettingResponse>(
       {
         method: "PATCH",
-        path: `${scopeBase(scope)}/settings/${encodeURIComponent(settingKey)}`,
+        path: `${scopeBase(scope)}/settings/${encodeURIComponent(settingId)}`,
         body,
       },
       opts,
@@ -118,17 +118,17 @@ export class ConfigClient {
     );
   }
 
-  /** PATCH <scope>/config/feature-flags/:flagKey */
+  /** PATCH <scope>/config/feature-flags/:flagId — addressed by public id (`flg_…`), not key. */
   updateFeatureFlag(
     scope: ConfigScope,
-    flagKey: string,
+    flagId: string,
     body: UpdateFeatureFlagRequest,
     opts: RequestOptions = {},
   ): Promise<UpdateFeatureFlagResponse> {
     return this.transport.request<UpdateFeatureFlagResponse>(
       {
         method: "PATCH",
-        path: `${scopeBase(scope)}/feature-flags/${encodeURIComponent(flagKey)}`,
+        path: `${scopeBase(scope)}/feature-flags/${encodeURIComponent(flagId)}`,
         body,
       },
       opts,
@@ -168,37 +168,37 @@ export class ConfigClient {
   }
 
   /**
-   * POST <scope>/config/secrets/:secretKey/rotate
+   * POST <scope>/config/secrets/:secretId/rotate — addressed by public id (`sec_…`), not key.
    *
    * Rotates a secret's value. Write-only — the rotated value is never echoed
    * back in any response, event, or audit payload.
    */
   rotateSecret(
     scope: ConfigScope,
-    secretKey: string,
+    secretId: string,
     body: RotateSecretRequest,
     opts: RequestOptions = {},
   ): Promise<RotateSecretMetadataResponse> {
     return this.transport.request<RotateSecretMetadataResponse>(
       {
         method: "POST",
-        path: `${scopeBase(scope)}/secrets/${encodeURIComponent(secretKey)}/rotate`,
+        path: `${scopeBase(scope)}/secrets/${encodeURIComponent(secretId)}/rotate`,
         body,
       },
       opts,
     );
   }
 
-  /** DELETE <scope>/config/secrets/:secretKey — soft-delete (revoke). */
+  /** DELETE <scope>/config/secrets/:secretId — soft-delete (revoke); addressed by public id (`sec_…`). */
   revokeSecret(
     scope: ConfigScope,
-    secretKey: string,
+    secretId: string,
     opts: RequestOptions = {},
   ): Promise<RevokeSecretMetadataResponse> {
     return this.transport.request<RevokeSecretMetadataResponse>(
       {
         method: "DELETE",
-        path: `${scopeBase(scope)}/secrets/${encodeURIComponent(secretKey)}`,
+        path: `${scopeBase(scope)}/secrets/${encodeURIComponent(secretId)}`,
       },
       opts,
     );

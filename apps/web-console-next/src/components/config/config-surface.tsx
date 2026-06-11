@@ -151,7 +151,9 @@ function SettingsTab({ scope, scopeKey }: { scope: ConfigScope; scopeKey: string
               cancel={{ label: "Cancel", onClick: () => setEditing(null) }}
               onSubmit={async (v) => {
                 const r = await wrap(() =>
-                  client.config.updateSetting(scope, editing.key, {
+                  // Item routes address by public id (set_…), not key — the
+                  // worker's parseSettingPublicId rejects bare keys (live 404).
+                  client.config.updateSetting(scope, editing.id, {
                     value: parseConfigValueInput(v.value),
                     description: v.description || null,
                   }),
@@ -245,7 +247,8 @@ function FlagsTab({ scope, scopeKey }: { scope: ConfigScope; scopeKey: string })
     qc.setQueryData<PublicFeatureFlag[]>(key, (cur) =>
       (cur ?? []).map((f) => (f.id === flag.id ? { ...f, enabled } : f)),
     );
-    const r = await wrap(() => client.config.updateFeatureFlag(scope, flag.flagKey, { enabled }));
+    // Address by public id (flg_…): the worker's item route rejects bare keys.
+    const r = await wrap(() => client.config.updateFeatureFlag(scope, flag.id, { enabled }));
     if (!r.ok) {
       qc.setQueryData<PublicFeatureFlag[]>(key, previous);
       toast({ kind: "error", title: "Toggle failed", description: r.error.message });
@@ -367,8 +370,9 @@ function SecretsTab({ scope, scopeKey }: { scope: ConfigScope; scopeKey: string 
   const [rotating, setRotating] = React.useState<PublicSecretMetadata | null>(null);
   const [revoking, setRevoking] = React.useState<PublicSecretMetadata | null>(null);
 
-  const revoke = async (secretKey: string) => {
-    const r = await wrap(() => client.config.revokeSecret(scope, secretKey));
+  const revoke = async (secretId: string) => {
+    // Address by public id (sec_…): the worker's item route rejects bare keys.
+    const r = await wrap(() => client.config.revokeSecret(scope, secretId));
     if (!r.ok) {
       toast({ kind: "error", title: "Revoke failed", description: r.error.message });
       return;
@@ -440,7 +444,7 @@ function SecretsTab({ scope, scopeKey }: { scope: ConfigScope; scopeKey: string 
               cancel={{ label: "Cancel", onClick: () => setRotating(null) }}
               onSubmit={async (v) => {
                 const r = await wrap(() =>
-                  client.config.rotateSecret(scope, rotating.secretKey, { value: v.value }),
+                  client.config.rotateSecret(scope, rotating.id, { value: v.value }),
                 );
                 if (!r.ok) {
                   toast({ kind: "error", title: "Rotate failed", description: r.error.message });
@@ -462,7 +466,7 @@ function SecretsTab({ scope, scopeKey }: { scope: ConfigScope; scopeKey: string 
         description="Consumers reading this secret stop resolving it immediately. This cannot be undone."
         resourceName={revoking?.secretKey}
         confirmLabel="Revoke secret"
-        onConfirm={() => (revoking ? revoke(revoking.secretKey) : undefined)}
+        onConfirm={() => (revoking ? revoke(revoking.id) : undefined)}
       />
 
       {secrets.loading ? (
