@@ -80,6 +80,10 @@
         {
           "binding": "BILLING_WORKER",
           "service": "billing-worker-stage"
+        },
+        {
+          "binding": "NOTIFICATIONS_WORKER",
+          "service": "notifications-worker-stage"
         }
       ],
       "durable_objects": {
@@ -140,6 +144,10 @@
         {
           "binding": "BILLING_WORKER",
           "service": "billing-worker-prod"
+        },
+        {
+          "binding": "NOTIFICATIONS_WORKER",
+          "service": "notifications-worker-prod"
         }
       ],
       "durable_objects": {

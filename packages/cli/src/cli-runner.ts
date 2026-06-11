@@ -30,6 +30,10 @@ import { webhookDeliveriesCommand } from "./commands/webhook-deliveries.js";
 import { webhookDeliveriesReplayCommand } from "./commands/webhook-deliveries-replay.js";
 import { securityEventsCommand } from "./commands/security-events.js";
 import {
+  notificationPreferencesGetCommand,
+  notificationPreferencesSetCommand,
+} from "./commands/notification-preferences.js";
+import {
   usageSummaryCommand,
   billingSummaryCommand,
   auditListCommand,
@@ -182,6 +186,9 @@ function buildRouter(opts: RunOptions): Router {
   r.register(["audit", "list"], "List audit log entries for the active organization", auditListCommand);
   // Account security events (actor-scoped — no --org)
   r.register(["security", "events"], "List account security events (actor-scoped)", securityEventsCommand);
+  // Notification preferences (actor-scoped per org)
+  r.register(["notifications", "preferences"], "Show your email notification preferences for an org", notificationPreferencesGetCommand);
+  r.register(["notifications", "preferences", "set"], "Enable/disable an email notification category", notificationPreferencesSetCommand);
   return r;
 }
 

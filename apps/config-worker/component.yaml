@@ -40,7 +40,23 @@ spec:
     typecheckCommand: pnpm exec turbo run typecheck --filter=@saas/config-worker
     dryRunCommand: pnpm exec wrangler deploy --dry-run --config wrangler.jsonc --env prod
     deployCommand: pnpm exec wrangler deploy --config wrangler.jsonc --env prod
-    preDeployCommand: "echo 'No pre-deploy step configured.'"
+    # Ensure the secrets-at-rest encryption key exists on every deploy target
+    # before the worker ships (PX2 completion — live stage verification found
+    # "Encryption is not configured"). Generate-if-missing, idempotent:
+    # `wrangler secret list` is the existence probe; the key is generated in
+    # CI, pushed straight to Cloudflare, and never logged or persisted
+    # elsewhere. Runs only in the deploy profile (pre-deploy capability), so
+    # PR/verify lanes never touch live secrets. AWS Secrets Manager escrow of
+    # this key is a named follow-up (BF deploy-time wiring).
+    preDeployCommand: |
+      for e in stage prod; do
+        if ! pnpm exec wrangler secret list --config wrangler.jsonc --env "$e" 2>/dev/null | grep -q '"SECRET_ENCRYPTION_KEY"'; then
+          echo "Provisioning SECRET_ENCRYPTION_KEY for env $e"
+          openssl rand -hex 32 | pnpm exec wrangler secret put SECRET_ENCRYPTION_KEY --config wrangler.jsonc --env "$e"
+        else
+          echo "SECRET_ENCRYPTION_KEY already present for env $e"
+        fi
+      done
     migrationCommand: "echo 'No migrations configured.'"
     smokeCommand: "echo 'No smoke test configured.'"
   labels:

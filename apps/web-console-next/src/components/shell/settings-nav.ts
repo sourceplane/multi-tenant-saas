@@ -63,6 +63,12 @@ export function buildSettingsNav(orgSlug: string): SettingsNavGroup[] {
           icon: "Mail",
           description: "Pending invites",
         },
+        {
+          href: `${base}/notifications`,
+          label: "Notifications",
+          icon: "Bell",
+          description: "Your email preferences",
+        },
       ],
     },
     {

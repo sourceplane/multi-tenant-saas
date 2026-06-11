@@ -28,6 +28,7 @@ const SEGMENT_LABELS: Record<string, string> = {
   "change-plan": "Change plan",
   config: "Config",
   audit: "Audit log",
+  notifications: "Notifications",
 };
 
 /**
