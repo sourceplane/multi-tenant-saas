@@ -55,6 +55,7 @@ const ORG_ROLE_PERMISSIONS: Record<OrganizationRole, readonly string[]> = {
     "organization.integration.read",
     "organization.integration.connect",
     "organization.integration.manage",
+    "organization.integration.token.issue",
     "project.repo_link.write",
   ],
   admin: [
@@ -95,6 +96,7 @@ const ORG_ROLE_PERMISSIONS: Record<OrganizationRole, readonly string[]> = {
     "organization.integration.read",
     "organization.integration.connect",
     "organization.integration.manage",
+    "organization.integration.token.issue",
     "project.repo_link.write",
   ],
   builder: [
@@ -243,6 +245,7 @@ const ALL_KNOWN_ACTIONS: ReadonlySet<string> = new Set([
   "organization.integration.read",
   "organization.integration.connect",
   "organization.integration.manage",
+  "organization.integration.token.issue",
   "project.repo_link.write",
 ]);
 

@@ -34,6 +34,7 @@ import {
   notificationPreferencesGetCommand,
   notificationPreferencesSetCommand,
 } from "./commands/notification-preferences.js";
+import { integrationsGithubTokenCommand } from "./commands/integrations-token.js";
 import {
   usageSummaryCommand,
   billingSummaryCommand,
@@ -190,6 +191,7 @@ function buildRouter(opts: RunOptions): Router {
   // Notification preferences (actor-scoped per org)
   r.register(["notifications", "preferences"], "Show your email notification preferences for an org", notificationPreferencesGetCommand);
   r.register(["notifications", "preferences", "set"], "Enable/disable an email notification category", notificationPreferencesSetCommand);
+  r.register(["integrations", "github", "token"], "Mint a short-lived, repo-scoped GitHub installation token", integrationsGithubTokenCommand);
   return r;
 }
 

@@ -4,6 +4,7 @@ import { handleGithubSetupCallback } from "./handlers/setup.js";
 import { handleGithubWebhookIngest } from "./handlers/ingest.js";
 import { handleListDeliveries, handleReplayDelivery } from "./handlers/deliveries.js";
 import { handleListRepositories } from "./handlers/repositories.js";
+import { handleIssueGithubToken } from "./handlers/token-broker.js";
 import {
   handleCreateRepoLink,
   handleListRepoLinks,
@@ -53,6 +54,7 @@ const ORG_INTEGRATION_RE = /^\/v1\/organizations\/([^/]+)\/integrations\/([^/]+)
 const ORG_DELIVERIES_RE = /^\/v1\/organizations\/([^/]+)\/integrations\/([^/]+)\/deliveries$/;
 const ORG_DELIVERY_REPLAY_RE =
   /^\/v1\/organizations\/([^/]+)\/integrations\/([^/]+)\/deliveries\/([^/]+)\/replay$/;
+const ORG_GITHUB_TOKEN_RE = /^\/v1\/organizations\/([^/]+)\/integrations\/github\/token$/;
 const ORG_CONNECTION_REPOSITORIES_RE =
   /^\/v1\/organizations\/([^/]+)\/integrations\/([^/]+)\/repositories$/;
 const PROJECT_REPO_LINKS_RE =
@@ -119,6 +121,17 @@ export async function route(request: Request, env: Env): Promise<Response> {
     if (!orgId) return notFound(requestId, pathname);
     if (request.method !== "GET") return methodNotAllowed(requestId);
     return handleListIntegrations(request, env, requestId, actor, orgId);
+  }
+
+  m = pathname.match(ORG_GITHUB_TOKEN_RE);
+  if (m) {
+    const orgId = parseOrgPublicId(m[1]!);
+    if (!orgId) return notFound(requestId, pathname);
+    if (request.method !== "POST") return methodNotAllowed(requestId);
+    if (!env.BILLING_WORKER) {
+      return errorResponse("internal_error", "Entitlement service not configured", 503, requestId);
+    }
+    return handleIssueGithubToken(request, env, requestId, actor, orgId);
   }
 
   m = pathname.match(ORG_CONNECTION_REPOSITORIES_RE);

@@ -270,3 +270,50 @@ export async function listInstallationRepositories(
   }
   return { repositories, truncated: repositories.length < totalCount };
 }
+
+// ── Token broker (IG4) ──────────────────────────────────────
+
+export interface ScopedTokenRequest {
+  /** Provider repository ids the token may touch. */
+  repositoryIds: number[];
+  /** e.g. { contents: "read", checks: "write" } — must be ⊆ the App grant. */
+  permissions: Record<string, "read" | "write">;
+}
+
+/**
+ * Mint a SCOPED-DOWN installation token for a tenant product. Never cached,
+ * never logged; revocation semantics stay GitHub's (TTL ≤ 1h).
+ */
+export async function createScopedInstallationToken(
+  jwt: string,
+  installationId: number,
+  scope: ScopedTokenRequest,
+  fetchImpl: FetchLike = fetch,
+): Promise<MintedInstallationToken | null> {
+  let res: Response;
+  try {
+    res = await fetchImpl(`${API_BASE}/app/installations/${installationId}/access_tokens`, {
+      method: "POST",
+      headers: { ...appHeaders(jwt), "content-type": "application/json" },
+      body: JSON.stringify({
+        repository_ids: scope.repositoryIds,
+        permissions: scope.permissions,
+      }),
+    });
+  } catch {
+    return null;
+  }
+  if (res.status !== 201) return null;
+  let data: Record<string, unknown>;
+  try {
+    data = (await res.json()) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+  if (typeof data.token !== "string" || typeof data.expires_at !== "string") return null;
+  return {
+    token: data.token,
+    expiresAt: data.expires_at,
+    permissions: (data.permissions as Record<string, unknown>) ?? null,
+  };
+}
