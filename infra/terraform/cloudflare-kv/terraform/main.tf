@@ -131,7 +131,36 @@ resource "cloudflare_workers_kv_namespace" "api_edge_idempotency" {
   title      = local.idempotency_namespace_title
 }
 
+# --- Wiring manifest (BF5) ---
+# Publish the consumable outputs of this component at the conventional
+# `<org>/<repo>/<component>/<env>` Secrets Manager path so downstream consumers
+# (BF6 deploy-time wiring) resolve resource IDs from here instead of committed
+# literals. Stable secret container + rotating version, mirroring the supabase
+# component's pattern.
+
+resource "aws_secretsmanager_secret" "wiring" {
+  name        = "${var.orgName}/${var.repo}/${var.component}/${var.environment}"
+  description = "Wiring outputs of the cloudflare-kv component (consumed by Worker deploy-time binding resolution)"
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+resource "aws_secretsmanager_secret_version" "wiring" {
+  secret_id = aws_secretsmanager_secret.wiring.id
+  secret_string = jsonencode({
+    api_edge_idempotency_kv_id    = cloudflare_workers_kv_namespace.api_edge_idempotency.id
+    api_edge_idempotency_kv_title = cloudflare_workers_kv_namespace.api_edge_idempotency.title
+  })
+}
+
 # --- Outputs (non-secret) ---
+
+output "wiring_secret_arn" {
+  description = "ARN of the wiring-manifest secret for this component/environment"
+  value       = aws_secretsmanager_secret.wiring.arn
+}
 
 output "api_edge_idempotency_kv_id" {
   description = "Cloudflare Workers KV namespace ID for api-edge idempotency replay store"

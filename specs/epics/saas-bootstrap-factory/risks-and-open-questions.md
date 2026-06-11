@@ -9,8 +9,8 @@ the deferred-decision protocol in `agents/orchestrator.md`.
 | # | Decision | Options | Leaning | Owner |
 |---|----------|---------|---------|-------|
 | D1 | Generic Hyperdrive binding name (BF4) | `PLATFORM_DB` / `DB` / `APP_DB` | **Resolved: `PLATFORM_DB`** (shipped in BF4) | resolved |
-| D2 | Wiring manifest store (BF5) | Secrets Manager / SSM Parameter Store | Secrets Manager — one access pattern + IAM shape shared with the Supabase doc; values aren't all secret but uniformity wins | implementer |
-| D3 | Wiring write granularity (BF5) | one doc per env vs `wiring/<env>/<component>` | per-component paths; assemble at read time (no cross-component write contention) | implementer |
+| D2 | Wiring manifest store (BF5) | Secrets Manager / SSM Parameter Store | **Resolved: Secrets Manager** (shipped in BF5) | resolved |
+| D3 | Wiring write granularity (BF5) | one doc per env vs `wiring/<env>/<component>` | **Resolved: per-component, at each component's conventional `<org>/<repo>/<component>/<env>` path** — matches the documented secret convention and IAM scope; assembled at read time | resolved |
 | D4 | Package scope on instantiation (BF12) | keep `@saas/` / rename to `@<scope>/` | **keep `@saas/` as default** — it is already product-neutral; rename stays available as a deterministic map for users who insist | recorded default |
 | D5 | `wrangler.jsonc` rendered file handling (BF6) | gitignore rendered file / commit fixture-rendered copy | gitignore rendered output; commit `wrangler.template.jsonc` + `wiring.fixture.json` so PR dry-run stays offline | implementer |
 | D6 | Golden repo composition source (BF10) | stay `kind: dir` / switch to OCI | stay `dir` (dogfooding decision already recorded); instances pin OCI | confirmed |
