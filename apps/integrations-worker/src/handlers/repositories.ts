@@ -59,7 +59,7 @@ export async function handleListRepositories(
 
   const query = (new URL(request.url).searchParams.get("query") ?? "").toLowerCase();
 
-  const executor = deps?.executor ?? createSqlExecutor(env.SOURCEPLANE_DB!);
+  const executor = deps?.executor ?? createSqlExecutor(env.PLATFORM_DB!);
   const owned = !deps?.executor;
   try {
     const repo = createIntegrationsRepository(executor);

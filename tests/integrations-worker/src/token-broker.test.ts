@@ -59,7 +59,7 @@ beforeAll(async () => {
 function createEnv(overrides?: Partial<Record<string, unknown>>): Env {
   return {
     ENVIRONMENT: "test",
-    SOURCEPLANE_DB: { connectionString: "postgres://fake" },
+    PLATFORM_DB: { connectionString: "postgres://fake" },
     MEMBERSHIP_WORKER: jsonFetcher({
       data: {
         memberships: [

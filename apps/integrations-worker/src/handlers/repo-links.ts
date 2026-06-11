@@ -220,7 +220,7 @@ export async function handleCreateRepoLink(
   const mapResult = await validateBranchEnvMap(env, orgId, projectId, requestId, body.branchEnvMap);
   if (!mapResult.ok) return mapResult.response;
 
-  const executor = deps?.executor ?? createSqlExecutor(env.SOURCEPLANE_DB!);
+  const executor = deps?.executor ?? createSqlExecutor(env.PLATFORM_DB!);
   const owned = !deps?.executor;
   try {
     const repo = createIntegrationsRepository(executor);
@@ -366,7 +366,7 @@ export async function handleListRepoLinks(
     return validationError(requestId, { [page.field]: [page.reason] });
   }
 
-  const executor = deps?.executor ?? createSqlExecutor(env.SOURCEPLANE_DB!);
+  const executor = deps?.executor ?? createSqlExecutor(env.PLATFORM_DB!);
   const owned = !deps?.executor;
   try {
     const repo = createIntegrationsRepository(executor);
@@ -428,7 +428,7 @@ export async function handleUpdateRepoLink(
       : await validateBranchEnvMap(env, orgId, projectId, requestId, body.branchEnvMap);
   if (mapResult && !mapResult.ok) return mapResult.response;
 
-  const executor = deps?.executor ?? createSqlExecutor(env.SOURCEPLANE_DB!);
+  const executor = deps?.executor ?? createSqlExecutor(env.PLATFORM_DB!);
   const owned = !deps?.executor;
   try {
     const repo = createIntegrationsRepository(executor);
@@ -473,7 +473,7 @@ export async function handleUnlinkRepoLink(
   const denied = await authorizeRepoLinkWrite(env, actor, orgId, projectId, requestId);
   if (denied) return denied;
 
-  const executor = deps?.executor ?? createSqlExecutor(env.SOURCEPLANE_DB!);
+  const executor = deps?.executor ?? createSqlExecutor(env.PLATFORM_DB!);
   const owned = !deps?.executor;
   try {
     const repo = createIntegrationsRepository(executor);
