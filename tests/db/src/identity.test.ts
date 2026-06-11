@@ -489,6 +489,70 @@ describe("IdentityRepository", () => {
     });
   });
 
+  describe("getSessionWithUserByTokenHash (PERF12d JOIN)", () => {
+    const SAMPLE_JOINED_ROW = {
+      // session columns, aliased as the JOIN selects them
+      session_id: "sess-001",
+      session_user_id: "u-001",
+      session_expires_at: FUTURE.toISOString(),
+      session_revoked_at: null,
+      session_created_at: NOW.toISOString(),
+      session_last_seen_at: NOW.toISOString(),
+      // the joined `u.*` user columns (id: "u-001", email, created_at, …)
+      ...SAMPLE_USER_ROW,
+    };
+
+    it("JOINs sessions to users in one parameterized query", async () => {
+      const { executor, queries } = createFakeExecutor({ rows: [SAMPLE_JOINED_ROW] });
+      const repo = createIdentityRepository(executor);
+
+      await repo.getSessionWithUserByTokenHash("sha256-hashed-token");
+
+      expect(queries[0]!.params).toEqual(["sha256-hashed-token"]);
+      expect(queries[0]!.text).toContain("JOIN identity.users");
+      expect(queries[0]!.text).toContain("revoked_at IS NULL");
+    });
+
+    it("splits the joined row into session + user with no column collision", async () => {
+      const { executor } = createFakeExecutor({ rows: [SAMPLE_JOINED_ROW] });
+      const repo = createIdentityRepository(executor);
+
+      const result = await repo.getSessionWithUserByTokenHash("sha256-hashed-token");
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        // session.id must come from session_id, NOT the user's id ("u-001").
+        expect(result.value.session.id).toBe("sess-001");
+        expect(result.value.session.userId).toBe("u-001");
+        expect(result.value.user.id).toBe("u-001");
+        expect(result.value.user.email).toBe("Test@Example.com");
+        expect(result.value.session).not.toHaveProperty("tokenHash");
+      }
+    });
+
+    it("returns not_found for unknown token hash", async () => {
+      const { executor } = createFakeExecutor({ rows: [] });
+      const repo = createIdentityRepository(executor);
+
+      const result = await repo.getSessionWithUserByTokenHash("unknown-hash");
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.kind).toBe("not_found");
+    });
+
+    it("returns expired for an expired session", async () => {
+      const { executor } = createFakeExecutor({
+        rows: [{ ...SAMPLE_JOINED_ROW, session_expires_at: PAST.toISOString() }],
+      });
+      const repo = createIdentityRepository(executor);
+
+      const result = await repo.getSessionWithUserByTokenHash("sha256-hashed-token");
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.kind).toBe("expired");
+    });
+  });
+
   describe("revokeSession", () => {
     it("uses parameterized update with revoked_at IS NULL guard", async () => {
       const { executor, queries } = createFakeExecutor({

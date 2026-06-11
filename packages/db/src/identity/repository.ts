@@ -351,6 +351,50 @@ export function createIdentityRepository(executor: SqlExecutor): IdentityReposit
       }
     },
 
+    async getSessionWithUserByTokenHash(
+      tokenHash: string,
+    ): Promise<IdentityResult<{ session: Session; user: User }>> {
+      try {
+        // PERF12d: fold the session lookup and its user fetch into one JOIN so a
+        // bearer-cache miss costs one DB round-trip, not two. Session columns are
+        // aliased (sessions and users both have `id`/`created_at`); `u.*` feeds
+        // mapUser, the aliased columns are split back to mapSession. Same filters
+        // and not_found/expired semantics as getSessionByTokenHash.
+        const result = await executor.execute<Record<string, unknown>>(
+          `SELECT
+             s.id AS session_id,
+             s.user_id AS session_user_id,
+             s.expires_at AS session_expires_at,
+             s.revoked_at AS session_revoked_at,
+             s.created_at AS session_created_at,
+             s.last_seen_at AS session_last_seen_at,
+             u.*
+           FROM identity.sessions s
+           JOIN identity.users u ON u.id = s.user_id
+           WHERE s.token_hash = $1 AND s.revoked_at IS NULL`,
+          [tokenHash],
+        );
+        if (result.rowCount === 0) {
+          return { ok: false, error: { kind: "not_found" } };
+        }
+        const row = result.rows[0]!;
+        const session = mapSession({
+          id: row.session_id,
+          user_id: row.session_user_id,
+          expires_at: row.session_expires_at,
+          revoked_at: row.session_revoked_at,
+          created_at: row.session_created_at,
+          last_seen_at: row.session_last_seen_at,
+        });
+        if (session.expiresAt < new Date()) {
+          return { ok: false, error: { kind: "expired" } };
+        }
+        return { ok: true, value: { session, user: mapUser(row) } };
+      } catch {
+        return safeError("Failed to get session");
+      }
+    },
+
     async revokeSession(id: string, revokedAt: Date): Promise<IdentityResult<Session>> {
       try {
         const result = await executor.execute<Record<string, unknown>>(
