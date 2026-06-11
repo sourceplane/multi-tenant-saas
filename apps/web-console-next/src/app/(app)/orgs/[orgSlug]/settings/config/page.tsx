@@ -6,6 +6,7 @@ import { Settings } from "lucide-react";
 import { OrgScope } from "@/components/shell/org-scope";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { ConfigSurface } from "@/components/config/config-surface";
 
 export default function ConfigPage() {
   const params = useParams<{ orgSlug: string }>();
@@ -14,10 +15,19 @@ export default function ConfigPage() {
     <OrgScope slug={slug}>
       {(org) => (
         <div className="space-y-5">
-          <header className="flex items-center gap-2">
-            <Settings className="h-5 w-5 text-muted-foreground" />
-            <h1 className="text-xl font-semibold tracking-tight">Configuration</h1>
+          <header>
+            <div className="flex items-center gap-2">
+              <Settings className="h-5 w-5 text-muted-foreground" />
+              <h1 className="text-xl font-semibold tracking-tight">Configuration</h1>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Organization-scoped settings, feature flags, and secrets. Project and environment
+              scopes live on their own pages.
+            </p>
           </header>
+
+          <ConfigSurface scope={{ kind: "organization", orgId: org.id }} />
+
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Organization identifiers</CardTitle>
@@ -41,17 +51,6 @@ export default function ConfigPage() {
                 </div>
               </dl>
             </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Settings, feature flags & secrets</CardTitle>
-              <CardDescription>
-                The config API is live today — manage org, project, and environment scoped
-                settings, feature flags, and secrets via the SDK (<code>client.config</code>) or
-                CLI. The console surface for them ships next.
-              </CardDescription>
-            </CardHeader>
           </Card>
         </div>
       )}

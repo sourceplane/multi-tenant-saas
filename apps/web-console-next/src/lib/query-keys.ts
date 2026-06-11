@@ -18,6 +18,9 @@ export const qk = {
   webhooks: (orgId: string) => ["webhooks", orgId] as const,
   webhookEndpoint: (orgId: string, endpointId: string) =>
     ["webhookEndpoint", orgId, endpointId] as const,
+  configSettings: (scopeKey: string) => ["configSettings", scopeKey] as const,
+  configFlags: (scopeKey: string) => ["configFlags", scopeKey] as const,
+  configSecrets: (scopeKey: string) => ["configSecrets", scopeKey] as const,
   billingSummary: (orgId: string) => ["billingSummary", orgId] as const,
   entitlements: (orgId: string) => ["entitlements", orgId] as const,
   invoices: (orgId: string) => ["invoices", orgId] as const,
