@@ -122,6 +122,8 @@ Slice 1 ✅ (PR #320): `shouldEmitTimingLog` sampling applied at the 4 existing
 worker `withTimings` sites (billing/events/membership/projects). Slice 2 ✅:
 config-worker list handlers (settings/flags/secrets) instrumented with
 `authz_ctx`∥`db` + `policy` + `total` phases — makes the PERF12b overlap
-directly visible — with a sampled `withTimings`. Remaining: webhooks (0/4),
-identity (0/12), metering (0/6), notifications (0/6), integrations (0/3), and
-billing's other reads. Feeds PERF6b dashboards. Owner: all workers.
+directly visible — with a sampled `withTimings`. Slice 3 ✅: webhooks-worker
+PERF12c read handlers (endpoints list, delivery-attempts list/get) with
+`authz`∥`db` + `total`. Remaining: identity (0/12), metering (0/6),
+notifications (0/6), integrations (0/3), and billing's other reads. Feeds
+PERF6b dashboards. Owner: all workers.

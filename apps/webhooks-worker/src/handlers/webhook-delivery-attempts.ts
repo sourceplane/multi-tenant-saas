@@ -5,7 +5,8 @@ import { createEventsRepository } from "@saas/db/events";
 import { createSqlExecutor } from "@saas/db/hyperdrive";
 import { fetchAuthorizationContext } from "../membership-client.js";
 import { authorizeViaPolicy } from "../policy-client.js";
-import { errorResponse, successResponse, listResponse, validationError } from "../http.js";
+import { errorResponse, successResponse, listResponse, validationError, withTimings } from "../http.js";
+import { createTimings } from "@saas/contracts/timing";
 import { toPublicDeliveryAttempt } from "../mappers.js";
 import { parsePageParams, encodeCursor } from "../pagination.js";
 import { replayDeliveryAttempt } from "../delivery.js";
@@ -75,20 +76,26 @@ export async function handleGetDeliveryAttempt(
   attemptId: string,
 ): Promise<Response> {
   const executor = createSqlExecutor(env.SOURCEPLANE_DB!);
+  // PERF14b: phase timings — `authz` and `db` run concurrently (PERF12c), so
+  // their overlap is directly visible in the Server-Timing breakdown.
+  const timings = createTimings();
+  const endTotal = timings.start("total");
+  const route = "webhooks.attempts.get";
   try {
     const repo = createWebhookRepository(executor);
     // PERF12: org-scoped authz and the read are independent — run concurrently,
     // discard the speculatively read attempt on deny (deny-by-default).
     const [denied, result] = await Promise.all([
-      authorizeWebhookRead(env, actor, orgId, requestId),
-      repo.getDeliveryAttempt(orgId, attemptId),
+      timings.measure("authz", () => authorizeWebhookRead(env, actor, orgId, requestId)),
+      timings.measure("db", () => repo.getDeliveryAttempt(orgId, attemptId)),
     ]);
-    if (denied) return denied;
+    endTotal();
+    if (denied) return withTimings(denied, requestId, route, timings);
     if (!result.ok) {
-      return errorResponse("not_found", "Delivery attempt not found", 404, requestId);
+      return withTimings(errorResponse("not_found", "Delivery attempt not found", 404, requestId), requestId, route, timings);
     }
 
-    return successResponse({ deliveryAttempt: toPublicDeliveryAttempt(result.value) }, requestId);
+    return withTimings(successResponse({ deliveryAttempt: toPublicDeliveryAttempt(result.value) }, requestId), requestId, route, timings);
   } catch {
     return errorResponse("internal_error", "Service unavailable", 503, requestId);
   } finally {
@@ -115,17 +122,23 @@ export async function handleListDeliveryAttempts(
   const dbCursor = cursor ? { createdAt: cursor.createdAt, id: cursor.id } : null;
 
   const executor = createSqlExecutor(env.SOURCEPLANE_DB!);
+  // PERF14b: phase timings — `authz` and `db` run concurrently (PERF12c), so
+  // their overlap is directly visible in the Server-Timing breakdown.
+  const timings = createTimings();
+  const endTotal = timings.start("total");
+  const route = "webhooks.attempts.list";
   try {
     const repo = createWebhookRepository(executor);
     // PERF12: org-scoped authz and the read are independent — run concurrently,
     // discard the speculatively read attempts on deny (deny-by-default).
     const [denied, result] = await Promise.all([
-      authorizeWebhookRead(env, actor, orgId, requestId),
-      repo.listDeliveryAttempts(orgId, endpointId, { limit, cursor: dbCursor }),
+      timings.measure("authz", () => authorizeWebhookRead(env, actor, orgId, requestId)),
+      timings.measure("db", () => repo.listDeliveryAttempts(orgId, endpointId, { limit, cursor: dbCursor })),
     ]);
-    if (denied) return denied;
+    endTotal();
+    if (denied) return withTimings(denied, requestId, route, timings);
     if (!result.ok) {
-      return errorResponse("internal_error", "Service unavailable", 503, requestId);
+      return withTimings(errorResponse("internal_error", "Service unavailable", 503, requestId), requestId, route, timings);
     }
 
     const deliveryAttempts = result.value.items.map(toPublicDeliveryAttempt);
@@ -133,7 +146,7 @@ export async function handleListDeliveryAttempts(
       ? encodeCursor(result.value.nextCursor.createdAt, result.value.nextCursor.id)
       : null;
 
-    return listResponse({ deliveryAttempts }, requestId, nextCursor);
+    return withTimings(listResponse({ deliveryAttempts }, requestId, nextCursor), requestId, route, timings);
   } catch {
     return errorResponse("internal_error", "Service unavailable", 503, requestId);
   } finally {

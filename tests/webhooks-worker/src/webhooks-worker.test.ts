@@ -374,6 +374,13 @@ describe("router", () => {
     expect(res.status).toBe(404);
     const body = (await res.json()) as Record<string, unknown>;
     expect(body).not.toHaveProperty("endpoints");
+    // PERF14b: the deny path still carries the Server-Timing phases, with the
+    // parallel authz/db pair (PERF12c) visible in the breakdown.
+    const timing = res.headers.get("Server-Timing");
+    expect(timing).toBeTruthy();
+    for (const phase of ["authz", "db", "total"]) {
+      expect(timing).toContain(phase);
+    }
   });
 
   it("returns 405 for PUT on endpoints collection", async () => {
