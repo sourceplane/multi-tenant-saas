@@ -36,7 +36,8 @@ The architect-style ground rules:
 | **B** (billing platform) | [`epics/saas-multi-org-billing/`](./epics/saas-multi-org-billing/) | In progress | Datadog-style multi-org ownership (default single org; more orgs purchased; billing from the default/parent org) + the `billing-provider-abstraction` sub-epic (Polar first, Stripe/others by config). Extends B6 + B11. |
 | **BF** | [`epics/saas-bootstrap-factory/`](./epics/saas-bootstrap-factory/) | Draft (not started) | Make the starter instantiable: BF0–BF2 truth + typed params · BF3–BF6 config indirection + deploy-time wiring (no committed resource IDs) · BF7–BF9 domain/foundation/preflight · BF10–BF12 OCI stack + Blueprint/Instance contracts + instantiator · BF13–BF14 acme rehearsal + upgrade path. |
 | **PX** | [`epics/saas-product-experience/`](./epics/saas-product-experience/) | In progress | Close the backend-ahead-of-surface gap: PX1 console truth/papercuts · PX2 config/flags/secrets UI · PX3 notification preferences e2e · PX4 rename lifecycle · PX5 first-run onboarding · PX6 Cmd-K resource search. All human-independent. |
-| **P1, P3–P7** | [`epics/saas-product-areas/`](./epics/saas-product-areas/) | Holding register | P1 promote-flow · P3 observability · P4 notification inbox · P5 marketplace · P6 changelog/status · P7 AI-native. |
+| **IG** | [`epics/saas-integrations/`](./epics/saas-integrations/) | Draft | Pluggable integrations platform (promotes P5), GitHub App first: IG0 foundation · IG1 connect flow · IG2 inbound `scm.*` events · IG3 repo links · IG4 token broker · IG5 console · IG6 lifecycle hardening · IG7 pluggability/instance proof. |
+| **P1, P3–P7** | [`epics/saas-product-areas/`](./epics/saas-product-areas/) | Holding register | P1 promote-flow · P3 observability · P4 notification inbox · P5 marketplace (⬆ promoted → `saas-integrations`) · P6 changelog/status · P7 AI-native. |
 
 For the status legend (`Draft → In progress → ✅ Shipped → ⛔ Blocked → Closed`),
 see [`README.md`](./README.md).
@@ -74,6 +75,14 @@ see [`README.md`](./README.md).
   notification preferences, rename, onboarding). PX1 (truth/papercuts) goes
   first to set the visual bar; PX2/PX3 ride on live backends; nothing in PX
   competes with BF or PERF for files.
+- **IG (integrations)** promotes P5 without waiting for P2: a repo link is a
+  plain record now, re-projectable as a manifested resource when P2 lands. It
+  rides shipped rails (B1 OAuth patterns, B5 event_log→webhooks fan-out, B11
+  entitlements) and adds the platform's first unauthenticated edge ingress
+  (design §5) — the only genuinely new trust path. IG0 (foundation) and IG2's
+  worker-side fixtures are human-independent; live paths are gated on
+  per-environment GitHub App registration (the epic's D1, same
+  park-and-continue posture as the Polar/Stripe credential gates).
 - **BF (bootstrap factory)** is orthogonal to B/U/P and mostly human-independent:
   BF0–BF2 (docs truth, infra `dependsOn` edges, parameterizing the Terraform +
   stack identity surface) are safe to schedule any time and improve this
