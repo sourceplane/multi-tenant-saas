@@ -17,7 +17,9 @@
  * the server instead so the default follows the user across devices/browsers.
  */
 
-const LAST_ORG_KEY = "sourceplane.next.last-org";
+import { STORAGE_PREFIX } from "./app-config";
+
+const LAST_ORG_KEY = `${STORAGE_PREFIX}.last-org`;
 
 export function readLastOrgSlug(): string | null {
   if (typeof window === "undefined") return null;

@@ -1,4 +1,5 @@
 import { handlePreflight, applyCorsHeaders, isAllowedOrigin } from "@api-edge/cors";
+import { consoleWorkersDevOrigin } from "@api-edge/app-config";
 import type { Env } from "@api-edge/env";
 
 const stageEnv: Env = { ENVIRONMENT: "stage", CONSOLE_CUSTOM_DOMAIN: "stage.sourceplane.ai" };
@@ -7,10 +8,12 @@ const testEnv: Env = { ENVIRONMENT: "test" };
 
 // Post Task 0083: legacy `apps/web-console` (Pages) was decommissioned. The CORS
 // allowlist now permits only the custom-domain hostnames + the web-console-next
-// `*.workers.dev` shadow hostnames.
-const STAGE_WORKER_ORIGIN = "https://sourceplane-web-console-next-stage.rahulvarghesepullely.workers.dev";
-const PROD_WORKER_ORIGIN = "https://sourceplane-web-console-next-prod.rahulvarghesepullely.workers.dev";
-const DEV_WORKER_ORIGIN = "https://sourceplane-web-console-next-dev.rahulvarghesepullely.workers.dev";
+// `*.workers.dev` shadow hostnames. Origins are built from the same BF3
+// identity seam the worker uses (`app-config`), so the assertions exercise the
+// allowlist *logic*, not a copy of the literals.
+const STAGE_WORKER_ORIGIN = consoleWorkersDevOrigin("stage");
+const PROD_WORKER_ORIGIN = consoleWorkersDevOrigin("prod");
+const DEV_WORKER_ORIGIN = consoleWorkersDevOrigin("dev");
 
 describe("api-edge cors", () => {
   describe("isAllowedOrigin — stage environment", () => {
@@ -117,10 +120,10 @@ describe("api-edge cors", () => {
       expect(isAllowedOrigin("https://evil.com", stageEnv)).toBe(false);
       expect(isAllowedOrigin("https://evil.com", prodEnv)).toBe(false);
       expect(
-        isAllowedOrigin(
-          "https://sourceplane-web-console-next-stage.rahulvarghesepullely.workers.dev.evil.com",
-          stageEnv,
-        ),
+        // Suffix attack: the real stage origin with `.evil.com` appended must
+        // stay disallowed. Derived from the seam so the attack string tracks
+        // the real hostname.
+        isAllowedOrigin(`${consoleWorkersDevOrigin("stage")}.evil.com`, stageEnv),
       ).toBe(false);
     });
 

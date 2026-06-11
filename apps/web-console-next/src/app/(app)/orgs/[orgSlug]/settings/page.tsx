@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CopyButton } from "@/components/ui/copy-button";
 import { SettingsCard } from "@/components/settings/settings-card";
+import { PRODUCT_NAME } from "@/lib/app-config";
 
 export default function OrgSettingsPage() {
   const params = useParams<{ orgSlug: string }>();
@@ -19,7 +20,7 @@ function Inner({ org }: { org: { id: string; name: string; slug: string } }) {
     <div className="space-y-6">
       <SettingsCard
         title="Organization Name"
-        description="This is your organization's visible name within Sourceplane. For example, the name of your company or department."
+        description={`This is your organization's visible name within ${PRODUCT_NAME}. For example, the name of your company or department.`}
         footerHint="Renaming an organization isn't available from the console yet."
       >
         <Input value={org.name} disabled className="max-w-md" aria-label="Organization name" />
@@ -27,7 +28,7 @@ function Inner({ org }: { org: { id: string; name: string; slug: string } }) {
 
       <SettingsCard
         title="Organization Slug"
-        description="This is your organization's URL namespace on Sourceplane. It identifies your organization across the console and the API."
+        description={`This is your organization's URL namespace on ${PRODUCT_NAME}. It identifies your organization across the console and the API.`}
         footerHint="Used in console URLs and API requests."
         footerAction={<CopyButton value={org.slug} />}
       >
