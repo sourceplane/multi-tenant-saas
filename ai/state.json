@@ -1,7 +1,7 @@
 {
   "goal": "Supabase/Postgres-backed multi-organization Orun SaaS control plane",
-  "active_milestone": "PX2",
-  "current_task": "0136",
+  "active_milestone": "PX3",
+  "current_task": "0137",
   "last_verified": "2026-06-02T13:05:00Z",
   "repo_health": "green",
   "next_focus": "PX cluster (specs/epics/saas-product-experience): close the backend-ahead-of-surface gap. Epic opened 2026-06-11 from a verified-live stage audit (authenticated Playwright walkthrough + edge API probes). Order: PX1 console truth/papercuts -> PX2 config/flags/secrets UI (edge facade already live) -> PX3 notification preferences e2e (unparks deferred U11 slice) -> PX4 rename PATCH lifecycle -> PX5 first-run onboarding -> PX6 Cmd-K resource search. All human-independent; B1/B6/B10 remain credential-blocked.",
@@ -157,17 +157,19 @@
     "0131",
     "0132",
     "0133",
-    "0135"
+    "0135",
+    "0136"
   ],
   "reverted": [
     "0134"
   ],
-  "task_agent": "ai/reports/task-0136-implementer.md",
+  "task_agent": "ai/reports/task-0137-implementer.md",
   "waiting_for_input": "false",
   "notes": [
     "2026-06-01: ai/ working tree compacted. Historical task prompts (ai/tasks/), implementer/verifier reports (ai/reports/), spec proposals (ai/proposals/), the task ledger (ai/context/task-ledger.md), and the orchestrator journal/brief were removed from the working tree to keep a minimal context surface. ALL remain recoverable from git history (see ai/context/current.md for retrieval). Live boot surface kept: this file, ai/context/current.md (compact summary), ai/context/decisions.md, ai/context/open-risks.md, ai/deferred.md, ai/waiting_for_input.md.",
     "2026-06-01: Task 0126 (B5 manual webhook delivery replay) DONE \u2014 implemented and merged as PR #181, squash 63886a6, now main HEAD. State files previously lagged reality (said 0126 only scoped). No active task; orchestrator must re-survey to scope the next leg.",
     "2026-06-02: Task 0134 (connection reuse) REVERTED. The module-scoped postgres client pool (#224/#225) broke on stage \u2014 Cloudflare Workers cannot reuse a socket opened in a different request ('Cannot perform I/O on behalf of a different request'); membership 500, billing flaky 503, self-heal retry insufficient. Rolled back via PR #227 (squash 2f5f4fc) to per-request executor + dispose(). Lesson: any cross-request connection reuse on Workers must go through Hyperdrive-supported patterns and be canaried before retry.",
-    "2026-06-02: While verifying the 0134 revert on stage, found members list returning a hard 500 (billing recovered fine). Root cause was NOT connection reuse but a PERF3 (#221) regression: `membership.role_assignments ... subject_id = ANY($2)` passed a JS array param, which fails to bind because the executor uses `fetch_types:false` (postgres can't resolve the array element-type OID). Fixed in packages/db by using a scalar parameterized IN-list; the connection-reuse stage test had misattributed this to its own change. Lesson: array params are unsafe with fetch_types:false \u2014 prefer scalar IN-lists; and verify ALL DB-backed endpoints (not just billing/orgs) after perf changes."
+    "2026-06-02: While verifying the 0134 revert on stage, found members list returning a hard 500 (billing recovered fine). Root cause was NOT connection reuse but a PERF3 (#221) regression: `membership.role_assignments ... subject_id = ANY($2)` passed a JS array param, which fails to bind because the executor uses `fetch_types:false` (postgres can't resolve the array element-type OID). Fixed in packages/db by using a scalar parameterized IN-list; the connection-reuse stage test had misattributed this to its own change. Lesson: array params are unsafe with fetch_types:false \u2014 prefer scalar IN-lists; and verify ALL DB-backed endpoints (not just billing/orgs) after perf changes.",
+    "2026-06-11: PX epic opened (saas-product-experience). PX1 (#299) + PX2 (#300) shipped & live-verified on stage. LIVE VERIFICATION FOUND BACKEND DRIFT: no successful backend convergence since failed #280 main run (cascade dependency-wait timeouts; --changed planning means console-only merges never redeployed workers). PX3 PR redeploys api-edge + config-worker + notifications-worker and provisions SECRET_ENCRYPTION_KEY via config-worker preDeployCommand. FOLLOW-UP NEEDED: full-fleet worker re-touch convergence + re-check #280's real failures (api-edge-tests dev, policy-worker dev)."
   ]
 }

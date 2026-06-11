@@ -4,16 +4,28 @@ As-built record for the PX cluster. Trust code over this doc.
 
 ## Summary
 
-Epic opened 2026-06-11 from a verified-live audit. Nothing shipped yet.
+Epic opened 2026-06-11 from a verified-live audit.
 
 | ID | Status |
 |----|--------|
-| PX1 | Ready (next) |
-| PX2 | Ready |
-| PX3 | Ready |
+| PX1 | ✅ Shipped (#299) — verified live on stage (designed 404, confirm dialogs, breadcrumbs) + prod 404 smoke |
+| PX2 | ✅ Shipped (#300, completion tail in PX3 PR) — settings create/edit + flag create verified live; flag PATCH + secrets blocked by stage drift/missing key, fixed by the PX3 PR's redeploy + key provisioning |
+| PX3 | In progress (PR open) — edge facade + console page + CLI parity |
 | PX4 | Ready |
 | PX5 | Ready |
 | PX6 | Ready |
+
+## Convergence note (2026-06-11)
+
+Live PX2 verification exposed that the backend had not converged since the
+failed `#280` main-push run (a few real failures cascaded into
+dependency-wait timeouts for nearly all worker deploy jobs; CI plans
+`--changed`, so subsequent console-only merges never re-deployed the
+backend). The PX3 PR re-touches config-worker and notifications-worker and
+redeploys api-edge by source change; full-fleet convergence for the other
+workers is a named follow-up. config-worker's deploy lane now provisions
+`SECRET_ENCRYPTION_KEY` (generate-if-missing via `wrangler secret`),
+unblocking the secrets surface.
 
 ## Audit record (2026-06-11)
 

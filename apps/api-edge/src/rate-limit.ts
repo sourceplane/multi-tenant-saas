@@ -55,7 +55,8 @@ export type RouteFamily =
   | "webhooks"
   | "metering"
   | "billing"
-  | "audit";
+  | "audit"
+  | "notifications";
 
 interface BucketLimits {
   /** Bucket capacity (max tokens). */
@@ -109,6 +110,10 @@ const LIMITS: Record<RouteFamily, FamilyConfig> = {
   audit: {
     identity: { limit: 120, windowSec: 60 },
     org: { limit: 600, windowSec: 60 },
+  },
+  notifications: {
+    identity: { limit: 60, windowSec: 60 },
+    org: { limit: 300, windowSec: 60 },
   },
 };
 

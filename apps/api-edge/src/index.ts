@@ -12,6 +12,7 @@ import { isWebhooksRoute, handleWebhooksRoute } from "./webhooks-facade";
 import { isMeteringRoute, handleMeteringRoute } from "./metering-facade";
 import { isBillingRoute, handleBillingRoute } from "./billing-facade";
 import { isBillingWebhookRoute, handleBillingWebhookRoute } from "./billing-webhooks-facade";
+import { isNotificationsRoute, handleNotificationsRoute } from "./notifications-facade";
 
 // Durable Object class backing the PERF5 Stage B rate-limit counters. Must be
 // exported from the Worker entry so the runtime can instantiate it for the
@@ -42,6 +43,8 @@ export default {
       response = await handleBillingWebhookRoute(request, env, requestId, url.pathname);
     } else if (isWebhooksRoute(url.pathname)) {
       response = await handleWebhooksRoute(request, env, requestId, url.pathname);
+    } else if (isNotificationsRoute(url.pathname)) {
+      response = await handleNotificationsRoute(request, env, requestId, url.pathname);
     } else if (isMeteringRoute(url.pathname)) {
       response = await handleMeteringRoute(request, env, requestId, url.pathname);
     } else if (isBillingRoute(url.pathname)) {
