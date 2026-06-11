@@ -56,16 +56,16 @@ describe("config-worker wrangler.jsonc Hyperdrive bindings", () => {
     env: Record<string, { hyperdrive?: Array<{ binding: string; id: string }> }>;
   };
 
-  test("stage SOURCEPLANE_DB is the verified stage Hyperdrive ID", () => {
+  test("stage PLATFORM_DB is the verified stage Hyperdrive ID", () => {
     const hd = wrangler.env.stage?.hyperdrive ?? [];
-    const db = hd.find((h) => h.binding === "SOURCEPLANE_DB");
+    const db = hd.find((h) => h.binding === "PLATFORM_DB");
     expect(db).toBeDefined();
     expect(db!.id).toBe(STAGE_HYPERDRIVE_ID);
   });
 
-  test("prod SOURCEPLANE_DB is the verified prod Hyperdrive ID", () => {
+  test("prod PLATFORM_DB is the verified prod Hyperdrive ID", () => {
     const hd = wrangler.env.prod?.hyperdrive ?? [];
-    const db = hd.find((h) => h.binding === "SOURCEPLANE_DB");
+    const db = hd.find((h) => h.binding === "PLATFORM_DB");
     expect(db).toBeDefined();
     expect(db!.id).toBe(PROD_HYPERDRIVE_ID);
   });

@@ -55,7 +55,7 @@ export async function handleListInvoices(
   actor: ActorContext,
   orgId: string,
 ): Promise<Response> {
-  if (!env.SOURCEPLANE_DB) {
+  if (!env.PLATFORM_DB) {
     return errorResponse("internal_error", "Service misconfigured", 503, requestId);
   }
 
@@ -88,7 +88,7 @@ export async function handleListInvoices(
   if (cursorOrErr instanceof Response) return cursorOrErr;
   const cursor = cursorOrErr;
 
-  const executor = createSqlExecutor(env.SOURCEPLANE_DB);
+  const executor = createSqlExecutor(env.PLATFORM_DB);
   const repo = createBillingRepository(executor);
   try {
     // PERF12: authorization and the MO4 billing-parent resolution are

@@ -148,7 +148,7 @@ export async function handleCreateWebhookEndpoint(
   const encrypted = await encryptSigningSecret(env);
   const secretCiphertext = encrypted?.ciphertext;
 
-  const executor = createSqlExecutor(env.SOURCEPLANE_DB!);
+  const executor = createSqlExecutor(env.PLATFORM_DB!);
   try {
     const repo = createWebhookRepository(executor);
     const eventsRepo = createEventsRepository(executor);
@@ -216,7 +216,7 @@ export async function handleGetWebhookEndpoint(
   orgId: string,
   endpointId: string,
 ): Promise<Response> {
-  const executor = createSqlExecutor(env.SOURCEPLANE_DB!);
+  const executor = createSqlExecutor(env.PLATFORM_DB!);
   try {
     const repo = createWebhookRepository(executor);
     const result = await repo.getEndpoint(orgId, endpointId);
@@ -260,7 +260,7 @@ export async function handleListWebhookEndpoints(
   const { limit, cursor } = pageResult.value;
   const dbCursor = cursor ? { createdAt: cursor.createdAt, id: cursor.id } : null;
 
-  const executor = createSqlExecutor(env.SOURCEPLANE_DB!);
+  const executor = createSqlExecutor(env.PLATFORM_DB!);
   // PERF14b: phase timings — `authz` and `db` run concurrently (PERF12c), so
   // their overlap is directly visible in the Server-Timing breakdown.
   const timings = createTimings();
@@ -331,7 +331,7 @@ export async function handleUpdateWebhookEndpoint(
     return validationError(requestId, fields);
   }
 
-  const executor = createSqlExecutor(env.SOURCEPLANE_DB!);
+  const executor = createSqlExecutor(env.PLATFORM_DB!);
   try {
     const repo = createWebhookRepository(executor);
     const eventsRepo = createEventsRepository(executor);
@@ -406,7 +406,7 @@ export async function handleDisableWebhookEndpoint(
     // body is optional for disable
   }
 
-  const executor = createSqlExecutor(env.SOURCEPLANE_DB!);
+  const executor = createSqlExecutor(env.PLATFORM_DB!);
   try {
     const repo = createWebhookRepository(executor);
     const eventsRepo = createEventsRepository(executor);
@@ -487,7 +487,7 @@ export async function handleEnableWebhookEndpoint(
   endpointId: string,
   deps?: EnableWebhookEndpointDeps,
 ): Promise<Response> {
-  const executor = deps ? null : createSqlExecutor(env.SOURCEPLANE_DB!);
+  const executor = deps ? null : createSqlExecutor(env.PLATFORM_DB!);
   try {
     const repo = deps ? deps.repo : createWebhookRepository(executor!);
 
@@ -622,7 +622,7 @@ export async function handleDeleteWebhookEndpoint(
   orgId: string,
   endpointId: string,
 ): Promise<Response> {
-  const executor = createSqlExecutor(env.SOURCEPLANE_DB!);
+  const executor = createSqlExecutor(env.PLATFORM_DB!);
   try {
     const repo = createWebhookRepository(executor);
     const eventsRepo = createEventsRepository(executor);
@@ -685,7 +685,7 @@ export async function handleRotateWebhookSecret(
   orgId: string,
   endpointId: string,
 ): Promise<Response> {
-  const executor = createSqlExecutor(env.SOURCEPLANE_DB!);
+  const executor = createSqlExecutor(env.PLATFORM_DB!);
   try {
     const repo = createWebhookRepository(executor);
     const eventsRepo = createEventsRepository(executor);

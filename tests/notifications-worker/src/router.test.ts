@@ -23,7 +23,7 @@ function internalHeaders(): HeadersInit {
 describe("router — internal-actor gate", () => {
   it("returns 200 on /health without actor header", async () => {
     const res = await route(new Request("http://nf/health", { method: "GET" }), env);
-    // Without SOURCEPLANE_DB the response is 200 with degraded=false (db not configured).
+    // Without PLATFORM_DB the response is 200 with degraded=false (db not configured).
     expect([200, 503]).toContain(res.status);
   });
 
@@ -72,7 +72,7 @@ describe("router — internal-actor gate", () => {
       }),
       env,
     );
-    // Without SOURCEPLANE_DB the handler returns 503 "Database not configured".
+    // Without PLATFORM_DB the handler returns 503 "Database not configured".
     expect(res.status).toBe(503);
     const body = (await res.json()) as { error: { code: string } };
     expect(body.error.code).toBe("internal_error");

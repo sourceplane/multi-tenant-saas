@@ -71,5 +71,5 @@ export function eventsRepoFor(executor: SqlExecutor): Pick<EventsRepository, "ap
 }
 
 export function isDbConfigured(env: Env): boolean {
-  return Boolean(env.SOURCEPLANE_DB);
+  return Boolean(env.PLATFORM_DB);
 }

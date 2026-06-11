@@ -4,7 +4,7 @@ import type { Env } from "@integrations-worker/env";
 function createFakeEnv(overrides?: Partial<Record<keyof Env, unknown>>): Env {
   const base: Record<string, unknown> = {
     ENVIRONMENT: "test",
-    SOURCEPLANE_DB: { connectionString: "postgres://fake" },
+    PLATFORM_DB: { connectionString: "postgres://fake" },
   };
   return { ...base, ...overrides } as unknown as Env;
 }

@@ -2,7 +2,7 @@ import type { Env } from "../env.js";
 import { successResponse } from "../http.js";
 
 export function handleHealth(env: Env, requestId: string): Response {
-  const dbConfigured = !!env.SOURCEPLANE_DB;
+  const dbConfigured = !!env.PLATFORM_DB;
   const membershipConfigured = !!env.MEMBERSHIP_WORKER;
   const policyConfigured = !!env.POLICY_WORKER;
   const billingConfigured = !!env.BILLING_WORKER;

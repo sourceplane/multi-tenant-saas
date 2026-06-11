@@ -58,7 +58,7 @@ function createMockFetcherThatThrows(): Fetcher {
 
 function createFakeEnv(overrides?: Record<string, unknown>): Env {
   const base: Record<string, unknown> = {
-    SOURCEPLANE_DB: { connectionString: "postgres://fake" },
+    PLATFORM_DB: { connectionString: "postgres://fake" },
     MEMBERSHIP_WORKER: createMockFetcher({ data: { memberships: [{ kind: "role_assignment", role: "admin", scope: { kind: "organization", orgId: TEST_ORG_UUID } }] } }),
     POLICY_WORKER: createMockFetcher({ data: { allow: true, reason: "org_admin", policyVersion: 1, derivedScope: { orgId: TEST_ORG_UUID } } }),
     // Default: billing-worker returns an allowed `limit.projects` decision with
@@ -383,8 +383,8 @@ describe("handleCreateProject", () => {
     expect(res.status).toBe(422);
   });
 
-  it("returns 503 when SOURCEPLANE_DB is missing", async () => {
-    const env = createFakeEnv({ SOURCEPLANE_DB: undefined });
+  it("returns 503 when PLATFORM_DB is missing", async () => {
+    const env = createFakeEnv({ PLATFORM_DB: undefined });
     const req = makeRequest("POST", `/v1/organizations/${TEST_ORG_PUBLIC}/projects`, { name: "Test" });
 
     const res = await handleCreateProject(req, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID);
@@ -754,8 +754,8 @@ describe("handleGetProject", () => {
     expect(projectsRepo.getProjectByIdCalls.length).toBe(0);
   });
 
-  it("returns 503 when SOURCEPLANE_DB is missing", async () => {
-    const env = createFakeEnv({ SOURCEPLANE_DB: undefined });
+  it("returns 503 when PLATFORM_DB is missing", async () => {
+    const env = createFakeEnv({ PLATFORM_DB: undefined });
     const res = await handleGetProject(env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID);
     expect(res.status).toBe(503);
   });
@@ -927,8 +927,8 @@ describe("handleListProjects", () => {
     expect(response.status).toBe(404);
   });
 
-  it("returns 503 when SOURCEPLANE_DB is missing", async () => {
-    const env = createFakeEnv({ SOURCEPLANE_DB: undefined });
+  it("returns 503 when PLATFORM_DB is missing", async () => {
+    const env = createFakeEnv({ PLATFORM_DB: undefined });
     const request = listRequest(TEST_ORG_PUBLIC);
     const response = await handleListProjects(request, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID);
 
@@ -1140,8 +1140,8 @@ describe("handleArchiveProject", () => {
     expect(res2.status).toBe(404);
   });
 
-  it("returns 503 when SOURCEPLANE_DB is missing", async () => {
-    const env = createFakeEnv({ SOURCEPLANE_DB: undefined });
+  it("returns 503 when PLATFORM_DB is missing", async () => {
+    const env = createFakeEnv({ PLATFORM_DB: undefined });
     const res = await handleArchiveProject(env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID);
     expect(res.status).toBe(503);
   });
@@ -1393,8 +1393,8 @@ describe("handleCreateEnvironment", () => {
     expect(res.status).toBe(503);
   });
 
-  it("returns 503 when SOURCEPLANE_DB is missing", async () => {
-    const env = createFakeEnv({ SOURCEPLANE_DB: undefined });
+  it("returns 503 when PLATFORM_DB is missing", async () => {
+    const env = createFakeEnv({ PLATFORM_DB: undefined });
     const req = makeRequest("POST", `/v1/organizations/${TEST_ORG_PUBLIC}/projects/${TEST_PROJECT_PUBLIC}/environments`, { name: "Test" });
 
     const res = await handleCreateEnvironment(req, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID);
@@ -1877,8 +1877,8 @@ describe("handleListEnvironments", () => {
     expect(raw).not.toContain(TEST_ENVIRONMENT_UUID);
   });
 
-  it("returns 503 when SOURCEPLANE_DB is missing", async () => {
-    const env = createFakeEnv({ SOURCEPLANE_DB: undefined });
+  it("returns 503 when PLATFORM_DB is missing", async () => {
+    const env = createFakeEnv({ PLATFORM_DB: undefined });
     const request = listRequest(TEST_ORG_PUBLIC, TEST_PROJECT_PUBLIC);
     const response = await handleListEnvironments(request, env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID);
 
@@ -2003,8 +2003,8 @@ describe("handleGetEnvironment", () => {
     expect(res.status).toBe(404);
   });
 
-  it("returns 503 when SOURCEPLANE_DB is missing", async () => {
-    const env = createFakeEnv({ SOURCEPLANE_DB: undefined });
+  it("returns 503 when PLATFORM_DB is missing", async () => {
+    const env = createFakeEnv({ PLATFORM_DB: undefined });
     const res = await handleGetEnvironment(env, "req_test", { subjectId: TEST_USER_ID, subjectType: "user" }, TEST_ORG_UUID, TEST_PROJECT_UUID, TEST_ENVIRONMENT_UUID);
     expect(res.status).toBe(503);
   });
@@ -2292,8 +2292,8 @@ describe("handleArchiveEnvironment", () => {
     expect(res.status).toBe(503);
   });
 
-  it("returns 503 when SOURCEPLANE_DB is missing", async () => {
-    const env = createFakeEnv({ SOURCEPLANE_DB: undefined });
+  it("returns 503 when PLATFORM_DB is missing", async () => {
+    const env = createFakeEnv({ PLATFORM_DB: undefined });
     const res = await handleArchiveEnvironment(env, "req_test",
       { subjectId: TEST_USER_ID, subjectType: "user" },
       TEST_ORG_UUID, TEST_PROJECT_UUID, TEST_ENVIRONMENT_UUID);

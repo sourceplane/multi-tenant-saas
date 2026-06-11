@@ -18,7 +18,7 @@ export async function handleGetOrganization(
     return errorResponse("not_found", "Organization not found", 404, requestId);
   }
 
-  if (!env.SOURCEPLANE_DB) {
+  if (!env.PLATFORM_DB) {
     return errorResponse("internal_error", "Database not configured", 503, requestId);
   }
 
@@ -28,7 +28,7 @@ export async function handleGetOrganization(
 
   const policyWorker = env.POLICY_WORKER;
 
-  const executor = createSqlExecutor(env.SOURCEPLANE_DB);
+  const executor = createSqlExecutor(env.PLATFORM_DB);
   try {
     const repo = createMembershipRepository(executor);
     const service = createOrganizationService({ repo, now: () => new Date() });

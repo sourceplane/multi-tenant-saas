@@ -31,11 +31,11 @@ export async function handleEnqueueNotification(
     return validationError(requestId, validated.errors);
   }
 
-  if (!deps?.service?.repo && !env.SOURCEPLANE_DB) {
+  if (!deps?.service?.repo && !env.PLATFORM_DB) {
     return errorResponse("internal_error", "Database not configured", 503, requestId);
   }
 
-  const executor = deps?.service?.repo ? null : createSqlExecutor(env.SOURCEPLANE_DB!);
+  const executor = deps?.service?.repo ? null : createSqlExecutor(env.PLATFORM_DB!);
   try {
     const repo = deps?.service?.repo ?? createNotificationsRepository(executor!);
     const provider = deps?.service?.provider ?? resolveProvider(env);

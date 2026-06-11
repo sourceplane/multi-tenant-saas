@@ -614,7 +614,7 @@ describe("config-worker router - mutations", () => {
     );
     const env = {} as Env;
     const res = await route(req, env);
-    // Will get 503 (no SOURCEPLANE_DB) but route matched — not 404 or 405
+    // Will get 503 (no PLATFORM_DB) but route matched — not 404 or 405
     expect(res.status).toBe(503);
   });
 

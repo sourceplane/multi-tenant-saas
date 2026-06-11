@@ -52,7 +52,7 @@ export async function handleFanOutPlan(
   if (request.method !== "POST") {
     return errorResponse("method_not_allowed", "Method not allowed", 405, requestId);
   }
-  if (!deps.repoFactory && !env.SOURCEPLANE_DB) {
+  if (!deps.repoFactory && !env.PLATFORM_DB) {
     return errorResponse("internal_error", "Service misconfigured", 503, requestId);
   }
 
@@ -66,7 +66,7 @@ export async function handleFanOutPlan(
   if ("error" in parsed) return validationError(requestId, parsed.error);
 
   const genId = deps.generateId ?? generateUuid;
-  const executor = deps.repoFactory ? null : createSqlExecutor(env.SOURCEPLANE_DB!);
+  const executor = deps.repoFactory ? null : createSqlExecutor(env.PLATFORM_DB!);
   try {
     const repo = deps.repoFactory ? deps.repoFactory(env) : createBillingRepository(executor!);
 

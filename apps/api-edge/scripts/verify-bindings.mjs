@@ -10,11 +10,11 @@ function stripJsoncComments(text) {
 
 const EXPECTED_HYPERDRIVE = {
   stage: {
-    binding: "SOURCEPLANE_DB",
+    binding: "PLATFORM_DB",
     id: "08f7c6055f544a3890a585d88fd92348",
   },
   prod: {
-    binding: "SOURCEPLANE_DB",
+    binding: "PLATFORM_DB",
     id: "ab2c21c2db6245a59c91588fcac7107a",
   },
 };
@@ -105,7 +105,7 @@ for (const [envName, expected] of Object.entries(EXPECTED_HYPERDRIVE)) {
     continue;
   }
 
-  console.log(`OK: [${envName}] SOURCEPLANE_DB → ${hd.id}`);
+  console.log(`OK: [${envName}] PLATFORM_DB → ${hd.id}`);
 }
 
 for (const [envName, expected] of Object.entries(EXPECTED_KV)) {

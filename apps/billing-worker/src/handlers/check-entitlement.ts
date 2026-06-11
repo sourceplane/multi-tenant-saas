@@ -236,7 +236,7 @@ export async function handleCheckEntitlement(
     return errorResponse("method_not_allowed", "Method not allowed", 405, requestId);
   }
 
-  if (!env.SOURCEPLANE_DB) {
+  if (!env.PLATFORM_DB) {
     return errorResponse("internal_error", "Service misconfigured", 503, requestId);
   }
 
@@ -257,7 +257,7 @@ export async function handleCheckEntitlement(
   // separate Hyperdrive clients.
   let sharedExecutor: ReturnType<typeof createSqlExecutor> | null = null;
   const getSharedExecutor = () => {
-    if (!sharedExecutor) sharedExecutor = createSqlExecutor(env.SOURCEPLANE_DB!);
+    if (!sharedExecutor) sharedExecutor = createSqlExecutor(env.PLATFORM_DB!);
     return sharedExecutor;
   };
 

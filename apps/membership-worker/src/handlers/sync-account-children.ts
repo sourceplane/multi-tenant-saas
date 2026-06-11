@@ -50,7 +50,7 @@ export async function handleSyncAccountChildren(
   if (request.method !== "POST") {
     return errorResponse("method_not_allowed", "Method not allowed", 405, requestId);
   }
-  if (!deps.repo && !env.SOURCEPLANE_DB) {
+  if (!deps.repo && !env.PLATFORM_DB) {
     return errorResponse("internal_error", "Database not configured", 503, requestId);
   }
 
@@ -64,7 +64,7 @@ export async function handleSyncAccountChildren(
   if ("error" in parsed) return errorResponse("bad_request", parsed.error, 400, requestId);
 
   const now = deps.now ? deps.now() : new Date();
-  const executor = deps.repo ? null : createSqlExecutor(env.SOURCEPLANE_DB!);
+  const executor = deps.repo ? null : createSqlExecutor(env.PLATFORM_DB!);
   try {
     const repo = deps.repo ?? createMembershipRepository(executor!);
     const childrenRes = await repo.listChildOrganizations(parsed.parentHex);

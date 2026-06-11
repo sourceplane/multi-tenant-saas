@@ -12,7 +12,7 @@ export async function handleListOrganizations(
   actor: ActorContext,
   url: URL,
 ): Promise<Response> {
-  if (!env.SOURCEPLANE_DB) {
+  if (!env.PLATFORM_DB) {
     return errorResponse("internal_error", "Database not configured", 503, requestId);
   }
 
@@ -22,7 +22,7 @@ export async function handleListOrganizations(
   }
   const { limit, cursor } = pageResult.value;
 
-  const executor = createSqlExecutor(env.SOURCEPLANE_DB);
+  const executor = createSqlExecutor(env.PLATFORM_DB);
   try {
     const repo = createMembershipRepository(executor);
     const result = await repo.listOrganizationsForSubjectPaged(actor.subjectId, {

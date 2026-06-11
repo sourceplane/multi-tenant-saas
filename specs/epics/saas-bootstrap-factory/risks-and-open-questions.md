@@ -8,7 +8,7 @@ the deferred-decision protocol in `agents/orchestrator.md`.
 
 | # | Decision | Options | Leaning | Owner |
 |---|----------|---------|---------|-------|
-| D1 | Generic Hyperdrive binding name (BF4) | `PLATFORM_DB` / `DB` / `APP_DB` | `PLATFORM_DB` (greppable, self-describing) | implementer |
+| D1 | Generic Hyperdrive binding name (BF4) | `PLATFORM_DB` / `DB` / `APP_DB` | **Resolved: `PLATFORM_DB`** (shipped in BF4) | resolved |
 | D2 | Wiring manifest store (BF5) | Secrets Manager / SSM Parameter Store | Secrets Manager — one access pattern + IAM shape shared with the Supabase doc; values aren't all secret but uniformity wins | implementer |
 | D3 | Wiring write granularity (BF5) | one doc per env vs `wiring/<env>/<component>` | per-component paths; assemble at read time (no cross-component write contention) | implementer |
 | D4 | Package scope on instantiation (BF12) | keep `@saas/` / rename to `@<scope>/` | **keep `@saas/` as default** — it is already product-neutral; rename stays available as a deterministic map for users who insist | recorded default |
@@ -33,10 +33,11 @@ the deferred-decision protocol in `agents/orchestrator.md`.
 - **Fleet rollout blast radius (BF4/BF6).** Renames and wiring touch all 13
   workers. Mitigation: pilot on `api-edge`, then one mechanical PR with
   per-worker smoke verification on stage before prod approval.
-- **Binding rename is config-only but deploy-ordered (BF4).** A worker
+- **Binding rename is config-only but deploy-ordered (BF4).** ~~A worker
   deployed with the new binding name before its code reads it (or vice versa)
-  500s. Mitigation: code reads via a single accessor that tolerates both names
-  for one deploy cycle, then drop the alias.
+  500s.~~ Resolved without an alias period: a Worker's binding config and code
+  bundle ship in one atomic `wrangler deploy`, so config/code skew within a
+  worker cannot occur (BF4 as-built; see `ai/context/decisions.md`).
 - **Foundation chicken-and-egg (BF8).** First apply needs credentials and
   local state. The state-migration step is the riskiest manual moment of the
   whole epic; it must be a written, rehearsed procedure (scratch account in

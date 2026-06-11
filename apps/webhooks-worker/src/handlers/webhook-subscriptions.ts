@@ -125,7 +125,7 @@ export async function handleCreateWebhookSubscription(
 
   const subscriptionId = crypto.randomUUID();
 
-  const executor = createSqlExecutor(env.SOURCEPLANE_DB!);
+  const executor = createSqlExecutor(env.PLATFORM_DB!);
   try {
     const repo = createWebhookRepository(executor);
     const eventsRepo = createEventsRepository(executor);
@@ -188,7 +188,7 @@ export async function handleGetWebhookSubscription(
   orgId: string,
   subscriptionId: string,
 ): Promise<Response> {
-  const executor = createSqlExecutor(env.SOURCEPLANE_DB!);
+  const executor = createSqlExecutor(env.PLATFORM_DB!);
   try {
     const repo = createWebhookRepository(executor);
     const result = await repo.getSubscription(orgId, subscriptionId);
@@ -231,7 +231,7 @@ export async function handleListWebhookSubscriptions(
   const { limit, cursor } = pageResult.value;
   const dbCursor = cursor ? { createdAt: cursor.createdAt, id: cursor.id } : null;
 
-  const executor = createSqlExecutor(env.SOURCEPLANE_DB!);
+  const executor = createSqlExecutor(env.PLATFORM_DB!);
   try {
     const repo = createWebhookRepository(executor);
     const result = await repo.listSubscriptions(orgId, endpointId, { limit, cursor: dbCursor });
@@ -278,7 +278,7 @@ export async function handleUpdateWebhookSubscription(
     return validationError(requestId, { enabled: ["Enabled must be a boolean"] });
   }
 
-  const executor = createSqlExecutor(env.SOURCEPLANE_DB!);
+  const executor = createSqlExecutor(env.PLATFORM_DB!);
   try {
     const repo = createWebhookRepository(executor);
     const eventsRepo = createEventsRepository(executor);
@@ -344,7 +344,7 @@ export async function handleDeleteWebhookSubscription(
   orgId: string,
   subscriptionId: string,
 ): Promise<Response> {
-  const executor = createSqlExecutor(env.SOURCEPLANE_DB!);
+  const executor = createSqlExecutor(env.PLATFORM_DB!);
   try {
     const repo = createWebhookRepository(executor);
     const eventsRepo = createEventsRepository(executor);

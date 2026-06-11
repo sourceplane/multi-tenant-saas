@@ -33,11 +33,11 @@ export async function handleLoginComplete(request: Request, env: Env, requestId:
     return validationError(requestId, errors);
   }
 
-  if (!env.SOURCEPLANE_DB) {
+  if (!env.PLATFORM_DB) {
     return errorResponse("internal_error", "Database not configured", 503, requestId);
   }
 
-  const executor = createSqlExecutor(env.SOURCEPLANE_DB);
+  const executor = createSqlExecutor(env.PLATFORM_DB);
   try {
     const repo = createIdentityRepository(executor);
     const ctx = extractRequestContext(request, requestId);

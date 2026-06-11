@@ -41,7 +41,7 @@ function jsonFetcher(body: unknown): Fetcher {
 function createEnv(): Env {
   return {
     ENVIRONMENT: "test",
-    SOURCEPLANE_DB: { connectionString: "postgres://fake" },
+    PLATFORM_DB: { connectionString: "postgres://fake" },
     MEMBERSHIP_WORKER: jsonFetcher({
       data: {
         memberships: [

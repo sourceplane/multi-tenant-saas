@@ -1,5 +1,5 @@
 export interface Env {
-  SOURCEPLANE_DB?: Hyperdrive;
+  PLATFORM_DB?: Hyperdrive;
   EVENTS_WORKER?: Fetcher;
   ENVIRONMENT: string;
   /** Provider selector; only "local-debug" is wired in V1. */

@@ -72,7 +72,7 @@ function billingFetcher(allowed: boolean, reason?: string): Fetcher {
 function createEnv(overrides?: Partial<Record<string, unknown>>): Env {
   return {
     ENVIRONMENT: "test",
-    SOURCEPLANE_DB: { connectionString: "postgres://fake" },
+    PLATFORM_DB: { connectionString: "postgres://fake" },
     MEMBERSHIP_WORKER: membershipFetcher(),
     POLICY_WORKER: policyFetcher(true),
     BILLING_WORKER: billingFetcher(true),

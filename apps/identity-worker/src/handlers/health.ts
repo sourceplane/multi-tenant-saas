@@ -27,11 +27,11 @@ export async function handleHealth(env: Env, requestId: string): Promise<Respons
 }
 
 async function checkDatabase(env: Env): Promise<{ configured: boolean; reachable: boolean }> {
-  if (!env.SOURCEPLANE_DB) {
+  if (!env.PLATFORM_DB) {
     return { configured: false, reachable: false };
   }
 
-  const adapter = createHyperdriveAdapter(env.SOURCEPLANE_DB);
+  const adapter = createHyperdriveAdapter(env.PLATFORM_DB);
   try {
     return await adapter.ping();
   } finally {
