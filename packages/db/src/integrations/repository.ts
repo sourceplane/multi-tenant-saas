@@ -128,6 +128,7 @@ function mapInboundDelivery(row: Record<string, unknown>): InboundDelivery {
   return {
     id: row.id as string,
     orgId: (row.org_id as string) ?? null,
+    connectionId: (row.connection_id as string) ?? null,
     provider: row.provider as string,
     deliveryKey: row.delivery_key as string,
     eventType: row.event_type as string,
@@ -242,6 +243,19 @@ export function createIntegrationsRepository(executor: SqlExecutor): Integration
         const result = await executor.execute<Record<string, unknown>>(
           `SELECT * FROM integrations.connections WHERE org_id = $1 AND id = $2`,
           [orgId, id],
+        );
+        if (result.rowCount === 0) return { ok: false, error: { kind: "not_found" } };
+        return { ok: true, value: mapConnection(result.rows[0]!) };
+      } catch {
+        return safeError("Failed to get connection");
+      }
+    },
+
+    async getConnectionById(id: Uuid): Promise<IntegrationsResult<IntegrationConnection>> {
+      try {
+        const result = await executor.execute<Record<string, unknown>>(
+          `SELECT * FROM integrations.connections WHERE id = $1`,
+          [id],
         );
         if (result.rowCount === 0) return { ok: false, error: { kind: "not_found" } };
         return { ok: true, value: mapConnection(result.rows[0]!) };
@@ -595,11 +609,18 @@ export function createIntegrationsRepository(executor: SqlExecutor): Integration
     async listInboundDeliveries(
       orgId: Uuid,
       params: PageQueryParams,
+      query?: { connectionId?: Uuid },
     ): Promise<IntegrationsResult<PagedResult<InboundDelivery>>> {
+      const values: unknown[] = [orgId];
+      let sql = `SELECT * FROM integrations.inbound_deliveries WHERE org_id = $1`;
+      if (query?.connectionId) {
+        values.push(query.connectionId);
+        sql += ` AND connection_id = $${values.length}`;
+      }
       return pagedList(
         executor,
-        `SELECT * FROM integrations.inbound_deliveries WHERE org_id = $1`,
-        [orgId],
+        sql,
+        values,
         params.limit,
         params.cursor,
         mapInboundDelivery,
@@ -633,17 +654,19 @@ export function createIntegrationsRepository(executor: SqlExecutor): Integration
         const result = await executor.execute<Record<string, unknown>>(
           `UPDATE integrations.inbound_deliveries
               SET org_id = COALESCE($2, org_id),
-                  status = COALESCE($3, status),
-                  attempts = COALESCE($4, attempts),
-                  next_attempt_at = $5,
-                  failure_reason = COALESCE($6, failure_reason),
-                  emitted_event_id = COALESCE($7, emitted_event_id),
+                  connection_id = COALESCE($3, connection_id),
+                  status = COALESCE($4, status),
+                  attempts = COALESCE($5, attempts),
+                  next_attempt_at = $6,
+                  failure_reason = COALESCE($7, failure_reason),
+                  emitted_event_id = COALESCE($8, emitted_event_id),
                   updated_at = now()
             WHERE id = $1
             RETURNING *`,
           [
             id,
             input.orgId ?? null,
+            input.connectionId ?? null,
             input.status ?? null,
             input.attempts ?? null,
             isoOrNull(input.nextAttemptAt),

@@ -26,18 +26,29 @@ describe("Integrations Migration Verification", () => {
     );
   });
 
-  it("is ordered after every previously shipped migration", () => {
+  it("orders the integrations migrations at the manifest tail", () => {
     const ids = manifest.migrations.map((m) => m.id);
-    expect(ids.indexOf("180_integrations_foundation")).toBe(ids.length - 1);
+    expect(ids.indexOf("180_integrations_foundation")).toBe(ids.length - 2);
+    expect(ids.indexOf("190_integrations_delivery_attribution")).toBe(ids.length - 1);
   });
 
-  it("manifest checksum matches the on-disk up.sql", () => {
-    const entry = manifest.migrations.find(
-      (m) => m.id === "180_integrations_foundation",
-    )!;
-    const content = readFileSync(resolve(MIGRATIONS_ROOT, entry.path));
-    const checksum = createHash("sha256").update(content).digest("hex");
-    expect(entry.checksum).toBe(checksum);
+  it("manifest checksums match the on-disk up.sql files", () => {
+    for (const id of ["180_integrations_foundation", "190_integrations_delivery_attribution"]) {
+      const entry = manifest.migrations.find((m) => m.id === id)!;
+      const content = readFileSync(resolve(MIGRATIONS_ROOT, entry.path));
+      const checksum = createHash("sha256").update(content).digest("hex");
+      expect(entry.checksum).toBe(checksum);
+    }
+  });
+
+  it("190 adds the connection pointer additively and idempotently", () => {
+    const sql = readFileSync(
+      resolve(MIGRATIONS_ROOT, "190_integrations_delivery_attribution/up.sql"),
+      "utf-8",
+    );
+    expect(sql).toContain("ADD COLUMN IF NOT EXISTS connection_id UUID");
+    expect(sql).toContain("idx_integrations_inbound_deliveries_connection");
+    expect(sql).toContain("WHERE connection_id IS NOT NULL");
   });
 
   describe("integrations SQL schema validation", () => {

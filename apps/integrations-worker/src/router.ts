@@ -1,13 +1,20 @@
 import type { Env } from "./env.js";
 import { handleHealth } from "./handlers/health.js";
 import { handleGithubSetupCallback } from "./handlers/setup.js";
+import { handleGithubWebhookIngest } from "./handlers/ingest.js";
+import { handleListDeliveries, handleReplayDelivery } from "./handlers/deliveries.js";
 import {
   handleConnectIntegration,
   handleGetIntegration,
   handleListIntegrations,
   handleRevokeIntegration,
 } from "./handlers/connections.js";
-import { generateRequestId, parseConnectionPublicId, parseOrgPublicId } from "./ids.js";
+import {
+  generateRequestId,
+  parseConnectionPublicId,
+  parseInboundDeliveryPublicId,
+  parseOrgPublicId,
+} from "./ids.js";
 import { asUuid } from "@saas/db/ids";
 import { errorResponse, methodNotAllowed, notFound } from "./http.js";
 
@@ -34,7 +41,11 @@ function resolveActor(request: Request): ActorContext | null {
 const ORG_INTEGRATIONS_RE = /^\/v1\/organizations\/([^/]+)\/integrations$/;
 const ORG_INTEGRATIONS_CONNECT_RE = /^\/v1\/organizations\/([^/]+)\/integrations\/github\/connect$/;
 const ORG_INTEGRATION_RE = /^\/v1\/organizations\/([^/]+)\/integrations\/([^/]+)$/;
+const ORG_DELIVERIES_RE = /^\/v1\/organizations\/([^/]+)\/integrations\/([^/]+)\/deliveries$/;
+const ORG_DELIVERY_REPLAY_RE =
+  /^\/v1\/organizations\/([^/]+)\/integrations\/([^/]+)\/deliveries\/([^/]+)\/replay$/;
 const GITHUB_SETUP_PATH = "/ingress/github/setup";
+const GITHUB_WEBHOOK_PATH = "/ingress/github/webhook";
 
 export async function route(request: Request, env: Env): Promise<Response> {
   const requestId = resolveRequestId(request);
@@ -51,6 +62,14 @@ export async function route(request: Request, env: Env): Promise<Response> {
   if (pathname === GITHUB_SETUP_PATH) {
     if (request.method !== "GET") return methodNotAllowed(requestId);
     return handleGithubSetupCallback(request, env, requestId);
+  }
+
+  // Inbound webhook ingress: authenticated by HMAC over the raw body, never
+  // by a bearer token (design §5). Verify-insert-ack; the cron drain does
+  // the rest.
+  if (pathname === GITHUB_WEBHOOK_PATH) {
+    if (request.method !== "POST") return methodNotAllowed(requestId);
+    return handleGithubWebhookIngest(request, env, requestId);
   }
 
   // Everything below is the authenticated org surface.
@@ -85,6 +104,32 @@ export async function route(request: Request, env: Env): Promise<Response> {
     if (!orgId) return notFound(requestId, pathname);
     if (request.method !== "GET") return methodNotAllowed(requestId);
     return handleListIntegrations(request, env, requestId, actor, orgId);
+  }
+
+  m = pathname.match(ORG_DELIVERIES_RE);
+  if (m) {
+    const orgId = parseOrgPublicId(m[1]!);
+    const connectionUuid = parseConnectionPublicId(m[2]!);
+    if (!orgId || !connectionUuid) return notFound(requestId, pathname);
+    if (request.method !== "GET") return methodNotAllowed(requestId);
+    return handleListDeliveries(request, env, requestId, actor, orgId, asUuid(connectionUuid));
+  }
+
+  m = pathname.match(ORG_DELIVERY_REPLAY_RE);
+  if (m) {
+    const orgId = parseOrgPublicId(m[1]!);
+    const connectionUuid = parseConnectionPublicId(m[2]!);
+    const deliveryUuid = parseInboundDeliveryPublicId(m[3]!);
+    if (!orgId || !connectionUuid || !deliveryUuid) return notFound(requestId, pathname);
+    if (request.method !== "POST") return methodNotAllowed(requestId);
+    return handleReplayDelivery(
+      env,
+      requestId,
+      actor,
+      orgId,
+      asUuid(connectionUuid),
+      asUuid(deliveryUuid),
+    );
   }
 
   m = pathname.match(ORG_INTEGRATION_RE);

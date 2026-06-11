@@ -1,6 +1,10 @@
-import type { IntegrationConnection } from "@saas/db/integrations";
-import type { PublicConnection, IntegrationProviderId } from "@saas/contracts/integrations";
-import { connectionPublicId, orgPublicId } from "./ids.js";
+import type { InboundDelivery, IntegrationConnection } from "@saas/db/integrations";
+import type {
+  PublicConnection,
+  PublicInboundDelivery,
+  IntegrationProviderId,
+} from "@saas/contracts/integrations";
+import { connectionPublicId, inboundDeliveryPublicId, orgPublicId } from "./ids.js";
 
 function isoOrNull(d: Date | null): string | null {
   return d == null ? null : d.toISOString();
@@ -35,4 +39,23 @@ export function toPublicConnectionWithSelection(
   repositorySelection: string | null,
 ): PublicConnection {
   return { ...toPublicConnection(connection), repositorySelection };
+}
+
+/**
+ * Safe projection of an inbox row: never the raw payload (admin-only) and
+ * never the delivery key beyond what the provider already knows.
+ */
+export function toPublicInboundDelivery(delivery: InboundDelivery): PublicInboundDelivery {
+  return {
+    id: inboundDeliveryPublicId(delivery.id),
+    provider: delivery.provider as IntegrationProviderId,
+    eventType: delivery.eventType,
+    action: delivery.action,
+    status: delivery.status,
+    signatureOk: delivery.signatureOk,
+    attempts: delivery.attempts,
+    failureReason: delivery.failureReason,
+    emittedEventId: delivery.emittedEventId,
+    receivedAt: delivery.receivedAt.toISOString(),
+  };
 }
