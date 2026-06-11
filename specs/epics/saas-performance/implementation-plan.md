@@ -110,8 +110,14 @@ cache; 5–10m write-invalidated caches for config settings/flags + webhook
 endpoint lists. Cuts latency and Supabase load. Revocation latency bounded by
 TTL (document like PERF2). Owner: membership/billing/config/webhooks workers.
 
-## PERF14 — Observability coverage + logging cost guard — 🗓️ Planned
-Server-Timing phases for the ~20 uninstrumented handlers; sample the structured
-timing `console.log` lines (1-in-N + always-log-slow) so Workers Logs ingestion
-stays within the included tier (~$50–80/mo exposure at 50M req/mo otherwise);
-header stays unsampled. Feeds PERF6b dashboards. Owner: all workers + api-edge.
+## PERF14 — Logging cost guard (timing-log sampling) — ✅ Shipped (edge)
+`shouldEmitTimingLog` (in `@saas/contracts/timing`) samples the structured timing
+`console.log` lines (default 1-in-10 + always-log-slow ≥1s) so Workers Logs
+ingestion stays within the included tier (~$50–80/mo exposure at 50M req/mo
+otherwise). The `Server-Timing` *header* stays unsampled (free). Wired into the
+api-edge emit sites (`withEdgeTimings`, `finishGate`). Owner: api-edge + contracts.
+
+## PERF14b — Server-Timing coverage for uninstrumented handlers — 🗓️ Planned
+Add `createTimings()` phases to the ~20 handlers that emit none (billing reads,
+config, webhooks, identity resolve, metering), and apply the same `shouldEmitTimingLog`
+sampling at each worker's `withTimings`. Feeds PERF6b dashboards. Owner: all workers.

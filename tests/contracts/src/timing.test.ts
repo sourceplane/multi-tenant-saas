@@ -2,6 +2,7 @@ import {
   createTimings,
   parseServerTimingDuration,
   appendServerTiming,
+  shouldEmitTimingLog,
 } from "@saas/contracts/timing";
 
 describe("contracts: timing (Server-Timing helper)", () => {
@@ -90,6 +91,21 @@ describe("contracts: timing (Server-Timing helper)", () => {
       expect(appendServerTiming(null, "b;dur=2")).toBe("b;dur=2");
       expect(appendServerTiming("a;dur=1", "")).toBe("a;dur=1");
       expect(appendServerTiming(null, "")).toBe("");
+    });
+  });
+
+  describe("shouldEmitTimingLog (PERF14 sampling)", () => {
+    it("always emits when a phase is slow, regardless of the sample roll", () => {
+      // random=0.99 (would normally be sampled out at rate 0.1), but a slow phase forces emit.
+      expect(shouldEmitTimingLog({ total: 1200 }, { rate: 0.1, slowMs: 1000, random: () => 0.99 })).toBe(true);
+    });
+    it("emits a fast request only when the sample roll is under the rate", () => {
+      expect(shouldEmitTimingLog({ total: 50 }, { rate: 0.1, random: () => 0.05 })).toBe(true);
+      expect(shouldEmitTimingLog({ total: 50 }, { rate: 0.1, random: () => 0.5 })).toBe(false);
+    });
+    it("respects a custom slow threshold", () => {
+      expect(shouldEmitTimingLog({ edge_ratelimit: 300 }, { rate: 0, slowMs: 200, random: () => 0.99 })).toBe(true);
+      expect(shouldEmitTimingLog({ edge_ratelimit: 100 }, { rate: 0, slowMs: 200, random: () => 0.99 })).toBe(false);
     });
   });
 });

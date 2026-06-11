@@ -64,7 +64,7 @@ import {
   describeIdempotencyKeyParseError,
   parseIdempotencyKey,
 } from "@saas/contracts/idempotency";
-import { createTimings, appendServerTiming, type Timings } from "@saas/contracts/timing";
+import { createTimings, appendServerTiming, shouldEmitTimingLog, type Timings } from "@saas/contracts/timing";
 
 import type { Env } from "./env.js";
 import { errorResponse } from "./http.js";
@@ -282,16 +282,21 @@ function finishGate(
       appendServerTiming(response.headers.get("Server-Timing"), addition),
     );
   }
-  // eslint-disable-next-line no-console -- structured timing line for prod observability
-  console.log(
-    JSON.stringify({
-      level: "info",
-      msg: "timing",
-      route: `edge.gate.${routeFamily}`,
-      requestId,
-      phases: gate.toJSON(),
-    }),
-  );
+  // PERF14: header is always set; the log line is sampled to bound Workers Logs
+  // ingestion cost (always emitted when a phase is slow).
+  const phases = gate.toJSON();
+  if (shouldEmitTimingLog(phases)) {
+    // eslint-disable-next-line no-console -- structured timing line for prod observability
+    console.log(
+      JSON.stringify({
+        level: "info",
+        msg: "timing",
+        route: `edge.gate.${routeFamily}`,
+        requestId,
+        phases,
+      }),
+    );
+  }
   return response;
 }
 
