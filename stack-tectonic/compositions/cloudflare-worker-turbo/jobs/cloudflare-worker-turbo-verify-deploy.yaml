@@ -55,18 +55,18 @@ spec:
       shell: bash
       run: |
         test -f package.json
-        if [ -n "{{ .parameters.wranglerTemplate }}" ]; then
-          # BF6: templated worker — the committed artifact is the template; the
-          # deployable config is rendered by wire-fixture/wire-live. Guard: a
-          # template must never carry committed 32-hex resource IDs.
-          test -f "{{ .parameters.wranglerTemplate }}"
-          if grep -nE '"id":[[:space:]]*"[0-9a-f]{32}"' "{{ .parameters.wranglerTemplate }}"; then
-            echo "verify-worker-structure: committed resource IDs found in {{ .parameters.wranglerTemplate }} — use @@wiring(...)@@ tokens" >&2
-            exit 1
-          fi
-        else
-          test -f "{{ .parameters.wranglerConfig }}"
+        {{- if .parameters.wranglerTemplate }}
+        # BF6: templated worker — the committed artifact is the template; the
+        # deployable config is rendered by wire-fixture/wire-live. Guard: a
+        # template must never carry committed 32-hex resource IDs.
+        test -f "{{ .parameters.wranglerTemplate }}"
+        if grep -nE '"id":[[:space:]]*"[0-9a-f]{32}"' "{{ .parameters.wranglerTemplate }}"; then
+          echo "verify-worker-structure: committed resource IDs found in {{ .parameters.wranglerTemplate }} — use @@wiring(...)@@ tokens" >&2
+          exit 1
         fi
+        {{- else }}
+        test -f "{{ .parameters.wranglerConfig }}"
+        {{- end }}
       onFailure: stop
 
     - id: wire-fixture
@@ -74,14 +74,14 @@ spec:
       capability: cloudflare-worker-turbo.wire-fixture
       shell: bash
       run: |
-        if [ -n "{{ .parameters.wranglerTemplate }}" ]; then
-          node {{ .parameters.workspaceDir }}/tooling/wire/render.mjs \
-            --template "{{ .parameters.wranglerTemplate }}" \
-            --out "{{ .parameters.wranglerConfig }}" \
-            --map "{{ .parameters.wiringFixture }}"
-        else
-          echo "wire-fixture: component is not wiring-templated; skipping."
-        fi
+        {{- if .parameters.wranglerTemplate }}
+        node {{ .parameters.workspaceDir }}/tooling/wire/render.mjs \
+          --template "{{ .parameters.wranglerTemplate }}" \
+          --out "{{ .parameters.wranglerConfig }}" \
+          --map "{{ .parameters.wiringFixture }}"
+        {{- else }}
+        echo "wire-fixture: component is not wiring-templated; skipping."
+        {{- end }}
       onFailure: stop
 
     - id: build-worker
@@ -120,23 +120,23 @@ spec:
       capability: cloudflare-worker-turbo.wire-live
       shell: bash
       run: |
-        if [ -n "{{ .parameters.wranglerTemplate }}" ]; then
-          set -euo pipefail
-          wiring_dir=$(mktemp -d)
-          for comp in $(echo "{{ .parameters.wiringComponents }}" | tr ',' ' '); do
-            for wenv in $(echo "{{ .parameters.wiringEnvs }}" | tr ',' ' '); do
-              aws secretsmanager get-secret-value \
-                --secret-id "{{ .parameters.orgName }}/{{ .parameters.repo }}/${comp}/${wenv}" \
-                --query SecretString --output text > "${wiring_dir}/${comp}__${wenv}.json"
-            done
+        {{- if .parameters.wranglerTemplate }}
+        set -euo pipefail
+        wiring_dir=$(mktemp -d)
+        for comp in $(echo "{{ .parameters.wiringComponents }}" | tr ',' ' '); do
+          for wenv in $(echo "{{ .parameters.wiringEnvs }}" | tr ',' ' '); do
+            aws secretsmanager get-secret-value \
+              --secret-id "{{ .parameters.orgName }}/{{ .parameters.repo }}/${comp}/${wenv}" \
+              --query SecretString --output text > "${wiring_dir}/${comp}__${wenv}.json"
           done
-          node {{ .parameters.workspaceDir }}/tooling/wire/render.mjs \
-            --template "{{ .parameters.wranglerTemplate }}" \
-            --out "{{ .parameters.wranglerConfig }}" \
-            --secrets-dir "${wiring_dir}"
-        else
-          echo "wire-live: component is not wiring-templated; skipping."
-        fi
+        done
+        node {{ .parameters.workspaceDir }}/tooling/wire/render.mjs \
+          --template "{{ .parameters.wranglerTemplate }}" \
+          --out "{{ .parameters.wranglerConfig }}" \
+          --secrets-dir "${wiring_dir}"
+        {{- else }}
+        echo "wire-live: component is not wiring-templated; skipping."
+        {{- end }}
       onFailure: stop
 
     - id: pre-deploy
