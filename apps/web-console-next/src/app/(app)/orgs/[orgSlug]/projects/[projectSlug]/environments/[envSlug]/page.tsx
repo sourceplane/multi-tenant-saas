@@ -7,6 +7,7 @@ import { OrgScope } from "@/components/shell/org-scope";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ConfigSurface } from "@/components/config/config-surface";
 import { wrap } from "@/lib/api";
 import { useSession } from "@/lib/session";
 import { useApiQuery, qk } from "@/lib/query";
@@ -82,6 +83,18 @@ function Inner({
           </dl>
         </CardContent>
       </Card>
+
+      <section className="space-y-3">
+        <div>
+          <h2 className="text-base font-semibold tracking-tight">Configuration</h2>
+          <p className="text-sm text-muted-foreground">
+            Settings, feature flags, and secrets scoped to this environment.
+          </p>
+        </div>
+        <ConfigSurface
+          scope={{ kind: "environment", orgId, projectId: project.id, environmentId: env.id }}
+        />
+      </section>
     </div>
   );
 }

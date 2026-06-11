@@ -67,7 +67,10 @@ export function buildNavSections(scope: NavScope): NavSection[] {
     sections.push({
       id: "project",
       label: projectSlug ? `Project · ${projectSlug}` : "Project",
-      links: [{ href: `${projectBase}/environments`, label: "Environments", icon: "Boxes" }],
+      links: [
+        { href: `${projectBase}/environments`, label: "Environments", icon: "Boxes" },
+        { href: `${projectBase}/config`, label: "Config", icon: "SlidersHorizontal" },
+      ],
     });
   }
 
