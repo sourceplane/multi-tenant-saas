@@ -2,17 +2,27 @@
 
 Last updated: 2026-06-11.
 
-## Active: PX cluster (saas-product-experience epic)
+## PX cluster (saas-product-experience epic) — PX1–PX3 shipped & live-verified
 
-Opened 2026-06-11 from a verified-live audit (authenticated Playwright
-walkthrough of stage + edge API probes; evidence in the epic's
-IMPLEMENTATION-STATUS.md). Finding: backends are ahead of surfaces — the
-config facade (settings/flags/secrets) is live on api-edge while the console
-Config page is a stub; notification preferences need only one edge facade;
-no rename anywhere; native confirm()s and the unbranded Next 404 are
-reachable. Epic: `specs/epics/saas-product-experience/` (PX1–PX6, all
-human-independent). Active task: 0135 = PX1 (console truth & papercuts).
-PX3 will unpark the deferred U11 notification-preferences slice.
+Opened 2026-06-11 from a verified-live audit. **PX1 (#299), PX2 (#300/#303/
+#304), PX3 (#303/#304) are shipped and verified live on stage** (authenticated
+Playwright + API probes; prod smoked): designed 404/confirm-dialogs/
+breadcrumbs; config settings/flags/secrets surface at all three scopes with
+full secret lifecycle (create→rotate→revoke, key provisioned for stage+prod by
+the config-worker deploy lane); notification preferences e2e via an
+actor-pinned edge facade + console page + CLI verbs. PX3 unparked the U11
+notification-preferences deferred slice.
+
+Live verification surfaced and fixed two latent platform bugs: (1) backend
+non-convergence since the failed #280 run (cascade dependency-wait timeouts +
+`--changed` planning) — api-edge/config-worker/notifications-worker
+redeployed; the OTHER workers (membership/events/webhooks/metering/projects/
+policy) are still on pre-#280 deploys — convergence follow-up needed; (2)
+SDK↔worker drift: config item routes address by public id, not key (#304).
+
+**Next ready: PX4** (rename PATCH lifecycle), then PX5 (onboarding), PX6
+(Cmd-K resource search). A parallel session is active on PERF + a new
+saas-integrations epic — coordinate console-file changes.
 
 > **Working-tree compaction (2026-06-01).** To keep a minimal context surface,
 > the bulky historical AI artifacts were removed from the working tree:

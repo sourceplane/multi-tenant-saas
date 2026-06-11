@@ -9,9 +9,9 @@ Epic opened 2026-06-11 from a verified-live audit.
 | ID | Status |
 |----|--------|
 | PX1 | ✅ Shipped (#299) — verified live on stage (designed 404, confirm dialogs, breadcrumbs) + prod 404 smoke |
-| PX2 | ✅ Shipped (#300, completion tail in PX3 PR) — settings create/edit + flag create verified live; flag PATCH + secrets blocked by stage drift/missing key, fixed by the PX3 PR's redeploy + key provisioning |
-| PX3 | In progress (PR open) — edge facade + console page + CLI parity |
-| PX4 | Ready |
+| PX2 | ✅ Shipped (#300 + #303 tail + #304 id-addressing fix) — full lifecycle verified live on stage 2026-06-11: setting create/edit, flag create + optimistic toggle, secret create → rotate (v2) → revoke, no secret material leaked; encryption key provisioned for stage AND prod by the deploy lane |
+| PX3 | ✅ Shipped (#303 + #304) — verified live on stage 2026-06-11: preference toggle persists across reload via the actor-pinned edge facade; prod smoke: route deployed (401 unauth, designed 404 on console) |
+| PX4 | Ready (next) |
 | PX5 | Ready |
 | PX6 | Ready |
 
