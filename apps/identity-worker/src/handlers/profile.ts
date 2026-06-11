@@ -3,7 +3,8 @@ import type { IdentityRepository } from "@saas/db/identity";
 import { createSqlExecutor } from "@saas/db/hyperdrive";
 import { createIdentityRepository } from "@saas/db/identity";
 import { createAuthService } from "../services/auth.js";
-import { successResponse, errorResponse, extractBearerToken, validationError } from "../http.js";
+import { successResponse, errorResponse, extractBearerToken, validationError, withTimings } from "../http.js";
+import { createTimings } from "@saas/contracts/timing";
 import { parseSessionToken } from "../ids.js";
 
 const MAX_DISPLAY_NAME_LENGTH = 120;
@@ -39,11 +40,17 @@ export async function handleProfile(
     });
 
     if (request.method === "GET") {
-      const result = await auth.getProfile(token);
+      // PERF14b: profile reads bypass the edge bearer cache (design §3), so
+      // every GET pays the DB-backed resolve — time it.
+      const timings = createTimings();
+      const endTotal = timings.start("total");
+      const route = "identity.profile.get";
+      const result = await timings.measure("resolve", () => auth.getProfile(token));
+      endTotal();
       if ("error" in result) {
-        return errorResponse(result.error, result.message, 401, requestId);
+        return withTimings(errorResponse(result.error, result.message, 401, requestId), requestId, route, timings);
       }
-      return successResponse({ user: result.user }, requestId, 200);
+      return withTimings(successResponse({ user: result.user }, requestId, 200), requestId, route, timings);
     }
 
     // PATCH

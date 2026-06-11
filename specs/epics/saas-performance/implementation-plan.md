@@ -124,6 +124,8 @@ config-worker list handlers (settings/flags/secrets) instrumented with
 `authz_ctx`∥`db` + `policy` + `total` phases — makes the PERF12b overlap
 directly visible — with a sampled `withTimings`. Slice 3 ✅: webhooks-worker
 PERF12c read handlers (endpoints list, delivery-attempts list/get) with
-`authz`∥`db` + `total`. Remaining: identity (0/12), metering (0/6),
-notifications (0/6), integrations (0/3), and billing's other reads. Feeds
-PERF6b dashboards. Owner: all workers.
+`authz`∥`db` + `total`. Slice 4 ✅: identity-worker hot resolve paths
+(resolve-bearer — every edge bearer-cache miss, the PERF12d JOIN — plus
+session and profile GET) with `resolve` + `total`. Remaining: metering (0/6),
+notifications (0/6), integrations (0/3), billing's other reads, and the
+login/oauth flows. Feeds PERF6b dashboards. Owner: all workers.
