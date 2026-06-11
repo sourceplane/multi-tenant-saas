@@ -184,3 +184,209 @@ export function auditEntriesToNdjson(
   if (entries.length === 0) return "";
   return entries.map((e) => JSON.stringify(e)).join("\n") + "\n";
 }
+
+// ---------------------------------------------------------------------------
+// Modern timeline view-model helpers (audit UX pass)
+// ---------------------------------------------------------------------------
+
+/**
+ * Curated category options for the filter select. The API treats category as
+ * a free string, so this list is a UX courtesy (one click instead of typing),
+ * sourced from the categories the workers actually emit. An unknown category
+ * arriving in data renders fine — only the *filter* select is curated.
+ */
+export const AUDIT_CATEGORY_OPTIONS: ReadonlyArray<string> = [
+  "auth",
+  "organization",
+  "membership",
+  "project",
+  "billing",
+  "subscription",
+  "entitlements",
+  "config",
+  "webhooks",
+  "metering",
+  "notifications",
+  "security",
+];
+
+export const AUDIT_ACTOR_TYPE_OPTIONS: ReadonlyArray<EventActorType> = [
+  "user",
+  "service_principal",
+  "workflow",
+  "system",
+];
+
+/**
+ * Visual accent per category — a semantic tone the renderer maps to design
+ * tokens, and a lucide icon name resolved by the renderer (same convention as
+ * `settings-nav.ts`). Unknown categories get the neutral fallback.
+ */
+export interface CategoryAccent {
+  tone: "violet" | "blue" | "green" | "amber" | "rose" | "slate";
+  icon: string;
+}
+
+const CATEGORY_ACCENTS: Record<string, CategoryAccent> = {
+  auth: { tone: "rose", icon: "KeyRound" },
+  security: { tone: "rose", icon: "ShieldCheck" },
+  organization: { tone: "violet", icon: "Building2" },
+  membership: { tone: "violet", icon: "Users" },
+  project: { tone: "blue", icon: "FolderKanban" },
+  config: { tone: "blue", icon: "SlidersHorizontal" },
+  billing: { tone: "green", icon: "Receipt" },
+  subscription: { tone: "green", icon: "Receipt" },
+  entitlements: { tone: "amber", icon: "Gauge" },
+  metering: { tone: "amber", icon: "Gauge" },
+  webhooks: { tone: "blue", icon: "Webhook" },
+  notifications: { tone: "violet", icon: "Bell" },
+};
+
+export function categoryAccent(category: string): CategoryAccent {
+  return CATEGORY_ACCENTS[category] ?? { tone: "slate", icon: "ScrollText" };
+}
+
+/**
+ * Compact relative time ("just now", "5m ago", "3h ago", "2d ago"); beyond
+ * 7 days falls back to a short local date. Malformed input → fallback. The
+ * absolute timestamp belongs in a `title` attribute next to this label.
+ */
+export function formatRelativeTime(
+  value: string | null | undefined,
+  now: number = Date.now(),
+  fallback = "—",
+): string {
+  if (!value) return fallback;
+  const t = new Date(value).getTime();
+  if (Number.isNaN(t)) return fallback;
+  const diffSec = Math.max(0, Math.floor((now - t) / 1000));
+  if (diffSec < 60) return "just now";
+  const mins = Math.floor(diffSec / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days <= 7) return `${days}d ago`;
+  return new Date(t).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+export interface AuditDayGroup {
+  /** "Today", "Yesterday", or a long local date. */
+  label: string;
+  /** Local-date key (YYYY-MM-DD) for stable React keys. */
+  key: string;
+  entries: PublicAuditEntry[];
+}
+
+function localDayKey(d: Date): string {
+  const m = `${d.getMonth() + 1}`.padStart(2, "0");
+  const day = `${d.getDate()}`.padStart(2, "0");
+  return `${d.getFullYear()}-${m}-${day}`;
+}
+
+/**
+ * Group entries by local calendar day, preserving input order (the API
+ * already returns newest-first). Entries with malformed timestamps fall into
+ * a trailing "Unknown date" group rather than being dropped.
+ */
+export function groupAuditEntriesByDay(
+  entries: ReadonlyArray<PublicAuditEntry>,
+  now: number = Date.now(),
+): AuditDayGroup[] {
+  const todayKey = localDayKey(new Date(now));
+  const yesterdayKey = localDayKey(new Date(now - 24 * 60 * 60 * 1000));
+  const groups: AuditDayGroup[] = [];
+  const byKey = new Map<string, AuditDayGroup>();
+  for (const e of entries) {
+    const d = new Date(e.occurredAt);
+    const valid = !Number.isNaN(d.getTime());
+    const key = valid ? localDayKey(d) : "unknown";
+    let group = byKey.get(key);
+    if (!group) {
+      const label = !valid
+        ? "Unknown date"
+        : key === todayKey
+          ? "Today"
+          : key === yesterdayKey
+            ? "Yesterday"
+            : d.toLocaleDateString(undefined, {
+                weekday: "long",
+                month: "long",
+                day: "numeric",
+                year: "numeric",
+              });
+      group = { label, key, entries: [] };
+      byKey.set(key, group);
+      groups.push(group);
+    }
+    group.entries.push(e);
+  }
+  return groups;
+}
+
+/** Time-range presets for the filter toolbar. */
+export type AuditTimePreset = "any" | "1h" | "24h" | "7d" | "30d" | "custom";
+
+export const AUDIT_TIME_PRESETS: ReadonlyArray<{
+  value: AuditTimePreset;
+  label: string;
+}> = [
+  { value: "any", label: "Any time" },
+  { value: "1h", label: "Last hour" },
+  { value: "24h", label: "Last 24 hours" },
+  { value: "7d", label: "Last 7 days" },
+  { value: "30d", label: "Last 30 days" },
+  { value: "custom", label: "Custom range" },
+];
+
+const PRESET_MS: Record<Exclude<AuditTimePreset, "any" | "custom">, number> = {
+  "1h": 60 * 60 * 1000,
+  "24h": 24 * 60 * 60 * 1000,
+  "7d": 7 * 24 * 60 * 60 * 1000,
+  "30d": 30 * 24 * 60 * 60 * 1000,
+};
+
+/**
+ * Resolve a non-custom preset to the `from` ISO bound (no `to` — presets are
+ * always "until now"). `any`/`custom` return undefined: `custom` keeps the
+ * caller's explicit from/to fields authoritative.
+ */
+export function presetFromIso(
+  preset: AuditTimePreset,
+  now: number = Date.now(),
+): string | undefined {
+  if (preset === "any" || preset === "custom") return undefined;
+  return new Date(now - PRESET_MS[preset]).toISOString();
+}
+
+/** One removable chip per active filter, for the toolbar summary row. */
+export interface AuditFilterChip {
+  key: keyof AuditFilterFormValues;
+  label: string;
+}
+
+const CHIP_LABELS: Record<keyof AuditFilterFormValues, string> = {
+  category: "category",
+  actorId: "actor",
+  actorType: "actor type",
+  subjectKind: "subject kind",
+  subjectId: "subject",
+  eventType: "event",
+  from: "from",
+  to: "to",
+};
+
+export function buildAuditFilterChips(
+  values: AuditFilterFormValues,
+): AuditFilterChip[] {
+  const chips: AuditFilterChip[] = [];
+  for (const key of Object.keys(CHIP_LABELS) as Array<keyof AuditFilterFormValues>) {
+    const v = clean(values[key]);
+    if (v !== undefined) chips.push({ key, label: `${CHIP_LABELS[key]}: ${v}` });
+  }
+  return chips;
+}
