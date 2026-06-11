@@ -3,37 +3,17 @@
 import * as React from "react";
 import Link from "next/link";
 import { Building2, Plus } from "lucide-react";
-import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { ZodForm } from "@/components/ui/zod-form";
-import { PreconditionInsight } from "@/components/precondition/insight";
 import { pickAccountBillingOrg } from "@/components/billing/account-org";
 import { useSession } from "@/lib/session";
 import { readLastOrgSlug, clearLastOrgSlug } from "@/lib/last-org";
 import { useApiQuery, qk, usePrefetch } from "@/lib/query";
 import { useToast } from "@/components/ui/toast";
-import { wrap, type ApiErrorBody } from "@/lib/api";
-
-const schema = z.object({
-  name: z.string().min(2, "Name must be at least 2 characters").max(64),
-  slug: z
-    .string()
-    .regex(/^[a-z0-9-]*$/, "Lowercase letters, digits, hyphens")
-    .max(48)
-    .optional(),
-});
+import { wrap } from "@/lib/api";
 
 export default function OrgsPage() {
   const { client } = useSession();
@@ -42,9 +22,6 @@ export default function OrgsPage() {
   const orgs = useApiQuery(qk.orgs(), () =>
     wrap(async () => (await client.organizations.list()).organizations),
   );
-  const [open, setOpen] = React.useState(false);
-  const [precondition, setPrecondition] = React.useState<ApiErrorBody | null>(null);
-
   // Multi-org is gated on the account's billing parent (its earliest-created
   // org — same choice the membership-worker MO2 gate makes). The paywall's
   // "Upgrade plan" CTA starts a Business checkout for that org.
@@ -80,66 +57,13 @@ export default function OrgsPage() {
             Tenant root. Pick an org or create a new one.
           </p>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="h-4 w-4 mr-1.5" />
-              New organization
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Create organization</DialogTitle>
-              <DialogDescription>
-                An organization is your tenant — it owns projects, members, and billing.
-              </DialogDescription>
-            </DialogHeader>
-            <ZodForm
-              schema={schema}
-              defaultValues={{ name: "", slug: "" }}
-              fields={[
-                { name: "name", label: "Name", placeholder: "Acme Inc." },
-                {
-                  name: "slug",
-                  label: "Slug",
-                  placeholder: "acme",
-                  hint: "Auto-filled from the name; edit to override.",
-                },
-              ]}
-              deriveSlug={{ from: "name", to: "slug" }}
-              submitLabel="Create"
-              cancel={{ label: "Cancel", onClick: () => setOpen(false) }}
-              onSubmit={async (v) => {
-                const payload: { name: string; slug?: string } = { name: v.name };
-                if (v.slug) payload.slug = v.slug;
-                const r = await wrap(async () =>
-                  (await client.organizations.create(payload)).organization,
-                );
-                if (!r.ok) {
-                  if (r.error.code === "precondition_failed") {
-                    setPrecondition(r.error);
-                  } else {
-                    toast({ kind: "error", title: "Create failed", description: r.error.message });
-                  }
-                  return;
-                }
-                toast({ kind: "success", title: "Organization created" });
-                setOpen(false);
-                orgs.reload();
-              }}
-            />
-          </DialogContent>
-        </Dialog>
+        <Button asChild>
+          <Link href="/orgs/new">
+            <Plus className="h-4 w-4 mr-1.5" />
+            New organization
+          </Link>
+        </Button>
       </header>
-
-      {precondition && (
-        <PreconditionInsight
-          error={precondition}
-          resource="organization"
-          onUpgrade={() => void onUpgrade()}
-          onDismiss={() => setPrecondition(null)}
-        />
-      )}
 
       {(orgs.data ?? []).some((o) => o.status === "suspended") && (
         <Card className="border-warning/40 bg-warning/5">
@@ -182,7 +106,7 @@ export default function OrgsPage() {
           icon={Building2}
           title="No organizations yet"
           description="Create your first organization to start provisioning projects and environments."
-          primaryAction={{ label: "New organization", onClick: () => setOpen(true) }}
+          primaryAction={{ label: "New organization", href: "/orgs/new" }}
         />
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
