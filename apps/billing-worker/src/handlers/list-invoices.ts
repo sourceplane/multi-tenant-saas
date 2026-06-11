@@ -88,24 +88,32 @@ export async function handleListInvoices(
   if (cursorOrErr instanceof Response) return cursorOrErr;
   const cursor = cursorOrErr;
 
-  const auth = await authorizeBillingRead(env, actor, orgId, requestId);
-  if (!auth.ok) return auth.response;
-
-  // MO4: a child org's invoices resolve to the account's billing parent.
-  const billingOrgId = await resolveBillingOrgHex(env, orgId, requestId);
-
   const executor = createSqlExecutor(env.SOURCEPLANE_DB);
   const repo = createBillingRepository(executor);
+  try {
+    // PERF12: authorization and the MO4 billing-parent resolution are
+    // independent — run them concurrently. The invoices read needs the resolved
+    // org, so it follows the gate (no speculative read of invoice data on deny).
+    const [auth, billingOrgId] = await Promise.all([
+      authorizeBillingRead(env, actor, orgId, requestId),
+      resolveBillingOrgHex(env, orgId, requestId),
+    ]);
+    if (!auth.ok) return auth.response;
 
-  const query: ListInvoicesQuery = { orgId: billingOrgId, ...(status ? { status } : {}), ...(subscriptionId ? { subscriptionId } : {}) };
-  const result = await repo.listInvoices(query, { limit, cursor });
-  if (!result.ok) {
+    const query: ListInvoicesQuery = { orgId: billingOrgId, ...(status ? { status } : {}), ...(subscriptionId ? { subscriptionId } : {}) };
+    const result = await repo.listInvoices(query, { limit, cursor });
+    if (!result.ok) {
+      return errorResponse("internal_error", "Failed to list invoices", 503, requestId);
+    }
+
+    const body: ListInvoicesResponse = {
+      invoices: result.value.items.map(mapInvoiceToPublic),
+      nextCursor: result.value.nextCursor,
+    };
+    return listResponse(body, requestId, encodeCursor(result.value.nextCursor));
+  } catch {
     return errorResponse("internal_error", "Failed to list invoices", 503, requestId);
+  } finally {
+    await executor.dispose();
   }
-
-  const body: ListInvoicesResponse = {
-    invoices: result.value.items.map(mapInvoiceToPublic),
-    nextCursor: result.value.nextCursor,
-  };
-  return listResponse(body, requestId, encodeCursor(result.value.nextCursor));
 }

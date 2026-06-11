@@ -31,16 +31,26 @@ export async function handleListPlans(
     status = rawStatus as PlanStatus;
   }
 
-  const auth = await authorizeBillingRead(env, actor, orgId, requestId);
-  if (!auth.ok) return auth.response;
-
   const executor = createSqlExecutor(env.SOURCEPLANE_DB);
   const repo = createBillingRepository(executor);
-  const result = await repo.listPlans(status ? { status } : {});
-  if (!result.ok) {
-    return errorResponse("internal_error", "Failed to list plans", 503, requestId);
-  }
+  try {
+    // PERF12: authorization (membership + policy) and the read are independent —
+    // run them concurrently, then apply the decision. On deny the speculatively
+    // read plans are discarded (deny-by-default; the plan catalog is non-sensitive).
+    const [auth, result] = await Promise.all([
+      authorizeBillingRead(env, actor, orgId, requestId),
+      repo.listPlans(status ? { status } : {}),
+    ]);
+    if (!auth.ok) return auth.response;
+    if (!result.ok) {
+      return errorResponse("internal_error", "Failed to list plans", 503, requestId);
+    }
 
-  const body: ListPlansResponse = { plans: result.value.map(mapPlanToPublic) };
-  return successResponse(body, requestId);
+    const body: ListPlansResponse = { plans: result.value.map(mapPlanToPublic) };
+    return successResponse(body, requestId);
+  } catch {
+    return errorResponse("internal_error", "Failed to list plans", 503, requestId);
+  } finally {
+    await executor.dispose();
+  }
 }
