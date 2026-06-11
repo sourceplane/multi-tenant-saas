@@ -119,3 +119,27 @@ export function appendServerTiming(existing: string | null, addition: string): s
   if (!existing) return addition;
   return `${existing}, ${addition}`;
 }
+
+/**
+ * Sampling gate for the structured timing LOG line (PERF14 cost guard).
+ *
+ * The `Server-Timing` *header* is always emitted (free, per-response). The
+ * structured `console.log` line, by contrast, is what hits Workers Logs
+ * ingestion — at ~2–3 lines per request across the worker chain it is a real,
+ * traffic-scaling cost. This gate keeps the log volume bounded while never
+ * dropping a signal that matters: it ALWAYS emits when any recorded phase is
+ * slow (so regressions are never sampled away), and otherwise emits at `rate`
+ * (0..1, default 1-in-10). `random` is injectable for tests.
+ */
+export function shouldEmitTimingLog(
+  phases: Record<string, number>,
+  opts?: { rate?: number; slowMs?: number; random?: () => number },
+): boolean {
+  const slowMs = opts?.slowMs ?? 1000;
+  for (const v of Object.values(phases)) {
+    if (v >= slowMs) return true;
+  }
+  const rate = opts?.rate ?? 0.1;
+  const r = (opts?.random ?? Math.random)();
+  return r < rate;
+}
