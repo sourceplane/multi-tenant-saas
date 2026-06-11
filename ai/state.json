@@ -1,10 +1,10 @@
 {
   "goal": "Supabase/Postgres-backed multi-organization Orun SaaS control plane",
-  "active_milestone": "PX3",
-  "current_task": "0137",
-  "last_verified": "2026-06-02T13:05:00Z",
+  "active_milestone": "IG0",
+  "current_task": "0138",
+  "last_verified": "2026-06-11T05:00:00Z",
   "repo_health": "green",
-  "next_focus": "PX cluster (specs/epics/saas-product-experience): close the backend-ahead-of-surface gap. Epic opened 2026-06-11 from a verified-live stage audit (authenticated Playwright walkthrough + edge API probes). Order: PX1 console truth/papercuts -> PX2 config/flags/secrets UI (edge facade already live) -> PX3 notification preferences e2e (unparks deferred U11 slice) -> PX4 rename PATCH lifecycle -> PX5 first-run onboarding -> PX6 Cmd-K resource search. All human-independent; B1/B6/B10 remain credential-blocked.",
+  "next_focus": "IG cluster (specs/epics/saas-integrations, promoted via #302): IG0 foundation shipped dormant as #307 (task 0138). Next: IG1 connect flow — provider registry + GitHub adapter, signed single-use state, edge setup ingress, minimal console Integrations surface. Human-independent IG1 parts can proceed now; the LIVE connect path parks on D1 (GitHub App registered per environment) + D2 (App permission set) + D4 (plan placement for feature.integrations.github / limit.repo_links). PX cluster continues in parallel (PX4-PX6 remain).",
   "deferred": [
     "0085b",
     "notifications-provider-swap",
@@ -158,12 +158,13 @@
     "0132",
     "0133",
     "0135",
-    "0136"
+    "0136",
+    "0137"
   ],
   "reverted": [
     "0134"
   ],
-  "task_agent": "ai/reports/task-0137-implementer.md",
+  "task_agent": "ai/reports/task-0138-implementer.md",
   "waiting_for_input": "false",
   "notes": [
     "2026-06-01: ai/ working tree compacted. Historical task prompts (ai/tasks/), implementer/verifier reports (ai/reports/), spec proposals (ai/proposals/), the task ledger (ai/context/task-ledger.md), and the orchestrator journal/brief were removed from the working tree to keep a minimal context surface. ALL remain recoverable from git history (see ai/context/current.md for retrieval). Live boot surface kept: this file, ai/context/current.md (compact summary), ai/context/decisions.md, ai/context/open-risks.md, ai/deferred.md, ai/waiting_for_input.md.",

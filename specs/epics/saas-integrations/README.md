@@ -13,7 +13,7 @@ and audit all live here.
 
 | Field | Value |
 |-------|-------|
-| Status | **Draft** — promoted from the `saas-product-areas` holding register (P5) |
+| Status | **In progress** — IG0 shipped (#307); IG1+ live paths gated on D1 (see `IMPLEMENTATION-STATUS.md`) |
 | Cluster | **IG** (integrations platform — promotes P5; consumes B1 OAuth login, B5 webhooks, B11 entitlements) |
 | Owner(s) | new `apps/integrations-worker` + `apps/api-edge` (ingress) + `packages/db` + `packages/contracts`/`sdk`/`cli` + `apps/web-console-next` |
 | Target branch | `main` (PRs merged incrementally) |
@@ -68,7 +68,7 @@ away from Polar.
 
 | ID | Milestone | Status |
 |----|-----------|--------|
-| IG0 | Foundation (dormant): `components/17-integrations.md`, contracts, `180_integrations_foundation` migration, repo layer, worker skeleton — no live behavior | 🗓️ Planned (human-independent) |
+| IG0 | Foundation (dormant): `components/17-integrations.md`, contracts, `180_integrations_foundation` migration, repo layer, worker skeleton — no live behavior | ✅ Shipped (#307) |
 | IG1 | Connect flow e2e: App install + signed-state callback ingress + installation ↔ org binding + connection lifecycle + minimal console connect surface | 🗓️ Planned (gated: App registration per env) |
 | IG2 | Inbound events: HMAC-verified webhook ingress, durable inbox + dedupe, cron drain, normalized `scm.*` emission into event_log, delivery log + replay | 🗓️ Planned |
 | IG3 | Repo links: repo browsing, project ↔ repo linking, branch → environment mapping, console repo picker | 🗓️ Planned |
