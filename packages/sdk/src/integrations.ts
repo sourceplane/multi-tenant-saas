@@ -1,5 +1,7 @@
 import type {
   ConnectIntegrationRequest,
+  IssueIntegrationTokenRequest,
+  IssueIntegrationTokenResponse,
   CreateRepoLinkRequest,
   CreateRepoLinkResponse,
   DeleteRepoLinkResponse,
@@ -185,6 +187,30 @@ export class IntegrationsClient {
       {
         method: "DELETE",
         path: `/v1/organizations/${encodeURIComponent(orgId)}/projects/${encodeURIComponent(projectId)}/repo-links/${encodeURIComponent(repoLinkId)}`,
+      },
+      opts,
+    );
+  }
+
+  /**
+   * POST /v1/organizations/:orgId/integrations/github/token — the broker.
+   *
+   * Exchanges the caller's control-plane credential for a short-lived
+   * (≤1h), repo-scoped GitHub installation token. Repositories must be
+   * linked to projects in the organization; permissions must be within the
+   * App's grant. The token is returned exactly once — handle it like a
+   * password and let it expire (it is never cached platform-side).
+   */
+  issueGithubToken(
+    orgId: string,
+    body: IssueIntegrationTokenRequest,
+    opts: RequestOptions = {},
+  ): Promise<IssueIntegrationTokenResponse> {
+    return this.transport.request<IssueIntegrationTokenResponse>(
+      {
+        method: "POST",
+        path: `/v1/organizations/${encodeURIComponent(orgId)}/integrations/github/token`,
+        body,
       },
       opts,
     );

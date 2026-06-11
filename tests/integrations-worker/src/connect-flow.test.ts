@@ -109,7 +109,8 @@ beforeAll(async () => {
   for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]!);
   const b64 = btoa(bin).match(/.{1,64}/g)!.join("\n");
   TEST_PRIVATE_KEY_PEM = `-----BEGIN PRIVATE KEY-----\n${b64}\n-----END PRIVATE KEY-----\n`;
-});
+}, 30_000); // RSA keygen can crawl under full-workspace test parallelism
+
 
 function pendingRow(overrides?: Record<string, unknown>): Record<string, unknown> {
   return {

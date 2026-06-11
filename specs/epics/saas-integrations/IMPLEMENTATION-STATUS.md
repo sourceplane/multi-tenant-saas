@@ -12,7 +12,7 @@ B5 outbound webhooks, B11 entitlements, console shell).
 | IG1 | ✅ Code complete (task 0139) — full connect machinery + console surface; live path 412-parks on D1 (GitHub App per environment) and unparks via secrets only, no code changes |
 | IG2 | ✅ Code complete (task 0140) — full inbound pipeline, fixture-verified; cron attach waits on a freed Cloudflare cron slot, live traffic on D1 |
 | IG3 | ✅ Code complete (task 0141) — repo links, branch→env maps, per-project event enrichment, console Git tab; live browsing on D1 + SECRET_ENCRYPTION_KEY |
-| IG4 | 🗓️ Planned |
+| IG4 | ✅ Code complete (task 0142) — broker endpoint, SDK/CLI, recipes; live mint on D1 |
 | IG5 | 🗓️ Planned |
 | IG6 | 🗓️ Planned |
 | IG7 | 🗓️ Planned (optional tail) |

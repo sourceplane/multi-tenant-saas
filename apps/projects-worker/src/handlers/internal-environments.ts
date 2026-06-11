@@ -20,7 +20,7 @@ export async function handleInternalListEnvironments(
   env: Env,
   requestId: string,
 ): Promise<Response> {
-  if (!env.SOURCEPLANE_DB) {
+  if (!env.PLATFORM_DB) {
     return errorResponse("internal_error", "Service unavailable", 503, requestId);
   }
 
@@ -31,7 +31,7 @@ export async function handleInternalListEnvironments(
     return errorResponse("bad_request", "orgId and projectId must be UUIDs", 400, requestId);
   }
 
-  const executor = createSqlExecutor(env.SOURCEPLANE_DB);
+  const executor = createSqlExecutor(env.PLATFORM_DB);
   try {
     const repo = createProjectsRepository(executor);
     const result = await repo.listEnvironmentsPaged(asUuid(orgId), asUuid(projectId), {

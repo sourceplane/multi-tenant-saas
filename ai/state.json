@@ -1,10 +1,10 @@
 {
   "goal": "Supabase/Postgres-backed multi-organization Orun SaaS control plane",
-  "active_milestone": "IG3",
-  "current_task": "0141",
+  "active_milestone": "IG4",
+  "current_task": "0142",
   "last_verified": "2026-06-11T05:35:00Z",
   "repo_health": "green",
-  "next_focus": "IG cluster (specs/epics/saas-integrations): IG1 connect flow code-complete (task 0139) \u2014 full machinery ships dormant; live connect 412-parks on D1. HUMAN GATES: D1 register GitHub Apps per env (sourceplane-dev|stage|prod) + set worker secrets (GITHUB_APP_ID/SLUG/PRIVATE_KEY(pkcs8)/WEBHOOK_SECRET/CLIENT_ID/CLIENT_SECRET, INTEGRATIONS_STATE_SECRET, SECRET_ENCRYPTION_KEY); D2 confirm App permission set; D4 confirm plan placement (defaults shipped: Free gets feature.integrations.github + limit.repo_links=1). ALSO: Cloudflare account at 5-cron limit \u2014 IG2 inbox drain needs a freed slot or plan upgrade. IG2 inbound events code-complete (task 0140); cron attach is a one-line wrangler change once a slot frees. IG3 repo links code-complete (task 0141). Next: IG4 token broker (D3 posture: service principals + owner/admin), then IG5 console polish. Operator gates unchanged: D1 secrets, cron slot for the IG2 drain, SECRET_ENCRYPTION_KEY on integrations-worker. PARALLEL: PX4/PX5/PX6 remain on the PX lane; coordinate console-file changes across sessions. Residual: full-fleet worker convergence (membership/events/webhooks/metering/projects/policy on pre-#280 deploys); SECRET_ENCRYPTION_KEY escrow to AWS Secrets Manager (BF follow-up).",
+  "next_focus": "IG cluster (specs/epics/saas-integrations): IG1 connect flow code-complete (task 0139) \u2014 full machinery ships dormant; live connect 412-parks on D1. HUMAN GATES: D1 register GitHub Apps per env (sourceplane-dev|stage|prod) + set worker secrets (GITHUB_APP_ID/SLUG/PRIVATE_KEY(pkcs8)/WEBHOOK_SECRET/CLIENT_ID/CLIENT_SECRET, INTEGRATIONS_STATE_SECRET, SECRET_ENCRYPTION_KEY); D2 confirm App permission set; D4 confirm plan placement (defaults shipped: Free gets feature.integrations.github + limit.repo_links=1). ALSO: Cloudflare account at 5-cron limit \u2014 IG2 inbox drain needs a freed slot or plan upgrade. IG2 inbound events code-complete (task 0140); cron attach is a one-line wrangler change once a slot frees. IG3 repo links code-complete (task 0141). IG4 token broker code-complete (task 0142). Next: IG5 console polish (marketplace cards, connection detail, Cmd-K) and IG6 hardening \u2014 both best done AFTER D1 unparks live verification. Operator gates unchanged: D1 secrets, cron slot for the IG2 drain, SECRET_ENCRYPTION_KEY on integrations-worker. PARALLEL: PX4/PX5/PX6 remain on the PX lane; coordinate console-file changes across sessions. Residual: full-fleet worker convergence (membership/events/webhooks/metering/projects/policy on pre-#280 deploys); SECRET_ENCRYPTION_KEY escrow to AWS Secrets Manager (BF follow-up).",
   "deferred": [
     "0085b",
     "notifications-provider-swap",
@@ -162,12 +162,13 @@
     "0137",
     "0138",
     "0139",
-    "0140"
+    "0140",
+    "0141"
   ],
   "reverted": [
     "0134"
   ],
-  "task_agent": "ai/reports/task-0141-implementer.md",
+  "task_agent": "ai/reports/task-0142-implementer.md",
   "waiting_for_input": "false",
   "notes": [
     "2026-06-01: ai/ working tree compacted. Historical task prompts (ai/tasks/), implementer/verifier reports (ai/reports/), spec proposals (ai/proposals/), the task ledger (ai/context/task-ledger.md), and the orchestrator journal/brief were removed from the working tree to keep a minimal context surface. ALL remain recoverable from git history (see ai/context/current.md for retrieval). Live boot surface kept: this file, ai/context/current.md (compact summary), ai/context/decisions.md, ai/context/open-risks.md, ai/deferred.md, ai/waiting_for_input.md.",
