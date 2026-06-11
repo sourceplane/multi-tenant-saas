@@ -3,6 +3,13 @@ import { handleHealth } from "./handlers/health.js";
 import { handleGithubSetupCallback } from "./handlers/setup.js";
 import { handleGithubWebhookIngest } from "./handlers/ingest.js";
 import { handleListDeliveries, handleReplayDelivery } from "./handlers/deliveries.js";
+import { handleListRepositories } from "./handlers/repositories.js";
+import {
+  handleCreateRepoLink,
+  handleListRepoLinks,
+  handleUnlinkRepoLink,
+  handleUpdateRepoLink,
+} from "./handlers/repo-links.js";
 import {
   handleConnectIntegration,
   handleGetIntegration,
@@ -14,6 +21,8 @@ import {
   parseConnectionPublicId,
   parseInboundDeliveryPublicId,
   parseOrgPublicId,
+  parseProjectPublicId,
+  parseRepoLinkPublicId,
 } from "./ids.js";
 import { asUuid } from "@saas/db/ids";
 import { errorResponse, methodNotAllowed, notFound } from "./http.js";
@@ -44,6 +53,12 @@ const ORG_INTEGRATION_RE = /^\/v1\/organizations\/([^/]+)\/integrations\/([^/]+)
 const ORG_DELIVERIES_RE = /^\/v1\/organizations\/([^/]+)\/integrations\/([^/]+)\/deliveries$/;
 const ORG_DELIVERY_REPLAY_RE =
   /^\/v1\/organizations\/([^/]+)\/integrations\/([^/]+)\/deliveries\/([^/]+)\/replay$/;
+const ORG_CONNECTION_REPOSITORIES_RE =
+  /^\/v1\/organizations\/([^/]+)\/integrations\/([^/]+)\/repositories$/;
+const PROJECT_REPO_LINKS_RE =
+  /^\/v1\/organizations\/([^/]+)\/projects\/([^/]+)\/repo-links$/;
+const PROJECT_REPO_LINK_RE =
+  /^\/v1\/organizations\/([^/]+)\/projects\/([^/]+)\/repo-links\/([^/]+)$/;
 const GITHUB_SETUP_PATH = "/ingress/github/setup";
 const GITHUB_WEBHOOK_PATH = "/ingress/github/webhook";
 
@@ -104,6 +119,49 @@ export async function route(request: Request, env: Env): Promise<Response> {
     if (!orgId) return notFound(requestId, pathname);
     if (request.method !== "GET") return methodNotAllowed(requestId);
     return handleListIntegrations(request, env, requestId, actor, orgId);
+  }
+
+  m = pathname.match(ORG_CONNECTION_REPOSITORIES_RE);
+  if (m) {
+    const orgId = parseOrgPublicId(m[1]!);
+    const connectionUuid = parseConnectionPublicId(m[2]!);
+    if (!orgId || !connectionUuid) return notFound(requestId, pathname);
+    if (request.method !== "GET") return methodNotAllowed(requestId);
+    return handleListRepositories(request, env, requestId, actor, orgId, asUuid(connectionUuid));
+  }
+
+  m = pathname.match(PROJECT_REPO_LINKS_RE);
+  if (m) {
+    const orgId = parseOrgPublicId(m[1]!);
+    const projectUuid = parseProjectPublicId(m[2]!);
+    if (!orgId || !projectUuid) return notFound(requestId, pathname);
+    switch (request.method) {
+      case "GET":
+        return handleListRepoLinks(request, env, requestId, actor, orgId, projectUuid);
+      case "POST":
+        if (!env.BILLING_WORKER) {
+          return errorResponse("internal_error", "Entitlement service not configured", 503, requestId);
+        }
+        return handleCreateRepoLink(request, env, requestId, actor, orgId, projectUuid);
+      default:
+        return methodNotAllowed(requestId);
+    }
+  }
+
+  m = pathname.match(PROJECT_REPO_LINK_RE);
+  if (m) {
+    const orgId = parseOrgPublicId(m[1]!);
+    const projectUuid = parseProjectPublicId(m[2]!);
+    const repoLinkUuid = parseRepoLinkPublicId(m[3]!);
+    if (!orgId || !projectUuid || !repoLinkUuid) return notFound(requestId, pathname);
+    switch (request.method) {
+      case "PATCH":
+        return handleUpdateRepoLink(request, env, requestId, actor, orgId, projectUuid, asUuid(repoLinkUuid));
+      case "DELETE":
+        return handleUnlinkRepoLink(env, requestId, actor, orgId, projectUuid, asUuid(repoLinkUuid));
+      default:
+        return methodNotAllowed(requestId);
+    }
   }
 
   m = pathname.match(ORG_DELIVERIES_RE);

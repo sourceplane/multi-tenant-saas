@@ -80,6 +80,13 @@ describe("integrations facade — route matching", () => {
     expect(isIntegrationsRoute("/v1/integrations")).toBe(false);
   });
 
+  it("matches project repo-link routes (IG3) but not other project routes", () => {
+    expect(isIntegrationsRoute("/v1/organizations/org_x/projects/prj_y/repo-links")).toBe(true);
+    expect(isIntegrationsRoute("/v1/organizations/org_x/projects/prj_y/repo-links/repl_z")).toBe(true);
+    expect(isIntegrationsRoute("/v1/organizations/org_x/projects/prj_y/environments")).toBe(false);
+    expect(isIntegrationsRoute("/v1/organizations/org_x/projects/prj_y")).toBe(false);
+  });
+
   it("matches exactly the two allowlisted ingress paths", () => {
     expect(isIntegrationsIngressRoute("/ingress/github/setup")).toBe(true);
     expect(isIntegrationsIngressRoute("/ingress/github/webhook")).toBe(true);
@@ -92,7 +99,7 @@ describe("integrations facade — authenticated surface", () => {
   it("rejects unsupported methods", async () => {
     const { env } = createEnv();
     const res = await handleIntegrationsRoute(
-      new Request(`https://edge.test${ORG_PATH}`, { method: "PATCH" }),
+      new Request(`https://edge.test${ORG_PATH}`, { method: "PUT" }),
       env as never,
       "req_1",
       ORG_PATH,

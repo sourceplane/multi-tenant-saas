@@ -292,6 +292,13 @@ export interface IntegrationsRepository {
   ): Promise<IntegrationsResult<RepoLink>>;
   /** Soft-unlink: flips status to 'unlinked'; the row remains for audit. */
   unlinkRepoLink(orgId: Uuid, id: Uuid): Promise<IntegrationsResult<RepoLink>>;
+  /** Drain enrichment: active links matching a provider repo, org-scoped. */
+  listActiveRepoLinksForRepo(
+    orgId: Uuid,
+    repoExternalId: string,
+  ): Promise<IntegrationsResult<RepoLink[]>>;
+  /** Entitlement gating: count of active links in the organization. */
+  countActiveRepoLinks(orgId: Uuid): Promise<IntegrationsResult<number>>;
 
   // Inbound deliveries (durable inbox)
   insertInboundDelivery(
