@@ -1,18 +1,19 @@
 import type { Env } from "./env";
+import { consoleWorkersDevOrigin } from "./app-config";
 
 // Deploy hostnames for `apps/web-console-next` (Next.js + opennextjs/cloudflare)
 // under the cloudflare-workers-assets-turbo composition. Per-env naming via
 // `${prefix}-${env}` so the cutover keeps a stable shape across environments.
+// Identity values (subdomain, worker prefix) come from `./app-config`.
 //
 // Legacy `apps/web-console` (vanilla Vite, Pages) was decommissioned in Task 0083
 // (custom-domain swing to web-console-next Workers). No CORS allowlist entry is
-// needed for the now-orphaned `sourceplane-web-console-{stage,prod}.pages.dev`
-// hostnames — they are not served by any current frontend.
-const WORKERS_DEV_SUBDOMAIN = "rahulvarghesepullely";
+// needed for the now-orphaned Pages hostnames — they are not served by any
+// current frontend.
 const WORKERS_ORIGINS: Record<string, string> = {
-  dev: `https://sourceplane-web-console-next-dev.${WORKERS_DEV_SUBDOMAIN}.workers.dev`,
-  stage: `https://sourceplane-web-console-next-stage.${WORKERS_DEV_SUBDOMAIN}.workers.dev`,
-  prod: `https://sourceplane-web-console-next-prod.${WORKERS_DEV_SUBDOMAIN}.workers.dev`,
+  dev: consoleWorkersDevOrigin("dev"),
+  stage: consoleWorkersDevOrigin("stage"),
+  prod: consoleWorkersDevOrigin("prod"),
 };
 
 const LOCALHOST_RE = /^https?:\/\/localhost(:\d+)?$/;

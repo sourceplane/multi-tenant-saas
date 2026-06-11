@@ -4,6 +4,7 @@
 
 import { Sourceplane } from "@saas/sdk";
 
+import { CLI_BIN, PRODUCT_NAME } from "./brand.js";
 import { Router, parseArgv } from "./router.js";
 import {
   loginCommand,
@@ -156,7 +157,7 @@ function buildRouter(opts: RunOptions): Router {
   const webhookVerifyHandler = makeWebhookVerifyCommand(opts.webhookVerify ?? {});
   const webhookSignHandler = makeWebhookSignCommand(opts.webhookSign ?? {});
   // Auth
-  r.register(["login"], "Authenticate against a Sourceplane API", loginCommand);
+  r.register(["login"], `Authenticate against a ${PRODUCT_NAME} API`, loginCommand);
   r.register(["logout"], "Clear stored credentials and context", logoutCommand);
   r.register(["whoami"], "Show the active identity and organization", whoamiCommand);
   // Organizations
@@ -195,48 +196,48 @@ function buildRouter(opts: RunOptions): Router {
 function printHelp(stdout: (line: string) => void): void {
   stdout(
     [
-      `sourceplane v${CLI_VERSION}`,
+      `${CLI_BIN} v${CLI_VERSION}`,
       "",
       "USAGE:",
-      "  sourceplane <command> [args] [--output=human|json]",
+      `  ${CLI_BIN} <command> [args] [--output=human|json]`,
       "",
       "AUTH:",
-      "  sourceplane login    [--api-url=URL] [--token=BEARER]",
-      "  sourceplane logout",
-      "  sourceplane whoami",
+      `  ${CLI_BIN} login    [--api-url=URL] [--token=BEARER]`,
+      `  ${CLI_BIN} logout`,
+      `  ${CLI_BIN} whoami`,
       "",
       "ORGANIZATIONS:",
-      "  sourceplane org list",
-      "  sourceplane org use <org-id>",
-      "  sourceplane org members",
-      "  sourceplane org invite <email> [--role=ROLE] [--idempotency-key=KEY] [--org=ORG_ID]",
+      `  ${CLI_BIN} org list`,
+      `  ${CLI_BIN} org use <org-id>`,
+      `  ${CLI_BIN} org members`,
+      `  ${CLI_BIN} org invite <email> [--role=ROLE] [--idempotency-key=KEY] [--org=ORG_ID]`,
       "",
       "PROJECTS / ENVIRONMENTS:",
-      "  sourceplane project list",
-      "  sourceplane project create <name> [--idempotency-key=KEY]",
-      "  sourceplane env create <project-id> <name> [--idempotency-key=KEY]",
+      `  ${CLI_BIN} project list`,
+      `  ${CLI_BIN} project create <name> [--idempotency-key=KEY]`,
+      `  ${CLI_BIN} env create <project-id> <name> [--idempotency-key=KEY]`,
       "",
       "API KEYS / WEBHOOKS:",
-      "  sourceplane api-key create <name> [--scope=SCOPE] [--idempotency-key=KEY]",
-      "  sourceplane webhook create <url> [--event=EVENT[,EVENT2,...]] [--idempotency-key=KEY]",
-      "  sourceplane webhook verify --secret=S --signature=H --timestamp=T [--body=PATH] [--tolerance-seconds=N]",
-      "  sourceplane webhook sign --secret=S --timestamp=T [--body=PATH]",
-      "  sourceplane webhook secrets rotate <endpointId> [--idempotency-key=KEY]",
-      "  sourceplane webhook enable <endpointId> [--idempotency-key=KEY] [--output=human|json]",
-      "  sourceplane webhook disable <endpointId> [--reason=TEXT] [--idempotency-key=KEY] [--output=human|json]",
-      "  sourceplane webhook deliveries <endpointId> [--limit=N] [--cursor=CURSOR] [--all] [--output=human|json]",
-      "  sourceplane webhook deliveries replay <attemptId> [--idempotency-key=KEY] [--output=human|json]",
+      `  ${CLI_BIN} api-key create <name> [--scope=SCOPE] [--idempotency-key=KEY]`,
+      `  ${CLI_BIN} webhook create <url> [--event=EVENT[,EVENT2,...]] [--idempotency-key=KEY]`,
+      `  ${CLI_BIN} webhook verify --secret=S --signature=H --timestamp=T [--body=PATH] [--tolerance-seconds=N]`,
+      `  ${CLI_BIN} webhook sign --secret=S --timestamp=T [--body=PATH]`,
+      `  ${CLI_BIN} webhook secrets rotate <endpointId> [--idempotency-key=KEY]`,
+      `  ${CLI_BIN} webhook enable <endpointId> [--idempotency-key=KEY] [--output=human|json]`,
+      `  ${CLI_BIN} webhook disable <endpointId> [--reason=TEXT] [--idempotency-key=KEY] [--output=human|json]`,
+      `  ${CLI_BIN} webhook deliveries <endpointId> [--limit=N] [--cursor=CURSOR] [--all] [--output=human|json]`,
+      `  ${CLI_BIN} webhook deliveries replay <attemptId> [--idempotency-key=KEY] [--output=human|json]`,
       "",
       "USAGE / BILLING / AUDIT:",
-      "  sourceplane usage summary [--metric=METRIC] [--from=ISO] [--to=ISO]",
-      "  sourceplane billing summary",
-      "  sourceplane audit list [--limit=N] [--cursor=CURSOR] [--category=CAT] [--all]",
+      `  ${CLI_BIN} usage summary [--metric=METRIC] [--from=ISO] [--to=ISO]`,
+      `  ${CLI_BIN} billing summary`,
+      `  ${CLI_BIN} audit list [--limit=N] [--cursor=CURSOR] [--category=CAT] [--all]`,
       "                         [--actor=ID] [--actor-type=TYPE] [--subject-kind=KIND]",
       "                         [--subject-id=ID] [--event-type=TYPE] [--from=ISO] [--to=ISO]",
       "                         [--format=ndjson]",
       "",
       "SECURITY:",
-      "  sourceplane security events [--limit=N] [--cursor=CURSOR] [--all] [--output=human|json]",
+      `  ${CLI_BIN} security events [--limit=N] [--cursor=CURSOR] [--all] [--output=human|json]`,
       "",
       "GLOBAL FLAGS:",
       "  --output=human|json   Output format (default: human)",
@@ -251,7 +252,7 @@ function printHelp(stdout: (line: string) => void): void {
 }
 
 function printUsageHint(stderr: (line: string) => void): void {
-  stderr("run `sourceplane --help` to see available commands");
+  stderr(`run \`${CLI_BIN} --help\` to see available commands`);
 }
 
 function defaultStdout(line: string): void {

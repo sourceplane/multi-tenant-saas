@@ -7,8 +7,9 @@
 // `loadKeytar()` is the one and only place we touch it.
 
 import type { StoredCredential, TokenStore } from "./types.js";
+import { KEYCHAIN_SERVICE } from "../brand.js";
 
-const SERVICE = "sourceplane-cli";
+const SERVICE = KEYCHAIN_SERVICE;
 const ACCOUNT = "default";
 
 interface KeytarLike {

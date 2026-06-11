@@ -1,14 +1,15 @@
 import type { Metadata, Viewport } from "next";
 import "../styles/globals.css";
 import { Providers } from "./providers";
+import { CONSOLE_TITLE, PRODUCT_DESCRIPTION, PRODUCT_NAME } from "@/lib/app-config";
 
 export const metadata: Metadata = {
-  title: "Sourceplane Console",
-  description: "Next-gen control plane for your projects, environments, and entitlements.",
+  title: CONSOLE_TITLE,
+  description: PRODUCT_DESCRIPTION,
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
-    title: "Sourceplane",
+    title: PRODUCT_NAME,
     statusBarStyle: "black-translucent",
   },
 };

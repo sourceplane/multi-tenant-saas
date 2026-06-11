@@ -10,6 +10,7 @@
 import type { CiphertextEnvelope, EncryptionAdapter } from "./encryption.js";
 import type { WebhookRepository, WebhookDeliveryAttempt, EndpointForDelivery } from "@saas/db/webhooks";
 import type { EventsRepository, StoredEvent } from "@saas/db/events";
+import { WEBHOOK_USER_AGENT } from "./app-config";
 
 // ── Constants ────────────────────────────────────────────────
 
@@ -235,7 +236,7 @@ async function deliverAttempt(
   // Sign if secret available
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    "User-Agent": "Sourceplane-Webhooks/1.0",
+    "User-Agent": WEBHOOK_USER_AGENT,
     "X-Webhook-ID": attempt.id,
     "X-Webhook-Timestamp": timestamp,
   };

@@ -8,9 +8,10 @@ import {
   createClient,
   type ApiTarget,
 } from "./api";
+import { STORAGE_PREFIX } from "./app-config";
 
-const TOKEN_KEY = "sourceplane.next.token";
-const TARGET_KEY = "sourceplane.next.target";
+const TOKEN_KEY = `${STORAGE_PREFIX}.token`;
+const TARGET_KEY = `${STORAGE_PREFIX}.target`;
 
 /**
  * Read the persisted bearer token straight from localStorage (client only).
