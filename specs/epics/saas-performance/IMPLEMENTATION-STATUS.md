@@ -23,9 +23,14 @@ Object, taking org-scoped reads/writes to ~55–65ms p50 (edge floor, beating th
 | PERF6 (core) | ✅ Shipped + verified | #248 (edge-gate measurability) |
 | Idempotency L1 | ✅ Shipped + verified | #256 (Cache API replay L1, tiered over KV) |
 | PERF6b | 🗓️ Planned | AE dataset + dashboards + synthetic prober |
-| PERF7 | 🗓️ Planned | — |
+| PERF7 | 🗓️ Planned | — (re-measured: console SSR spikes 1.0–2.6s; edge cold ~0.7s) |
 | PERF8 | 🗓️ Planned | — |
 | PERF9 | 🗓️ Planned | — |
+| PERF10 | 🗓️ Planned | second audit: immutable `_next/static` headers + bundle trim |
+| PERF11 | 🗓️ Planned | second audit: 6 console surfaces still bypass react-query |
+| PERF12 | 🗓️ Planned | second audit: 10 serial read handlers + identity JOIN fold |
+| PERF13 | 🗓️ Planned | second audit: authz-context + near-static micro-caches |
+| PERF14 | 🗓️ Planned | second audit: Server-Timing coverage + timing-log sampling |
 
 ## Verified prod numbers (2026-06-08, warm p50)
 
@@ -44,6 +49,16 @@ PERF6 made the gate measurable in `Server-Timing` (PR #248) and surfaced:
 - idempotency replay `edge_idem;dur=40–96` (KV `get`) on keyed writes → **addressed
   for same-colo replays** by a colo-local Cache API L1 in front of KV (PR #256):
   replays drop to ~3–4ms; first request still consults KV (global correctness).
+
+A **second full-surface audit (2026-06-08, post-PERF5/6)** probed every edge
+route family + console delivery on stage and prod and audited client + worker
+code: edge is uniformly at floor (~50–65ms, all families, `edge_ratelimit=0`;
+service-binding hops ≈ free), but found five new improvement clusters —
+scheduled as **PERF10–PERF14** (see `design.md` § "Second full-surface audit").
+Headlines: `_next/static` chunks served `max-age=0` (revalidated every repeat
+visit), console SSR cold spikes 1.0–2.6s, 6 console surfaces bypass the query
+cache, 10 worker read handlers still serialize authz→db, and the per-request
+timing logs are a ~$50–80/mo Workers-Logs exposure at 50M req/mo (sample them).
 
 ## Open
 

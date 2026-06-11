@@ -1,8 +1,10 @@
-# saas-performance — Implementation Plan (PERF1–PERF9)
+# saas-performance — Implementation Plan (PERF1–PERF14)
 
 The PERF task ladder, ordered by impact ÷ effort. The measurement record and
 per-task *design* rationale live in `design.md`; this is the milestone list with
 status + "done when". Status reflects code reality as of 2026-06-08.
+PERF10–PERF14 were added by the 2026-06-08 **second full-surface audit**
+(see `design.md` § "Second full-surface audit").
 
 ## PERF1 — Console client cache, SWR & prefetch — ✅ Shipped (PR #216, Task 0130)
 Client query cache (`@tanstack/react-query`-style) with stale-while-revalidate;
@@ -55,9 +57,11 @@ contracts/timing + Analytics Engine.
 sink + per-route dashboards + synthetic prober.
 
 ## PERF7 — Cold-start reduction (edge + console SSR) — 🗓️ Planned
-Cold isolates add 0.9–1.8s. Shrink bundles + lazy-load rare-path deps; evaluate
-Smart Placement and a keep-warm cron / min-instances. Owner: all workers +
-web-console-next.
+Re-measured 2026-06-08: edge cold ~0.7s worst-case; **console SSR spikes
+1.0–2.6s including mid-sequence isolate churn** (HTML is `no-store`, every visit
+pays SSR). Shrink bundles + lazy-load rare-path deps; evaluate Smart Placement
+and a keep-warm cron; consider static/ISR shell for the console (human decision
+D4 — see risks). Owner: all workers + web-console-next.
 
 ## PERF8 — Edge response cache for safe GETs — 🗓️ Planned
 Cache authorizable safe GETs at the edge (Cache API / `s-maxage` + SWR), keyed by
@@ -67,3 +71,40 @@ actor+scope+route, invalidated on mutation; pairs with PERF1. Owner: api-edge.
 Ship the reverse-lookup index migration and the Hyperdrive cache-eligibility audit
 deferred from PERF3; add a Supabase read replica + Hyperdrive read routing when
 traffic warrants. Owner: `packages/db` + infra.
+
+## PERF10 — Console asset delivery: immutable caching + bundle trim — 🗓️ Planned
+Add a `_headers` file to the Workers Assets output so hashed `/_next/static/*`
+chunks are `public, max-age=31536000, immutable` (today: `max-age=0,
+must-revalidate` → ~19 revalidations per repeat visit); trim the 39 KiB polyfills
+chunk via browserslist; review the two largest chunks. Done when repeat visits
+issue zero asset revalidations and entry JS < ~170 KiB gzip. Owner:
+web-console-next.
+
+## PERF11 — Console client-cache completion — 🗓️ Planned
+Move the six audited manual-fetch spots onto `useApiQuery` shared cache keys:
+sidebar org switcher (duplicate org-list fetches), scope switcher (3 uncached
+calls/mount), account/profile, account/security, usage page, webhook delivery
+history. Done when revisits paint instantly from cache (background revalidate)
+and no `useEffect`/`useAsync` data fetches remain on those surfaces. Owner:
+web-console-next.
+
+## PERF12 — Server read-path parallelization completion + identity JOIN — 🗓️ Planned
+Apply the PERF4 authctx∥db pattern to the 10 remaining serial read handlers
+(billing plans/entitlements/invoices/customer; config settings/flags/secrets;
+webhooks endpoints + delivery-attempts list/get; ~80–100ms each), and fold the
+identity resolve's 2 serial DB queries into single JOINs. Deny-by-default
+discard semantics preserved + tested, exactly as PERF4. Owner: worker handlers +
+identity repo.
+
+## PERF13 — Hot-fact micro-caching (authz context + near-static reads) — 🗓️ Planned
+Short-TTL (10–30s) cache for membership `authorization-context` (highest ROI —
+consumed by 6+ workers per authed request); 24h/event-invalidated plans-catalog
+cache; 5–10m write-invalidated caches for config settings/flags + webhook
+endpoint lists. Cuts latency and Supabase load. Revocation latency bounded by
+TTL (document like PERF2). Owner: membership/billing/config/webhooks workers.
+
+## PERF14 — Observability coverage + logging cost guard — 🗓️ Planned
+Server-Timing phases for the ~20 uninstrumented handlers; sample the structured
+timing `console.log` lines (1-in-N + always-log-slow) so Workers Logs ingestion
+stays within the included tier (~$50–80/mo exposure at 50M req/mo otherwise);
+header stays unsampled. Feeds PERF6b dashboards. Owner: all workers + api-edge.

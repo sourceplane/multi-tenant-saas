@@ -242,7 +242,10 @@ half (AE dataset + dashboards) is tracked as **PERF6b** below.
 
 Ordered by impact ÷ effort. With PERF5 and the PERF6 core shipped, the next
 headline is **PERF7 (cold starts)** — now the largest remaining latency — with
-**PERF6b** (dashboards) as the cheap observability follow-on.
+**PERF6b** (dashboards) as the cheap observability follow-on. The 2026-06-08
+**second full-surface audit** (section below) added **PERF10–PERF14**; of those,
+**PERF10 (immutable assets) and PERF11 (client-cache completion)** are the
+cheapest perceived-snappiness wins and can land before PERF7's heavier legs.
 
 #### PERF6b — Aggregate the Server-Timing metrics into dashboards
 
@@ -260,7 +263,10 @@ Analytics Engine dataset binding (see Cost notes).
 
 #### PERF7 — Cold-start reduction (edge + console SSR)
 
-**Problem:** 0.9–1.8s on cold isolates (root cause #4), dominating p99.
+**Problem:** cold isolates dominate p99. Re-measured 2026-06-08 (second audit):
+edge cold improved to ~0.7s worst-case, but **console SSR spikes 1.0–2.6s** —
+including *mid-sequence* (isolate churn, not just first hit) — and the HTML is
+`no-store`, so every visit pays a full SSR render.
 
 **Plan:**
 - Measure per-worker bundle size and cold-eval time; lazy-load heavy/rare-path
@@ -299,6 +305,135 @@ those client-cache-only via PERF1).
 **Owner:** `packages/db` + infra. **Acceptance:** index present and used by the
 membership reverse lookup; Hyperdrive query-cache hit-rate confirmed; replica
 routing behind a flag.
+
+#### PERF10 — Console asset delivery: immutable caching + bundle trim
+
+From the second audit: hashed `/_next/static/*` chunks ship with
+`max-age=0, must-revalidate` (Workers Assets default — no `_headers` file), so
+every repeat visit re-validates ~19 chunks; and the 202 KiB entry bundle carries
+a 39 KiB polyfills chunk that modern browsers don't need.
+**Plan:** add a `_headers` file to the assets output (`/_next/static/*` →
+`public, max-age=31536000, immutable`; sensible TTLs for manifest/icons); tune
+browserslist to drop legacy polyfills; review the two largest chunks for
+lazy-loadable weight. **Owner:** web-console-next. **Acceptance:** repeat-visit
+loads issue zero asset revalidations; entry JS < ~170 KiB gzip.
+
+#### PERF11 — Console client-cache completion (kill the last manual fetches)
+
+Six confirmed spots bypass react-query (audit list above): sidebar org switcher
+(duplicate org-list fetches), scope switcher (3 uncached calls per topbar mount),
+account/profile, account/security, usage page, webhook delivery history.
+**Plan:** move all six onto `useApiQuery` with shared query keys so navigation
+renders instantly from cache and in-flight requests dedupe. **Owner:**
+web-console-next. **Acceptance:** no `useEffect`/`useAsync` data fetches remain
+in the app shell or listed pages; revisits paint from cache with background
+revalidate.
+
+#### PERF12 — Server read-path parallelization completion + identity JOIN
+
+Apply the PERF4 authctx∥db pattern to the 10 remaining serial read handlers
+(billing plans/entitlements/invoices/customer; config settings/flags/secrets;
+webhooks endpoints+delivery-attempts list/get) — ~80–100ms each; fold the
+identity resolve 2-serial-query path (session→user, key→principal) into single
+JOINs. Deny-by-default discard semantics exactly as PERF4. **Owner:** worker
+handlers + identity repo. **Acceptance:** no read handler awaits authz before an
+independent DB read; resolve does 1 query per token type.
+
+#### PERF13 — Hot-fact micro-caching (authz context + near-static reads)
+
+Highest-ROI server cache from the audit: short-TTL (10–30s) cache for membership
+`authorization-context` (1 query, consumed by 6+ workers on every authed
+request); 24h/event-invalidated cache for the plans catalog; 5–10m
+write-invalidated caches for config settings/flags and webhook endpoint lists.
+Cuts both latency **and Supabase load** (the dominant bill). Revocation latency
+bounded by TTL — document the tradeoff like PERF2. **Owner:** membership/billing/
+config/webhooks workers. **Acceptance:** authz-context cache hit-rate visible in
+timing logs; plans/config/webhook reads serve from cache between writes.
+
+#### PERF14 — Observability coverage + logging cost guard
+
+Extend `Server-Timing` phases to the ~20 uninstrumented handlers (billing reads,
+config, webhooks, identity resolve, metering) using the existing
+`createTimings()` pattern, and add a **sampling guard** for the structured
+timing `console.log` lines (1-in-N + always-log-slow) so Workers Logs ingestion
+stays in the free tier (~$50–80/mo exposure at 50M req/mo otherwise). Keep the
+`Server-Timing` header itself unsampled (free). Feeds PERF6b dashboards.
+**Owner:** all workers + api-edge. **Acceptance:** every read handler emits
+phases; timing-log volume ≤ included tier at projected traffic.
+
+## Second full-surface audit (2026-06-08, post-PERF5/PERF6)
+
+A per-section sweep of the live product (stage + prod probes on every edge route
+family + console delivery) cross-checked with a full client and worker code
+audit. Goal: "world-class snappy" + cost-effective. Scheduled as **PERF10–PERF14**
+below.
+
+### Live numbers (this pass)
+
+- **Edge: uniformly at floor.** Every route family (auth/org/project/audit/
+  billing/webhooks) probes ~50–65ms p50 on both stage and prod with
+  `edge_ratelimit;dur=0`; a real cross-worker hop (`GET /v1/auth/oauth/providers`
+  through identity-worker) is ~52–56ms ≈ floor — **service-binding hops are
+  essentially free**. Edge cold has improved to ~0.7s worst-case.
+- **Console: warm SSR 60–120ms, but cold/isolate-churn spikes 1.0–2.6s** (prod
+  showed a 2.58s spike mid-sequence — not just first-hit). HTML is
+  `private, no-cache, no-store`, so every visit pays a full SSR render.
+- **Static-asset caching bug (high-leverage, one-file fix):** hashed
+  `/_next/static/*` chunks are served `cache-control: public, max-age=0,
+  must-revalidate` (Workers Assets default; no `_headers` file in
+  `.open-next/assets`). The browser re-validates ~19 chunks on **every repeat
+  visit** instead of caching immutably (`max-age=31536000, immutable`).
+- **Bundle: 202 KiB gzip** total JS on the entry page; largest chunks 52.5K +
+  45.6K (framework) and **polyfills 39.4 KiB** — mostly dead weight on modern
+  browsers (browserslist tuning).
+
+### Client audit (confirmed in code; the #234 salvage, verified)
+
+Several #234/M5 claims are already fixed (env-page waterfall, hover prefetch,
+auth-hydration flash, org-scope caching — all ✓). Still real:
+
+1. `sidebar-org-switcher.tsx:33` fetches the org list **outside react-query** →
+   duplicate in-flight org-list requests on every shell mount.
+2. `scope-switcher.tsx:43–69` makes **3 manual uncached calls** (orgs → projects
+   → envs) on every topbar mount instead of reusing the page query cache.
+3. `account/page.tsx:34` (profile), 4. `account/security/page.tsx:40`,
+   5. `usage/page.tsx:86,262`, 6. webhook delivery history
+   (`settings/webhooks/[endpointId]/page.tsx:305`) — all manual
+   `useEffect`/`useAsync` fetches that bypass the query cache → spinners on
+   every revisit instead of instant cached render.
+
+### Server audit (worker read paths)
+
+- **10 read handlers still run authz serially before the DB read** (the PERF4
+  authctx∥db pattern was only applied to the 4 hot reads): billing
+  `list-plans` / `list-entitlements` / `list-invoices` / `get-customer`; config
+  `list-settings` / `list-feature-flags` / `list-secrets`; webhooks endpoints
+  list/get + delivery-attempts list/get. ~80–100ms each when authed.
+- **identity resolve does 2 serial DB queries** (session→user; api-key→principal)
+  on every bearer-cache miss — foldable into one JOIN
+  (`identity-worker/src/services/auth.ts:171`).
+- **Highest-ROI cache:** membership `authorization-context` (1 query, consumed by
+  6+ workers on every authed request) — short-TTL (10–30s) cache.
+- **Near-static data uncached:** plans catalog (changes ~never → 24h/event-driven
+  cache), config settings/flags (10m, invalidate on write), webhook endpoints
+  (5m). Each saves a Supabase query per read → also a **Supabase compute** saver.
+- **Server-Timing coverage gaps:** ~20 handlers (all billing reads, config,
+  webhooks, identity resolve, metering) emit no phase breakdown — only the 4
+  PERF4 hot reads do.
+- Already optimal (no action): the 4 PERF4 hot reads, members enrich (batched),
+  check-entitlement shared executor.
+
+### Cost-effectiveness notes from this pass
+
+- **Structured timing logs:** every request now emits 2–3 JSON `console.log`
+  lines (gate + edge facade + worker). If Workers Logs ingestion is enabled,
+  that's ~100–150M lines @ 50M req/mo ≈ **$50–80/mo** ($0.60/M beyond 20M).
+  Guard: sample timing logs (e.g. 1-in-10) and/or log only slow requests;
+  keep the `Server-Timing` *header* unsampled (free).
+- The near-static caches above cut Supabase queries — the **dominant bill** —
+  and the immutable-assets fix removes ~19 revalidation round-trips per repeat
+  visit (free, pure UX).
+- PERF6b AE sink should sample (1-in-N) if volume makes $0.25/M material.
 
 ## Target SLOs (warm, server-side p50 unless noted)
 
