@@ -54,15 +54,20 @@ describe("formatRelativeTime", () => {
 });
 
 describe("groupAuditEntriesByDay", () => {
+  // The helper groups by *local* calendar day, so build timestamps from
+  // local-time Date constructors to keep assertions timezone-stable.
+  const localIso = (day: number, hour: number) => new Date(2026, 5, day, hour).toISOString();
+  const LOCAL_NOW = new Date(2026, 5, 11, 12).getTime();
+
   it("labels today/yesterday and preserves input order", () => {
     const groups = groupAuditEntriesByDay(
       [
-        entry({ id: "a", occurredAt: "2026-06-11T10:00:00.000Z" }),
-        entry({ id: "b", occurredAt: "2026-06-11T08:00:00.000Z" }),
-        entry({ id: "c", occurredAt: "2026-06-10T22:00:00.000Z" }),
-        entry({ id: "d", occurredAt: "2026-06-01T08:00:00.000Z" }),
+        entry({ id: "a", occurredAt: localIso(11, 10) }),
+        entry({ id: "b", occurredAt: localIso(11, 8) }),
+        entry({ id: "c", occurredAt: localIso(10, 22) }),
+        entry({ id: "d", occurredAt: localIso(1, 8) }),
       ],
-      NOW,
+      LOCAL_NOW,
     );
     expect(groups.map((g) => g.entries.map((e) => e.id))).toEqual([["a", "b"], ["c"], ["d"]]);
     expect(groups[0]!.label).toBe("Today");
@@ -71,7 +76,7 @@ describe("groupAuditEntriesByDay", () => {
   });
 
   it("collects malformed timestamps into an Unknown date group", () => {
-    const groups = groupAuditEntriesByDay([entry({ id: "x", occurredAt: "garbage" })], NOW);
+    const groups = groupAuditEntriesByDay([entry({ id: "x", occurredAt: "garbage" })], LOCAL_NOW);
     expect(groups).toHaveLength(1);
     expect(groups[0]!.label).toBe("Unknown date");
   });
