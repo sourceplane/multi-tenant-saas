@@ -19,6 +19,7 @@
     "./billing": "./src/billing/index.ts",
     "./notifications": "./src/notifications/index.ts",
     "./support": "./src/support/index.ts",
+    "./integrations": "./src/integrations/index.ts",
     "./runner": "./src/runner/index.ts"
   },
   "bin": {

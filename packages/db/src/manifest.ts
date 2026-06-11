@@ -165,5 +165,14 @@ export const manifest: MigrationManifest = {
       description:
         "Optional parent-organization pointer (nullable parent_org_id on membership.organizations) — the dormant seam for the saas-multi-org-billing epic; NULL = standalone, no behavior change",
     },
+    {
+      id: "180_integrations_foundation",
+      context: "integrations",
+      path: "180_integrations_foundation/up.sql",
+      checksum:
+        "e86ac972013587fcd3b04be5c1daa1306a456990ebbb9d30e9b5d79770772497",
+      description:
+        "Integrations persistence foundation (IG0, dormant) — provider-agnostic connections, GitHub installation facts, repo links with branch→environment maps, the durable inbound-delivery inbox, and the encrypted installation-token cache",
+    },
   ],
 };

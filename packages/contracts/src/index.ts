@@ -15,3 +15,4 @@ export * from "./webhooks.js";
 export * from "./metering.js";
 export * from "./billing.js";
 export * from "./notifications.js";
+export * from "./integrations.js";

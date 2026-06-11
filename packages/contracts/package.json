@@ -22,6 +22,7 @@
     "./metering": "./src/metering.ts",
     "./billing": "./src/billing.ts",
     "./notifications": "./src/notifications.ts",
+    "./integrations": "./src/integrations.ts",
     "./idempotency": "./src/idempotency.ts"
   },
   "scripts": {
