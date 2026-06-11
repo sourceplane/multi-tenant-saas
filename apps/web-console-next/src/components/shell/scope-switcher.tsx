@@ -14,9 +14,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/cn";
 import { useSession } from "@/lib/session";
-import type { ApiClient } from "@/lib/api";
-import type { PublicOrganization } from "@saas/contracts/membership";
-import type { PublicProject, PublicEnvironment } from "@saas/contracts/projects";
+import { wrap } from "@/lib/api";
+import { useApiQuery, qk } from "@/lib/query";
 
 /**
  * URL-driven scope switcher.
@@ -36,37 +35,34 @@ export function ScopeSwitcher() {
   const projectSlug = params?.projectSlug ?? null;
   const envSlug = params?.envSlug ?? null;
 
-  const [orgs, setOrgs] = React.useState<PublicOrganization[] | null>(null);
-  const [projects, setProjects] = React.useState<PublicProject[] | null>(null);
-  const [envs, setEnvs] = React.useState<PublicEnvironment[] | null>(null);
-
-  React.useEffect(() => {
-    if (!token) return;
-    void loadOrgs(client, setOrgs);
-  }, [token, client]);
-
+  // PERF11: the org/project/env lists are read through react-query so the topbar
+  // reuses the page caches (no uncached refetch on every mount), with each level
+  // gated on the previous resolving. Keys mirror the page queries exactly.
+  const orgs = useApiQuery(
+    qk.orgs(),
+    () => wrap(async () => (await client.organizations.list()).organizations),
+    { enabled: !!token },
+  ).data;
   const currentOrg = React.useMemo(() => orgs?.find((o) => o.slug === orgSlug) ?? null, [orgs, orgSlug]);
 
-  React.useEffect(() => {
-    if (!currentOrg) {
-      setProjects(null);
-      return;
-    }
-    void loadProjects(client, currentOrg.id, setProjects);
-  }, [client, currentOrg]);
-
+  const projectsData = useApiQuery(
+    qk.projects(currentOrg?.id ?? ""),
+    () => wrap(async () => (await client.projects.list(currentOrg!.id)).projects),
+    { enabled: !!currentOrg },
+  ).data;
+  const projects = currentOrg ? projectsData : null;
   const currentProject = React.useMemo(
     () => projects?.find((p) => p.slug === projectSlug) ?? null,
     [projects, projectSlug],
   );
 
-  React.useEffect(() => {
-    if (!currentOrg || !currentProject) {
-      setEnvs(null);
-      return;
-    }
-    void loadEnvs(client, currentOrg.id, currentProject.id, setEnvs);
-  }, [client, currentOrg, currentProject]);
+  const envsData = useApiQuery(
+    qk.environments(currentOrg?.id ?? "", currentProject?.id ?? ""),
+    () =>
+      wrap(async () => (await client.environments.list(currentOrg!.id, currentProject!.id)).environments),
+    { enabled: !!currentOrg && !!currentProject },
+  ).data;
+  const envs = currentOrg && currentProject ? envsData : null;
 
   return (
     <div className="flex min-w-0 items-center gap-1 text-sm">
@@ -193,43 +189,6 @@ function Crumb({
       </DropdownMenuContent>
     </DropdownMenu>
   );
-}
-
-async function loadOrgs(
-  client: ApiClient,
-  setOrgs: (o: PublicOrganization[] | null) => void,
-) {
-  try {
-    const r = await client.organizations.list();
-    setOrgs(r.organizations);
-  } catch {
-    setOrgs([]);
-  }
-}
-async function loadProjects(
-  client: ApiClient,
-  orgId: string,
-  setProjects: (p: PublicProject[] | null) => void,
-) {
-  try {
-    const r = await client.projects.list(orgId);
-    setProjects(r.projects);
-  } catch {
-    setProjects([]);
-  }
-}
-async function loadEnvs(
-  client: ApiClient,
-  orgId: string,
-  projectId: string,
-  setEnvs: (e: PublicEnvironment[] | null) => void,
-) {
-  try {
-    const r = await client.environments.list(orgId, projectId);
-    setEnvs(r.environments);
-  } catch {
-    setEnvs([]);
-  }
 }
 
 void Link;

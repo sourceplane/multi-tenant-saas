@@ -12,7 +12,8 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { useSession } from "@/lib/session";
-import type { PublicOrganization } from "@saas/contracts/membership";
+import { wrap } from "@/lib/api";
+import { useApiQuery, qk } from "@/lib/query";
 
 /**
  * Org switcher anchored at the top of the sidebar (Vercel's team-switcher
@@ -24,27 +25,19 @@ export function SidebarOrgSwitcher({ onNavigate }: { onNavigate?: () => void } =
   const router = useRouter();
   const { client, token } = useSession();
   const orgSlug = params?.orgSlug ?? null;
-  const [orgs, setOrgs] = React.useState<PublicOrganization[] | null>(null);
+  // Shared `orgs` query (PERF11): reuses the same cache entry as the page list
+  // and `useOrgBySlug`, so the shell paints from cache and never fires a
+  // duplicate org-list request on mount.
+  const orgs =
+    useApiQuery(
+      qk.orgs(),
+      () => wrap(async () => (await client.organizations.list()).organizations),
+      { enabled: !!token },
+    ).data;
   const go = (href: string) => {
     onNavigate?.();
     router.push(href);
   };
-
-  React.useEffect(() => {
-    if (!token) return;
-    let cancelled = false;
-    client.organizations
-      .list()
-      .then((r) => {
-        if (!cancelled) setOrgs(r.organizations);
-      })
-      .catch(() => {
-        if (!cancelled) setOrgs([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [client, token]);
 
   const current = orgs?.find((o) => o.slug === orgSlug) ?? null;
   const label = current?.name ?? orgSlug ?? "Select organization";
