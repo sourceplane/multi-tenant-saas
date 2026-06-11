@@ -43,22 +43,32 @@ export async function handleListEntitlements(
     subscriptionId = parsed;
   }
 
-  const auth = await authorizeBillingRead(env, actor, orgId, requestId);
-  if (!auth.ok) return auth.response;
-
-  const executor = createSqlExecutor(env.SOURCEPLANE_DB);
-  const repo = createBillingRepository(executor);
-
   const query: ListEntitlementsQuery = {
     orgId,
     ...(source ? { source } : {}),
     ...(subscriptionId ? { subscriptionId } : {}),
   };
-  const result = await repo.listEntitlements(query);
-  if (!result.ok) {
-    return errorResponse("internal_error", "Failed to list entitlements", 503, requestId);
-  }
 
-  const body: GetEntitlementsResponse = { entitlements: result.value.map(mapEntitlementToPublic) };
-  return successResponse(body, requestId);
+  const executor = createSqlExecutor(env.SOURCEPLANE_DB);
+  const repo = createBillingRepository(executor);
+  try {
+    // PERF12: authorization and the read are independent — run concurrently,
+    // then apply the decision. On deny the speculatively read entitlements are
+    // discarded (deny-by-default), exactly as the PERF4 hot reads do.
+    const [auth, result] = await Promise.all([
+      authorizeBillingRead(env, actor, orgId, requestId),
+      repo.listEntitlements(query),
+    ]);
+    if (!auth.ok) return auth.response;
+    if (!result.ok) {
+      return errorResponse("internal_error", "Failed to list entitlements", 503, requestId);
+    }
+
+    const body: GetEntitlementsResponse = { entitlements: result.value.map(mapEntitlementToPublic) };
+    return successResponse(body, requestId);
+  } catch {
+    return errorResponse("internal_error", "Failed to list entitlements", 503, requestId);
+  } finally {
+    await executor.dispose();
+  }
 }
