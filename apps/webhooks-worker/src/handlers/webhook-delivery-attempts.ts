@@ -74,13 +74,16 @@ export async function handleGetDeliveryAttempt(
   orgId: string,
   attemptId: string,
 ): Promise<Response> {
-  const denied = await authorizeWebhookRead(env, actor, orgId, requestId);
-  if (denied) return denied;
-
   const executor = createSqlExecutor(env.SOURCEPLANE_DB!);
   try {
     const repo = createWebhookRepository(executor);
-    const result = await repo.getDeliveryAttempt(orgId, attemptId);
+    // PERF12: org-scoped authz and the read are independent — run concurrently,
+    // discard the speculatively read attempt on deny (deny-by-default).
+    const [denied, result] = await Promise.all([
+      authorizeWebhookRead(env, actor, orgId, requestId),
+      repo.getDeliveryAttempt(orgId, attemptId),
+    ]);
+    if (denied) return denied;
     if (!result.ok) {
       return errorResponse("not_found", "Delivery attempt not found", 404, requestId);
     }
@@ -103,9 +106,6 @@ export async function handleListDeliveryAttempts(
   orgId: string,
   endpointId: string,
 ): Promise<Response> {
-  const denied = await authorizeWebhookRead(env, actor, orgId, requestId);
-  if (denied) return denied;
-
   const pageResult = parsePageParams(new URL(request.url));
   if (!pageResult.ok) {
     return validationError(requestId, { [pageResult.field]: [pageResult.reason] });
@@ -117,7 +117,13 @@ export async function handleListDeliveryAttempts(
   const executor = createSqlExecutor(env.SOURCEPLANE_DB!);
   try {
     const repo = createWebhookRepository(executor);
-    const result = await repo.listDeliveryAttempts(orgId, endpointId, { limit, cursor: dbCursor });
+    // PERF12: org-scoped authz and the read are independent — run concurrently,
+    // discard the speculatively read attempts on deny (deny-by-default).
+    const [denied, result] = await Promise.all([
+      authorizeWebhookRead(env, actor, orgId, requestId),
+      repo.listDeliveryAttempts(orgId, endpointId, { limit, cursor: dbCursor }),
+    ]);
+    if (denied) return denied;
     if (!result.ok) {
       return errorResponse("internal_error", "Service unavailable", 503, requestId);
     }

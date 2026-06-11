@@ -361,6 +361,21 @@ describe("router", () => {
     expect(res.status).toBe(404);
   });
 
+  it("list endpoints: policy deny returns 404 and leaks no data (PERF12 deny-by-default)", async () => {
+    // The PERF12 read runs concurrently with authz; a deny must still 404 and
+    // never surface the speculatively read rows.
+    const env = createFakeEnv({
+      POLICY_WORKER: createMockFetcher({
+        data: { allow: false, reason: "denied", policyVersion: 1, derivedScope: { orgId: TEST_ORG_UUID } },
+      }),
+    });
+    const req = makeRequest("GET", `/v1/organizations/${TEST_ORG_PUBLIC}/webhooks/endpoints`);
+    const res = await route(req, env);
+    expect(res.status).toBe(404);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body).not.toHaveProperty("endpoints");
+  });
+
   it("returns 405 for PUT on endpoints collection", async () => {
     const env = createFakeEnv();
     const req = makeRequest("PUT", `/v1/organizations/${TEST_ORG_PUBLIC}/webhooks/endpoints`);

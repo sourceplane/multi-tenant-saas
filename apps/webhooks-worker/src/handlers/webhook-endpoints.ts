@@ -250,8 +250,6 @@ export async function handleListWebhookEndpoints(
   const policyAction = projectId
     ? "project.webhook.read" as const
     : "organization.webhook.read" as const;
-  const denied = await authorizeWebhook(env, actor, orgId, projectId, policyAction, requestId);
-  if (denied) return denied;
 
   const pageResult = parsePageParams(new URL(request.url));
   if (!pageResult.ok) {
@@ -264,7 +262,14 @@ export async function handleListWebhookEndpoints(
   const executor = createSqlExecutor(env.SOURCEPLANE_DB!);
   try {
     const repo = createWebhookRepository(executor);
-    const result = await repo.listEndpoints(orgId, { limit, cursor: dbCursor }, projectId);
+    // PERF12: authorization (membership + policy) and the read are independent
+    // (the policy resource is the route's org/project, not row-derived) — run
+    // them concurrently and discard the speculatively read rows on deny.
+    const [denied, result] = await Promise.all([
+      authorizeWebhook(env, actor, orgId, projectId, policyAction, requestId),
+      repo.listEndpoints(orgId, { limit, cursor: dbCursor }, projectId),
+    ]);
+    if (denied) return denied;
     if (!result.ok) {
       return errorResponse("internal_error", "Service unavailable", 503, requestId);
     }
