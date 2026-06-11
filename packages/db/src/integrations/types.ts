@@ -161,6 +161,8 @@ export type InboundDeliveryStatus =
 export interface InboundDelivery {
   id: string;
   orgId: string | null;
+  /** Owning connection once attributed (installation → connection → org). */
+  connectionId: string | null;
   provider: string;
   deliveryKey: string;
   eventType: string;
@@ -195,6 +197,7 @@ export interface InsertInboundDeliveryOutcome {
 
 export interface MarkInboundDeliveryInput {
   orgId?: Uuid | null;
+  connectionId?: Uuid | null;
   status?: InboundDeliveryStatus;
   attempts?: number;
   nextAttemptAt?: Date | null;
@@ -233,6 +236,13 @@ export interface IntegrationsRepository {
   // Connections
   createConnection(input: CreateConnectionInput): Promise<IntegrationsResult<IntegrationConnection>>;
   getConnection(orgId: Uuid, id: Uuid): Promise<IntegrationsResult<IntegrationConnection>>;
+  /**
+   * INTERNAL (drain/replay only): resolve a connection without an org filter.
+   * The inbound pipeline attributes deliveries installation → connection →
+   * org, so the org is an output here, not an input. Never expose through a
+   * request-scoped read path.
+   */
+  getConnectionById(id: Uuid): Promise<IntegrationsResult<IntegrationConnection>>;
   listConnections(
     orgId: Uuid,
     params: PageQueryParams,
@@ -291,6 +301,7 @@ export interface IntegrationsRepository {
   listInboundDeliveries(
     orgId: Uuid,
     params: PageQueryParams,
+    query?: { connectionId?: Uuid },
   ): Promise<IntegrationsResult<PagedResult<InboundDelivery>>>;
   /** Cron drain scan: due pending work, oldest first. */
   listDueInboundDeliveries(limit: number): Promise<IntegrationsResult<InboundDelivery[]>>;

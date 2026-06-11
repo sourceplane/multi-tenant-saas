@@ -80,10 +80,11 @@ describe("integrations facade — route matching", () => {
     expect(isIntegrationsRoute("/v1/integrations")).toBe(false);
   });
 
-  it("matches exactly the one ingress path", () => {
+  it("matches exactly the two allowlisted ingress paths", () => {
     expect(isIntegrationsIngressRoute("/ingress/github/setup")).toBe(true);
-    expect(isIntegrationsIngressRoute("/ingress/github/webhook")).toBe(false);
+    expect(isIntegrationsIngressRoute("/ingress/github/webhook")).toBe(true);
     expect(isIntegrationsIngressRoute("/ingress/github/setup/extra")).toBe(false);
+    expect(isIntegrationsIngressRoute("/ingress/github/other")).toBe(false);
   });
 });
 
@@ -178,6 +179,49 @@ describe("integrations facade — public setup ingress", () => {
       env as never,
       "req_1",
       "/ingress/github/setup",
+    );
+    expect(res.status).toBe(405);
+    expect(calls).toHaveLength(0);
+  });
+});
+
+describe("integrations facade — public webhook ingress", () => {
+  it("streams the raw body with the signature headers, no session required", async () => {
+    const { env, calls } = createEnv();
+    const res = await handleIntegrationsIngressRoute(
+      new Request("https://edge.test/ingress/github/webhook", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-github-delivery": "gh-uuid-1",
+          "x-github-event": "push",
+          "x-hub-signature-256": "sha256=abc",
+        },
+        body: JSON.stringify({ zen: "Keep it logically awesome." }),
+      }),
+      env as never,
+      "req_1",
+      "/ingress/github/webhook",
+    );
+    expect(res.status).toBe(200);
+    expect(calls).toHaveLength(1);
+    const headers = new Headers(calls[0]!.init.headers);
+    expect(headers.get("x-github-delivery")).toBe("gh-uuid-1");
+    expect(headers.get("x-github-event")).toBe("push");
+    expect(headers.get("x-hub-signature-256")).toBe("sha256=abc");
+    expect(headers.get("x-internal-caller")).toBe("api-edge");
+    expect(headers.get("x-actor-subject-id")).toBeNull();
+    // Raw body forwarded as a stream, not re-serialized.
+    expect(calls[0]!.init.body).toBeTruthy();
+  });
+
+  it("rejects non-POST on the webhook path", async () => {
+    const { env, calls } = createEnv();
+    const res = await handleIntegrationsIngressRoute(
+      new Request("https://edge.test/ingress/github/webhook", { method: "GET" }),
+      env as never,
+      "req_1",
+      "/ingress/github/webhook",
     );
     expect(res.status).toBe(405);
     expect(calls).toHaveLength(0);

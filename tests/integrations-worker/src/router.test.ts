@@ -71,7 +71,7 @@ describe("integrations-worker router (IG0 — dormant)", () => {
       MEMBERSHIP_WORKER: {} as unknown,
       POLICY_WORKER: {} as unknown,
     });
-    const paths = ["/", "/ingress/github/webhook", "/v1/unknown"];
+    const paths = ["/", "/ingress/github/unknown", "/v1/unknown"];
     for (const path of paths) {
       const response = await route(
         new Request(`https://worker.test${path}`, {

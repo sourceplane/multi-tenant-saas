@@ -3,6 +3,8 @@ import type {
   ConnectIntegrationResponse,
   GetIntegrationResponse,
   ListIntegrationsResponse,
+  ListInboundDeliveriesResponse,
+  ReplayInboundDeliveryResponse,
   RevokeIntegrationResponse,
 } from "@saas/contracts/integrations";
 
@@ -56,6 +58,43 @@ export class IntegrationsClient {
         method: "POST",
         path: `/v1/organizations/${encodeURIComponent(orgId)}/integrations/github/connect`,
         body,
+      },
+      opts,
+    );
+  }
+
+  /** GET /v1/organizations/:orgId/integrations/:connectionId/deliveries */
+  listDeliveries(
+    orgId: string,
+    connectionId: string,
+    opts: RequestOptions = {},
+  ): Promise<ListInboundDeliveriesResponse> {
+    return this.transport.request<ListInboundDeliveriesResponse>(
+      {
+        method: "GET",
+        path: `/v1/organizations/${encodeURIComponent(orgId)}/integrations/${encodeURIComponent(connectionId)}/deliveries`,
+      },
+      opts,
+    );
+  }
+
+  /**
+   * POST .../integrations/:connectionId/deliveries/:deliveryId/replay
+   *
+   * Re-runs normalize/emit from the persisted inbox row — never re-trusts
+   * the wire.
+   */
+  replayDelivery(
+    orgId: string,
+    connectionId: string,
+    deliveryId: string,
+    opts: RequestOptions = {},
+  ): Promise<ReplayInboundDeliveryResponse> {
+    return this.transport.request<ReplayInboundDeliveryResponse>(
+      {
+        method: "POST",
+        path: `/v1/organizations/${encodeURIComponent(orgId)}/integrations/${encodeURIComponent(connectionId)}/deliveries/${encodeURIComponent(deliveryId)}/replay`,
+        body: {},
       },
       opts,
     );
