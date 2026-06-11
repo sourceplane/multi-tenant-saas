@@ -7,14 +7,12 @@
   "vars": {
     "ENVIRONMENT": "local"
   },
-  // No cron trigger yet: the Cloudflare account is at its 5-cron-trigger
-  // limit (webhooks-worker + metering-worker × stage/prod). The IG2 inbox
-  // drain needs a schedule here — that requires either a plan upgrade or
-  // freeing a slot before IG2 lands. The scheduled() handler is already
-  // wired in src/index.ts; an empty list keeps deploys from touching the
-  // schedules API.
+  // Inbox drain (IG2): attribute → normalize → emit, every minute — same
+  // cadence as the outbound webhooks dispatcher. Unblocked 2026-06-11 by the
+  // Workers Paid upgrade (the account was previously at the free plan's
+  // 5-cron-trigger limit).
   "triggers": {
-    "crons": []
+    "crons": ["* * * * *"]
   },
   "env": {
     "dev": {
