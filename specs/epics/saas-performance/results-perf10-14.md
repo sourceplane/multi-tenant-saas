@@ -35,6 +35,45 @@ surface). Where modeled, the derivation is shown so it can be falsified.
 
 ---
 
+## 0b. Live verification — 2026-06-11 re-run of the probe battery
+
+The full §0 probe methodology was **re-run against prod on 2026-06-11** (13
+samples, first discarded, p50), from a different network vantage than the
+2026-06-08 run — this vantage's floor is ~67ms vs the original ~56ms, so compare
+**within-run deltas against the floor**, not absolute cross-run values.
+
+| Probe | 2026-06-08 p50 | **2026-06-11 p50** | Now over floor |
+| --- | --- | --- | --- |
+| `OPTIONS` preflight (edge floor) | 56ms | **72ms** | — (floor) |
+| `GET /v1/zzz` → 404 (routed floor) | 56ms | **67ms** | +0 |
+| `GET /health` (DB ping) | 62ms | **70ms** | **+~3ms** |
+| `GET /v1/organizations` (was 1 RL bucket) | 190ms | **68ms** | **+~1ms** |
+| `GET …/:org/projects` (was 2 RL buckets) | **320ms** | **66ms** | **+~0ms** |
+| `GET …/:org/billing/summary` (was 2 buckets) | **332ms** | **65ms** | **+~0ms** |
+| `GET /v1/auth/profile` bad-token | 225ms | **70ms** | **+~3ms** |
+| Console SSR (warm) | 120–160ms | **84ms** | — |
+| Console SSR (cold first hit) | 1.4–1.8s | **1.44s** | unchanged |
+| Cold edge isolate (first hit) | 0.9–1.6s | **0.95–3.0s** | unchanged |
+
+**Measured conclusions:**
+
+1. **The rate-limiter tax is verifiably gone** (PERF5, confirmed live): org-scoped
+   reads went **320–332ms → 65–66ms** — every probed path now sits at the edge
+   floor. The previously dominant ~264ms cost measures as **~0ms**.
+2. **The `<150ms warm p50` end-state target is met** on every probed server path,
+   with ~2× headroom.
+3. **PERF10 verified live**: `cache-control: public, max-age=31536000, immutable`
+   on `_next/static` chunks, and one conditional revalidation (`304`) measured at
+   **81ms p50** — so the ~19 the console previously fired per repeat visit cost
+   **~260ms** across ~6 parallel connections (≈3–4 serial waves × 81ms). The
+   modeled 150–200ms in §1 was conservative; the measured figure is higher.
+4. **Cold starts are now the only large measured cost left** (~1–3s edge isolate
+   first hit, ~1.4s console SSR first hit) — PERF7 remains the biggest p99 lever.
+5. The identity hop and the DB round-trip both measure **~3ms over floor** —
+   effectively free on the warm path.
+
+---
+
 ## 1. PERF10 — immutable `_next/static` caching
 
 **Change:** long-lived `Cache-Control: public, max-age=31536000, immutable` on the
@@ -148,7 +187,7 @@ Three journeys, holding the post-PERF5 baseline fixed and applying only PERF10�
 
 | Journey | Before (post-PERF5) | After PERF10–14 | Delta | Basis |
 | --- | --- | --- | --- | --- |
-| **Console repeat navigation** | ~19 asset revalidations + 5 uncached shell reads | static from cache, shell from react-query | **~150–200ms revalidation + 5 round-trips removed; shell paints instantly** | modeled (PERF10+11) |
+| **Console repeat navigation** | ~19 asset revalidations (81ms each, §0b) + 5 uncached shell reads | static from cache, shell from react-query | **~260ms revalidation + 5 round-trips removed; shell paints instantly** | **measured** revalidation cost (PERF10) + modeled fan-out (PERF11) |
 | **Authed billing/config/webhooks read** | `authz(~80–100ms) + read` serial | `max(authz, read)` | **−(read) ≈ tens of ms/read** | modeled (PERF12a–c) |
 | **Bearer cache-miss auth** | 2 serial DB queries | 1 JOIN | **−~6ms, −1 query** | anchored (PERF12d) |
 
@@ -168,9 +207,11 @@ navigation feeling instant** (PERF10+PERF11 together); the largest *server* win 
 
 ## 7. What is measured vs. modeled, and remaining headroom
 
-**Measured live:** PERF10 header in prod; all §0 anchors. **Modeled** (no
-per-surface live before/after probe): the PERF11/PERF12 deltas — derived from the
-anchors + code structure, falsifiable via the now-broader `Server-Timing` phases.
+**Measured live (§0b, 2026-06-11):** the full probe battery — rate-limiter
+removal confirmed (320ms→66ms), `<150ms` target met on every probed path, PERF10
+header + per-revalidation cost (81ms), warm SSR 84ms, cold starts unchanged.
+**Modeled** (no per-surface live before/after probe): the PERF11/PERF12 deltas —
+derived from the anchors + code structure, falsifiable via `Server-Timing` phases.
 The cleanest way to convert these from modeled→measured is PERF6b (wire the
 `Server-Timing` phases into Analytics Engine dashboards) + PERF14b (instrument the
 ~20 handlers that still emit no phases) — then `authz` vs `read` overlap and the
