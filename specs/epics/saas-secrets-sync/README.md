@@ -13,7 +13,7 @@ from escrow with one apply. Lands in this baseline first; forks (e.g.
 
 | Field | Value |
 |-------|-------|
-| Status | **In progress (SS0/SS1 shipped, SS2 in flight)** |
+| Status | **In progress (SS0–SS2 shipped; SS3 operator seeding)** |
 | Cluster | **SS** (SS0–SS5) |
 | Owner(s) | `tooling/secrets-sync/` (new), `tests/secrets-sync/` (new), `stack-tectonic` worker compositions, `infra/terraform/*`, all `wrangler.template.jsonc` surfaces, `specs/core/access-and-infra.md` |
 | Target branch | `main` |
@@ -76,7 +76,7 @@ job summaries, or this spec tree.
 |----|-----------|-------------|--------|
 | SS0 | Escrow convention + committed secrets manifest | No | ✅ Shipped (#342) |
 | SS1 | `secrets-check` drift detector enforced in verify lanes | No | ✅ Shipped (#342) |
-| SS2 | `secrets-live` deploy-lane sync (escrow → Cloudflare) | Deploy approvals only | 🛠️ In progress |
-| SS3 | Escrow seeding of all currently-manual secrets | **Yes — human supplies/writes values** | ⛔ Blocked on SS2 merge + human |
-| SS4 | Shared secrets via Cloudflare Secrets Store | Decision + account feature check | 🗓️ Planned |
+| SS2 | `secrets-live` deploy-lane sync (escrow → Cloudflare) | Deploy approvals only | ✅ Shipped (#346) |
+| SS3 | Escrow seeding of all currently-manual secrets | **Yes — human supplies/writes values** | 🛠️ In progress (operator) |
+| SS4 | Shared secrets via Cloudflare Secrets Store | No (entitlement confirmed) | 🗓️ Ready — after SS3 |
 | SS5 | Rotation runbook + BF9 preflight integration | No | 🗓️ Planned |
