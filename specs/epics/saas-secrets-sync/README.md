@@ -13,7 +13,7 @@ from escrow with one apply. Lands in this baseline first; forks (e.g.
 
 | Field | Value |
 |-------|-------|
-| Status | **Draft (SS0/SS1 in progress)** |
+| Status | **In progress (SS0/SS1 shipped, SS2 in flight)** |
 | Cluster | **SS** (SS0–SS5) |
 | Owner(s) | `tooling/secrets-sync/` (new), `tests/secrets-sync/` (new), `stack-tectonic` worker compositions, `infra/terraform/*`, all `wrangler.template.jsonc` surfaces, `specs/core/access-and-infra.md` |
 | Target branch | `main` |
@@ -49,9 +49,10 @@ The fix reuses the rails BF5/BF6 built rather than inventing new ones:
    of `tooling/wire/render.mjs`) that fails loudly when escrow is incomplete
    against the manifest or deployed secret names diverge, enforced by the
    `tests/secrets-sync` quick-check component (SS1).
-3. **Deploy-lane sync** — a `secrets-live` step that pushes escrow values to
-   Cloudflare before the worker deploys, with a non-secret fingerprint var
-   for value-drift detection (SS2).
+3. **Deploy-lane sync** — a `secrets-live` step in the worker deploy lane
+   that pushes escrow values to Cloudflare (after `deploy`, so first-boot
+   workers exist; before `smoke`), with a non-secret fingerprint record in
+   Secrets Manager for idempotence and value-drift detection (SS2).
 4. **Seed + dedup** — humans escrow the currently-manual values once (SS3);
    shared keys move to Cloudflare Secrets Store bindings so one secret serves
    the three encryption-key consumers (SS4).
@@ -73,9 +74,9 @@ job summaries, or this spec tree.
 
 | ID | Milestone | Human help? | Status |
 |----|-----------|-------------|--------|
-| SS0 | Escrow convention + committed secrets manifest | No | 🛠️ In progress |
-| SS1 | `secrets-check` drift detector enforced in verify lanes | No | 🛠️ In progress |
-| SS2 | `secrets-live` deploy-lane sync (escrow → Cloudflare) | Deploy approvals only | 🗓️ Planned |
-| SS3 | Escrow seeding of all currently-manual secrets | **Yes — human supplies/writes values** | ⛔ Blocked on SS0 + human |
+| SS0 | Escrow convention + committed secrets manifest | No | ✅ Shipped (#342) |
+| SS1 | `secrets-check` drift detector enforced in verify lanes | No | ✅ Shipped (#342) |
+| SS2 | `secrets-live` deploy-lane sync (escrow → Cloudflare) | Deploy approvals only | 🛠️ In progress |
+| SS3 | Escrow seeding of all currently-manual secrets | **Yes — human supplies/writes values** | ⛔ Blocked on SS2 merge + human |
 | SS4 | Shared secrets via Cloudflare Secrets Store | Decision + account feature check | 🗓️ Planned |
 | SS5 | Rotation runbook + BF9 preflight integration | No | 🗓️ Planned |
