@@ -11,6 +11,9 @@ spec:
   path: apps/identity-worker
   dependsOn:
     - component: cloudflare-hyperdrive
+    - component: policy-worker
+    - component: membership-worker
+    - component: notifications-worker
   subscribe:
     environments:
       - name: dev

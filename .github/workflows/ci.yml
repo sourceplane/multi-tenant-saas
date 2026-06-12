@@ -5,6 +5,13 @@ on:
     branches: [main]
   pull_request:
 
+# One run per ref. Superseded PR runs are cancelled (each push re-plans
+# anyway), which stops stale fan-outs from starving the runner pool; main
+# convergence runs are never cancelled, they queue.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
   packages: write
