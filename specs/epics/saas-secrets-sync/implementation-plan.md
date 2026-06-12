@@ -71,19 +71,24 @@ entry is removed from the fixture.
 
 **Scope**
 
-- New step in the Stack Tectonic worker deploy profile, ordered **before**
-  `wrangler deploy` and after the wire-live fetch: read the env's escrow
-  payload, push each of the worker's secrets via Wrangler/Cloudflare API
-  (bulk `wrangler versions secret bulk` or per-name `secret put`).
-- Idempotence + value-drift: maintain a non-secret
-  `SECRETS_FINGERPRINT` var (map of `SECRET_NAME → sha256(value)[:16]`)
-  rendered into the worker config, so SS1's deployed-check can detect stale
-  values, not just missing names, without ever reading a secret back.
-- Skip-if-unchanged: when fingerprints match, the step is a no-op (avoids
-  churning worker versions on every deploy).
-- First-boot ordering: encode `dependsOn` so a worker's first deploy follows
-  escrow seeding, eliminating the manual-seed footgun recorded in the BF6b
-  rollout.
+- New `secrets-live` step in the Stack Tectonic worker deploy profile,
+  ordered **after** `wrangler deploy` and before `smoke`: a first-boot worker
+  must exist before secrets can be pushed (avoids the BF6b binding-cycle
+  class of footgun), and `wrangler secret bulk` rolls a new version
+  immediately, so smoke observes the synced state.
+- Idempotence + value-drift: a non-secret fingerprint record
+  (`<org>/<repo>/worker-secrets-fingerprints/<env>`, map of
+  `worker → SECRET_NAME → sha256(value)[:16]`) lives next to the escrow in
+  Secrets Manager — readable by checkers, unlike Cloudflare-side state —
+  and is updated only after a successful push.
+- Skip-if-unchanged: when fingerprints match the record, the step pushes
+  nothing (no worker-version churn). The decision logic is the pure
+  `tooling/secrets-sync/sync.mjs`; all cloud I/O stays in the composition
+  step, mirroring the wire-live split.
+- Pre-SS3 safety: no escrow document at all = clean skip (existing
+  manually-put secrets untouched); escrow present but missing a required
+  secret = hard failure (never deploy a worker with known-incomplete
+  secrets).
 
 **Done when** a worker whose escrow value changes gets the new value on the
 next deploy with no human step, and an unchanged deploy does not create a new
