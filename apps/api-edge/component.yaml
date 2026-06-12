@@ -18,6 +18,10 @@ spec:
     - component: webhooks-worker
     - component: billing-worker
     - component: integrations-worker
+    - component: identity-worker
+    - component: membership-worker
+    - component: metering-worker
+    - component: notifications-worker
   subscribe:
     environments:
       - name: dev
