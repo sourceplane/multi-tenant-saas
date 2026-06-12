@@ -10,9 +10,9 @@ on boot.
 |----|--------|------------------|
 | SS0 | ✅ Shipped (#342) | Escrow convention documented (`access-and-infra.md` § Worker runtime secrets); `tooling/secrets-sync/secrets.manifest.json` committed — names derived from the `wrangler secret put` comments across the five secret-bearing worker templates (identity, billing, webhooks, config, integrations-deferred). |
 | SS1 | ✅ Shipped (#342) | `tooling/secrets-sync/check.mjs` + `escrow.fixture.json` committed; enforced in verify lanes by the `tests/secrets-sync` quick-check component (jest suite covers green/missing/typo/empty/strict/deployed paths and manifest↔template coverage). |
-| SS2 | 🛠️ In progress | `secrets-live` step in `cloudflare-worker-turbo` deploy profile (after `deploy`, before `smoke`); pure decision tool `tooling/secrets-sync/sync.mjs` + 7 jest cases; `secretsWorker` parameter set on the five secret-bearing workers. |
-| SS3 | ⛔ Blocked | Needs SS0 merged + human-seeded values (see risks register). |
-| SS4 | 🗓️ Planned | Needs Secrets Store entitlement confirmation. |
+| SS2 | ✅ Shipped (#346) | `secrets-live` step in `cloudflare-worker-turbo` deploy profile (after `deploy`, before `smoke`); pure decision tool `tooling/secrets-sync/sync.mjs` + 7 jest cases; `secretsWorker` parameter set on the five secret-bearing workers. |
+| SS3 | 🛠️ In progress (human) | SS2 live on main (merge run 27428163400: all 15 worker deploy lanes green, secrets-live clean-skip pre-seeding). Operator seeding the stage/prod escrow per `tooling/secrets-sync/seed.md`. |
+| SS4 | 🗓️ Ready | Secrets Store entitlement confirmed on the account (2026-06-12). Implement after SS3 seeding (Terraform sources the shared key from the escrow). |
 | SS5 | 🗓️ Planned | Pairs with BF9 preflight doctor. |
 
 ## Decisions taken

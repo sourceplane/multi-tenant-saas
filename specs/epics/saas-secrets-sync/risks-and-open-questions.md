@@ -8,7 +8,6 @@ Live register. Remove entries when resolved; record the decision in
 | Item | Blocking decision | Unblock signal |
 |------|-------------------|----------------|
 | **SS3 — escrow seeding** | Human must write live secret values into `sourceplane/multi-tenant-saas/worker-secrets/{stage,prod}`. The existing manually-`put` values (notably `SECRET_ENCRYPTION_KEY` — it encrypts data at rest) must be escrowed *as-is*, not regenerated. | Values present; SS1 escrow check green against live Secrets Manager. |
-| **SS4 — Secrets Store availability** | Cloudflare Secrets Store entitlement/limits on this account need confirming before Terraform adoption. | Operator confirms the feature on the account's plan. |
 | **Fork instances** | Each fork (e.g. `orun-cloud`) escrows its own values under its own `<org>/<repo>/worker-secrets/<env>` path — values never sync across instances, only the mechanism does. | Fork operator seeds its escrow after syncing this epic down. |
 
 ## Open design questions
