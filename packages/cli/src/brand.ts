@@ -22,4 +22,6 @@ export const KEYCHAIN_SERVICE = `${CLI_BIN}-cli`;
 export const CONFIG_APP_DIR = CLI_BIN;
 
 /** Env var overriding the config directory (used heavily by tests). */
-export const CONFIG_DIR_ENV_VAR = `${CLI_BIN.toUpperCase()}_CONFIG_DIR`;
+// Hyphens map to underscores so a hyphenated CLI_BIN (e.g. "acme-cloud")
+// still derives a valid env var name.
+export const CONFIG_DIR_ENV_VAR = `${CLI_BIN.toUpperCase().replace(/-/g, "_")}_CONFIG_DIR`;
