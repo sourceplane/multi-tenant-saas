@@ -86,6 +86,27 @@ sourceplane/multi-tenant-saas/supabase/stage
 Secret values must never be committed, echoed in logs, or copied into task
 reports. Reports may include secret names and non-secret resource IDs.
 
+### Worker Runtime Secrets
+
+Runtime secrets consumed by Cloudflare Workers (OAuth client secrets,
+`OAUTH_STATE_SECRET`, billing provider tokens, `SECRET_ENCRYPTION_KEY`, the
+GitHub App bundle) follow the same system-of-record rule. They are escrowed
+in AWS Secrets Manager as one JSON document per environment:
+
+```text
+<org>/<repo>/worker-secrets/<env>
+```
+
+mapping `worker → SECRET_NAME → value`. The committed, non-secret
+declaration of which secret names each worker requires is
+`tooling/secrets-sync/secrets.manifest.json`;
+`tooling/secrets-sync/check.mjs` validates escrow payloads and deployed
+secret names against it without printing values. Cloudflare worker secrets
+are deploy-time copies only — write-only, never the source of truth, and
+never read back. Workers must not call AWS Secrets Manager at request time.
+The `saas-secrets-sync` epic owns the sync/drift mechanics
+(`specs/epics/saas-secrets-sync/`).
+
 ## Terraform State
 
 Terraform state for this repo uses AWS S3, not Cloudflare R2.

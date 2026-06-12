@@ -1,0 +1,148 @@
+# saas-secrets-sync — Implementation Plan
+
+Status: Normative for the SS cluster. As-built record in
+`IMPLEMENTATION-STATUS.md`; decisions and human gates in
+`risks-and-open-questions.md`.
+
+## SS0 — Escrow convention + committed secrets manifest
+
+**Scope**
+
+- Define the escrow document: one AWS Secrets Manager secret per environment
+  at `sourceplane/multi-tenant-saas/worker-secrets/<env>`, JSON shape:
+
+  ```json
+  {
+    "identity-worker": {
+      "GITHUB_OAUTH_CLIENT_SECRET": "…",
+      "GOOGLE_OAUTH_CLIENT_SECRET": "…",
+      "OAUTH_STATE_SECRET": "…"
+    },
+    "billing-worker": { "POLAR_ACCESS_TOKEN": "…", "POLAR_WEBHOOK_SECRET": "…" }
+  }
+  ```
+
+  This matches the wire-live fetch shape (`<component>__<env>.json`) so the
+  composition step that already fetches wiring payloads can fetch escrow with
+  the same mechanism and IAM grant (`sourceplane/multi-tenant-saas/*` is already in
+  the plan/deploy role policies).
+
+- Commit `tooling/secrets-sync/secrets.manifest.json` — the **non-secret**
+  declaration of which secret *names* each worker requires per environment.
+  Derived today from the `wrangler secret put` comments in each
+  `wrangler.template.jsonc`; becomes the single source of truth those comments
+  point at.
+
+- Record the convention in `specs/core/access-and-infra.md` (follow-up edit,
+  same PR or next).
+
+**Done when** the manifest is committed, covers every worker template's
+documented secrets (identity, billing, webhooks, config, integrations), and
+`access-and-infra.md` names the escrow path.
+
+## SS1 — `secrets-check` drift detector
+
+**Scope**
+
+- `tooling/secrets-sync/check.mjs` — zero-dependency Node script, sibling in
+  style to `tooling/wire/render.mjs` (fail-loud, `--`-flag CLI, no cloud SDK
+  imports; payloads are fetched by the composition step, not the script).
+- Modes:
+  - `--escrow-dir <dir>`: validate fetched escrow payloads against the
+    manifest — every required `worker/SECRET_NAME` present, no unknown extras
+    (typo detection). Values are never printed; only names and SHA-256
+    fingerprints.
+  - `--deployed-dir <dir>`: validate `wrangler secret list` JSON output per
+    worker (fetched by the lane) against the manifest — every required name
+    deployed.
+  - `--fixture <file>`: committed `escrow.fixture.json` with dummy values so
+    PR verify lanes run offline, exactly like `wiring.fixture.json`.
+- Exit non-zero listing every missing/unknown entry; never echo a value.
+- Enforcement: a `tests/secrets-sync` quick-check component (standard
+  turbo-package test shape) runs the checker against the fixture and the
+  failure paths on every PR, and asserts the manifest covers exactly the
+  worker templates that document a `wrangler secret put`.
+
+**Done when** the checker runs green against the committed fixture in the PR
+verify lane and red (with a complete, value-free report) when a manifest
+entry is removed from the fixture.
+
+## SS2 — `secrets-live` deploy-lane sync
+
+**Scope**
+
+- New step in the Stack Tectonic worker deploy profile, ordered **before**
+  `wrangler deploy` and after the wire-live fetch: read the env's escrow
+  payload, push each of the worker's secrets via Wrangler/Cloudflare API
+  (bulk `wrangler versions secret bulk` or per-name `secret put`).
+- Idempotence + value-drift: maintain a non-secret
+  `SECRETS_FINGERPRINT` var (map of `SECRET_NAME → sha256(value)[:16]`)
+  rendered into the worker config, so SS1's deployed-check can detect stale
+  values, not just missing names, without ever reading a secret back.
+- Skip-if-unchanged: when fingerprints match, the step is a no-op (avoids
+  churning worker versions on every deploy).
+- First-boot ordering: encode `dependsOn` so a worker's first deploy follows
+  escrow seeding, eliminating the manual-seed footgun recorded in the BF6b
+  rollout.
+
+**Done when** a worker whose escrow value changes gets the new value on the
+next deploy with no human step, and an unchanged deploy does not create a new
+secret version.
+
+## SS3 — Escrow seeding of currently-manual secrets ⛔ human-gated
+
+**Scope**
+
+- Human writes the live values into
+  `sourceplane/multi-tenant-saas/worker-secrets/{stage,prod}`:
+  identity (GitHub/Google client secrets + `OAUTH_STATE_SECRET`), billing
+  (`POLAR_ACCESS_TOKEN`, `POLAR_WEBHOOK_SECRET`), webhooks/config/integrations
+  (`SECRET_ENCRYPTION_KEY` — current values, pre-SS4), integrations GitHub App
+  bundle when `saas-integrations` D1 lands.
+- Provide a small seeding helper (`tooling/secrets-sync/seed.md` runbook or
+  `aws secretsmanager put-secret-value` one-liners) that never echoes values.
+- **Ordering constraint:** existing `SECRET_ENCRYPTION_KEY` values must be
+  escrowed *as-is* (they encrypt data at rest — regenerating them bricks
+  stored webhook endpoints/integration tokens).
+
+**Done when** SS1's escrow check passes against live Secrets Manager for
+stage and prod with zero manual `wrangler secret put` remaining in runbooks.
+
+## SS4 — Shared secrets via Cloudflare Secrets Store
+
+**Scope**
+
+- Move account-level shared secrets (today: `SECRET_ENCRYPTION_KEY` used by
+  webhooks-, config-, and integrations-worker) from three per-worker copies
+  to one Secrets Store entry with three bindings.
+- Terraform-manage the store entry (Cloudflare provider) with the value
+  sourced from escrow; workers bind via `secrets_store_secret` in their
+  templates.
+- Keep per-worker secrets (OAuth, Polar) as plain worker secrets — Secrets
+  Store earns its keep only where one value has multiple consumers.
+
+**Done when** rotating the key in escrow updates all three workers through a
+single store entry, and the per-worker copies are deleted.
+
+## SS5 — Rotation runbook + BF9 preflight integration
+
+**Scope**
+
+- Per-class rotation runbook: provider-issued (Polar, OAuth — rotate at
+  provider, escrow, redeploy), repo-generated (`OAUTH_STATE_SECRET` — free
+  rotation), data-encrypting (`SECRET_ENCRYPTION_KEY` — requires re-encrypt
+  migration; document the grace-window pattern already used by webhook secret
+  rotation).
+- Database credentials stay inside the Terraform component (rotation must
+  update Supabase + Hyperdrive together; Secrets Manager auto-rotation
+  lambdas would rotate one side only — explicitly out of scope).
+- Wire SS1 checks into the BF9 preflight doctor when it lands.
+
+**Done when** each secret class has a tested runbook and the doctor reports
+escrow completeness per environment.
+
+## Sequencing
+
+SS0 → SS1 ship together (this PR series); SS2 next (composition change +
+deploy approvals); SS3 unblocks on SS0+human; SS4 after SS2 proves the sync
+path; SS5 closes the program alongside BF9.
