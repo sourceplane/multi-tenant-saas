@@ -60,7 +60,15 @@ describe("secrets manifest (SS0)", () => {
 
   it("covers every worker template that documents a `wrangler secret put`", () => {
     const apps = path.resolve(here, "../../../apps");
-    const declared = Object.keys(manifest.workers).sort();
+    // The manifest is a projection that also includes config-only consumers
+    // (e.g. notifications-worker) with no secrets; the coverage invariant is
+    // over workers that actually carry secrets (required or deferred).
+    const withSecrets = Object.entries(
+      manifest.workers as Record<string, { required: string[]; deferred?: unknown }>,
+    )
+      .filter(([, spec]) => spec.required.length > 0 || spec.deferred !== undefined)
+      .map(([name]) => name)
+      .sort();
     const fromTemplates = fs
       .readdirSync(apps)
       .filter((app) => {
@@ -71,7 +79,7 @@ describe("secrets manifest (SS0)", () => {
         );
       })
       .sort();
-    expect(declared).toEqual(fromTemplates);
+    expect(withSecrets).toEqual(fromTemplates);
   });
 
   it("never contains secret-looking values, only names", () => {
@@ -116,7 +124,7 @@ describe("secrets-check (SS1)", () => {
     expect(relaxed.status).toBe(0);
     const strict = runCheck(["--fixture", fixturePath, "--strict"]);
     expect(strict.status).toBe(1);
-    expect(strict.stderr).toContain("integrations-worker: missing GITHUB_APP_ID");
+    expect(strict.stderr).toContain("integrations-worker: missing GITHUB_APP_PRIVATE_KEY");
   });
 
   it("never prints secret values, only fingerprints", () => {

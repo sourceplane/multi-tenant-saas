@@ -80,3 +80,4 @@ job summaries, or this spec tree.
 | SS3 | Escrow seeding of all currently-manual secrets | **Yes — human supplies/writes values** | 🛠️ In progress (operator) |
 | SS4 | Shared secrets via Cloudflare Secrets Store | No (entitlement confirmed) | 🗓️ Ready — after SS3 |
 | SS5 | Rotation runbook + BF9 preflight integration | No | 🗓️ Planned |
+| SS6 | Integration documents: config + secret co-located per provider | **Yes — re-seed in the new layout** | 🛠️ In progress (SS6a: model + projector + tests) |
