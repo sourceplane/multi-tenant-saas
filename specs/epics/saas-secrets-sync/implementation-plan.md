@@ -148,6 +148,60 @@ escrow completeness per environment.
 
 ## Sequencing
 
-SS0 → SS1 ship together (this PR series); SS2 next (composition change +
-deploy approvals); SS3 unblocks on SS0+human; SS4 after SS2 proves the sync
-path; SS5 closes the program alongside BF9.
+SS0 → SS1 shipped (#342); SS2 shipped (#346); SS3 unblocks on the SS6a layout +
+human seeding; SS4 after SS3 (Secrets Store sources the shared key from the
+platform document); SS5 closes alongside BF9.
+
+## SS6 — Integration documents (config + secret co-located per provider)
+
+The escrow path is keyed by *worker* and holds *secrets only*. But a single
+provider integration (GitHub OAuth, Polar, the GitHub App) has two halves: a
+non-secret identifier/config (`GITHUB_OAUTH_CLIENT_ID`, `POLAR_PRODUCT_MAP`)
+that today lives hardcoded in `wrangler.template.jsonc`, and a secret in
+escrow. Re-registering or rotating an integration touches both places. SS6
+makes **one provider integration = one document** holding both halves, so SM
+is the single config point for integrations as well as secrets.
+
+**Model.** `tooling/secrets-sync/integrations.manifest.json` is the source of
+truth: each provider integration declares its `config` keys, `secret` keys,
+and consuming workers; non-integration secrets (`SECRET_ENCRYPTION_KEY`,
+`OAUTH_STATE_SECRET`, `INTEGRATIONS_STATE_SECRET`) share one `platform`
+document. Storage:
+
+- `<org>/<repo>/integrations/<name>/<env>` — config + secret per provider
+- `<org>/<repo>/platform-secrets/<env>` — non-integration secrets
+
+**Boundary.** Config keys are non-secret (may appear in logs, plan output, a
+future config UI); secret keys never do. Both are tagged in the manifest and
+projected into separate outputs.
+
+### SS6a — model, projector, checker, seeding (this PR)
+
+- `integrations.manifest.json` (source of truth) + `integrations.fixture.json`
+  (offline dummy docs).
+- `assemble.mjs` (pure, no cloud): `--project-manifest` regenerates the
+  per-worker `secrets.manifest.json` (now a GENERATED projection, keeping the
+  shipped SS1/SS2 contract intact); `--env/--docs-dir|--fixture` validates the
+  fetched documents and emits the per-worker **secrets** view (feeds the
+  unchanged `sync.mjs`) and the per-worker **config** view (for SS6b). Fails
+  closed on any missing/empty required key.
+- `tests/secrets-sync` gains assemble coverage + a consistency test asserting
+  the committed `secrets.manifest.json` equals the projection.
+- `seed.md` rewritten for the per-integration layout.
+
+**Done when** the projector round-trips to the committed per-worker manifest,
+the fixture covers every declared key, and the suite is green — with no change
+to the deployed `secrets-live` behavior.
+
+### SS6b — deploy-lane assembly + de-hardcode (follow-up)
+
+- Add an `assemble` step to the worker deploy profile: fetch the integration +
+  platform documents the worker consumes, project to secrets (→ existing
+  `secrets-live`) and config, and render the config into the worker's `vars`
+  via the existing `tooling/wire/render.mjs` token mechanism.
+- Convert the Category-A `vars` in each `wrangler.template.jsonc` to wiring
+  tokens and delete the hardcoded values, so SM becomes the only source.
+- Extend SS1's verify-lane check to assert config-name coverage too.
+
+**Done when** the OAuth client IDs, Polar product map, and email-from config
+are rendered from SM at deploy and no longer committed in templates.

@@ -107,6 +107,22 @@ never read back. Workers must not call AWS Secrets Manager at request time.
 The `saas-secrets-sync` epic owns the sync/drift mechanics
 (`specs/epics/saas-secrets-sync/`).
 
+Provider **integration configuration** (non-secret but account/environment
+specific — OAuth client IDs, Polar product maps, email-from addresses) is
+co-located with its paired secret in one document per integration:
+
+```text
+<org>/<repo>/integrations/<name>/<env>
+```
+
+Non-integration secrets (`SECRET_ENCRYPTION_KEY`, `OAUTH_STATE_SECRET`,
+`INTEGRATIONS_STATE_SECRET`) share `<org>/<repo>/platform-secrets/<env>`.
+`tooling/secrets-sync/integrations.manifest.json` is the source of truth;
+config keys are non-secret and may be logged, secret keys never. Instance
+*branding* constants (product name, CLI binary, sales email) stay in the
+source `app-config` seam, and orchestration parameters (AWS account, region,
+domains) stay in `intent.yaml` — neither belongs in Secrets Manager.
+
 ## Terraform State
 
 Terraform state for this repo uses AWS S3, not Cloudflare R2.

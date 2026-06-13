@@ -14,6 +14,8 @@ on boot.
 | SS3 | 🛠️ In progress (human) | SS2 live on main (merge run 27428163400: all 15 worker deploy lanes green, secrets-live clean-skip pre-seeding). Operator seeding the stage/prod escrow per `tooling/secrets-sync/seed.md`. |
 | SS4 | 🗓️ Ready | Secrets Store entitlement confirmed on the account (2026-06-12). Implement after SS3 seeding (Terraform sources the shared key from the escrow). |
 | SS5 | 🗓️ Planned | Pairs with BF9 preflight doctor. |
+| SS6a | 🛠️ In progress | `integrations.manifest.json` (source of truth) + `integrations.fixture.json`; `assemble.mjs` projects per-integration/platform documents → the per-worker secret view (regenerates the now-GENERATED `secrets.manifest.json`, keeping SS1/SS2 intact) + a per-worker config view. 8 new jest cases incl. a projection-consistency guard; `seed.md` rewritten for the per-integration layout. Deployed `secrets-live` behavior unchanged. |
+| SS6b | 🗓️ Planned | Deploy-lane `assemble` step + render config into `vars` via the wire renderer; de-hardcode the Category-A `vars` from the worker templates. |
 
 ## Decisions taken
 
@@ -34,3 +36,10 @@ on boot.
   Secrets Store are deploy-time copies. Workers never read AWS at runtime.
 - Baseline-first: the epic ships here; forks consume it via fork-sync and
   seed their own escrow values under their own `<org>/<repo>` namespace.
+- SS6 storage model (operator decision, 2026-06-13): **one merged document per
+  provider integration** (config + secret co-located), with non-integration
+  secrets in a single `platform-secrets` document. `assemble.mjs` projects this
+  into the per-worker secret view the shipped tools already consume, so the
+  storage reorg does not rewrite the live `secrets-live` contract.
+- Config/secret boundary held: config keys are non-secret and projected
+  separately from secrets; no tool prints a secret value.
