@@ -98,7 +98,7 @@ export async function handleCreateInvitation(
   const validEmail = (email as string).trim();
   const validRole = role as string;
 
-  if (!deps && !env.SOURCEPLANE_DB) {
+  if (!deps && !env.PLATFORM_DB) {
     return errorResponse("internal_error", "Database not configured", 503, requestId);
   }
 
@@ -114,7 +114,7 @@ export async function handleCreateInvitation(
   }
 
   const policyWorker = env.POLICY_WORKER;
-  const executor = deps ? null : createSqlExecutor(env.SOURCEPLANE_DB!);
+  const executor = deps ? null : createSqlExecutor(env.PLATFORM_DB!);
   try {
     const repo = deps ? deps.repo : createMembershipRepository(executor!);
 

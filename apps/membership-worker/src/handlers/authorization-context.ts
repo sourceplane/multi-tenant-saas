@@ -19,7 +19,7 @@ export async function handleAuthorizationContext(
   requestId: string,
   deps?: HandleAuthorizationContextDeps,
 ): Promise<Response> {
-  if (!env.SOURCEPLANE_DB) {
+  if (!env.PLATFORM_DB) {
     return errorResponse("internal_error", "Service unavailable", 503, requestId);
   }
 
@@ -56,7 +56,7 @@ export async function handleAuthorizationContext(
     orgId: req.orgId,
   };
 
-  const executor = deps?.repo ? null : createSqlExecutor(env.SOURCEPLANE_DB);
+  const executor = deps?.repo ? null : createSqlExecutor(env.PLATFORM_DB);
   const repo = deps?.repo ?? createMembershipRepository(executor!);
 
   try {

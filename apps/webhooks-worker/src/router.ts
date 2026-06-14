@@ -87,7 +87,7 @@ export async function route(request: Request, env: Env): Promise<Response> {
   }
 
   // Pre-flight checks
-  if (!env.SOURCEPLANE_DB) {
+  if (!env.PLATFORM_DB) {
     return errorResponse("internal_error", "Database not configured", 503, requestId);
   }
   if (!env.MEMBERSHIP_WORKER || !env.POLICY_WORKER) {

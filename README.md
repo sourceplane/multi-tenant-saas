@@ -19,10 +19,24 @@ public edge API, with a Next.js console on Workers + Static Assets.
 - **Billing** is live end-to-end via the Polar adapter (embedded checkout,
   plan changes, multi-org fan-out).
 - **Known credential-blocked tails** (see `specs/epics/saas-baseline/`): full
-  production OAuth/magic-link auth, Stripe, and the chosen notifications email
-  provider require human-supplied credentials.
+  production OAuth/magic-link auth and Stripe require human-supplied
+  credentials. The notifications email provider is Cloudflare Email Service
+  (`cloudflare-email`, no API key — the `send_email` binding is the
+  credential); it needs one-time account setup: Workers Paid plan and the
+  sending domain verified in Email Service (DKIM/SPF).
 - The `dev` environment is verify-only (no provisioned Supabase project by
   design).
+
+## Forking / rebranding
+
+This baseline is built to be instantiated as new products. The mechanical
+rename (repo slug, product name/domain, SDK class, CLI bin, worker prefixes,
+user agents, workers.dev subdomain) is one script —
+`node tooling/rebrand/rebrand.mjs --values my-brand.json` — and everything
+that needs human hands is a checklist. Forks can also grow **a few
+components at a time**: `tooling/fork/components.mjs` orders and validates
+per-component copies against the full prerequisite graph (and keeps
+`pnpm-lock.yaml` in sync). See **[FORKING.md](FORKING.md)**.
 
 ## Prerequisites
 

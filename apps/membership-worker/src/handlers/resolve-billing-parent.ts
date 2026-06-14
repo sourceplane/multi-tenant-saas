@@ -25,7 +25,7 @@ export async function handleResolveBillingParent(
   if (request.method !== "POST") {
     return errorResponse("method_not_allowed", "Method not allowed", 405, requestId);
   }
-  if (!deps.repo && !env.SOURCEPLANE_DB) {
+  if (!deps.repo && !env.PLATFORM_DB) {
     return errorResponse("internal_error", "Database not configured", 503, requestId);
   }
 
@@ -44,7 +44,7 @@ export async function handleResolveBillingParent(
     return errorResponse("bad_request", "orgId is malformed", 400, requestId);
   }
 
-  const executor = deps.repo ? null : createSqlExecutor(env.SOURCEPLANE_DB!);
+  const executor = deps.repo ? null : createSqlExecutor(env.PLATFORM_DB!);
   try {
     const repo = deps.repo ?? createMembershipRepository(executor!);
     const res = await repo.getOrganizationById(hex);

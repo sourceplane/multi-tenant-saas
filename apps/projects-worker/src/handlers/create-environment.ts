@@ -98,7 +98,7 @@ export async function handleCreateEnvironment(
   projectId: Uuid,
   deps?: HandleCreateEnvironmentDeps,
 ): Promise<Response> {
-  if (!env.SOURCEPLANE_DB) {
+  if (!env.PLATFORM_DB) {
     return errorResponse("internal_error", "Service unavailable", 503, requestId);
   }
   if (!env.MEMBERSHIP_WORKER) {
@@ -174,7 +174,7 @@ export async function handleCreateEnvironment(
   const preTxExecutor =
     deps?.projectsRepo && deps?.eventsRepo
       ? null
-      : createSqlExecutor(env.SOURCEPLANE_DB);
+      : createSqlExecutor(env.PLATFORM_DB);
   let countRepo: Pick<ProjectsRepository, "countActiveEnvironments">;
   if (deps?.projectsRepo) {
     countRepo = deps.projectsRepo;

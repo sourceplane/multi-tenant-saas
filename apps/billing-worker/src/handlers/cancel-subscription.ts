@@ -43,8 +43,8 @@ async function readActiveSub(
   deps: CancelSubscriptionDeps,
 ): Promise<ActiveSub | null> {
   if (deps.getActiveSubscription) return deps.getActiveSubscription(billingOrgHex);
-  if (!env.SOURCEPLANE_DB) return null;
-  const executor = createSqlExecutor(env.SOURCEPLANE_DB);
+  if (!env.PLATFORM_DB) return null;
+  const executor = createSqlExecutor(env.PLATFORM_DB);
   try {
     const repo = createBillingRepository(executor);
     const res = await repo.getActiveSubscription(billingOrgHex);

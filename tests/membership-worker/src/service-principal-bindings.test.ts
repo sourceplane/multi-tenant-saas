@@ -17,7 +17,7 @@ const SP_SUBJECT_ID = servicePrincipalSubjectId(SP_UUID); // sp_aaaaaaaabbbbcccc
 function createFakeEnv(overrides: Partial<Env> = {}): Env {
   return {
     ENVIRONMENT: "test",
-    SOURCEPLANE_DB: { connectionString: "postgres://fake" } as unknown as Hyperdrive,
+    PLATFORM_DB: { connectionString: "postgres://fake" } as unknown as Hyperdrive,
     ...overrides,
   };
 }
@@ -256,7 +256,7 @@ describe("handleCreateServicePrincipalBinding", () => {
     expect(res.status).toBe(409);
   });
 
-  it("returns 503 when SOURCEPLANE_DB is missing", async () => {
+  it("returns 503 when PLATFORM_DB is missing", async () => {
     const noDbEnv = { ENVIRONMENT: "test" } as Env;
     const req = makeCreateRequest({
       orgId: ORG_ID,
@@ -328,7 +328,7 @@ describe("handleListServicePrincipalBindings", () => {
     expect(res.status).toBe(422);
   });
 
-  it("returns 503 when SOURCEPLANE_DB is missing", async () => {
+  it("returns 503 when PLATFORM_DB is missing", async () => {
     const noDbEnv = { ENVIRONMENT: "test" } as Env;
     const url = new URL(`http://membership-worker/v1/internal/membership/service-principal-bindings?orgId=${ORG_ID}&subjectId=${SP_SUBJECT_ID}`);
 
@@ -369,7 +369,7 @@ describe("handleRevokeServicePrincipalBinding", () => {
     expect(res.status).toBe(422);
   });
 
-  it("returns 503 when SOURCEPLANE_DB is missing", async () => {
+  it("returns 503 when PLATFORM_DB is missing", async () => {
     const noDbEnv = { ENVIRONMENT: "test" } as Env;
     const url = new URL(`http://membership-worker/v1/internal/membership/service-principal-bindings/ra-1?orgId=${ORG_ID}`);
 

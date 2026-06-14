@@ -33,7 +33,7 @@ export async function handleGetUsageSummary(
   actor: ActorContext,
   orgId: string,
 ): Promise<Response> {
-  if (!env.SOURCEPLANE_DB || !env.MEMBERSHIP_WORKER || !env.POLICY_WORKER) {
+  if (!env.PLATFORM_DB || !env.MEMBERSHIP_WORKER || !env.POLICY_WORKER) {
     return errorResponse("internal_error", "Service misconfigured", 503, requestId);
   }
 
@@ -104,7 +104,7 @@ export async function handleGetUsageSummary(
   }
 
   // Query usage summary
-  const executor = createSqlExecutor(env.SOURCEPLANE_DB);
+  const executor = createSqlExecutor(env.PLATFORM_DB);
   const repo = createMeteringRepository(executor);
 
   const result = await repo.getUsageSummary({

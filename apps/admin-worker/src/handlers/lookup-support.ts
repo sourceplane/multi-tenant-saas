@@ -112,11 +112,11 @@ export async function handleLookupOrganizationForSupport(
     return successResponse({ organization: publicOrg(result.value) }, requestId, 200);
   }
 
-  if (!env.SOURCEPLANE_DB) {
+  if (!env.PLATFORM_DB) {
     return errorResponse("internal_error", "Database not configured", 503, requestId);
   }
 
-  const executor = createSqlExecutor(env.SOURCEPLANE_DB);
+  const executor = createSqlExecutor(env.PLATFORM_DB);
   try {
     const repo = createSupportRepository(executor);
     const result = await repo.lookupOrganizationForSupport(orgUuid);
@@ -162,11 +162,11 @@ export async function handleLookupUserForSupport(
     return successResponse({ user: publicUser(result.value) }, requestId, 200);
   }
 
-  if (!env.SOURCEPLANE_DB) {
+  if (!env.PLATFORM_DB) {
     return errorResponse("internal_error", "Database not configured", 503, requestId);
   }
 
-  const executor = createSqlExecutor(env.SOURCEPLANE_DB);
+  const executor = createSqlExecutor(env.PLATFORM_DB);
   try {
     const repo = createSupportRepository(executor);
     const result = await repo.lookupUserForSupport(userUuid);

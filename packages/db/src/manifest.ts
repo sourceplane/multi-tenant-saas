@@ -174,5 +174,14 @@ export const manifest: MigrationManifest = {
       description:
         "Integrations persistence foundation (IG0, dormant) — provider-agnostic connections, GitHub installation facts, repo links with branch→environment maps, the durable inbound-delivery inbox, and the encrypted installation-token cache",
     },
+    {
+      id: "190_integrations_delivery_attribution",
+      context: "integrations",
+      path: "190_integrations_delivery_attribution/up.sql",
+      checksum:
+        "535487194c9c4a129e013282a5f51a5c3e6e2afb3f15c5a0b5f1028e0c5af73f",
+      description:
+        "Connection pointer on the inbound-delivery inbox (nullable connection_id + partial index) — lets the per-connection delivery log scope precisely; attributed by the IG2 cron drain",
+    },
   ],
 };

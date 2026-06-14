@@ -6,7 +6,7 @@ import type { Env } from "@membership-worker/env";
 function createFakeEnv(overrides: Partial<Env> = {}): Env {
   return {
     ENVIRONMENT: "test",
-    SOURCEPLANE_DB: { connectionString: "postgres://fake" } as unknown as Hyperdrive,
+    PLATFORM_DB: { connectionString: "postgres://fake" } as unknown as Hyperdrive,
     ...overrides,
   };
 }
@@ -239,7 +239,7 @@ describe("membership-worker: authorization-context internal route", () => {
   });
 
   describe("missing DB binding", () => {
-    it("returns 503 when SOURCEPLANE_DB is missing", async () => {
+    it("returns 503 when PLATFORM_DB is missing", async () => {
       const env: Env = { ENVIRONMENT: "test" };
       const req = makeRequest({ subject: { type: "user", id: "usr_1" }, orgId: ORG_ID });
 

@@ -68,7 +68,7 @@ export async function handleWebhookIntake(
   if (request.method !== "POST") {
     return errorResponse("method_not_allowed", "Method not allowed", 405, requestId);
   }
-  if (!deps.repoFactory && !env.SOURCEPLANE_DB) {
+  if (!deps.repoFactory && !env.PLATFORM_DB) {
     return errorResponse("internal_error", "Service misconfigured", 503, requestId);
   }
 
@@ -186,7 +186,7 @@ async function assignFor(
     const events = deps.eventsFactory ? deps.eventsFactory(env) : null;
     outcome = await assignPlanWithRepos(repo, events, parsed, def, opts);
   } else {
-    const executor = createSqlExecutor(env.SOURCEPLANE_DB!);
+    const executor = createSqlExecutor(env.PLATFORM_DB!);
     try {
       if ("transaction" in executor) {
         outcome = await executor.transaction(async (txExec) => {

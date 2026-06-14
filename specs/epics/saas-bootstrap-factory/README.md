@@ -64,10 +64,10 @@ that quality into reuse.
 | BF0 | Truth pass: docs match code reality | No | ✅ Shipped |
 | BF1 | Encode the real infra dependency DAG | No | ✅ Shipped |
 | BF2 | Parameterize the Terraform + stack identity surface | No | ✅ Shipped |
-| BF3 | App identity via config indirection | No | 🗓️ Planned |
-| BF4 | Generalize runtime binding names | No | 🗓️ Planned |
-| BF5 | Wiring manifest from Terraform outputs | No | 🗓️ Planned |
-| BF6 | Deploy-time wiring in worker compositions (keystone) | Deploy approvals only | 🗓️ Planned |
+| BF3 | App identity via config indirection | No | ✅ Shipped |
+| BF4 | Generalize runtime binding names | No | ✅ Shipped |
+| BF5 | Wiring manifest from Terraform outputs | No | ✅ Shipped |
+| BF6 | Deploy-time wiring in worker compositions (keystone) | Deploy approvals only | 🛠️ In progress (api-edge pilot shipped; fleet rollout = BF6b) |
 | BF7 | Finish cloudflare-domain v5 re-import (0085b) | Deploy approvals; registrar access if DNS changes | 🗓️ Planned |
 | BF8 | Foundation component for fresh AWS accounts | **Yes — AWS admin creds (one-time)** | 🗓️ Planned |
 | BF9 | Preflight doctor for external prerequisites | No (humans supply the secrets it checks) | 🗓️ Planned |

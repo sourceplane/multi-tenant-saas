@@ -27,7 +27,7 @@ function createMockHyperdrive(): Hyperdrive {
 
 function createEnv(overrides?: Record<string, unknown>): Env {
   const base: Env = {
-    SOURCEPLANE_DB: createMockHyperdrive(),
+    PLATFORM_DB: createMockHyperdrive(),
     MEMBERSHIP_WORKER: createMockFetcher(async () =>
       Response.json({ data: { memberships: [{ kind: "role_assignment", role: "owner", scope: { kind: "organization", orgId: TEST_ORG_UUID } }] } }),
     ),
@@ -88,8 +88,8 @@ describe("events-worker router", () => {
       expect(res.status).toBe(401);
     });
 
-    it("returns 503 when SOURCEPLANE_DB is missing", async () => {
-      const env = createEnv({ SOURCEPLANE_DB: undefined });
+    it("returns 503 when PLATFORM_DB is missing", async () => {
+      const env = createEnv({ PLATFORM_DB: undefined });
       const res = await route(makeRequest(`/v1/organizations/${TEST_ORG_PUBLIC_ID}/audit`), env);
       expect(res.status).toBe(503);
     });

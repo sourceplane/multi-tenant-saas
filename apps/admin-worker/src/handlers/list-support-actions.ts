@@ -99,11 +99,11 @@ export async function handleListSupportActions(
     return successResponse({ supportActions: items.map(publicRecord) }, requestId, 200, cursorToken);
   }
 
-  if (!env.SOURCEPLANE_DB) {
+  if (!env.PLATFORM_DB) {
     return errorResponse("internal_error", "Database not configured", 503, requestId);
   }
 
-  const executor = createSqlExecutor(env.SOURCEPLANE_DB);
+  const executor = createSqlExecutor(env.PLATFORM_DB);
   try {
     const repo = createSupportRepository(executor);
     const listResult = await repo.listSupportActions(targetOrgUuid, pageParams);

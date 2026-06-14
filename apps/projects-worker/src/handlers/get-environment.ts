@@ -22,7 +22,7 @@ export async function handleGetEnvironment(
   environmentId: string,
   deps?: HandleGetEnvironmentDeps,
 ): Promise<Response> {
-  if (!env.SOURCEPLANE_DB) {
+  if (!env.PLATFORM_DB) {
     return errorResponse("internal_error", "Service unavailable", 503, requestId);
   }
   if (!env.MEMBERSHIP_WORKER) {
@@ -56,7 +56,7 @@ export async function handleGetEnvironment(
     return errorResponse("not_found", "Not found", 404, requestId);
   }
 
-  const executor = createSqlExecutor(env.SOURCEPLANE_DB);
+  const executor = createSqlExecutor(env.PLATFORM_DB);
   try {
     const repo = deps?.projectsRepo ?? createProjectsRepository(executor);
 

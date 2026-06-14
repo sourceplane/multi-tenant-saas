@@ -163,7 +163,7 @@ export async function handleCreateApiKey(
   requestId: string,
   deps?: ApiKeyAdminDeps,
 ): Promise<Response> {
-  if (!env.SOURCEPLANE_DB) return errorResponse("internal_error", "Service unavailable", 503, requestId);
+  if (!env.PLATFORM_DB) return errorResponse("internal_error", "Service unavailable", 503, requestId);
   if (!env.MEMBERSHIP_WORKER) return errorResponse("internal_error", "Service unavailable", 503, requestId);
   if (!env.POLICY_WORKER) return errorResponse("internal_error", "Service unavailable", 503, requestId);
 
@@ -251,7 +251,7 @@ export async function handleCreateApiKey(
   if (!bindResult.ok) return errorResponse("internal_error", "Failed to create service principal binding", 500, requestId);
 
   // Persist identity-side state in a transaction
-  const executor = deps?.identityRepo && deps?.eventsRepo ? null : createSqlExecutor(env.SOURCEPLANE_DB);
+  const executor = deps?.identityRepo && deps?.eventsRepo ? null : createSqlExecutor(env.PLATFORM_DB);
   try {
     const doCreate = async (identityRepo: IdentityRepository, eventsRepo: EventsRepository) => {
       // Create service principal
@@ -392,7 +392,7 @@ export async function handleListApiKeys(
   requestId: string,
   deps?: ApiKeyAdminDeps,
 ): Promise<Response> {
-  if (!env.SOURCEPLANE_DB) return errorResponse("internal_error", "Service unavailable", 503, requestId);
+  if (!env.PLATFORM_DB) return errorResponse("internal_error", "Service unavailable", 503, requestId);
   if (!env.MEMBERSHIP_WORKER) return errorResponse("internal_error", "Service unavailable", 503, requestId);
   if (!env.POLICY_WORKER) return errorResponse("internal_error", "Service unavailable", 503, requestId);
 
@@ -424,7 +424,7 @@ export async function handleListApiKeys(
   const cursorParam = url.searchParams.get("cursor");
   const limit = limitParam ? Math.min(Math.max(parseInt(limitParam, 10) || 20, 1), 100) : 20;
 
-  const executor = deps?.identityRepo ? null : createSqlExecutor(env.SOURCEPLANE_DB);
+  const executor = deps?.identityRepo ? null : createSqlExecutor(env.PLATFORM_DB);
   try {
     const identityRepo = deps?.identityRepo ?? createIdentityRepository(executor!);
 
@@ -524,7 +524,7 @@ export async function handleRevokeApiKey(
   requestId: string,
   deps?: ApiKeyAdminDeps,
 ): Promise<Response> {
-  if (!env.SOURCEPLANE_DB) return errorResponse("internal_error", "Service unavailable", 503, requestId);
+  if (!env.PLATFORM_DB) return errorResponse("internal_error", "Service unavailable", 503, requestId);
   if (!env.MEMBERSHIP_WORKER) return errorResponse("internal_error", "Service unavailable", 503, requestId);
   if (!env.POLICY_WORKER) return errorResponse("internal_error", "Service unavailable", 503, requestId);
 
@@ -544,7 +544,7 @@ export async function handleRevokeApiKey(
   if (!actorUuid) return errorResponse("validation_failed", "Invalid actor id", 422, requestId);
 
   // Authorization: need to know the key's scope to authorize correctly
-  const executor = deps?.identityRepo && deps?.eventsRepo ? null : createSqlExecutor(env.SOURCEPLANE_DB);
+  const executor = deps?.identityRepo && deps?.eventsRepo ? null : createSqlExecutor(env.PLATFORM_DB);
   try {
     const identityRepo = deps?.identityRepo ?? createIdentityRepository(executor!);
 

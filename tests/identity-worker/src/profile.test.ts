@@ -38,7 +38,7 @@ async function setupAuthenticatedUser(repo: ReturnType<typeof createFakeReposito
 }
 
 function makeEnv(db: Hyperdrive = {} as Hyperdrive): Env {
-  return { SOURCEPLANE_DB: db, ENVIRONMENT: "test" } as Env;
+  return { PLATFORM_DB: db, ENVIRONMENT: "test" } as Env;
 }
 
 function makeGetRequest(token?: string) {
@@ -86,6 +86,19 @@ describe("GET /v1/auth/profile", () => {
     expect(json.data.user.email).toBe("test@example.com");
     expect(json.data.user.id).toBeDefined();
     expect(json.meta.requestId).toBe("req_p3");
+  });
+
+  it("carries Server-Timing phases on GET (PERF14b)", async () => {
+    const repo = createFakeRepository();
+    const { token } = await setupAuthenticatedUser(repo);
+
+    const response = await handleProfile(makeGetRequest(token), makeEnv(), "req_p4", { repo });
+    expect(response.status).toBe(200);
+    const timing = response.headers.get("Server-Timing");
+    expect(timing).toBeTruthy();
+    for (const phase of ["resolve", "total"]) {
+      expect(timing).toContain(phase);
+    }
   });
 });
 

@@ -19,8 +19,7 @@ import type { OutputMode } from "../output/index.js";
 import { formatOutput } from "../output/index.js";
 import type { ContextStore } from "../context/store.js";
 import type { TokenStore } from "../token-store/types.js";
-
-const DEFAULT_API_URL = "https://api.sourceplane.dev";
+import { DEFAULT_API_URL } from "../brand.js";
 
 export interface LoginInput {
   readonly apiUrl?: string;

@@ -119,8 +119,8 @@ export async function handleReconcile(
       const repo = deps.repoFactory(env);
       const events = deps.eventsFactory ? deps.eventsFactory(env) : null;
       outcome = await assignPlanWithRepos(repo, events, parsed, def, opts);
-    } else if (env.SOURCEPLANE_DB) {
-      const executor = createSqlExecutor(env.SOURCEPLANE_DB);
+    } else if (env.PLATFORM_DB) {
+      const executor = createSqlExecutor(env.PLATFORM_DB);
       try {
         if ("transaction" in executor) {
           outcome = await executor.transaction(async (txExec) => {

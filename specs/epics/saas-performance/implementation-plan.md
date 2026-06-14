@@ -117,7 +117,15 @@ ingestion stays within the included tier (~$50–80/mo exposure at 50M req/mo
 otherwise). The `Server-Timing` *header* stays unsampled (free). Wired into the
 api-edge emit sites (`withEdgeTimings`, `finishGate`). Owner: api-edge + contracts.
 
-## PERF14b — Server-Timing coverage for uninstrumented handlers — 🗓️ Planned
-Add `createTimings()` phases to the ~20 handlers that emit none (billing reads,
-config, webhooks, identity resolve, metering), and apply the same `shouldEmitTimingLog`
-sampling at each worker's `withTimings`. Feeds PERF6b dashboards. Owner: all workers.
+## PERF14b — Server-Timing coverage for uninstrumented handlers — 🔄 In progress
+Slice 1 ✅ (PR #320): `shouldEmitTimingLog` sampling applied at the 4 existing
+worker `withTimings` sites (billing/events/membership/projects). Slice 2 ✅:
+config-worker list handlers (settings/flags/secrets) instrumented with
+`authz_ctx`∥`db` + `policy` + `total` phases — makes the PERF12b overlap
+directly visible — with a sampled `withTimings`. Slice 3 ✅: webhooks-worker
+PERF12c read handlers (endpoints list, delivery-attempts list/get) with
+`authz`∥`db` + `total`. Slice 4 ✅: identity-worker hot resolve paths
+(resolve-bearer — every edge bearer-cache miss, the PERF12d JOIN — plus
+session and profile GET) with `resolve` + `total`. Remaining: metering (0/6),
+notifications (0/6), integrations (0/3), billing's other reads, and the
+login/oauth flows. Feeds PERF6b dashboards. Owner: all workers.

@@ -335,7 +335,7 @@ export async function handleAssignPlan(
   if (request.method !== "POST") {
     return errorResponse("method_not_allowed", "Method not allowed", 405, requestId);
   }
-  if (!deps.repoFactory && !env.SOURCEPLANE_DB) {
+  if (!deps.repoFactory && !env.PLATFORM_DB) {
     return errorResponse("internal_error", "Service misconfigured", 503, requestId);
   }
 
@@ -363,7 +363,7 @@ export async function handleAssignPlan(
   }
 
   // Production path: wrap subscription + entitlement + events atomically.
-  const executor = createSqlExecutor(env.SOURCEPLANE_DB!);
+  const executor = createSqlExecutor(env.PLATFORM_DB!);
   try {
     if ("transaction" in executor) {
       const outcome = await executor.transaction(async (txExec) => {

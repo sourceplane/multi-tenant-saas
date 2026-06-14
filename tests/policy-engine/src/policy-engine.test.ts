@@ -686,7 +686,7 @@ describe("listEffectivePermissions", () => {
     expect(result.derivedScope.orgId).toBe("org_1");
 
     const allowed = result.permissions.filter((p) => p.allow);
-    expect(allowed.length).toBe(30);
+    expect(allowed.length).toBe(31);
   });
 
   it("returns limited permissions for viewer", () => {
@@ -975,6 +975,43 @@ describe("integration actions (saas-integrations IG1)", () => {
     expect(
       authorize(
         authReq("organization.integration.connect", ORG, [projectFact("project_admin", ORG, "p1")]),
+      ).allow,
+    ).toBe(false);
+  });
+});
+
+describe("project.repo_link.write (saas-integrations IG3)", () => {
+  const ORG = "org-1";
+
+  it("requires a projectId (project-scoped action)", () => {
+    expect(
+      authorize(authReq("project.repo_link.write", ORG, [orgFact("owner", ORG)])).allow,
+    ).toBe(false);
+    expect(
+      authorize(authReq("project.repo_link.write", ORG, [orgFact("owner", ORG)], "p1")).allow,
+    ).toBe(true);
+  });
+
+  it("grants org owner/admin and the project's own admin, denies the rest", () => {
+    expect(
+      authorize(authReq("project.repo_link.write", ORG, [orgFact("admin", ORG)], "p1")).allow,
+    ).toBe(true);
+    expect(
+      authorize(
+        authReq("project.repo_link.write", ORG, [projectFact("project_admin", ORG, "p1")], "p1"),
+      ).allow,
+    ).toBe(true);
+    expect(
+      authorize(
+        authReq("project.repo_link.write", ORG, [projectFact("project_admin", ORG, "p2")], "p1"),
+      ).allow,
+    ).toBe(false);
+    expect(
+      authorize(authReq("project.repo_link.write", ORG, [orgFact("builder", ORG)], "p1")).allow,
+    ).toBe(false);
+    expect(
+      authorize(
+        authReq("project.repo_link.write", ORG, [projectFact("project_builder", ORG, "p1")], "p1"),
       ).allow,
     ).toBe(false);
   });

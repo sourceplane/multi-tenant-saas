@@ -138,7 +138,7 @@ describe("materializeRecentRollups", () => {
 // ── runScheduledMaterialization ───────────────────────────
 
 describe("runScheduledMaterialization", () => {
-  it("fails closed and logs when SOURCEPLANE_DB is missing — no throw, no repo call", async () => {
+  it("fails closed and logs when PLATFORM_DB is missing — no throw, no repo call", async () => {
     const env: Env = { ENVIRONMENT: "test" };
     const errors: unknown[][] = [];
     const originalError = console.error;
@@ -150,6 +150,6 @@ describe("runScheduledMaterialization", () => {
     } finally {
       console.error = originalError;
     }
-    expect(errors.some((e) => String(e[0]).includes("SOURCEPLANE_DB binding missing"))).toBe(true);
+    expect(errors.some((e) => String(e[0]).includes("PLATFORM_DB binding missing"))).toBe(true);
   });
 });

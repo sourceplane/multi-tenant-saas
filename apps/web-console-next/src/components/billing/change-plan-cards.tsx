@@ -29,11 +29,11 @@ import {
   pollForPlanChange,
   type PlanChangeAction,
 } from "./plan-actions";
+import { SALES_EMAIL } from "@/lib/app-config";
 
 const POLL_ATTEMPTS = 20;
 const POLL_INTERVAL_MS = 1500;
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
-const SALES_EMAIL = "sales@sourceplane.ai";
 
 /**
  * Polar-style "Change plan" screen: a grid of plan cards (current marked

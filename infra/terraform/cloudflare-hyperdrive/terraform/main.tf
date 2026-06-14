@@ -120,7 +120,7 @@ variable "terraformVersion" {
 # Fetch Supabase connection details from AWS Secrets Manager
 # Written by the supabase component
 data "aws_secretsmanager_secret_version" "supabase" {
-  secret_id = "sourceplane/multi-tenant-saas/supabase/${var.environment}"
+  secret_id = "${var.orgName}/${var.repo}/supabase/${var.environment}"
 }
 
 locals {
@@ -159,7 +159,36 @@ resource "cloudflare_hyperdrive_config" "postgres" {
   }
 }
 
+# --- Wiring manifest (BF5) ---
+# Publish the consumable outputs of this component at the conventional
+# `<org>/<repo>/<component>/<env>` Secrets Manager path so downstream consumers
+# (BF6 deploy-time wiring) resolve resource IDs from here instead of committed
+# literals. Stable secret container + rotating version, mirroring the supabase
+# component's pattern.
+
+resource "aws_secretsmanager_secret" "wiring" {
+  name        = "${var.orgName}/${var.repo}/${var.component}/${var.environment}"
+  description = "Wiring outputs of the cloudflare-hyperdrive component (consumed by Worker deploy-time binding resolution)"
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+resource "aws_secretsmanager_secret_version" "wiring" {
+  secret_id = aws_secretsmanager_secret.wiring.id
+  secret_string = jsonencode({
+    hyperdrive_id   = cloudflare_hyperdrive_config.postgres.id
+    hyperdrive_name = cloudflare_hyperdrive_config.postgres.name
+  })
+}
+
 # --- Outputs (non-secret) ---
+
+output "wiring_secret_arn" {
+  description = "ARN of the wiring-manifest secret for this component/environment"
+  value       = aws_secretsmanager_secret.wiring.arn
+}
 
 output "hyperdrive_id" {
   description = "Cloudflare Hyperdrive config ID"

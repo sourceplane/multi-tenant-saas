@@ -56,6 +56,30 @@ Last updated: 2026-05-26
   non-blocking Orun/spec limitation for now because the components subscribe to
   different environments. Proposal `ai/proposals/task-0007.1-spec-update.md`
   records the deferred follow-up.
+- BF6 pilot (saas-bootstrap-factory): Worker binding IDs are resolved at
+  deploy time, never committed. Pattern (piloted on api-edge): committed
+  `wrangler.template.jsonc` with `@@wiring(<component>/<env>:<key>)@@` tokens +
+  committed `wiring.fixture.json` for offline verify/dry-run; rendered
+  `wrangler.jsonc` is gitignored. The cloudflare-worker-turbo composition owns
+  `wire-fixture` (verify lanes, offline) and `wire-credentials`/`wire-live`
+  (deploy lanes, OIDC plan role reads the BF5 wiring secrets).
+  `verify-structure` rejects committed 32-hex IDs in templates. All 13 worker
+  components carry the role-identity params so the shared deploy profile's
+  use-step renders a valid ARN even for not-yet-templated workers.
+- BF5 (saas-bootstrap-factory): infra components publish their consumable
+  outputs ("wiring manifest") to AWS Secrets Manager at their conventional
+  `<org>/<repo>/<component>/<env>` path, as Terraform-owned resources (stable
+  container + rotating version). cloudflare-hyperdrive publishes
+  hyperdrive_id/name; cloudflare-kv publishes the api-edge idempotency KV
+  id/title. Consumers (BF6 deploy-time wiring) assemble per-component paths at
+  read time. No new `/wiring/` namespace — the existing convention + IAM
+  write scope (`sourceplane/multi-tenant-saas/*`) already cover it.
+- BF4 (saas-bootstrap-factory): the Hyperdrive binding name is `PLATFORM_DB`
+  (was `SOURCEPLANE_DB`; epic decision D1). Renamed atomically across all 12
+  DB-bound workers' wrangler configs + code in one PR with **no alias period**:
+  a Worker's binding config and code bundle ship in a single `wrangler deploy`,
+  so config/code skew within a worker cannot occur. Historical `ai/reports/`
+  mentions are frozen as-is.
 - BF1 (saas-bootstrap-factory): the real infra ordering is now encoded as
   `dependsOn` edges — `supabase → bootstrap`, `cloudflare-hyperdrive →
   supabase`, and `db-migrate → supabase` (in addition to the existing

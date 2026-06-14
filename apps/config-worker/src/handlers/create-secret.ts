@@ -135,7 +135,7 @@ export async function handleCreateSecret(
     return errorResponse("internal_error", "Encryption is not configured", 503, requestId);
   }
 
-  if (!deps && !env.SOURCEPLANE_DB) {
+  if (!deps && !env.PLATFORM_DB) {
     return errorResponse("internal_error", "Service unavailable", 503, requestId);
   }
   if (!deps && !env.MEMBERSHIP_WORKER) {
@@ -215,7 +215,7 @@ export async function handleCreateSecret(
     input.ciphertextEnvelope = ciphertextEnvelope;
   }
 
-  const executor = deps ? null : createSqlExecutor(env.SOURCEPLANE_DB!);
+  const executor = deps ? null : createSqlExecutor(env.PLATFORM_DB!);
   try {
     if (executor && "transaction" in executor) {
       const txResult = await executor.transaction(async (txExec) => {

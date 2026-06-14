@@ -17,7 +17,7 @@ export async function handleListPlans(
   actor: ActorContext,
   orgId: string,
 ): Promise<Response> {
-  if (!env.SOURCEPLANE_DB) {
+  if (!env.PLATFORM_DB) {
     return errorResponse("internal_error", "Service misconfigured", 503, requestId);
   }
 
@@ -31,7 +31,7 @@ export async function handleListPlans(
     status = rawStatus as PlanStatus;
   }
 
-  const executor = createSqlExecutor(env.SOURCEPLANE_DB);
+  const executor = createSqlExecutor(env.PLATFORM_DB);
   const repo = createBillingRepository(executor);
   try {
     // PERF12: authorization (membership + policy) and the read are independent —

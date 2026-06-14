@@ -27,7 +27,7 @@ export async function handleCreateServicePrincipalBinding(
   requestId: string,
   deps?: ServicePrincipalBindingDeps,
 ): Promise<Response> {
-  if (!env.SOURCEPLANE_DB) {
+  if (!env.PLATFORM_DB) {
     return errorResponse("internal_error", "Service unavailable", 503, requestId);
   }
 
@@ -77,7 +77,7 @@ export async function handleCreateServicePrincipalBinding(
     return validationError(requestId, { role: [`Invalid role '${role}' for scope '${scopeKind}'`] });
   }
 
-  const executor = deps?.repo ? null : createSqlExecutor(env.SOURCEPLANE_DB);
+  const executor = deps?.repo ? null : createSqlExecutor(env.PLATFORM_DB);
   const repo = deps?.repo ?? createMembershipRepository(executor!);
 
   try {
@@ -116,7 +116,7 @@ export async function handleListServicePrincipalBindings(
   url: URL,
   deps?: ServicePrincipalBindingDeps,
 ): Promise<Response> {
-  if (!env.SOURCEPLANE_DB) {
+  if (!env.PLATFORM_DB) {
     return errorResponse("internal_error", "Service unavailable", 503, requestId);
   }
 
@@ -130,7 +130,7 @@ export async function handleListServicePrincipalBindings(
     return validationError(requestId, { subjectId: ["Must be a valid service_principal subject ID (sp_<hex32>)"] });
   }
 
-  const executor = deps?.repo ? null : createSqlExecutor(env.SOURCEPLANE_DB);
+  const executor = deps?.repo ? null : createSqlExecutor(env.PLATFORM_DB);
   const repo = deps?.repo ?? createMembershipRepository(executor!);
 
   try {
@@ -160,7 +160,7 @@ export async function handleRevokeServicePrincipalBinding(
   url: URL,
   deps?: ServicePrincipalBindingDeps,
 ): Promise<Response> {
-  if (!env.SOURCEPLANE_DB) {
+  if (!env.PLATFORM_DB) {
     return errorResponse("internal_error", "Service unavailable", 503, requestId);
   }
 
@@ -169,7 +169,7 @@ export async function handleRevokeServicePrincipalBinding(
     return validationError(requestId, { orgId: ["Required query parameter"] });
   }
 
-  const executor = deps?.repo ? null : createSqlExecutor(env.SOURCEPLANE_DB);
+  const executor = deps?.repo ? null : createSqlExecutor(env.PLATFORM_DB);
   const repo = deps?.repo ?? createMembershipRepository(executor!);
 
   try {

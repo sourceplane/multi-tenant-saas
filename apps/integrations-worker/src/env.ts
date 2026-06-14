@@ -1,8 +1,9 @@
 export interface Env {
-  SOURCEPLANE_DB?: Hyperdrive;
+  PLATFORM_DB?: Hyperdrive;
   MEMBERSHIP_WORKER?: Fetcher;
   POLICY_WORKER?: Fetcher;
   BILLING_WORKER?: Fetcher;
+  PROJECTS_WORKER?: Fetcher;
   ENVIRONMENT: string;
 
   // ── Per-environment secrets (wrangler secret put; never vars) ──

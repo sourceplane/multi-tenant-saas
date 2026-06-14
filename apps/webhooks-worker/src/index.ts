@@ -12,12 +12,12 @@ export default {
   },
 
   async scheduled(_controller: ScheduledController, env: Env, _ctx: ExecutionContext): Promise<void> {
-    if (!env.SOURCEPLANE_DB) {
-      console.error("[scheduled] SOURCEPLANE_DB binding missing");
+    if (!env.PLATFORM_DB) {
+      console.error("[scheduled] PLATFORM_DB binding missing");
       return;
     }
 
-    const executor = createSqlExecutor(env.SOURCEPLANE_DB);
+    const executor = createSqlExecutor(env.PLATFORM_DB);
     const webhookRepo = createWebhookRepository(executor);
     const eventsRepo = createEventsRepository(executor);
     const encryption = await createEncryptionAdapter(env.SECRET_ENCRYPTION_KEY);

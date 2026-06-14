@@ -5,7 +5,8 @@ import { createEventsRepository } from "@saas/db/events";
 import { createSqlExecutor } from "@saas/db/hyperdrive";
 import { fetchAuthorizationContext } from "../membership-client.js";
 import { authorizeViaPolicy } from "../policy-client.js";
-import { errorResponse, successResponse, listResponse, validationError } from "../http.js";
+import { errorResponse, successResponse, listResponse, validationError, withTimings } from "../http.js";
+import { createTimings } from "@saas/contracts/timing";
 import { toPublicWebhookEndpoint } from "../mappers.js";
 import { parsePageParams, encodeCursor } from "../pagination.js";
 import { parseProjectPublicId } from "../ids.js";
@@ -147,7 +148,7 @@ export async function handleCreateWebhookEndpoint(
   const encrypted = await encryptSigningSecret(env);
   const secretCiphertext = encrypted?.ciphertext;
 
-  const executor = createSqlExecutor(env.SOURCEPLANE_DB!);
+  const executor = createSqlExecutor(env.PLATFORM_DB!);
   try {
     const repo = createWebhookRepository(executor);
     const eventsRepo = createEventsRepository(executor);
@@ -215,7 +216,7 @@ export async function handleGetWebhookEndpoint(
   orgId: string,
   endpointId: string,
 ): Promise<Response> {
-  const executor = createSqlExecutor(env.SOURCEPLANE_DB!);
+  const executor = createSqlExecutor(env.PLATFORM_DB!);
   try {
     const repo = createWebhookRepository(executor);
     const result = await repo.getEndpoint(orgId, endpointId);
@@ -259,19 +260,25 @@ export async function handleListWebhookEndpoints(
   const { limit, cursor } = pageResult.value;
   const dbCursor = cursor ? { createdAt: cursor.createdAt, id: cursor.id } : null;
 
-  const executor = createSqlExecutor(env.SOURCEPLANE_DB!);
+  const executor = createSqlExecutor(env.PLATFORM_DB!);
+  // PERF14b: phase timings — `authz` and `db` run concurrently (PERF12c), so
+  // their overlap is directly visible in the Server-Timing breakdown.
+  const timings = createTimings();
+  const endTotal = timings.start("total");
+  const route = "webhooks.endpoints.list";
   try {
     const repo = createWebhookRepository(executor);
     // PERF12: authorization (membership + policy) and the read are independent
     // (the policy resource is the route's org/project, not row-derived) — run
     // them concurrently and discard the speculatively read rows on deny.
     const [denied, result] = await Promise.all([
-      authorizeWebhook(env, actor, orgId, projectId, policyAction, requestId),
-      repo.listEndpoints(orgId, { limit, cursor: dbCursor }, projectId),
+      timings.measure("authz", () => authorizeWebhook(env, actor, orgId, projectId, policyAction, requestId)),
+      timings.measure("db", () => repo.listEndpoints(orgId, { limit, cursor: dbCursor }, projectId)),
     ]);
-    if (denied) return denied;
+    endTotal();
+    if (denied) return withTimings(denied, requestId, route, timings);
     if (!result.ok) {
-      return errorResponse("internal_error", "Service unavailable", 503, requestId);
+      return withTimings(errorResponse("internal_error", "Service unavailable", 503, requestId), requestId, route, timings);
     }
 
     const endpoints = result.value.items.map(toPublicWebhookEndpoint);
@@ -279,7 +286,7 @@ export async function handleListWebhookEndpoints(
       ? encodeCursor(result.value.nextCursor.createdAt, result.value.nextCursor.id)
       : null;
 
-    return listResponse({ endpoints }, requestId, nextCursor);
+    return withTimings(listResponse({ endpoints }, requestId, nextCursor), requestId, route, timings);
   } catch {
     return errorResponse("internal_error", "Service unavailable", 503, requestId);
   } finally {
@@ -324,7 +331,7 @@ export async function handleUpdateWebhookEndpoint(
     return validationError(requestId, fields);
   }
 
-  const executor = createSqlExecutor(env.SOURCEPLANE_DB!);
+  const executor = createSqlExecutor(env.PLATFORM_DB!);
   try {
     const repo = createWebhookRepository(executor);
     const eventsRepo = createEventsRepository(executor);
@@ -399,7 +406,7 @@ export async function handleDisableWebhookEndpoint(
     // body is optional for disable
   }
 
-  const executor = createSqlExecutor(env.SOURCEPLANE_DB!);
+  const executor = createSqlExecutor(env.PLATFORM_DB!);
   try {
     const repo = createWebhookRepository(executor);
     const eventsRepo = createEventsRepository(executor);
@@ -480,7 +487,7 @@ export async function handleEnableWebhookEndpoint(
   endpointId: string,
   deps?: EnableWebhookEndpointDeps,
 ): Promise<Response> {
-  const executor = deps ? null : createSqlExecutor(env.SOURCEPLANE_DB!);
+  const executor = deps ? null : createSqlExecutor(env.PLATFORM_DB!);
   try {
     const repo = deps ? deps.repo : createWebhookRepository(executor!);
 
@@ -615,7 +622,7 @@ export async function handleDeleteWebhookEndpoint(
   orgId: string,
   endpointId: string,
 ): Promise<Response> {
-  const executor = createSqlExecutor(env.SOURCEPLANE_DB!);
+  const executor = createSqlExecutor(env.PLATFORM_DB!);
   try {
     const repo = createWebhookRepository(executor);
     const eventsRepo = createEventsRepository(executor);
@@ -678,7 +685,7 @@ export async function handleRotateWebhookSecret(
   orgId: string,
   endpointId: string,
 ): Promise<Response> {
-  const executor = createSqlExecutor(env.SOURCEPLANE_DB!);
+  const executor = createSqlExecutor(env.PLATFORM_DB!);
   try {
     const repo = createWebhookRepository(executor);
     const eventsRepo = createEventsRepository(executor);

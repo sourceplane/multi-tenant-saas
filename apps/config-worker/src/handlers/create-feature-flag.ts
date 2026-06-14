@@ -71,7 +71,7 @@ export async function handleCreateFeatureFlag(
     return validationError(requestId, fields);
   }
 
-  if (!deps && !env.SOURCEPLANE_DB) {
+  if (!deps && !env.PLATFORM_DB) {
     return errorResponse("internal_error", "Service unavailable", 503, requestId);
   }
   if (!deps && !env.MEMBERSHIP_WORKER) {
@@ -118,7 +118,7 @@ export async function handleCreateFeatureFlag(
   const genId = deps?.generateId ?? (() => randomHex(16));
   const now = deps?.now ? deps.now() : new Date();
 
-  const executor = deps ? null : createSqlExecutor(env.SOURCEPLANE_DB!);
+  const executor = deps ? null : createSqlExecutor(env.PLATFORM_DB!);
   try {
     if (executor && "transaction" in executor) {
       const txResult = await executor.transaction(async (txExec) => {

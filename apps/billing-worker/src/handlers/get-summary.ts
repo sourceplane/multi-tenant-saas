@@ -27,13 +27,13 @@ export async function handleGetBillingSummary(
   orgId: string,
   deps?: HandleGetBillingSummaryDeps,
 ): Promise<Response> {
-  if (!deps?.repo && !env.SOURCEPLANE_DB) {
+  if (!deps?.repo && !env.PLATFORM_DB) {
     return errorResponse("internal_error", "Service misconfigured", 503, requestId);
   }
 
   const timings = createTimings();
   const endTotal = timings.start("total");
-  const executor = deps?.repo ? null : createSqlExecutor(env.SOURCEPLANE_DB!);
+  const executor = deps?.repo ? null : createSqlExecutor(env.PLATFORM_DB!);
   const repo = deps?.repo ?? createBillingRepository(executor!);
   try {
     // PERF4 (task 0133): authorization (membership context + policy) and the

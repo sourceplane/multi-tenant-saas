@@ -39,7 +39,7 @@ export async function handleListMembers(
     pageParams = { limit, cursor: cursor ? { createdAt: cursor.createdAt, id: cursor.id } : null };
   }
 
-  if (!deps && !env.SOURCEPLANE_DB) {
+  if (!deps && !env.PLATFORM_DB) {
     return errorResponse("internal_error", "Database not configured", 503, requestId);
   }
 
@@ -50,7 +50,7 @@ export async function handleListMembers(
   const policyWorker = env.POLICY_WORKER;
   const timings = createTimings();
   const endTotal = timings.start("total");
-  const executor = deps ? null : createSqlExecutor(env.SOURCEPLANE_DB!);
+  const executor = deps ? null : createSqlExecutor(env.PLATFORM_DB!);
   try {
     const repo = deps ? deps.repo : createMembershipRepository(executor!);
 

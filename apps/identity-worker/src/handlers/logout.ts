@@ -11,11 +11,11 @@ export async function handleLogout(request: Request, env: Env, requestId: string
     return errorResponse("unauthenticated", "Missing or invalid Authorization header", 401, requestId);
   }
 
-  if (!env.SOURCEPLANE_DB) {
+  if (!env.PLATFORM_DB) {
     return errorResponse("internal_error", "Database not configured", 503, requestId);
   }
 
-  const executor = createSqlExecutor(env.SOURCEPLANE_DB);
+  const executor = createSqlExecutor(env.PLATFORM_DB);
   try {
     const repo = createIdentityRepository(executor);
     const ctx = extractRequestContext(request, requestId);

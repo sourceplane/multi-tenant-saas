@@ -19,6 +19,7 @@
 //     happens here — that all comes from the SDK.
 
 import { Sourceplane, SourceplaneError, type ClientOptions } from "@saas/sdk";
+import { apiEdgeWorkersDevUrl } from "./app-config";
 
 export type ApiClient = Sourceplane;
 
@@ -28,8 +29,8 @@ export interface ApiTarget {
 }
 
 const ALL_TARGETS: ApiTarget[] = [
-  { name: "stage", url: "https://api-edge-stage.rahulvarghesepullely.workers.dev" },
-  { name: "prod", url: "https://api-edge-prod.rahulvarghesepullely.workers.dev" },
+  { name: "stage", url: apiEdgeWorkersDevUrl("stage") },
+  { name: "prod", url: apiEdgeWorkersDevUrl("prod") },
 ];
 
 export const DEPLOY_ENV: string | undefined =

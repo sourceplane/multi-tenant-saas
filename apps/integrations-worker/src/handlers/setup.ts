@@ -105,7 +105,7 @@ export async function handleGithubSetupCallback(
   requestId: string,
   deps?: SetupDeps,
 ): Promise<Response> {
-  if (!env.SOURCEPLANE_DB) {
+  if (!env.PLATFORM_DB) {
     return popupPage("error", "Service unavailable", "The integration service is not ready.");
   }
 
@@ -118,7 +118,7 @@ export async function handleGithubSetupCallback(
     return popupPage("error", "Invalid callback", "The installation reference is missing.");
   }
 
-  const executor = deps?.executor ?? createSqlExecutor(env.SOURCEPLANE_DB);
+  const executor = deps?.executor ?? createSqlExecutor(env.PLATFORM_DB);
   const owned = !deps?.executor;
   try {
     const repo = createIntegrationsRepository(executor);

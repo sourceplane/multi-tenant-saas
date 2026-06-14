@@ -236,7 +236,7 @@ export async function handleCreateOrganization(
     return validationError(requestId, fields);
   }
 
-  if (!deps && !env.SOURCEPLANE_DB) {
+  if (!deps && !env.PLATFORM_DB) {
     return errorResponse("internal_error", "Database not configured", 503, requestId);
   }
 
@@ -254,7 +254,7 @@ export async function handleCreateOrganization(
     roleAssignment: { id: roleAssignmentId, orgId, subjectId: actor.subjectId, subjectType: actor.subjectType, role: "owner", scopeKind: "organization", scopeRef: null, createdAt: now },
   };
 
-  const executor = deps ? null : createSqlExecutor(env.SOURCEPLANE_DB!);
+  const executor = deps ? null : createSqlExecutor(env.PLATFORM_DB!);
   try {
     // MO2 gate / MO3 child linkage: an *additional* org is gated, then linked to
     // and fanned out from the account's billing parent. Bootstrap is exempt.

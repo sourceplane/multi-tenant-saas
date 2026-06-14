@@ -72,7 +72,7 @@ function billingFetcher(allowed: boolean, reason?: string): Fetcher {
 function createEnv(overrides?: Partial<Record<string, unknown>>): Env {
   return {
     ENVIRONMENT: "test",
-    SOURCEPLANE_DB: { connectionString: "postgres://fake" },
+    PLATFORM_DB: { connectionString: "postgres://fake" },
     MEMBERSHIP_WORKER: membershipFetcher(),
     POLICY_WORKER: policyFetcher(true),
     BILLING_WORKER: billingFetcher(true),
@@ -109,7 +109,8 @@ beforeAll(async () => {
   for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]!);
   const b64 = btoa(bin).match(/.{1,64}/g)!.join("\n");
   TEST_PRIVATE_KEY_PEM = `-----BEGIN PRIVATE KEY-----\n${b64}\n-----END PRIVATE KEY-----\n`;
-});
+}, 30_000); // RSA keygen can crawl under full-workspace test parallelism
+
 
 function pendingRow(overrides?: Record<string, unknown>): Record<string, unknown> {
   return {

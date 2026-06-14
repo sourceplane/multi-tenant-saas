@@ -162,6 +162,28 @@ export interface RevokeIntegrationResponse {
   revoked: true;
 }
 
+// ── Repository browsing (IG3) ───────────────────────────────
+
+/** Safe projection of a provider repository visible to an installation. */
+export interface PublicRepository {
+  /** Provider-side repository id (opaque string). */
+  externalId: string;
+  fullName: string;
+  defaultBranch: string | null;
+  private: boolean;
+}
+
+/**
+ * GET /v1/organizations/{orgId}/integrations/{connectionId}/repositories
+ * Lists repositories the installation can see (via the platform's cached
+ * installation token). `query` filters by substring of the full name.
+ */
+export interface ListRepositoriesResponse {
+  repositories: PublicRepository[];
+  /** True when the provider reported more pages than were fetched. */
+  truncated: boolean;
+}
+
 // ── Repo link flow ──────────────────────────────────────────
 
 /**

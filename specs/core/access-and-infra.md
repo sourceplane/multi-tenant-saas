@@ -86,6 +86,43 @@ sourceplane/multi-tenant-saas/supabase/stage
 Secret values must never be committed, echoed in logs, or copied into task
 reports. Reports may include secret names and non-secret resource IDs.
 
+### Worker Runtime Secrets
+
+Runtime secrets consumed by Cloudflare Workers (OAuth client secrets,
+`OAUTH_STATE_SECRET`, billing provider tokens, `SECRET_ENCRYPTION_KEY`, the
+GitHub App bundle) follow the same system-of-record rule. They are escrowed
+in AWS Secrets Manager as one JSON document per environment:
+
+```text
+<org>/<repo>/worker-secrets/<env>
+```
+
+mapping `worker → SECRET_NAME → value`. The committed, non-secret
+declaration of which secret names each worker requires is
+`tooling/secrets-sync/secrets.manifest.json`;
+`tooling/secrets-sync/check.mjs` validates escrow payloads and deployed
+secret names against it without printing values. Cloudflare worker secrets
+are deploy-time copies only — write-only, never the source of truth, and
+never read back. Workers must not call AWS Secrets Manager at request time.
+The `saas-secrets-sync` epic owns the sync/drift mechanics
+(`specs/epics/saas-secrets-sync/`).
+
+Provider **integration configuration** (non-secret but account/environment
+specific — OAuth client IDs, Polar product maps, email-from addresses) is
+co-located with its paired secret in one document per integration:
+
+```text
+<org>/<repo>/integrations/<name>/<env>
+```
+
+Non-integration secrets (`SECRET_ENCRYPTION_KEY`, `OAUTH_STATE_SECRET`,
+`INTEGRATIONS_STATE_SECRET`) share `<org>/<repo>/platform-secrets/<env>`.
+`tooling/secrets-sync/integrations.manifest.json` is the source of truth;
+config keys are non-secret and may be logged, secret keys never. Instance
+*branding* constants (product name, CLI binary, sales email) stay in the
+source `app-config` seam, and orchestration parameters (AWS account, region,
+domains) stay in `intent.yaml` — neither belongs in Secrets Manager.
+
 ## Terraform State
 
 Terraform state for this repo uses AWS S3, not Cloudflare R2.

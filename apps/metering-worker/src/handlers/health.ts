@@ -3,7 +3,7 @@ import { successResponse, errorResponse } from "../http.js";
 
 export function handleHealth(env: Env, requestId: string): Response {
   const missing: string[] = [];
-  if (!env.SOURCEPLANE_DB) missing.push("SOURCEPLANE_DB");
+  if (!env.PLATFORM_DB) missing.push("PLATFORM_DB");
   if (!env.MEMBERSHIP_WORKER) missing.push("MEMBERSHIP_WORKER");
   if (!env.POLICY_WORKER) missing.push("POLICY_WORKER");
 

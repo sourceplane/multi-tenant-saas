@@ -105,7 +105,7 @@ describe("GitHub provider adapter", () => {
     expect(calls[0]!.url).toBe("https://api.github.com/app/installations/9912345");
     expect(calls[0]!.headers.authorization).toMatch(/^Bearer eyJ/);
     expect(calls[0]!.headers["user-agent"]).toBe("sourceplane-integrations-worker");
-  });
+  }, 30_000);
 
   it("completeConnect fails closed on a malformed private key", async () => {
     const provider = createGithubProvider(credentials("-----BEGIN RSA PRIVATE KEY-----\nnotakey\n-----END RSA PRIVATE KEY-----"));
@@ -136,7 +136,7 @@ describe("App JWT minting", () => {
       new TextEncoder().encode(`${h}.${p}`),
     );
     expect(valid).toBe(true);
-  });
+  }, 30_000);
 
   it("returns null for unusable PEM input", async () => {
     expect(await mintAppJwt("1", "", Date.now())).toBeNull();

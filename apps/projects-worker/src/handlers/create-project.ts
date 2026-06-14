@@ -96,7 +96,7 @@ export async function handleCreateProject(
   orgId: Uuid,
   deps?: HandleCreateProjectDeps,
 ): Promise<Response> {
-  if (!env.SOURCEPLANE_DB) {
+  if (!env.PLATFORM_DB) {
     return errorResponse("internal_error", "Service unavailable", 503, requestId);
   }
   if (!env.MEMBERSHIP_WORKER) {
@@ -172,7 +172,7 @@ export async function handleCreateProject(
   const preTxExecutor =
     deps?.projectsRepo && deps?.eventsRepo
       ? null
-      : createSqlExecutor(env.SOURCEPLANE_DB);
+      : createSqlExecutor(env.PLATFORM_DB);
   let countRepo: Pick<ProjectsRepository, "countActiveProjects">;
   if (deps?.projectsRepo) {
     countRepo = deps.projectsRepo;

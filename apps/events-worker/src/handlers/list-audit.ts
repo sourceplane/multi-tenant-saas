@@ -79,7 +79,7 @@ export async function handleListAudit(
   orgId: string,
   deps?: HandleListAuditDeps,
 ): Promise<Response> {
-  if (!env.SOURCEPLANE_DB) {
+  if (!env.PLATFORM_DB) {
     return errorResponse("internal_error", "Service unavailable", 503, requestId);
   }
   if (!env.MEMBERSHIP_WORKER) {
@@ -109,7 +109,7 @@ export async function handleListAudit(
   const { limit, cursor } = pageResult.value;
   const dbCursor = cursor ? { occurredAt: cursor.occurredAt, id: cursor.id } : null;
 
-  const executor = createSqlExecutor(env.SOURCEPLANE_DB);
+  const executor = createSqlExecutor(env.PLATFORM_DB);
   const timings = createTimings();
   const endTotal = timings.start("total");
   try {

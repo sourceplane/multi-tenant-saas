@@ -40,7 +40,7 @@ export interface HandlerDeps {
 
 function resolveExecutor(env: Env, deps?: HandlerDeps): { executor: SqlExecutor; owned: boolean } {
   if (deps?.executor) return { executor: deps.executor, owned: false };
-  return { executor: createSqlExecutor(env.SOURCEPLANE_DB!), owned: true };
+  return { executor: createSqlExecutor(env.PLATFORM_DB!), owned: true };
 }
 
 async function disposeIfOwned(executor: SqlExecutor, owned: boolean): Promise<void> {

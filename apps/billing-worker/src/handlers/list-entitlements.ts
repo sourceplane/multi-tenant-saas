@@ -18,7 +18,7 @@ export async function handleListEntitlements(
   actor: ActorContext,
   orgId: string,
 ): Promise<Response> {
-  if (!env.SOURCEPLANE_DB) {
+  if (!env.PLATFORM_DB) {
     return errorResponse("internal_error", "Service misconfigured", 503, requestId);
   }
 
@@ -49,7 +49,7 @@ export async function handleListEntitlements(
     ...(subscriptionId ? { subscriptionId } : {}),
   };
 
-  const executor = createSqlExecutor(env.SOURCEPLANE_DB);
+  const executor = createSqlExecutor(env.PLATFORM_DB);
   const repo = createBillingRepository(executor);
   try {
     // PERF12: authorization and the read are independent — run concurrently,

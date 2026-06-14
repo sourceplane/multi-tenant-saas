@@ -9,7 +9,8 @@
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src",
-    "verify-bindings": "node scripts/verify-bindings.mjs"
+    "verify-bindings": "node scripts/verify-bindings.mjs",
+    "wire:fixture": "node ../../tooling/wire/render.mjs --template wrangler.template.jsonc --out wrangler.jsonc --map wiring.fixture.json"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250508.0",

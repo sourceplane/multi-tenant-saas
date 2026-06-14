@@ -132,11 +132,11 @@ export async function handleListEntitlementDecisions(
     return respond(aggResult.value);
   }
 
-  if (!env.SOURCEPLANE_DB) {
+  if (!env.PLATFORM_DB) {
     return errorResponse("internal_error", "Database not configured", 503, requestId);
   }
 
-  const executor = createSqlExecutor(env.SOURCEPLANE_DB);
+  const executor = createSqlExecutor(env.PLATFORM_DB);
   try {
     const repo = createEntitlementDecisionRepository(executor);
     const aggResult = await repo.aggregateDecisions(targetOrgUuid, {
