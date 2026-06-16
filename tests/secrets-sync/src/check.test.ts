@@ -45,16 +45,16 @@ function workerSecrets(fixture: Fixture, env: string, worker: string): Record<st
 }
 
 interface Manifest {
-  escrowPath: string;
+  storage: string;
   environments: string[];
   workers: Record<string, { required: string[]; deferred?: { names: string[] } }>;
 }
 const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as Manifest;
 
-describe("secrets manifest (SS0)", () => {
-  it("declares the escrow path under this repo's Secrets Manager namespace", () => {
-    expect(manifest.escrowPath).toBe(
-      "sourceplane/multi-tenant-saas/worker-secrets/<env>",
+describe("secrets manifest (SS0/SS6b)", () => {
+  it("declares the SS6b storage layout under this repo's Secrets Manager namespace", () => {
+    expect(manifest.storage).toBe(
+      "sourceplane/multi-tenant-saas/integrations/<name>/<env> + sourceplane/multi-tenant-saas/platform-secrets/<env>",
     );
   });
 

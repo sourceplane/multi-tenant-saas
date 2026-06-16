@@ -63,6 +63,14 @@ webhook endpoints and integration tokens).
 5. Deploy any worker (or merge any PR touching one). The `secrets-live` step
    pushes only what changed; first run after seeding pushes everything.
 
+   **All-or-nothing per env**: `secrets-live` fetches every active
+   integration doc + the platform doc. If the env is fully unseeded it
+   clean-skips (existing wrangler-put secrets untouched). If *any* doc is
+   present but the projection is incomplete (e.g. github-oauth seeded but
+   google-oauth missing), the step **hard-fails** and lists the missing
+   keys — never deploys a worker with half-seeded secrets. Seed every doc
+   listed above for an env before triggering a deploy in that env.
+
 6. Confirm: the deploy log shows `secrets-live: … pushing N secret(s)`; a
    second deploy shows `in sync — nothing to push`.
 

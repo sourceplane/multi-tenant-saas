@@ -91,37 +91,32 @@ reports. Reports may include secret names and non-secret resource IDs.
 Runtime secrets consumed by Cloudflare Workers (OAuth client secrets,
 `OAUTH_STATE_SECRET`, billing provider tokens, `SECRET_ENCRYPTION_KEY`, the
 GitHub App bundle) follow the same system-of-record rule. They are escrowed
-in AWS Secrets Manager as one JSON document per environment:
+in AWS Secrets Manager as one document per **provider integration** (config
++ secret co-located) plus a single platform document for non-integration
+secrets:
 
 ```text
-<org>/<repo>/worker-secrets/<env>
+<org>/<repo>/integrations/<name>/<env>      # per-provider config + secret(s)
+<org>/<repo>/platform-secrets/<env>         # SECRET_ENCRYPTION_KEY, OAUTH_STATE_SECRET, INTEGRATIONS_STATE_SECRET
 ```
 
-mapping `worker → SECRET_NAME → value`. The committed, non-secret
-declaration of which secret names each worker requires is
-`tooling/secrets-sync/secrets.manifest.json`;
-`tooling/secrets-sync/check.mjs` validates escrow payloads and deployed
-secret names against it without printing values. Cloudflare worker secrets
-are deploy-time copies only — write-only, never the source of truth, and
-never read back. Workers must not call AWS Secrets Manager at request time.
-The `saas-secrets-sync` epic owns the sync/drift mechanics
-(`specs/epics/saas-secrets-sync/`).
+`tooling/secrets-sync/integrations.manifest.json` is the source of truth
+declaring which keys live in each document and which workers consume them;
+`tooling/secrets-sync/assemble.mjs` projects them into the per-worker secret
+view that `tooling/secrets-sync/sync.mjs` pushes to Cloudflare (and the
+per-worker config view that renders into wrangler `vars`).
+`tooling/secrets-sync/secrets.manifest.json` is a GENERATED projection of
+the integrations manifest used by the legacy `check.mjs` drift checker.
+Cloudflare worker secrets are deploy-time copies only — write-only, never
+the source of truth, and never read back. Workers must not call AWS Secrets
+Manager at request time. The `saas-secrets-sync` epic owns the sync/drift
+mechanics (`specs/epics/saas-secrets-sync/`).
 
-Provider **integration configuration** (non-secret but account/environment
-specific — OAuth client IDs, Polar product maps, email-from addresses) is
-co-located with its paired secret in one document per integration:
-
-```text
-<org>/<repo>/integrations/<name>/<env>
-```
-
-Non-integration secrets (`SECRET_ENCRYPTION_KEY`, `OAUTH_STATE_SECRET`,
-`INTEGRATIONS_STATE_SECRET`) share `<org>/<repo>/platform-secrets/<env>`.
-`tooling/secrets-sync/integrations.manifest.json` is the source of truth;
-config keys are non-secret and may be logged, secret keys never. Instance
-*branding* constants (product name, CLI binary, sales email) stay in the
-source `app-config` seam, and orchestration parameters (AWS account, region,
-domains) stay in `intent.yaml` — neither belongs in Secrets Manager.
+Config keys are non-secret and may be logged (or appear in plan output);
+secret keys never are. Instance *branding* constants (product name, CLI
+binary, sales email) stay in the source `app-config` seam, and
+orchestration parameters (AWS account, region, domains) stay in
+`intent.yaml` — neither belongs in Secrets Manager.
 
 ## Terraform State
 

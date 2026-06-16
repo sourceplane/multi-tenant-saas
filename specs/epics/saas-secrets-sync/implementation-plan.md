@@ -148,9 +148,12 @@ escrow completeness per environment.
 
 ## Sequencing
 
-SS0 → SS1 shipped (#342); SS2 shipped (#346); SS3 unblocks on the SS6a layout +
-human seeding; SS4 after SS3 (Secrets Store sources the shared key from the
-platform document); SS5 closes alongside BF9.
+SS0 → SS1 shipped (#342); SS2 shipped (#346); SS6a shipped (#348). SS6b-secrets
+(this PR) wires the deploy lane to the SS6a layout, replacing the old
+`worker-secrets/<env>` escrow read. SS3 unblocks on operator seeding of the
+per-integration + `platform-secrets` documents; SS6b-config follows. SS4 after
+SS3 (Secrets Store sources the shared key from the platform document); SS5
+closes alongside BF9.
 
 ## SS6 — Integration documents (config + secret co-located per provider)
 
@@ -195,10 +198,30 @@ to the deployed `secrets-live` behavior.
 
 ### SS6b — deploy-lane assembly + de-hardcode (follow-up)
 
-- Add an `assemble` step to the worker deploy profile: fetch the integration +
-  platform documents the worker consumes, project to secrets (→ existing
-  `secrets-live`) and config, and render the config into the worker's `vars`
-  via the existing `tooling/wire/render.mjs` token mechanism.
+Lands in two parts to decouple the secret hydration (mechanism) from the
+template de-hardcoding (template churn across five workers).
+
+**SS6b-secrets** (this PR — required to consume the SS6 layout)
+
+- Rewrite `secrets-live` in `cloudflare-worker-turbo-verify-deploy.yaml` to:
+  fetch the active per-integration documents (and `platform-secrets/<env>`)
+  via `assemble.mjs --list-docs --env <env>` (skips fully-deferred
+  integrations) + `aws secretsmanager get-secret-value` per doc; project them
+  via `assemble.mjs --env <env> --docs-dir <dir> --out-secrets …`; feed the
+  per-worker secret view into the unchanged `sync.mjs`.
+- Transition contract: `ResourceNotFoundException` on a doc is tolerated and
+  treated as "absent"; **all docs absent = clean-skip** (pre-SS3); **any
+  doc seeded but partial = hard-fail** (assemble.mjs fails closed with a
+  list of missing keys); non-NotFound errors fail hard. Drops the old
+  `worker-secrets/<env>` escrow path.
+- No template edits; client IDs and other Category-A `vars` stay hardcoded
+  until SS6b-config.
+
+**SS6b-config** (follow-up, larger blast radius)
+
+- Add the `assemble` projection of the per-worker **config** view into the
+  `tooling/wire/render.mjs` token mechanism (or a parallel step) so wrangler
+  `vars` are rendered from the same fetched docs.
 - Convert the Category-A `vars` in each `wrangler.template.jsonc` to wiring
   tokens and delete the hardcoded values, so SM becomes the only source.
 - Extend SS1's verify-lane check to assert config-name coverage too.

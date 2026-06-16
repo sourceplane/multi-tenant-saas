@@ -24,6 +24,12 @@
 //       per-worker secrets and config projections. Secret values are never
 //       printed; config values may be.
 //
+//   --list-docs --env <env>
+//       Emit one tab-separated `<name>\t<secret-id>` line per document the
+//       deploy lane needs to fetch for this env (active integration docs +
+//       platform doc when it has any non-deferred consumer). Fully-deferred
+//       integrations are skipped. Consumed by the SS6b secrets-live step.
+//
 // Exit codes: 0 ok · 1 validation failure (all listed) · 2 usage/config.
 
 import * as fs from "node:fs";
@@ -88,6 +94,32 @@ function projectSecretManifest() {
   return out;
 }
 
+if (has("list-docs")) {
+  const env = arg("env");
+  if (!env) {
+    console.error("usage: assemble.mjs --list-docs --env <env>");
+    process.exit(2);
+  }
+  if (!(manifest.environments ?? []).includes(env)) {
+    console.error(`assemble: environment ${env} is not declared in the manifest`);
+    process.exit(2);
+  }
+  const root = manifest.escrowRoot;
+  for (const [name, spec] of Object.entries(integrations)) {
+    if (spec.consumers.every((w) => deferredConsumers.has(w))) continue;
+    const id = `${root}/${spec.doc.replace("<env>", env)}`;
+    process.stdout.write(`${name}\t${id}\n`);
+  }
+  const platformHasActive = Object.values(platform.secret ?? {}).some((consumers) =>
+    consumers.some((w) => !deferredConsumers.has(w)),
+  );
+  if (platformHasActive) {
+    const id = `${root}/${platform.doc.replace("<env>", env)}`;
+    process.stdout.write(`platform\t${id}\n`);
+  }
+  process.exit(0);
+}
+
 if (has("project-manifest")) {
   const outFile = arg("out");
   if (!outFile) {
@@ -96,8 +128,8 @@ if (has("project-manifest")) {
   }
   const projected = {
     $comment:
-      "GENERATED from integrations.manifest.json by assemble.mjs --project-manifest. Do not edit by hand; edit integrations.manifest.json and regenerate. Per-worker secret view consumed by check.mjs and sync.mjs.",
-    escrowPath: `${manifest.escrowRoot}/worker-secrets/<env>`,
+      "GENERATED from integrations.manifest.json by assemble.mjs --project-manifest. Do not edit by hand; edit integrations.manifest.json and regenerate. Per-worker secret view consumed by check.mjs (and historically sync.mjs; SS6b sync.mjs reads the assemble.mjs projection directly).",
+    storage: `${manifest.escrowRoot}/integrations/<name>/<env> + ${manifest.escrowRoot}/${manifest.platform?.doc ?? "platform-secrets/<env>"}`,
     environments: manifest.environments,
     workers: projectSecretManifest(),
   };

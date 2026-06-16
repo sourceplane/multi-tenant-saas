@@ -96,6 +96,60 @@ describe("integrations manifest projection (SS6)", () => {
   });
 });
 
+describe("--list-docs (SS6b deploy-lane fetch list)", () => {
+  function listDocs(env: string): { lines: [string, string][]; result: RunResult } {
+    const result = run(["--list-docs", "--env", env]);
+    const lines = result.stdout
+      .split("\n")
+      .filter((l) => l.length > 0)
+      .map((l) => {
+        const [name, id] = l.split("\t");
+        if (!name || !id) throw new Error(`malformed line: ${JSON.stringify(l)}`);
+        return [name, id] as [string, string];
+      });
+    return { lines, result };
+  }
+
+  it("emits one tab-separated <name>\\t<secret-id> line per active doc for stage", () => {
+    const { lines, result } = listDocs("stage");
+    expect(result.status).toBe(0);
+    const map = new Map(lines);
+    expect(map.get("github-oauth")).toBe(
+      "sourceplane/multi-tenant-saas/integrations/github-oauth/stage",
+    );
+    expect(map.get("google-oauth")).toBe(
+      "sourceplane/multi-tenant-saas/integrations/google-oauth/stage",
+    );
+    expect(map.get("polar")).toBe("sourceplane/multi-tenant-saas/integrations/polar/stage");
+    expect(map.get("cloudflare-email")).toBe(
+      "sourceplane/multi-tenant-saas/integrations/cloudflare-email/stage",
+    );
+    expect(map.get("platform")).toBe("sourceplane/multi-tenant-saas/platform-secrets/stage");
+  });
+
+  it("excludes fully-deferred integrations (github-app has only the deferred integrations-worker)", () => {
+    const { lines } = listDocs("stage");
+    const names = lines.map(([n]) => n);
+    expect(names).not.toContain("github-app");
+  });
+
+  it("works for prod as well, swapping only the env segment", () => {
+    const { lines: stage } = listDocs("stage");
+    const { lines: prod } = listDocs("prod");
+    const stageNames = stage.map(([n]) => n).sort();
+    const prodNames = prod.map(([n]) => n).sort();
+    expect(prodNames).toEqual(stageNames);
+    for (const [, id] of prod) expect(id.endsWith("/prod")).toBe(true);
+    for (const [, id] of stage) expect(id.endsWith("/stage")).toBe(true);
+  });
+
+  it("rejects an undeclared environment with a usage error", () => {
+    const { result } = listDocs("does-not-exist");
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain("not declared in the manifest");
+  });
+});
+
 describe("assemble projection from documents (SS6)", () => {
   it("projects per-worker secrets matching the sync.mjs input contract", () => {
     const { secrets } = assembleStage(integrationsFixturePath);
