@@ -2,9 +2,10 @@
 // Fork/rebrand renamer for the multi-tenant SaaS baseline (zero-dependency).
 //
 // Rewrites every *instance identity* literal in the repo — repo name, product
-// domain, product/display name, SDK class name, CLI bin, worker-name prefix,
-// wire-visible user agents, workers.dev subdomain — to the values supplied in
-// a values file, leaving *org-owned* identity untouched (GitHub org, orun
+// domain, product/display name, SDK class name, CLI bin, Cloudflare worker
+// resource names (so a fork is account-safe even when it shares an account
+// with the baseline), wire-visible user agents, workers.dev subdomain — to the
+// values supplied in a values file, leaving *org-owned* identity untouched (GitHub org, orun
 // state backend, `sourceplane.io` manifest apiVersion, S3 state buckets,
 // company email addresses). The rename map is the codified form of the
 // transformation log from the first real instantiation (orun-cloud,
@@ -213,9 +214,34 @@ function replaceBrandWord(file, text, count) {
     .join("");
 }
 
+// Cloudflare worker resource names that ship UN-prefixed in the baseline: the
+// top-level "name" of each apps/<w>/wrangler.template.jsonc. They deploy as
+// "<name>-<env>" and are referenced by service bindings, smoke health-checks,
+// and binding tests. In a Cloudflare account SHARED with the baseline an
+// un-prefixed name silently overwrites the baseline's live worker (the orun
+// component identity — dependsOn, component.yaml metadata, paths — is left
+// alone; only the deployed CF identity is branded).
+function discoverWorkerCfNames() {
+  const names = new Set();
+  for (const file of files) {
+    if (!/^apps\/[^/]+\/wrangler\.template\.jsonc$/.test(file)) continue;
+    let text;
+    try {
+      text = fs.readFileSync(file, "utf8");
+    } catch {
+      continue;
+    }
+    // The top-level worker name is the first "name" key and is a lowercase
+    // slug — never the nested binding/DO names (EMAIL, RateLimiterDO, …).
+    const m = text.match(/"name":\s*"([a-z][a-z0-9-]*)"/);
+    if (m && !m[1].startsWith(`${brandSlug}-`)) names.add(m[1]);
+  }
+  return [...names];
+}
+
 // Scoped, regex-based pairs applied after the literal map.
 function scopedPairs() {
-  return [
+  const list = [
     // Branded env-var names: the real CONFIG_DIR override (brand.ts derives
     // it from CLI_BIN, so tests/docs must rename in lockstep) plus doc
     // placeholders like SOURCEPLANE_TOKEN / SOURCEPLANE_API_KEY /
@@ -236,6 +262,32 @@ function scopedPairs() {
       fileFilter: (file) => file.startsWith("packages/cli/"),
     },
   ];
+
+  // Brand-prefix every Cloudflare worker resource name so a fork is safe to
+  // deploy even into an account it shares with the baseline.
+  const workerNames = discoverWorkerCfNames();
+  if (workerNames.length > 0) {
+    // Longest-first so an alternation never matches a shorter prefix of a name.
+    const wn = workerNames.slice().sort((a, b) => b.length - a.length).join("|");
+    // (a) The worker's own deployed name — the top-level wrangler "name".
+    // Scoped to wrangler templates and the discovered slugs, so binding/DO
+    // "name" keys (EMAIL, RateLimiterDO) are never touched.
+    list.push({
+      re: new RegExp(`("name":\\s*")(${wn})(")`, "g"),
+      replacement: (_file, _m, pre, name, post) => `${pre}${brandSlug}-${name}${post}`,
+      label: "worker CF name (wrangler template)",
+      fileFilter: (file) => /^apps\/[^/]+\/wrangler\.template\.jsonc$/.test(file),
+    });
+    // (b) Every "<worker>-<env>" reference — service bindings, smoke
+    // health-checks (`…-${ORUN_ENVIRONMENT}`), binding tests and fixtures.
+    // The lookbehind keeps it idempotent (skips already-branded names).
+    list.push({
+      re: new RegExp(`(?<!${brandSlug}-)\\b(${wn})-(stage|prod|dev|\\$\\{[A-Z_]+\\})`, "g"),
+      replacement: (_file, _m, name, env) => `${brandSlug}-${name}-${env}`,
+      label: "worker CF name (env-suffixed references)",
+    });
+  }
+  return list;
 }
 
 // ── Leftover sweep ─────────────────────────────────────────────
@@ -324,10 +376,9 @@ for (const file of files) {
 
   for (const { re, replacement, label, fileFilter } of regexPairs) {
     if (fileFilter && !fileFilter(file)) continue;
-    const to = replacement(file);
-    text = text.replace(re, () => {
+    text = text.replace(re, (...m) => {
       counts.set(label, (counts.get(label) ?? 0) + 1);
-      return to;
+      return replacement(file, ...m);
     });
   }
 
