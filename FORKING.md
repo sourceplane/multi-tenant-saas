@@ -3,8 +3,9 @@
 This repo is a reusable baseline: fork it, rebrand it, deploy it as a new
 product. The mechanical rename is one script; everything that needs human
 hands (cloud accounts, secrets, OAuth apps) is the checklist below. The
-process was proven by the first real instantiation (`orun-cloud`) and the
-friction it found is folded back in here.
+process was proven by the first real instantiation (`orun-cloud`) and
+sharpened by the second (`lumen`); the friction each found is folded back in
+here (see §5 for the hard-won bring-up details).
 
 ## 1. Create the repo
 
@@ -47,6 +48,27 @@ runs a leftover sweep that fails on any missed baseline identity, writes a
 provenance record to `ai/context/fork-from-baseline.md`, and is idempotent —
 rerunning it is a no-op. `node tooling/rebrand/rebrand.mjs --verify` re-runs
 just the sweep at any time.
+
+> ⚠️ **Worker and KV names are only partially brand-prefixed — this is
+> destructive in a shared Cloudflare account.** The rename map prefixes the
+> three workers that ship pre-prefixed in the baseline (`web-console`,
+> `identity-worker`, `integrations-worker`) and the workers.dev subdomain, but
+> the other ~10 workers keep generic `name:`/`service:` identifiers
+> (`membership-worker-stage`, `policy-worker-stage`, …) and the KV namespace
+> titles are not prefixed. That is safe **only if the fork deploys to its own
+> Cloudflare account.** If you point the fork at the baseline's account (same
+> `workersDevSubdomain`), each unprefixed name **deploys over the baseline's
+> live worker** on the first apply — a silent overwrite, not a rejected
+> collision. Pick one before the first deploy:
+>
+> 1. **Give the fork its own Cloudflare account** (recommended) — generic
+>    worker names are then collision-free and need no extra rename.
+> 2. **Brand-prefix everything** — prefix every worker `name:`/`service:` (in
+>    each `apps/*/wrangler.template.jsonc`, both `stage` and `prod`, including
+>    cross-worker service bindings) and the KV namespace titles with
+>    `brandSlug` before the first deploy. The `lumen` fork shared the account
+>    and had to do this for all 13 workers in one dedicated PR; folding a full
+>    worker/KV prefix pass into `rebrand.mjs` would remove this footgun.
 
 It deliberately does **not** touch org-owned identity:
 
@@ -117,11 +139,16 @@ names exactly what to copy next if not.
   `cloudflare-domain` last.
 - `billing-worker`, `membership-worker`, `events-worker`,
   `notifications-worker` form a **service-binding cycle** and must be copied
-  (and first deployed) as one batch; the first convergence of that batch on
-  an empty account may need one full-workflow re-run while the mutual
-  bindings bootstrap.
-- The console deploys independently but is only *usable* once `api-edge`
-  and `identity-worker` are live.
+  (and first deployed) as one batch. On a fresh account this cycle **cannot
+  bootstrap on its own** — Cloudflare rejects a deploy whose service binding
+  targets a worker that does not exist yet (error `10143`), and re-running the
+  workflow does not help because the cycle never resolves. Break it with the
+  two-pass procedure in §5.
+- The console's deploy **smoke health-checks `api-edge`**, so it is not truly
+  independent: it must carry `dependsOn: api-edge` or its first convergence
+  fails with `curl` exit 22 (404) while api-edge is still deploying. (The
+  baseline currently omits this edge — the `lumen` fork added it; see §5.) The
+  console is also only *usable* once `api-edge` and `identity-worker` are live.
 
 The `tests/config-worker` guard suite is partial-tree safe (its api-edge
 sections skip when api-edge is not yet copied), so CI stays green at every
@@ -135,7 +162,13 @@ with the right account owners. Track progress in your generated
 
 - [ ] **GitHub Actions secrets**: `CLOUDFLARE_ACCOUNT_ID`,
       `CLOUDFLARE_API_TOKEN` (Workers+KV+Hyperdrive+DNS scopes),
-      `SUPABASE_API_KEY`.
+      `SUPABASE_API_KEY`, **`SUPABASE_ORG_ID`** (the `supabase` Terraform
+      reads it as `TF_VAR_supabaseOrgId` to create the projects; the first
+      `supabase` apply fails without it).
+- [ ] **Cloudflare account isolation**: decide up front whether the fork gets
+      its **own** Cloudflare account (recommended) or reuses the baseline's. If
+      reused, complete the worker/KV brand-prefix pass from §2 *before* the
+      first deploy — otherwise the fork overwrites the baseline's live workers.
 - [ ] **AWS** (via the org's `aws-admin` repo): GitHub-OIDC roles
       `<env>-github-<org>-<repoName>-{plan,production-deploy}` per
       environment, plus Secrets Manager write scope `<org>/<repoName>/*`.
@@ -169,9 +202,57 @@ with the right account owners. Track progress in your generated
   state keys on `<run>-<attempt>` and a partial re-run deadlocks.
 - **Keep PRs to a few components.** Fleet-wide PRs fan out 30–70 CI jobs and
   starve the runner pool (the first instantiation split its rollout into
-  four PRs for this reason).
+  four PRs for this reason). A batch of ~12–18 jobs (4–5 components) converges
+  reliably; bring components up in dependency order (see the recovery playbook
+  below). To re-converge a component without a code change, append a one-line
+  `# ci: <reason> (<timestamp>)` comment to its `component.yaml` — orun's
+  change-scoped planner re-plans only the touched components.
+- **The console needs `dependsOn: api-edge`.** Its deploy smoke curls
+  `<brand>-api-edge-<env>/health`; without the edge the smoke races api-edge's
+  concurrent deploy and fails (404 / curl exit 22). The baseline omits this
+  edge today — add it to `apps/web-console-next/component.yaml` (the `lumen`
+  fork did) until it is folded into the baseline.
+- **`dev` lanes for data-bound workers are expected red.** `dev` has no
+  Supabase/Hyperdrive/KV wiring, so the `*-dev` verify/deploy lanes for workers
+  that need the data layer fail by design. Judge bring-up by `stage`/`prod`.
 - `stage`/`prod` converge on merge to `main` behind `requireApproval: true`
   — someone has to approve the deploy lanes.
+
+### Bootstrapping the service-binding cycle (two-pass)
+
+The `{billing, membership, events, notifications}` cluster (§3) cannot deploy
+on a fresh account: each worker binds another that does not exist yet, and
+Cloudflare rejects the deploy (`10143`). Re-running does not help — break the
+cycle into a DAG with two PRs, then put it back:
+
+1. **Strip the feedback edges.** Removing just two service bindings makes the
+   cluster acyclic: `billing → membership` and `membership → notifications`
+   (the two edges declared in `ACKNOWLEDGED_BINDING_CYCLES`). Delete those
+   `services[]` entries from `billing-worker` and `membership-worker`
+   (stage+prod), trigger all four components, and merge. They now deploy in
+   order `policy → billing → membership → events → notifications`.
+2. **Restore the edges.** Revert the two removals and merge again. `membership`
+   and `notifications` now exist, so Cloudflare accepts the restored bindings;
+   only `billing` + `membership` redeploy. The cluster is back to its full,
+   correct topology.
+
+These are deploy-config bindings only — the worker `Env` types and the
+(fetcher-mocking) tests are unaffected, and the `deployment-config` cycle test
+only shrinks its checked set in pass 1.
+
+### Recovering a partially-failed fleet convergence
+
+When a large convergence partially fails (timeouts / runner starvation),
+recover in small dependency-ordered batches rather than re-running the whole
+fleet:
+
+1. Identify what actually deployed (worker `/health`, Terraform state).
+2. Re-trigger the rest layer by layer, one PR each: **infra → leaf workers
+   (policy, admin) → the cycle cluster via the two-pass above →
+   membership-dependents (config, metering, webhooks, projects, identity) →
+   `api-edge` → console**. Each layer's dependencies must be live before it.
+3. Verify each layer (`<brand>-api-edge-<env>/health` returns `ok`, including
+   its database check) before starting the next.
 
 ## 6. Upstream syncs
 
