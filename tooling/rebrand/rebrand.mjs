@@ -346,8 +346,25 @@ function scopedPairs() {
 // claim on, and every secret read fails with "Validation failed" long after
 // the rebrand looked clean. Bare `halo` is deliberately not matched — it is an
 // ordinary word and would fire on prose.
-const RESIDUE_RE =
-  /multi-tenant-saas|rahulvarghesepullely|Sourceplane|sourceplane\.ai|api\.sourceplane\.dev|sourceplane-web-console|sourceplane\.next|SOURCEPLANE_|secret:\/\/halo\//g;
+//
+// The workers.dev subdomain is the one literal a fork may legitimately KEEP:
+// worker names are already brand-prefixed, so sharing the baseline's account
+// subdomain collides with nothing, and the phase-01 README documents keeping
+// it as supported. Flagging it anyway made `rebrand --verify` exit 1 in the
+// middle of the scaffold hook chain, which silently skipped every later hook
+// (workspace re-tenant, restage, lockfile) — a bootstrap that fails late and
+// obscurely because of a naming preference. So it counts as residue only when
+// the caller actually asked for a different one. Under --verify there is no
+// values file to compare against, and --verify runs on forks where a kept
+// subdomain is not a missed rename, so it is skipped there too.
+const BASELINE_SUBDOMAIN = "rahulvarghesepullely";
+const subdomainChanged = !verifyOnly && workersDevSubdomain !== BASELINE_SUBDOMAIN;
+const RESIDUE_RE = new RegExp(
+  (subdomainChanged ? `${BASELINE_SUBDOMAIN}|` : "") +
+    "multi-tenant-saas|Sourceplane|sourceplane\\.ai|api\\.sourceplane\\.dev|" +
+    "sourceplane-web-console|sourceplane\\.next|SOURCEPLANE_|secret:\\/\\/halo\\/",
+  "g",
+);
 
 const ALLOWED_RESIDUE = [
   /https:\/\/orun-api\.sourceplane\.ai/, // orun state backend
