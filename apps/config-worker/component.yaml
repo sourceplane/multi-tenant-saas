@@ -17,10 +17,17 @@ spec:
   dependsOn:
     - component: membership-worker
     - component: policy-worker
-    # Shared workspace packages this component BUNDLES. Declared so a change
-    # to one marks this component changed and redeploys it — without the
-    # edge, `orun plan --changed` keys on `path:` alone and a worker can run
-    # a months-old copy of a package that has since changed underneath it.
+    # Shared workspace packages this component BUNDLES. The edge makes the
+    # relationship visible to `orun plan` and ORDERS the run: when both sides
+    # are in scope, the package's lane precedes this one, so a build never
+    # races the thing it compiles against.
+    #
+    # It does NOT pull this component into the changed set. `--changed` is
+    # path-based: a commit touching only `packages/db` plans `db` alone
+    # (measured on orun v2.53.2 — 1 component, 3 jobs), and an edge whose
+    # other side is unselected is dropped with a warning. Forcing a bundling
+    # Worker to redeploy takes an explicit `# ci:` marker, which is exactly
+    # why the bootstrap stamps them on retry.
     - component: contracts
     - component: db
   # Runtime secrets, wire-now-seed-later: best-effort references —
