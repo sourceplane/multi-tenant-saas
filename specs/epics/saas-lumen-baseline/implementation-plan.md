@@ -102,16 +102,24 @@ this milestone writes.
 `infra/*`):
 - A `docs:` block naming `docs/overview.md` plus `architecture` and `runbook`
   pages. The files arrive in LB4; the registration is the contract.
-- `dependsOn` edges for **bundled workspace packages**. Without them
-  `orun plan --changed` keys on `path:` alone and a Worker can ship a
-  months-old copy of a package that has since changed underneath it. This is a
-  correctness fix, not bookkeeping.
+- `dependsOn` edges for **bundled workspace packages**, so the relationship is
+  visible to `orun plan` and the package's lane precedes its consumers' when
+  both are in scope.
 - `secretEnv` wiring entries replacing Secrets Manager reads (design §1.4).
 - Drop the `awsAccountId` / `awsRegion` parameters.
 
-**Done when.** `orun plan --view dag` shows the bundle edges; a change to
-`packages/contracts` marks every bundling Worker changed; no manifest names an
-AWS parameter.
+**Done when.** `orun plan --view dag` shows the bundle edges; no manifest names
+an AWS parameter.
+
+**Corrected after measurement.** This milestone was originally written claiming
+the edges also pull consumers into the changed set — that a `packages/db`
+commit would redeploy every Worker bundling it. It does not. `--changed` is
+path-based: measured on orun v2.53.2, a `packages/db`-only commit plans `db`
+alone (1 component, 3 jobs), and an edge whose other side is unselected is
+dropped with a warning. Redeploying a consumer against a changed package needs
+an explicit `# ci:` marker, which is precisely why the bootstrap stamps them on
+retry (design §2.4). The edges are still worth declaring for ordering and
+visibility; they are not the safety net the original wording promised.
 
 **Human help.** None.
 
