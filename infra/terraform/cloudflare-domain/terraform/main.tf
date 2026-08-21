@@ -88,7 +88,7 @@ variable "terraformVersion" {
 
 variable "baseDomain" {
   type        = string
-  default     = "multi-tenant-saas.app"
+  default     = "sourceplane.ai"
   description = "Root domain to manage (from BASE_DOMAIN env or component parameter)"
 }
 
@@ -104,7 +104,7 @@ variable "zoneMode" {
 
 variable "workerNamePrefix" {
   type        = string
-  default     = "multi-tenant-saas-web-console-next"
+  default     = "sourceplane-web-console-next"
   description = "Worker name prefix for the new console; full Worker service name is {prefix}-{environment}"
 }
 
@@ -164,7 +164,7 @@ locals {
 #     The live Cloudflare custom-domain resource is NOT touched — only the
 #     Terraform state file in S3 is mutated. Expected plan diff:
 #       Plan: 0 to add, 0 to change, 1 to forget.
-#     After post-merge apply, `stage.multi-tenant-saas.app` and `prod.multi-tenant-saas.app`
+#     After post-merge apply, `stage.sourceplane.ai` and `prod.sourceplane.ai`
 #     continue to serve from their existing Workers (immutable IDs
 #     052eaece5e989d5a7280b6c206e562c42950e3a6 and
 #     31e5f2ed1b1e4a5700e8ae0678846a0d753840e1) but are no longer tracked.

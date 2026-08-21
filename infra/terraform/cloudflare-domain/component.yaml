@@ -9,6 +9,11 @@ metadata:
     scope: dns-and-custom-domains
 
 spec:
+  docs:
+    overview: docs/overview.md
+    pages:
+      - { path: docs/architecture.md, role: architecture }
+      - { path: docs/runbook.md, role: runbook }
   type: terraform
   lifecycle: production
   owner: platform
@@ -19,14 +24,14 @@ spec:
     stackName: cloudflare-domain
     terraformDir: terraform
     terraformVersion: "1.15.3"
-    baseDomain: multi-tenant-saas.app
+    baseDomain: sourceplane.ai
     zoneMode: existing
-    workerNamePrefix: multi-tenant-saas-web-console-next
+    workerNamePrefix: sourceplane-web-console-next
     # NOTE: `CONSOLE_CUSTOM_DOMAIN` is intentionally NOT declared here.
     # It is supplied per-environment via
     # `environments.{dev,stage,prod}.parameterDefaults.terraform.CONSOLE_CUSTOM_DOMAIN`
-    # in `intent.yaml` (dev: "", stage: stage.multi-tenant-saas.app,
-    # prod: prod.multi-tenant-saas.app) and surfaced to Terraform as
+    # in `intent.yaml` (dev: "", stage: stage.sourceplane.ai,
+    # prod: prod.sourceplane.ai) and surfaced to Terraform as
     # `TF_VAR_CONSOLE_CUSTOM_DOMAIN` by the generic `.parameters` →
     # `TF_VAR_<key>` loop in the cloudflare-domain-validate job template.
     # Declaring a default here would shadow the parameterDefault override
@@ -40,7 +45,7 @@ spec:
     - component: web-console-next
 
   # PARKED — no environment subscriptions, so no jobs are planned. The zone
-  # this stack manages (baseDomain multi-tenant-saas.app) is not delegated to Cloudflare
+  # this stack manages (baseDomain sourceplane.ai) is not delegated to Cloudflare
   # and does not exist in the connected account (the domain is parked at
   # dns.ws — a rebrand artifact), so `data.cloudflare_zone.existing` fails
   # every plan with "no zone found". Restore the subscribe block below once
