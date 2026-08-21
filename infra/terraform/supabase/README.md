@@ -1,7 +1,7 @@
 # Supabase Infrastructure Component
 
 Provisions Supabase projects for `stage` and `prod` environments under the
-`sourceplane` organization and stores generated credentials in AWS Secrets
+`multi-tenant-saas` organization and stores generated credentials in AWS Secrets
 Manager.
 
 ## Environments

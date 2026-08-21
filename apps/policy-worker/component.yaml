@@ -4,11 +4,23 @@ metadata:
   name: policy-worker
   description: Cloudflare Worker for policy authorization decisions
 spec:
+  docs:
+    overview: docs/overview.md
+    pages:
+      - { path: docs/architecture.md, role: architecture }
+      - { path: docs/runbook.md, role: runbook }
   type: cloudflare-worker-turbo
   lifecycle: production
   owner: platform
   domain: starter-runtime
   path: apps/policy-worker
+  dependsOn:
+    # Shared workspace packages this component BUNDLES. Declared so a change
+    # to one marks this component changed and redeploys it — without the
+    # edge, `orun plan --changed` keys on `path:` alone and a worker can run
+    # a months-old copy of a package that has since changed underneath it.
+    - component: contracts
+    - component: policy-engine
   subscribe:
     environments:
       - name: dev
@@ -32,8 +44,6 @@ spec:
     appDir: .
     # BF6: identity/role inputs for the deploy lane's wire-credentials step.
     # Inert until this worker gets a wrangler template (fleet rollout, BF6b).
-    awsAccountId: "306024784101"
-    awsRegion: us-east-1
     orgName: sourceplane
     owner: sourceplane
     repo: multi-tenant-saas
@@ -53,4 +63,3 @@ spec:
     layer: runtime
     surface: policy
     runtime: cloudflare
-# ci: trigger full-component verification (orun v2.12.0 upgrade — PR #183)

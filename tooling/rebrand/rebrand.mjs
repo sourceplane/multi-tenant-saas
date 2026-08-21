@@ -50,6 +50,20 @@ const dryRun = flag("dry-run");
 const verifyOnly = flag("verify");
 
 let values = {};
+if (verifyOnly) {
+  // --verify takes no values file, but a fork carries the one the blueprint
+  // rendered. Read it best-effort for ONE field: the workspace slug. Without
+  // it the sweep cannot tell a correctly re-tenanted `secret://<slug>/` from
+  // the baseline's leftover, and a fork that legitimately deploys into the
+  // baseline's own workspace would fail verification for being right.
+  try {
+    const v = JSON.parse(fs.readFileSync(".rebrand/values.json", "utf8"));
+    if (typeof v.orunWorkspaceSlug === "string") values.orunWorkspaceSlug = v.orunWorkspaceSlug;
+    if (typeof v.orunWorkspace === "string") values.orunWorkspace = v.orunWorkspace;
+  } catch {
+    /* absent or unreadable — the sweep just stays strict */
+  }
+}
 if (!verifyOnly) {
   const valuesPath = arg("values");
   if (!valuesPath) {
@@ -75,6 +89,21 @@ const cliBin = values.cliBin ?? repoName;
 const apiBaseUrl = values.apiBaseUrl ?? `https://api.${productDomain}`;
 const workersDevSubdomain = values.workersDevSubdomain ?? "your-workers-subdomain";
 const salesEmail = values.salesEmail; // optional
+// A `secret://<workspace>/<project>/<env>/<KEY>` ref names the WORKSPACE
+// first and the project (repo) second. Here the two differ (`halo` /
+// `multi-tenant-saas`), so the repo-slug pass below must not be allowed to
+// rewrite the workspace segment — a fork whose refs point at a workspace that
+// does not exist fails every resolve with "Validation failed". The workspace
+// segment is renamed separately from orunWorkspaceSlug (a ws_… id cannot
+// appear here: the platform matches the run's org SLUG), falling back to the
+// fork's own slug only when the caller supplied nothing better.
+const orunWorkspaceSlug = (() => {
+  const explicit = (values.orunWorkspaceSlug ?? "").trim();
+  if (explicit) return explicit;
+  const ws = (values.orunWorkspace ?? "").trim();
+  if (ws && !/^ws_/i.test(ws)) return ws; // already a slug
+  return repoName;
+})();
 // Derived code-shaped forms.
 const camelName = pascalName.charAt(0).toLowerCase() + pascalName.slice(1);
 const envPrefix = cliBin.toUpperCase().replace(/-/g, "_");
@@ -242,6 +271,22 @@ function discoverWorkerCfNames() {
 // Scoped, regex-based pairs applied after the literal map.
 function scopedPairs() {
   const list = [
+    // Secret refs: `secret://<workspace>/<project>/…`. Only the WORKSPACE
+    // segment is rewritten here; the project segment is the repo slug and is
+    // handled by the repo-slug pass like every other occurrence.
+    //
+    // Matching the workspace segment ALONE is deliberate. Anchoring on
+    // `secret://halo/multi-tenant-saas/` looks tighter but silently does
+    // nothing: the repo slug is already renamed by the time this runs, so the
+    // pattern no longer matches and every fork keeps the baseline's workspace
+    // — the exact failure this pass exists to prevent. `halo` is safe to match
+    // here because the `secret://` prefix scopes it; bare `halo` is an
+    // ordinary word and is never rewritten.
+    {
+      re: /\bsecret:\/\/halo\//g,
+      replacement: () => `secret://${orunWorkspaceSlug}/`,
+      label: "secret ref workspace segment",
+    },
     // Branded env-var names: the real CONFIG_DIR override (brand.ts derives
     // it from CLI_BIN, so tests/docs must rename in lockstep) plus doc
     // placeholders like SOURCEPLANE_TOKEN / SOURCEPLANE_API_KEY /
@@ -296,12 +341,23 @@ function scopedPairs() {
 // literal is residue: either org-owned (allowed, enumerated below) or a
 // missed rename (reported, non-zero exit).
 
+// `secret://halo/` is listed because a fork that keeps the baseline's
+// WORKSPACE segment resolves nothing: the refs point at a workspace it has no
+// claim on, and every secret read fails with "Validation failed" long after
+// the rebrand looked clean. Bare `halo` is deliberately not matched — it is an
+// ordinary word and would fire on prose.
 const RESIDUE_RE =
-  /multi-tenant-saas|rahulvarghesepullely|Sourceplane|sourceplane\.ai|api\.sourceplane\.dev|sourceplane-web-console|sourceplane\.next|SOURCEPLANE_/g;
+  /multi-tenant-saas|rahulvarghesepullely|Sourceplane|sourceplane\.ai|api\.sourceplane\.dev|sourceplane-web-console|sourceplane\.next|SOURCEPLANE_|secret:\/\/halo\//g;
 
 const ALLOWED_RESIDUE = [
   /https:\/\/orun-api\.sourceplane\.ai/, // orun state backend
   /[A-Za-z0-9._%+-]+@sourceplane\.ai/, // company mailboxes
+  // A fork that deploys into the BASELINE's own workspace keeps `secret://halo/`
+  // legitimately — the segment names the workspace it really runs in. Allow it
+  // only when the fork's resolved slug IS that workspace, so the check still
+  // catches the case it exists for: a fork pointed at a workspace it has no
+  // claim on.
+  ...(orunWorkspaceSlug === "halo" ? [/secret:\/\/halo\//] : []),
 ];
 
 function sweep(files) {

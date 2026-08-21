@@ -56,10 +56,10 @@ All parameters follow the Orun/golden-path Terraform convention:
 | `awsRegion` | string | `us-east-1` | AWS region for Secrets Manager access |
 | `cloudflareApiToken` | string | *(required, sensitive)* | Cloudflare API token (from `CLOUDFLARE_API_TOKEN` env var in CI) |
 | `cloudflareAccountId` | string | `""` | Cloudflare account ID (from `CLOUDFLARE_ACCOUNT_ID` env var in CI, or passed as `-var`) |
-| `orgName` | string | `sourceplane` | Organization name (for tags and secret paths) |
-| `owner` | string | `sourceplane` | Repository owner (for tags) |
+| `orgName` | string | `multi-tenant-saas` | Organization name (for tags and secret paths) |
+| `owner` | string | `multi-tenant-saas` | Repository owner (for tags) |
 | `repo` | string | `multi-tenant-saas` | Repository name (for tags and secret paths) |
-| `namespace` | string | `sourceplane` | Namespace (for labels and naming conventions) |
+| `namespace` | string | `multi-tenant-saas` | Namespace (for labels and naming conventions) |
 | `namespacePrefix` | string | `""` | Prefix for resource names (e.g., `dev-` for non-prod) |
 | `environment` | string | `stage` | Environment name (stage or prod) |
 | `component` | string | `cloudflare-hyperdrive` | Component name (for tags) |

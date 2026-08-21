@@ -9,6 +9,11 @@ metadata:
     scope: dns-and-custom-domains
 
 spec:
+  docs:
+    overview: docs/overview.md
+    pages:
+      - { path: docs/architecture.md, role: architecture }
+      - { path: docs/runbook.md, role: runbook }
   type: terraform
   lifecycle: production
   owner: platform
@@ -36,25 +41,30 @@ spec:
     # variable itself already defaults to "" in
     # `terraform/variables.tf`, so absence here is safe for dev.
 
-  env:
-    AWS_EC2_METADATA_DISABLED: "true"
-
   dependsOn:
     - component: web-console-next
 
+  # PARKED — no environment subscriptions, so no jobs are planned. The zone
+  # this stack manages (baseDomain sourceplane.ai) is not delegated to Cloudflare
+  # and does not exist in the connected account (the domain is parked at
+  # dns.ws — a rebrand artifact), so `data.cloudflare_zone.existing` fails
+  # every plan with "no zone found". Restore the subscribe block below once
+  # the zone exists in the account (and finish the 0085b v5 re-import).
+  #
+  # subscribe:
+  #   environments:
+  #     - name: stage
+  #       profile: plan-only
+  #       profileRules:
+  #         - profile: apply
+  #           when:
+  #             triggerRef: github-push-main
+  #
+  #     - name: prod
+  #       profile: plan-only
+  #       profileRules:
+  #         - profile: apply
+  #           when:
+  #             triggerRef: github-push-main
   subscribe:
-    environments:
-      - name: stage
-        profile: plan-only
-        profileRules:
-          - profile: apply
-            when:
-              triggerRef: github-push-main
-
-      - name: prod
-        profile: plan-only
-        profileRules:
-          - profile: apply
-            when:
-              triggerRef: github-push-main
-# ci: trigger full-component verification (orun v2.12.0 upgrade — PR #183)
+    environments: []
