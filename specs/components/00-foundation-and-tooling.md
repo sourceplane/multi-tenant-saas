@@ -31,10 +31,10 @@ Bootstrap a production-grade Cloudflare monorepo that all later SaaS starter bou
 - Worker and Pages app scaffolds
 - shared environment typing
 - Supabase Postgres and Hyperdrive adapter conventions
-- Terraform provisioning for Supabase, Hyperdrive, Worker infra, AWS Secrets Manager secrets, and the S3 backend baseline
+- Terraform provisioning for Supabase, Hyperdrive, and Worker infra, with state in the Orun HTTP backend and provider credentials brokered per run
 - local development scripts
 - Orun and Stack Tectonic CI/deploy pipeline skeleton
-- root `intent.yaml`, `kiox.yaml`, committed `kiox.lock`, and local `stack-tectonic/`
+- root `intent.yaml`, `kiox.yaml`, committed `kiox.lock`, and the pinned OCI composition stack
 - `component.yaml` scaffolds for apps, packages, infra, and test components
 - contract-test harness wired to `packages/contracts`
 
@@ -61,10 +61,9 @@ Bootstrap a production-grade Cloudflare monorepo that all later SaaS starter bou
 ### Orun Structure
 
 - `intent.yaml` discovers `apps/`, `packages/`, `tests/`, and `infra/`.
-- `intent.yaml` follows the `aws-admin` environment model: `dev`, `stage`, `prod`, promotion gates, `parameterDefaults.terraform`, and `AWS_REGION`.
+- `intent.yaml` declares the `dev`, `stage`, `prod` environment model with promotion gates, `parameterDefaults.terraform`, and the workspace claim for remote state.
 - `intent.yaml` points at the repo's selected Stack Tectonic composition source and binds component types centrally.
-- `stack-tectonic/` is aligned with `../aws-admin/stacks/aws-admin-terraform/` for Terraform schema, jobs, profiles, README style, and local/CI behavior before new infra components depend on it.
-- `kiox.yaml` pins the same Orun runtime version as `aws-admin`.
+- The composition stack is consumed as a pinned OCI artifact; a composition change is a stack release plus a version bump here, never a repo-local edit.
 - `kiox.yaml` pins the Orun provider image and `kiox.lock` records the resolved digest.
 - `.orun/` contains generated local plans, locks, and run state and is not committed.
 - Each app, package, infra unit, and test suite has a colocated `component.yaml`.

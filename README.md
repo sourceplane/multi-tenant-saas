@@ -85,14 +85,13 @@ packages/notifications-client  Notifications client
 packages/shared           Generic helpers (IDs, errors) — no domain logic
 packages/testing          Test fixtures and utilities
 
-infra/terraform/bootstrap          Verifies AWS state backend + Secrets access
 infra/terraform/supabase           Supabase project provisioning (stage/prod)
 infra/terraform/cloudflare-hyperdrive  Hyperdrive config fronting Supabase
 infra/terraform/cloudflare-kv      api-edge idempotency KV namespace
 infra/terraform/cloudflare-domain  Zone adoption + console custom domain
 infra/db-migrate                   Database migration runner component
 
-stack-tectonic            Repo-local Orun composition stack (execution contracts)
+flows/                    The phased bootstrap (see BOOTSTRAP.md)
 tooling/tsconfig          Shared TypeScript configurations
 tooling/eslint            Shared ESLint configuration
 tests/*                   Per-component contract and verifier test suites

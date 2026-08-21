@@ -12,6 +12,19 @@ spec:
   dependsOn:
     - component: membership-worker
     - component: policy-worker
+    # Shared workspace packages this component BUNDLES. Declared so a change
+    # to one marks this component changed and redeploys it — without the
+    # edge, `orun plan --changed` keys on `path:` alone and a worker can run
+    # a months-old copy of a package that has since changed underneath it.
+    - component: contracts
+    - component: db
+  # BF6 wiring documents from orun secrets (SEC-JOB): lease-published by
+  # the infra components; wire-live renders the wrangler template from
+  # these instead of Secrets Manager documents.
+  secretEnv:
+    WIRING_CLOUDFLARE_HYPERDRIVE_STAGE: "secret://halo/multi-tenant-saas/stage/WIRING_CLOUDFLARE_HYPERDRIVE"
+    WIRING_CLOUDFLARE_HYPERDRIVE_PROD: "secret://halo/multi-tenant-saas/prod/WIRING_CLOUDFLARE_HYPERDRIVE"
+
   subscribe:
     environments:
       - name: dev
@@ -36,8 +49,6 @@ spec:
     # BF6b: deploy-time wiring — wrangler.jsonc is rendered, never committed.
     # Verify lanes render from wiring.fixture.json (offline); deploy lanes
     # resolve real IDs from the Secrets Manager wiring manifest (BF5).
-    awsAccountId: "306024784101"
-    awsRegion: us-east-1
     orgName: sourceplane
     owner: sourceplane
     repo: multi-tenant-saas
@@ -61,4 +72,3 @@ spec:
     layer: runtime
     surface: events
     runtime: cloudflare
-# ci: trigger full-component verification (orun v2.12.0 upgrade — PR #183)

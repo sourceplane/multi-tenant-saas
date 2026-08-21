@@ -14,6 +14,28 @@ spec:
     - component: policy-worker
     - component: membership-worker
     - component: notifications-worker
+    # Shared workspace packages this component BUNDLES. Declared so a change
+    # to one marks this component changed and redeploys it — without the
+    # edge, `orun plan --changed` keys on `path:` alone and a worker can run
+    # a months-old copy of a package that has since changed underneath it.
+    - component: contracts
+    - component: db
+    - component: notifications-client
+  # Runtime secrets, wire-now-seed-later: best-effort references —
+  # an unseeded key is skipped at resolve (and by secrets-live), so
+  # this block is inert until the value is stored in orun secrets.
+  # BF6 wiring documents from orun secrets (SEC-JOB): lease-published by
+  # the infra components; wire-live renders the wrangler template from
+  # these instead of Secrets Manager documents.
+  secretEnv:
+    WIRING_CLOUDFLARE_HYPERDRIVE_STAGE: "secret://halo/multi-tenant-saas/stage/WIRING_CLOUDFLARE_HYPERDRIVE"
+    WIRING_CLOUDFLARE_HYPERDRIVE_PROD: "secret://halo/multi-tenant-saas/prod/WIRING_CLOUDFLARE_HYPERDRIVE"
+
+  optionalSecretEnv:
+    GITHUB_OAUTH_CLIENT_SECRET: "secret://halo/multi-tenant-saas/{{ .environment }}/GITHUB_OAUTH_CLIENT_SECRET"
+    GOOGLE_OAUTH_CLIENT_SECRET: "secret://halo/multi-tenant-saas/{{ .environment }}/GOOGLE_OAUTH_CLIENT_SECRET"
+    OAUTH_STATE_SECRET: "secret://halo/multi-tenant-saas/{{ .environment }}/OAUTH_STATE_SECRET"
+
   subscribe:
     environments:
       - name: dev
@@ -38,14 +60,13 @@ spec:
     # BF6b: deploy-time wiring — wrangler.jsonc is rendered, never committed.
     # Verify lanes render from wiring.fixture.json (offline); deploy lanes
     # resolve real IDs from the Secrets Manager wiring manifest (BF5).
-    awsAccountId: "306024784101"
-    awsRegion: us-east-1
     orgName: sourceplane
     owner: sourceplane
     repo: multi-tenant-saas
 
-    # SS2: manifest key for the secrets-live escrow sync (saas-secrets-sync).
-    secretsWorker: identity-worker
+    # Runtime worker secrets, pushed by the secrets-live step from the
+    # values orun resolves for the optionalSecretEnv references below.
+    runtimeSecrets: "GITHUB_OAUTH_CLIENT_SECRET,GOOGLE_OAUTH_CLIENT_SECRET,OAUTH_STATE_SECRET"
     turboFilter: "@saas/identity-worker"
     wranglerConfig: wrangler.jsonc
     wranglerTemplate: wrangler.template.jsonc
@@ -65,5 +86,3 @@ spec:
     layer: runtime
     surface: identity
     runtime: cloudflare
-# ci: trigger full-component verification (orun v2.12.0 upgrade — PR #183)
-# ci: SS6b first-deploy — push GitHub/Google client secrets + OAUTH_STATE_SECRET from the seeded integration + platform docs (#350)

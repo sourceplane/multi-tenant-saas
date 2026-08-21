@@ -1,5 +1,31 @@
 # Epic: saas-secrets-sync
 
+> **⛔ Closed — superseded by [`saas-lumen-baseline`](../saas-lumen-baseline/) LB1.**
+>
+> This epic's system of record was AWS Secrets Manager. LB1 removes AWS from
+> the loop entirely: Terraform state moved to the Orun Cloud HTTP backend and
+> provider credentials are brokered per run from the workspace's own
+> connections, so there is no escrow left for `tooling/secrets-sync` to write
+> to or check against. The tooling and its test package were deleted with LB1.
+>
+> **Why superseded rather than retargeted at the workspace secret store:** the
+> secrets this epic managed are the credential-blocked tail — OAuth apps,
+> Polar, Stripe. A freshly instantiated product has none of them; they arrive
+> when an operator creates those apps, long after bootstrap. Its remaining
+> value was drift detection against a manifest, and the workspace secret store
+> is already the single write path, so the manifest would only describe what
+> the store enumerates. Carrying it forward would mean every fork inherits
+> tooling pointed at an AWS account it does not have, failing in a way that
+> reads like a bug.
+>
+> **What survives:** the escrow contract this epic established — a partial seed
+> hard-fails the deploy lane rather than leaving a Worker half-configured — is
+> preserved in the deploy lane and is not up for renegotiation. Runtime secrets
+> are now declared as `optionalSecretEnv` references resolved from the
+> workspace store (`specs/core/access-and-infra.md` § Worker Runtime Secrets).
+>
+> The record below is kept as-built and is no longer normative.
+
 **One write path for every secret.** AWS Secrets Manager is the system of
 record; Cloudflare holds deploy-time copies. Humans and Terraform write
 secrets in exactly one place (`<org>/<repo>/…/<env>`), and the deploy lane
@@ -13,7 +39,7 @@ from escrow with one apply. Lands in this baseline first; forks (e.g.
 
 | Field | Value |
 |-------|-------|
-| Status | **In progress (SS0–SS2 shipped; SS3 operator seeding)** |
+| Status | **⛔ Closed — superseded by LB1** (SS0–SS2 had shipped) |
 | Cluster | **SS** (SS0–SS5) |
 | Owner(s) | `tooling/secrets-sync/` (new), `tests/secrets-sync/` (new), `stack-tectonic` worker compositions, `infra/terraform/*`, all `wrangler.template.jsonc` surfaces, `specs/core/access-and-infra.md` |
 | Target branch | `main` |

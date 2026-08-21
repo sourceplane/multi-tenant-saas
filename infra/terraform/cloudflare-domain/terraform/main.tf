@@ -1,17 +1,11 @@
 terraform {
   required_version = ">= 1.15.0"
 
-  backend "s3" {
-    encrypt              = true
-    use_lockfile         = true
-    workspace_key_prefix = "env"
-  }
+  # State lives on the platform (SB1): the runner exports TF_HTTP_* per job, so
+  # this block stays empty — no S3 bucket, no AWS role, no workspaces.
+  backend "http" {}
 
   required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
     cloudflare = {
       source  = "cloudflare/cloudflare"
       version = "~> 4.52"
@@ -21,36 +15,12 @@ terraform {
 
 # --- Providers ---
 
-provider "aws" {
-  region = var.awsRegion
-
-  default_tags {
-    tags = {
-      ManagedBy   = "terraform"
-      Repository  = "${var.owner}/${var.repo}"
-      Component   = var.component
-      Environment = var.environment
-    }
-  }
-}
-
-provider "cloudflare" {
-  api_token = var.cloudflare_api_token
-}
+# Authenticates via the CLOUDFLARE_API_TOKEN env var (provider-native): the
+# token is an orun-managed secret resolved into the job env at run time, so it
+# never transits Terraform variables.
+provider "cloudflare" {}
 
 # --- Variables (standard Orun parameters) ---
-
-variable "awsRegion" {
-  type    = string
-  default = "us-east-1"
-}
-
-variable "cloudflare_api_token" {
-  type        = string
-  sensitive   = true
-  default     = ""
-  description = "Cloudflare API token (from CLOUDFLARE_API_TOKEN env var)"
-}
 
 variable "cloudflare_account_id" {
   type        = string
@@ -118,7 +88,7 @@ variable "terraformVersion" {
 
 variable "baseDomain" {
   type        = string
-  default     = "sourceplane.ai"
+  default     = "multi-tenant-saas.app"
   description = "Root domain to manage (from BASE_DOMAIN env or component parameter)"
 }
 
@@ -134,7 +104,7 @@ variable "zoneMode" {
 
 variable "workerNamePrefix" {
   type        = string
-  default     = "sourceplane-web-console-next"
+  default     = "multi-tenant-saas-web-console-next"
   description = "Worker name prefix for the new console; full Worker service name is {prefix}-{environment}"
 }
 
@@ -194,7 +164,7 @@ locals {
 #     The live Cloudflare custom-domain resource is NOT touched — only the
 #     Terraform state file in S3 is mutated. Expected plan diff:
 #       Plan: 0 to add, 0 to change, 1 to forget.
-#     After post-merge apply, `stage.sourceplane.ai` and `prod.sourceplane.ai`
+#     After post-merge apply, `stage.multi-tenant-saas.app` and `prod.multi-tenant-saas.app`
 #     continue to serve from their existing Workers (immutable IDs
 #     052eaece5e989d5a7280b6c206e562c42950e3a6 and
 #     31e5f2ed1b1e4a5700e8ae0678846a0d753840e1) but are no longer tracked.

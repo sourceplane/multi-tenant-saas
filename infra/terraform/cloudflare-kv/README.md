@@ -61,12 +61,11 @@ Standard Orun parameters (matching `cloudflare-hyperdrive`):
 | Name | Type | Default | Description |
 |---|---|---|---|
 | `awsRegion` | string | `us-east-1` | AWS region for Terraform state backend |
-| `cloudflare_api_token` | string (sensitive) | `""` | From `CLOUDFLARE_API_TOKEN` env var |
 | `cloudflare_account_id` | string (sensitive) | `""` | From `CLOUDFLARE_ACCOUNT_ID` env var |
-| `orgName` | string | `sourceplane` | Org identifier |
-| `owner` | string | `sourceplane` | GitHub owner |
+| `orgName` | string | `multi-tenant-saas` | Org identifier |
+| `owner` | string | `multi-tenant-saas` | GitHub owner |
 | `repo` | string | `multi-tenant-saas` | GitHub repo |
-| `namespace` | string | `sourceplane` | Logical namespace |
+| `namespace` | string | `multi-tenant-saas` | Logical namespace |
 | `namespacePrefix` | string | `""` | Stage/prod prefix (`stg-`, `prod-`) |
 | `lane` | string | `verify` | Orun lane |
 | `environment` | string | `stage` | Target environment |
@@ -198,4 +197,5 @@ terraform -chdir=infra/terraform/cloudflare-kv/terraform fmt -check
 
 - Cloudflare Workers KV: https://developers.cloudflare.com/kv/
 - Stripe Idempotency-Key contract: https://stripe.com/docs/api/idempotent_requests
-- Orun Terraform component spec: see `stack-tectonic/compositions/terraform/`
+- Orun Terraform component spec: see the `terraform` composition in the
+  [stack-tectonic](https://github.com/sourceplane/stack-tectonic) catalog

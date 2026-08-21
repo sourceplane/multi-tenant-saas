@@ -17,9 +17,10 @@ kiox.lock                  Resolved Kiox provider lock
   /workflows
     ci.yml                 Portable Orun plan/run workflow for PRs and main
 
-/stack-tectonic            Repo-owned operations catalog, aligned with aws-admin stack style
-  stack.yaml
-  /compositions
+/flows                     The phased bootstrap: how this baseline births a product
+  /phases                  Eight idempotent workflows (01-scaffold … 08-docs) + the 00-all umbrella
+  /common                  Shared scripts the phases compose
+  /agent                   The sandbox agent's task brief
 
 /apps
   /api-edge                Public HTTP entry Worker
@@ -140,7 +141,7 @@ kiox.lock                  Resolved Kiox provider lock
 - Every CI-gated test suite is modeled as a first-class Orun component under `tests/components/`.
 - `packages/testing` holds shared fixtures, harnesses, and helpers; it is not the CI gate by itself.
 - Deployable, package, and infra components must declare `dependsOn` edges to the test components that gate them.
-- The starter test composition should begin as a repo-owned `turbo-test` contract inside `stack-tectonic/compositions/` so unit, contract, integration, and smoke suites can run through Orun with repo-specific inputs.
+- Test suites run through the published stack's `turbo-package` composition, so unit, contract, integration, and smoke suites are planned like any other component.
 - A component that cannot name its required test component dependency is not ready to merge.
 
 ## Platform Resource Mapping
@@ -224,15 +225,18 @@ When a component outgrows Cloudflare-native storage or queueing:
 
 This repo uses [orun](https://orun-api.sourceplane.ai) for composition-driven
 CI and deployment. The working model is the Orun golden path captured in
-`specs/core/orun-golden-path.md`, with `aws-admin` as the reference implementation
-for Terraform, S3 backend, and environment structure.
+`specs/core/orun-golden-path.md`. Terraform state lives in the Orun Cloud HTTP
+backend under the workspace claim; provider credentials are brokered per run
+from the workspace's integration connections.
 
-- **`stack-tectonic/`** is the repo-owned operations catalog. Its Terraform
-  composition must be brought in line with `../aws-admin/stacks/aws-admin-terraform/`
-  before new infra work depends on it.
+- **The composition stack** is consumed as a published OCI artifact
+  (`oci://ghcr.io/sourceplane/stack-tectonic:<version>`), pinned in
+  `intent.yaml`. It is not repo-local: a bare reference would resolve to
+  `:latest` and let a catalog release change this repo's execution contracts
+  without a commit here.
 - **`intent.yaml`** records discovery roots, composition sources and bindings,
-  trigger bindings, and `dev` -> `stage` -> `prod` environment promotion. It
-  uses `parameterDefaults.terraform` and `env.AWS_REGION` like `aws-admin`.
+  trigger bindings, the workspace claim for remote state, and
+  `dev` -> `stage` -> `prod` environment promotion.
 - **`.orun/`** contains generated local Orun plans, locks, and run state. It is
   ignored by git; `kiox.lock` is the committed runtime/provider lock.
 - **`component.yaml`** in each app, package, infra module, and test suite
@@ -271,13 +275,15 @@ The CI workflow (`ci.yml`) compiles one Orun plan on every PR and push to main, 
 
 Adding a new app, package, infra module, or test suite requires only a colocated `component.yaml`. The workflow does not need to change.
 
-If a repo-specific composition change is needed:
+If a composition change is needed:
 
-1. update `stack-tectonic/` first,
-2. update the schema/profile/job contract and README together,
-3. add or update the matching smoke fixture there when one exists,
-4. run local `kiox -- orun validate`, `plan`, and `run --dry-run`,
-5. then merge the consuming component change.
+1. land it in `sourceplane/stack-tectonic` and cut a release,
+2. bump the pinned `oci://…:<version>` in `intent.yaml`,
+3. run local `kiox -- orun validate`, `plan`, and `run --dry-run`,
+4. then merge the consuming component change.
+
+The pin is the seam: a composition cannot change this repo's behaviour until
+the version here moves.
 
 ## CI And Quality Gates
 

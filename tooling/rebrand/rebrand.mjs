@@ -75,6 +75,21 @@ const cliBin = values.cliBin ?? repoName;
 const apiBaseUrl = values.apiBaseUrl ?? `https://api.${productDomain}`;
 const workersDevSubdomain = values.workersDevSubdomain ?? "your-workers-subdomain";
 const salesEmail = values.salesEmail; // optional
+// A `secret://<workspace>/<project>/<env>/<KEY>` ref names the WORKSPACE
+// first and the project (repo) second. Here the two differ (`halo` /
+// `multi-tenant-saas`), so the repo-slug pass below must not be allowed to
+// rewrite the workspace segment — a fork whose refs point at a workspace that
+// does not exist fails every resolve with "Validation failed". The workspace
+// segment is renamed separately from orunWorkspaceSlug (a ws_… id cannot
+// appear here: the platform matches the run's org SLUG), falling back to the
+// fork's own slug only when the caller supplied nothing better.
+const orunWorkspaceSlug = (() => {
+  const explicit = (values.orunWorkspaceSlug ?? "").trim();
+  if (explicit) return explicit;
+  const ws = (values.orunWorkspace ?? "").trim();
+  if (ws && !/^ws_/i.test(ws)) return ws; // already a slug
+  return repoName;
+})();
 // Derived code-shaped forms.
 const camelName = pascalName.charAt(0).toLowerCase() + pascalName.slice(1);
 const envPrefix = cliBin.toUpperCase().replace(/-/g, "_");
@@ -242,6 +257,14 @@ function discoverWorkerCfNames() {
 // Scoped, regex-based pairs applied after the literal map.
 function scopedPairs() {
   const list = [
+    // Secret refs: `secret://<workspace>/<project>/…`. MUST precede the
+    // repo-slug pass below, which would otherwise rewrite the workspace
+    // segment to the repo name (see orunWorkspaceSlug above).
+    {
+      re: /\bsecret:\/\/halo\/multi-tenant-saas\//g,
+      replacement: () => `secret://${orunWorkspaceSlug}/${repoName}/`,
+      label: "secret ref workspace/project",
+    },
     // Branded env-var names: the real CONFIG_DIR override (brand.ts derives
     // it from CLI_BIN, so tests/docs must rename in lockstep) plus doc
     // placeholders like SOURCEPLANE_TOKEN / SOURCEPLANE_API_KEY /
@@ -296,8 +319,13 @@ function scopedPairs() {
 // literal is residue: either org-owned (allowed, enumerated below) or a
 // missed rename (reported, non-zero exit).
 
+// `secret://halo/` is listed because a fork that keeps the baseline's
+// WORKSPACE segment resolves nothing: the refs point at a workspace it has no
+// claim on, and every secret read fails with "Validation failed" long after
+// the rebrand looked clean. Bare `halo` is deliberately not matched — it is an
+// ordinary word and would fire on prose.
 const RESIDUE_RE =
-  /multi-tenant-saas|rahulvarghesepullely|Sourceplane|sourceplane\.ai|api\.sourceplane\.dev|sourceplane-web-console|sourceplane\.next|SOURCEPLANE_/g;
+  /multi-tenant-saas|rahulvarghesepullely|Sourceplane|sourceplane\.ai|api\.sourceplane\.dev|sourceplane-web-console|sourceplane\.next|SOURCEPLANE_|secret:\/\/halo\//g;
 
 const ALLOWED_RESIDUE = [
   /https:\/\/orun-api\.sourceplane\.ai/, // orun state backend

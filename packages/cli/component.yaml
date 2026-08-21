@@ -2,7 +2,7 @@ apiVersion: sourceplane.io/v1
 kind: Component
 metadata:
   name: cli
-  description: First-class TypeScript CLI for the Sourceplane control plane API
+  description: First-class TypeScript CLI for the Lumen control plane API
 spec:
   type: turbo-package
   lifecycle: production
@@ -26,4 +26,3 @@ spec:
     team: platform
     layer: shared
     surface: cli
-# ci: trigger full-component verification (orun v2.12.0 upgrade — PR #183)

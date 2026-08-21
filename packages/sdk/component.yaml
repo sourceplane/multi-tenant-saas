@@ -2,7 +2,7 @@ apiVersion: sourceplane.io/v1
 kind: Component
 metadata:
   name: sdk
-  description: Runtime-agnostic TypeScript SDK for the Sourceplane control plane API
+  description: Runtime-agnostic TypeScript SDK for the Lumen control plane API
 spec:
   type: turbo-package
   lifecycle: production
@@ -26,4 +26,3 @@ spec:
     team: platform
     layer: shared
     surface: sdk
-# ci: trigger full-component verification (orun v2.12.0 upgrade — PR #183)

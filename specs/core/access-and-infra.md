@@ -4,214 +4,227 @@ Status: Normative
 
 ## Intent
 
-Define the access, Terraform, remote-state, and secret-storage model for the
-multi-tenant SaaS repo. This repo follows the same Orun golden-path shape as
-`aws-admin`: component-native Terraform declarations, CI behavior compiled by
-Orun, environment behavior visible in `intent.yaml`, and cloud access granted
-through repo-scoped AWS roles.
+Define the access, Terraform, remote-state, and secret-storage model for this
+repo. The governing principle is that **nothing credential-shaped is stored
+anywhere**: Terraform state lives in the Orun Cloud HTTP backend under a
+declared workspace claim, and every provider credential is brokered per run
+from the workspace's own integration connections.
+
+This is what makes the repo a baseline. A product instantiated from it connects
+Cloudflare and Supabase in its workspace and has, at that moment, everything its
+pipelines need — no cloud account to create, no role to trust, no secret to
+seed by hand.
 
 ## Golden Path References
 
 - `specs/core/orun-golden-path.md` explains how agents should reason about Orun
   repos.
-- `../aws-admin/intent.yaml` is the reference for environment shape:
-  `dev`, `stage`, `prod`, promotion gates, `parameterDefaults.terraform`, and
-  `AWS_REGION`.
-- `../aws-admin/stacks/aws-admin-terraform/` is the reference Terraform
-  composition contract for `plan-only` and `apply` profiles.
-- `../aws-admin/domains/**/component.yaml` and colocated `README.md` files are
-  the reference for component descriptor and component documentation style.
+- `intent.yaml` is the reference for environment shape: `dev`, `stage`, `prod`,
+  promotion gates, `parameterDefaults.terraform`, and the workspace claim.
+- The published composition stack (`oci://ghcr.io/sourceplane/stack-tectonic`)
+  owns the `plan-only` / `apply` profile contracts. Components name a
+  composition; they do not describe their own pipeline.
+- `infra/terraform/**/component.yaml` and colocated `docs/` are the reference
+  for component descriptor and documentation style.
 
 ## Agent Access
 
 Agents may assume authenticated access to:
 
 - `gh` for GitHub PRs, checks, logs, and repository inspection.
-- AWS through the repo-scoped IAM roles created by `aws-admin`.
+- `orun`, authenticated headlessly through `ORUN_TOKEN` / `ORUN_TOKEN_FILE`.
 - `wrangler` and Supabase tooling only when a task explicitly needs to inspect
-  or verify Cloudflare/Supabase resources.
+  or verify Cloudflare/Supabase resources — and then through credentials
+  brokered for that run, never long-lived ones.
+
+A refreshed platform credential arrives at `ORUN_TOKEN_FILE`. Read it; never
+copy it (a copied token dies in 15 minutes) and never print any token.
 
 When access is unclear, task agents must pause or record the blocker instead of
-inventing account IDs, role ARNs, project refs, or secret names.
+inventing account IDs, connection ids, project refs, or secret names.
 
-## AWS Admin Boundary
+## Tenancy Boundary
 
-`aws-admin` owns AWS IAM and the shared Terraform state buckets. This repo must
-not hand-create IAM users, roles, policies, or S3 state buckets.
+`intent.yaml` declares `execution.state.workspace`. That claim is sent on every
+remote operation, including the credential-free CI OIDC exchange, so the
+platform can enforce `claim ⊆ authorized`.
 
-The required `aws-admin` component for this repo creates environment-scoped
-GitHub OIDC roles for `sourceplane/multi-tenant-saas`. Those roles must allow:
-
-- Terraform state read/write against the shared S3 state buckets named
-  `sourceplane-<env>`.
-- AWS Secrets Manager read/write for this repo's secret namespace:
-  `<org>/<repo>/<component>/<env>`.
-- Read-only identity and policy inspection needed by Terraform plan jobs.
-
-The role names and trust subjects must follow the same pattern as the existing
-`aws-admin` GitHub repository components. The multi-tenant SaaS repo consumes
-those roles; it does not own their creation.
+Declaring it implies **strict mode**: a non-interactive run that resolves no
+workspace fails fast rather than writing into whatever tenant it happens to
+reach. A fork that inherits this file and not its own workspace would claim
+another tenant's workspace on every remote op, so the scaffold phase rewrites
+the claim per product and refuses to guess when no value is supplied.
 
 ## CI Secrets And Identity
 
-GitHub Actions must use OIDC-assumed AWS roles rather than committing or logging
-long-lived credentials. If a task temporarily relies on existing AWS access
-secrets while migrating, it must record the compatibility reason and remove the
-fallback in the smallest safe follow-up.
+GitHub Actions authenticate to the platform by OIDC. There are no cloud
+credentials in the CI environment and no long-lived secrets at rest.
 
 The baseline CI environment needs:
 
 - `ORUN_BACKEND_URL` for Orun remote execution state.
 - GitHub token access supplied by Actions.
-- AWS role configuration supplied through the Orun Terraform composition or an
-  explicit pre-run credential step that is itself encoded in the Orun-planned
-  job behavior.
-- `SUPABASE_API_KEY` as a GitHub Actions secret with management access to the
-  Supabase `sourceplane` organization. Terraform jobs must map this secret to
-  the selected Supabase provider's access-token input without printing it.
 
-Provider-specific credentials, Supabase database passwords, API keys, and
-connection strings must live in AWS Secrets Manager under:
+Everything else is brokered. Five workspace secrets are created once per
+product from its connections — no value is typed, seen, or stored, because each
+is a *template* the platform resolves at read time:
 
-```text
-<org>/<repo>/<component>/<env>
-```
+| Key | Provider | Template | Resolves to |
+|---|---|---|---|
+| `CLOUDFLARE_API_TOKEN` | cloudflare | `workers-deploy` | fresh per-run Workers deploy token |
+| `CLOUDFLARE_HYPERDRIVE_TOKEN` | cloudflare | `hyperdrive-edit` | fresh per-run Hyperdrive token |
+| `CLOUDFLARE_ACCOUNT_ID` | cloudflare | `account-id` | connection fact (non-secret) |
+| `SUPABASE_ACCESS_TOKEN` | supabase | `management-access` | fresh per-run management token |
+| `SUPABASE_ORG_ID` | supabase | `org-id` | connection fact (non-secret) |
 
-Example:
+`flows/common/create-secrets.sh <workspace>` creates them and is idempotent:
+existing healthy keys are kept, and a key orphaned by a revoked connection is
+revoked and recreated against the current one.
 
-```text
-sourceplane/multi-tenant-saas/supabase/stage
-```
+Creating them requires an **admin-role** workspace key. Builder and viewer keys
+read fine, but their writes return `not_found` — resource-hiding masks the
+denial as absence. This is the single most common bootstrap failure, so the
+script special-cases the message rather than letting an operator chase missing
+scopes.
 
 Secret values must never be committed, echoed in logs, or copied into task
 reports. Reports may include secret names and non-secret resource IDs.
 
-### Worker Runtime Secrets
+## Wiring Documents
 
-Runtime secrets consumed by Cloudflare Workers (OAuth client secrets,
-`OAUTH_STATE_SECRET`, billing provider tokens, `SECRET_ENCRYPTION_KEY`, the
-GitHub App bundle) follow the same system-of-record rule. They are escrowed
-in AWS Secrets Manager as one document per **provider integration** (config
-+ secret co-located) plus a single platform document for non-integration
-secrets:
+Infra components publish their resource identifiers as workspace project
+secrets under lease, and consumers resolve them at deploy time. Nothing with a
+real resource ID is ever committed.
 
 ```text
-<org>/<repo>/integrations/<name>/<env>      # per-provider config + secret(s)
-<org>/<repo>/platform-secrets/<env>         # SECRET_ENCRYPTION_KEY, OAUTH_STATE_SECRET, INTEGRATIONS_STATE_SECRET
+secret://<workspace>/<project>/<env>/WIRING_<COMPONENT>
 ```
 
-`tooling/secrets-sync/integrations.manifest.json` is the source of truth
-declaring which keys live in each document and which workers consume them;
-`tooling/secrets-sync/assemble.mjs` projects them into the per-worker secret
-view that `tooling/secrets-sync/sync.mjs` pushes to Cloudflare (and the
-per-worker config view that renders into wrangler `vars`).
-`tooling/secrets-sync/secrets.manifest.json` is a GENERATED projection of
-the integrations manifest used by the legacy `check.mjs` drift checker.
-Cloudflare worker secrets are deploy-time copies only — write-only, never
-the source of truth, and never read back. Workers must not call AWS Secrets
-Manager at request time. The `saas-secrets-sync` epic owns the sync/drift
-mechanics (`specs/epics/saas-secrets-sync/`).
+A component declares what it needs in its own `component.yaml`, so the edge is
+visible to `orun plan` instead of buried in a job template:
 
-Config keys are non-secret and may be logged (or appear in plan output);
-secret keys never are. Instance *branding* constants (product name, CLI
-binary, sales email) stay in the source `app-config` seam, and
-orchestration parameters (AWS account, region, domains) stay in
-`intent.yaml` — neither belongs in Secrets Manager.
+```yaml
+secretEnv:
+  WIRING_CLOUDFLARE_HYPERDRIVE_STAGE: "secret://halo/multi-tenant-saas/stage/WIRING_CLOUDFLARE_HYPERDRIVE"
+```
+
+Verify lanes render bindings from a committed fixture instead
+(`wiring.fixture.json`) and are therefore offline by construction: a pull
+request cannot obtain credentials or contact a state backend.
+
+### Worker Runtime Secrets
+
+Runtime secrets consumed by Workers (OAuth client secrets, `OAUTH_STATE_SECRET`,
+billing provider tokens, `SECRET_ENCRYPTION_KEY`, the GitHub App bundle) live in
+the workspace secret store and are declared as `optionalSecretEnv` references:
+
+```yaml
+optionalSecretEnv:
+  GITHUB_OAUTH_CLIENT_SECRET: "secret://halo/multi-tenant-saas/{{ .environment }}/GITHUB_OAUTH_CLIENT_SECRET"
+```
+
+These are **wire-now, seed-later**: an unseeded key is skipped at resolve, so
+the block is inert until a value is stored. That is what lets a freshly
+instantiated product deploy before anyone has created its OAuth apps.
+
+The component's `runtimeSecrets` parameter names which of them the deploy lane
+pushes to Cloudflare. Cloudflare worker secrets are deploy-time copies only —
+write-only, never the source of truth, never read back. A **partial seed
+hard-fails** the lane rather than leaving a Worker half-configured.
+
+Config keys are non-secret and may be logged or appear in plan output; secret
+keys never are. Instance *branding* constants (product name, CLI binary, sales
+email) stay in the source `app-config` seam, and orchestration parameters
+(domains, prefixes) stay in `intent.yaml` — neither belongs in a secret store.
 
 ## Terraform State
 
-Terraform state for this repo uses AWS S3, not Cloudflare R2.
+Terraform state lives in the **Orun Cloud HTTP backend**. There is no S3
+bucket, no AWS role, and no Terraform workspaces.
 
-All Terraform components must use the same backend contract as `aws-admin`:
+Every Terraform component declares an empty backend block:
 
-- bucket: `<orgName>-<environment>`; for this repo, `sourceplane-dev`,
-  `sourceplane-stage`, and `sourceplane-prod`
-- key: `<repo>/<component>/terraform.tfstate`
-- `workspace_key_prefix = "env"`
-- `encrypt = true`
-- `use_lockfile = true`
-- region supplied from environment or component parameters, defaulting to
-  `us-east-1`
-
-The effective state object path is therefore:
-
-```text
-env/<environment>/<repo>/<component>/terraform.tfstate
+```hcl
+backend "http" {}
 ```
 
-The old R2 bootstrap component is deprecated and must be removed from active
-repo source by Task 0003.1. That task is source deletion only; it must not
-clean up, import, destroy, or otherwise mutate live Cloudflare, R2, Hyperdrive,
-Supabase, AWS, or Terraform state resources.
+The runner exports `TF_HTTP_*` per job — the address is
+`…/state/tfstate/{component}/{environment}` and the password is the run token —
+so the environment is carried in the address rather than in a workspace prefix.
+State is scoped by the workspace claim, which is what makes one workspace
+unable to read another's.
+
+### Adoption
+
+A component's `adopt.tf` looks the resource up by name at plan time with the
+job's brokered credentials and imports it when the platform state does not yet
+track it. Fresh products resolve to `id = ""` and create normally; a resource
+already in state short-circuits the lookup.
+
+This exists for exactly one case — a create colliding with a resource left by a
+previous partial run (Cloudflare's duplicate-title guard, error 10014) — and is
+inert everywhere else. It is what makes the infrastructure phase re-runnable
+after a failure, which the bootstrap's retry depends on.
 
 ## Terraform Components
 
 Infrastructure provisioning must be represented as Orun-discovered Terraform
 components under `infra/terraform/**`.
 
-Minimum target components:
+The components:
 
-- a Supabase infrastructure component that creates the environment database or
-  project resources and stores generated secrets in AWS Secrets Manager;
-- Cloudflare infrastructure components that wire Workers, Hyperdrive, queues,
-  bindings, or other runtime resources when they become task scope.
+- `supabase` — creates the `stage` and `prod` projects and publishes their
+  credentials as wiring secrets;
+- `cloudflare-hyperdrive` — pooled Postgres connectivity for the Workers
+  runtime, originating from the connection `supabase` published;
+- `cloudflare-kv` — the KV namespace backing edge idempotency and rate limits;
+- `cloudflare-domain` — the zone and the per-environment custom-domain attach.
 
-Terraform components must follow the `aws-admin` component style:
+Terraform components must follow the shared component style:
 
 - `spec.type: terraform`
 - `spec.domain` aligned with the repo's intent groups
 - typed values under `spec.parameters`
 - `terraformDir: terraform`
 - pinned `terraformVersion`
-- explicit `dependsOn` edges for state, IAM, Supabase, or Cloudflare ordering
-- `plan-only` by default, with `apply` selected by profile rules on the merge
-  trigger
-- a colocated `README.md` with metadata, purpose, resources, parameters,
-  outputs, usage, dependencies, and operational notes
+- `secretOutputs` naming the wiring document the apply publishes
+- `secretEnv` naming the brokered credentials the provider authenticates with,
+  declared at component level because plan-only lanes refresh against the live
+  provider API too, not just apply
 
 ## Supabase Ownership
 
 Supabase Postgres is the primary relational database for product-owned state.
-New environment databases or Supabase projects must be created by Terraform
-through Orun jobs after AWS access and S3 state are in place.
+Environment projects are created by Terraform through Orun jobs.
 
-The current Supabase target decision is:
-
-- Organization/account name: `sourceplane`
-- Supabase organization slug/id: `dwazxcrywsdbxpuouifa`
-- Task 0006 provisions only `stage` and `prod`.
-- `dev` is intentionally not provisioned for now and must not be added to the
-  Supabase Terraform component without a later task.
-- `stage` and `prod` each get a separate Supabase project and therefore a
-  separate primary Postgres database. Do not use branches or a shared
-  project/database for these environments.
-- Project names should follow `<repo>-<env>`:
-  `multi-tenant-saas-stage` and `multi-tenant-saas-prod`.
+- The Supabase **organization comes from the workspace's connection**, resolved
+  through the `SUPABASE_ORG_ID` template. It is deliberately not hardcoded: a
+  product instantiated from this baseline provisions into whichever org its own
+  consent selected.
+- `stage` and `prod` each get a separate Supabase project, and therefore a
+  separate primary Postgres database. Do not use branches or a shared project
+  for these environments.
+- `dev` is intentionally not provisioned — it is verify-only by design.
+- Project names follow `<repo>-<env>`.
 - Project refs are assigned by Supabase during creation and must be recorded as
-  non-secret outputs/report values after apply.
+  non-secret outputs after apply.
 
 The Supabase infrastructure component must:
 
 - generate database credentials through Terraform;
-- authenticate through the Supabase provider using the GitHub
-  `SUPABASE_API_KEY` secret in CI and a local equivalent only when running
-  approved local verification;
+- authenticate through the brokered `SUPABASE_ACCESS_TOKEN`;
 - avoid logging generated passwords or API keys;
-- write connection details and generated credentials to AWS Secrets Manager
-  under `<org>/<repo>/<component>/<env>`;
-- expose only non-secret outputs in Terraform outputs and reports;
-- leave Worker/Hyperdrive wiring either in the same clearly scoped Terraform
-  component or in a dependent Cloudflare infra component.
+- publish connection details as a wiring secret under lease;
+- expose only non-secret outputs in Terraform outputs and reports.
 
-Existing human-provided Cloudflare/Supabase resources may be inspected for
-migration context, but the target path is Terraform-owned infrastructure with
-S3 state and AWS Secrets Manager as the secret system of record.
+Supabase project creation is the long pole of the infrastructure phase — budget
+five to seven minutes per environment.
 
 ## Orun Execution
 
 All infrastructure plan/apply behavior must run through Orun. Direct Terraform,
-Supabase, Wrangler, or AWS apply commands in GitHub Actions are prohibited
-unless they are emitted by an Orun composition job.
+Supabase, or Wrangler commands in GitHub Actions are prohibited unless they are
+emitted by an Orun composition job.
 
 Required validation for infrastructure changes:
 
@@ -222,24 +235,26 @@ kiox -- orun plan --intent intent.yaml --output plan.json
 kiox -- orun run --plan plan.json --dry-run --runner github-actions
 ```
 
-Use `--changed` when proving PR scoping, and use full plans when validating
+Use `--changed` when proving PR scoping, and full plans when validating
 environment promotion or cross-component dependency behavior.
 
 ## Acceptance Criteria
 
-- `multi-tenant-saas` uses the Orun runtime pinned in `kiox.yaml`
-  (authoritative; `kiox.lock` records the resolved digest) while continuing to
-  follow `aws-admin` for Terraform component and backend structure.
-- `intent.yaml` uses the `dev`, `stage`, `prod` environment shape and
-  Terraform parameter defaults from the AWS-admin pattern.
-- Terraform state uses S3 buckets `sourceplane-<env>` and the AWS-admin state
-  key pattern.
-- AWS-admin-created roles allow the multi-tenant SaaS CI path to read/write its
-  Secrets Manager namespace and Terraform state.
-- Supabase `stage` and `prod` projects are separate, Terraform-created projects
-  under organization `sourceplane` (`dwazxcrywsdbxpuouifa`), and their generated
-  database credentials are stored in AWS Secrets Manager.
-- CI and local `kiox -- orun ...` behavior are verified from rendered plans,
-  not inferred from file names.
+- This repo uses the Orun runtime pinned in `kiox.yaml` (authoritative;
+  `kiox.lock` records the resolved digest) and the composition stack pinned in
+  `intent.yaml`.
+- `intent.yaml` uses the `dev`, `stage`, `prod` environment shape and declares
+  the workspace claim.
+- Terraform state resolves through the Orun HTTP backend; no component names an
+  S3 bucket, an AWS role, or a Terraform workspace prefix.
+- A plan and apply for every infra component completes with **no AWS credential
+  in the environment**.
+- Wiring secrets are published by the infra components and readable by the
+  components that declare them.
+- Supabase `stage` and `prod` are separate Terraform-created projects in the
+  organization the workspace's connection selects, and their generated
+  credentials are published as wiring secrets rather than committed.
+- CI and local `kiox -- orun ...` behavior are verified from rendered plans, not
+  inferred from file names.
 - Resource creation or permission changes are verified against live provider
   state before merge.
