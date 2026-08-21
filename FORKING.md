@@ -1,151 +1,22 @@
-# Forking this baseline into a new SaaS
+# Operator checklist — what no script can do
 
-This repo is a reusable baseline: fork it, rebrand it, deploy it as a new
-product. The mechanical rename is one script; everything that needs human
-hands (cloud accounts, secrets, OAuth apps) is the checklist below. The
-process was proven by the first real instantiation (`orun-cloud`) and
-sharpened by the second (`lumen`); the friction each found is folded back in
-here (see §5 for the hard-won bring-up details).
+The mechanical part of instantiating this baseline is **not** here any more.
+Creating the repo, copying the tree, renaming every identity literal and
+re-tenanting the workspace claim are the blueprint's job, run by the phased
+bootstrap: start at **[BOOTSTRAP.md](BOOTSTRAP.md)**.
 
-## 1. Create the repo
+What remains is what a script genuinely cannot perform on your behalf — cloud
+accounts and consents, OAuth applications, billing products, DNS — plus the
+first-boot behaviour worth knowing before you meet it at 2am.
 
-Either GitHub-fork this repo or import a history-free snapshot
-(`git archive` → new repo), which is what the first instantiation did. A
-snapshot keeps the new product's history clean; upstream syncs become manual
-cherry-picks.
+> Superseded and removed: the hand-run rebrand script invocation (now the
+> blueprint's `rebrand` hook, which also re-tenants the `secret://` workspace
+> segment a manual run would miss) and the per-component incremental fork
+> tool (its prerequisite graph and copy ordering are now `dependsOn` edges in
+> `repo-blueprint.yaml`, so one ordering exists instead of two that can
+> disagree).
 
-## 2. Rebrand (scripted)
-
-Write a values file (start from `tooling/rebrand/values.example.json`):
-
-```jsonc
-{
-  "repoName": "acme-cloud",          // repo slug: intent name, component repo:,
-                                     // Secrets Manager paths, OIDC role names,
-                                     // Supabase project names
-  "productName": "Acme Cloud",       // display name: console, CLI copy, docs
-  "productDomain": "acme.dev",       // BASE_DOMAIN, console custom domains,
-                                     // OAuth origins, billing success URLs
-  "brandSlug": "acme",               // worker-name prefix + user-agent slugs
-  "cliBin": "acme",                  // CLI binary / keychain / ~/.config dir
-  "workersDevSubdomain": "...",      // your Cloudflare workers.dev subdomain
-  "salesEmail": "sales@acme.dev"     // optional; omit to keep the baseline mailbox
-}
-```
-
-Then, on a clean tree:
-
-```bash
-node tooling/rebrand/rebrand.mjs --values my-brand.json --dry-run   # inspect
-node tooling/rebrand/rebrand.mjs --values my-brand.json             # apply
-git diff --stat                                                     # review, commit
-```
-
-The script applies the deterministic rename map (repo slug, product domain,
-display name, SDK class `Sourceplane` → your PascalName, CLI bin, **every
-Cloudflare worker resource name**, wire-visible user agents, branded env vars,
-workers.dev subdomain), runs a leftover sweep that fails on any missed baseline
-identity, writes a provenance record to `ai/context/fork-from-baseline.md`, and
-is idempotent — rerunning it is a no-op. `node tooling/rebrand/rebrand.mjs
---verify` re-runs just the sweep at any time.
-
-> ✅ **Forks are Cloudflare-account-safe.** `rebrand.mjs` brand-prefixes every
-> worker's deployed name — the top-level wrangler `"name"`, every
-> `"<worker>-<env>"` service binding, smoke health-check and binding test — so
-> a fork's workers (`acme-membership-worker-stage`, …) never collide with the
-> baseline's, even when the fork *shares* the baseline's account. The KV
-> idempotency namespace self-brands via `${var.repo}` for the same reason. The
-> orun *component* identity (dependsOn, `component.yaml` metadata, paths) is
-> deliberately left generic — only the deployed CF identity is branded.
-> Giving the fork its own Cloudflare account is still cleaner, but no longer
-> required to avoid clobbering the baseline. (Earlier forks had to prefix all
-> workers by hand; that is now mechanical.)
-
-It deliberately does **not** touch org-owned identity:
-
-| Kept as-is | Why |
-|---|---|
-| GitHub org (`owner:`, `namespace:`, `github.com/sourceplane/...`) | The org, not the product |
-| `apiVersion: sourceplane.io/v1` manifests | Schema identifier owned by the orun tooling |
-| `https://orun-api.sourceplane.ai` | orun state backend (`intent.yaml`) |
-| S3 state buckets, Terraform `orgName`/`owner` defaults | Org-scoped shared infra (owned by `aws-admin`) |
-| GitHub App slugs | Registered apps; slugs are globally unique (re-register, step 3) |
-| npm scope `@saas/*` | Already product-neutral (decision D4) |
-| Company mailboxes (unless `salesEmail` is set) | Real inboxes |
-
-If you fork *under a different GitHub org*, the org-owned column is yours to
-re-point too (intent `namespace`, component `owner:`/`orgName:`, state
-buckets, the orun backend URL) — that is an infrastructure move, not a
-rebrand, and is intentionally out of the script's scope.
-
-## 3. Alternative: incremental (per-component) forks
-
-The snapshot path above copies everything at once. If you want a fork that
-grows a few components per PR — smaller reviews, smaller CI fan-outs, or a
-deliberate subset of the platform — use `tooling/fork/components.mjs`. It
-builds the *complete* prerequisite graph (declared `dependsOn`, wrangler
-service bindings, deploy-time wiring inputs, workspace package dependencies,
-tests-follow-their-subject) and orders/validates copies against it.
-
-**Step 0 — scaffolding (no components).** Create the new repo with the
-non-component skeleton: `intent.yaml`, `kiox.yaml` + `kiox.lock`,
-`.github/workflows/ci.yml`, `stack-tectonic/`, `tooling/`, root
-`package.json`, `pnpm-workspace.yaml`, `pnpm-lock.yaml`, `turbo.json`,
-`.gitignore`, and the docs you want. CI plans an empty job matrix and is
-green before any component exists.
-
-**Step 1 — rebrand the source once.** Run the rebrand script on a scratch
-clone of the baseline (see above) and copy batches *from that clone*, so
-every copied file arrives already rebranded.
-
-**Step 2 — copy in order.** Ask the tool for the order, then copy one batch
-per PR:
-
-```bash
-node tooling/fork/components.mjs --order                 # numbered batches
-node tooling/fork/components.mjs --copy policy-worker \
-  --from ../baseline-rebranded                           # one batch per PR
-git add -A && git commit                                 # lockfile included!
-```
-
-`--copy` brings each component's directory plus its `tests/` package, then
-resyncs `pnpm-lock.yaml` (`pnpm install --lockfile-only`) and re-validates
-the dependency closure. The resync matters: worker CI installs with
-`--frozen-lockfile`, and pnpm requires the lockfile's importer set to match
-the workspace exactly — every batch that adds or removes components must
-commit the resynced lockfile. Resolutions stay pinned to the baseline's;
-only the importer set changes.
-
-At any time, `node tooling/fork/components.mjs --check` verifies that every
-prerequisite of every component present in the tree is also present, and
-names exactly what to copy next if not.
-
-**Ordering facts the tool encodes:**
-
-- All `packages/*` ship as one foundation batch — they are verify-only (no
-  cloud), and the test suites' cross-package dependencies make finer slicing
-  not worth it.
-- Infra goes `bootstrap → supabase → cloudflare-hyperdrive → db-migrate`
-  before any DB-bound worker; `cloudflare-kv` only before `api-edge`;
-  `cloudflare-domain` last.
-- `billing-worker`, `membership-worker`, `events-worker`,
-  `notifications-worker` form a **service-binding cycle** and must be copied
-  (and first deployed) as one batch. On a fresh account this cycle **cannot
-  bootstrap on its own** — Cloudflare rejects a deploy whose service binding
-  targets a worker that does not exist yet (error `10143`), and re-running the
-  workflow does not help because the cycle never resolves. Break it with the
-  `cycle-break.mjs` two-pass tool (§5).
-- The console's deploy **smoke health-checks `api-edge`**, so it carries
-  `dependsOn: api-edge` (in `apps/web-console-next/component.yaml`) — without
-  that edge its first convergence races api-edge's deploy and fails with `curl`
-  exit 22 (404). The console is also only *usable* once `api-edge` and
-  `identity-worker` are live.
-
-The `tests/config-worker` guard suite is partial-tree safe (its api-edge
-sections skip when api-edge is not yet copied), so CI stays green at every
-intermediate state.
-
-## 4. Operator checklist (per instance, by design)
+## 1. Operator checklist (per instance, by design)
 
 Nothing here can be scripted from inside the repo; budget a working session
 with the right account owners. Track progress in your generated
@@ -180,7 +51,7 @@ with the right account owners. Track progress in your generated
 - [ ] **Billing**: Polar (or Stripe) products and the env secrets the
       billing-worker expects.
 
-## 5. First-boot expectations (learned the hard way)
+## 2. First-boot expectations (learned the hard way)
 
 - PR (verify) lanes plan Terraform only. The `cloudflare-hyperdrive` plan is
   **red on PRs until the first `main` apply** has written the Supabase
@@ -245,7 +116,7 @@ fleet:
 3. Verify each layer (`<brand>-api-edge-<env>/health` returns `ok`, including
    its database check) before starting the next.
 
-## 6. Upstream syncs
+## 3. Upstream syncs
 
 A snapshot fork has no shared git history: sync by cherry-picking content
 and re-recording it in `ai/context/fork-from-baseline.md`. The longer-term
