@@ -1,5 +1,15 @@
-# The multi-tenant-saas blueprint card: what the console's Blueprints page renders and
-# the platform's bootstrap door consumes (epic saas-blueprints-onboarding).
+# The multi-tenant-saas blueprint card: the CONTRACT the platform's bootstrap
+# door reads and the console renders, screen for screen (epic
+# saas-bootstrap-console, BC1 + BC-K5).
+#
+# Everything the console shows about this baseline comes from this file. Adding
+# a provider to `requires` grows a row in the Providers step; adding a key to
+# `secrets` grows a row in the Secrets step. Neither needs a console change.
+#
+# The division of labour with the registry is strict: the registry (orun-cloud
+# `infra/baselines-registry/baselines.yaml`) owns identity and commerce — id,
+# visibility, tier, the pinned tag, the brief and umbrella paths. This file
+# owns the build contract. NEITHER RESTATES THE OTHER.
 apiVersion: orun.io/v1
 kind: Blueprint
 metadata:
@@ -13,7 +23,29 @@ metadata:
 spec:
   source:
     repo: sourceplane/multi-tenant-saas
-    tag: baseline-v17          # bumped by the baseline release process
+    # No `tag`, and its absence is the point. This file is fetched AT the tag
+    # the registry pins, so a tag here can only ever be a second copy that
+    # rots — and it did: this line read `baseline-v17` while the registry
+    # published `baseline-v1`, and the reader refused the whole file for it.
+
+  # ── What the operator reads first (the flow's step 1) ───────────────────
+  overview:
+    lede: >
+      The Sourceplane release line of the Cloudflare + Supabase fleet: workers
+      at the edge, Postgres underneath, Terraform holding the data plane.
+    architecture:
+      - layer: Edge
+        items: [api-edge, web-console-next]
+      - layer: Services
+        items: ["12 bounded-context Workers"]
+      - layer: Data
+        items: [Supabase Postgres, Hyperdrive, KV]
+      - layer: Delivery
+        items: [Terraform, GitHub Actions, db-migrate]
+    outcome:
+      - Live on stage and prod
+      - A Terraform-held data plane
+      - Migrations apply on merge
   requires:
     integrations: [github, cloudflare, supabase]
     apiKeyRole: admin          # secret writes need the admin floor
@@ -21,7 +53,13 @@ spec:
     - key: reponame
       label: Repo name
       pattern: "^[a-z][a-z0-9-]{1,38}$"
-      askedBy: console         # needed before repo creation
+      askedBy: console
+      # The console already has this: the operator picked the repository. Say
+      # so rather than making the flow ask for the name printed above the
+      # field — and say it HERE, because the only alternative was for the
+      # console to special-case this key by name, which would make the console
+      # the authority on what a baseline's own input means.
+      from: repo.name
     - key: productname
       label: Product display name
       askedBy: agent
@@ -31,6 +69,42 @@ spec:
     - key: subdomain
       label: workers.dev subdomain
       askedBy: agent
+  # ── PREVIEW ONLY. `flows/common/create-secrets.sh` creates these. ────────
+  # Transcribed from that script's own `create` calls, so the conformance
+  # check compares this list to the script rather than to a copy of itself.
+  # The console renders them read-only: they are minted from the workspace's
+  # connections at build time, so no credential is ever typed, shown or stored
+  # in the console. Keys that already exist are kept.
+  secrets:
+    - key: CLOUDFLARE_API_TOKEN
+      provider: cloudflare
+      template: workers-deploy
+      why: Workers + KV deploys
+    - key: CLOUDFLARE_HYPERDRIVE_TOKEN
+      provider: cloudflare
+      template: hyperdrive-edit
+      why: Hyperdrive — the deploy token deliberately cannot touch it
+    - key: CLOUDFLARE_ACCOUNT_ID
+      provider: cloudflare
+      template: account-id
+      why: Connection fact, not a secret
+      fact: true
+    - key: SUPABASE_ACCESS_TOKEN
+      provider: supabase
+      template: management-access
+      why: Project create and migrations
+    - key: SUPABASE_ORG_ID
+      provider: supabase
+      template: org-id
+      why: Connection fact, not a secret
+      fact: true
+
+  # NO `programme` block, and that is a declaration rather than an omission:
+  # this repo predates the task-plane work (there is no `flows/common/track.sh`
+  # and the umbrella ensures no milestones), so there is no epic or milestone
+  # shape for the console to preview. An empty Work-plan step is worse than no
+  # step. When BT is ported here, this block arrives with it.
+
   bootstrap:
     umbrella: flows/phases/00-all/workflow.yaml
     agentBrief: flows/agent/BASELINE-TASK.md

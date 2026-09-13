@@ -21,6 +21,23 @@ permissions:
   id-token: write
 
 jobs:
+  # The blueprint manifest against the flows that realize it
+  # (saas-bootstrap-console BC2/BC-K5). Its own lane, and independent of the
+  # convergence matrix below: this file is read by the CONSOLE at a pinned
+  # tag, so a manifest that drifts is invisible to every test that only runs
+  # the build. It shipped exactly that way — a `spec.source.tag` reading
+  # `baseline-v17` against a registry publishing `baseline-v1`, which the
+  # platform's reader refused and nothing here noticed.
+  flows-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Contract test (manifest)
+        run: |
+          set -euo pipefail
+          python3 -c 'import yaml' 2>/dev/null || pip install --quiet pyyaml
+          bash flows/testing/manifest.test.sh
+
   plan:
     runs-on: ubuntu-latest
     outputs:
