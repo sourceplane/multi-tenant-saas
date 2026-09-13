@@ -32,11 +32,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - name: Contract test (manifest)
+      - name: Contract tests (manifest, converge)
         run: |
           set -euo pipefail
           python3 -c 'import yaml' 2>/dev/null || pip install --quiet pyyaml
           bash flows/testing/manifest.test.sh
+          bash flows/testing/converge.test.sh
 
   plan:
     runs-on: ubuntu-latest
