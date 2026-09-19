@@ -38,6 +38,8 @@ jobs:
           python3 -c 'import yaml' 2>/dev/null || pip install --quiet pyyaml
           bash flows/testing/manifest.test.sh
           bash flows/testing/converge.test.sh
+      - name: Rebrand contract (writes each value once; --verify with the product's values)
+        run: bash testing/rebrand.test.sh
 
   plan:
     runs-on: ubuntu-latest

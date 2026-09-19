@@ -13,25 +13,26 @@
 //
 // Usage (from the repo root, on a clean tree):
 //   node tooling/rebrand/rebrand.mjs --values my-brand.json [--dry-run]
-//   node tooling/rebrand/rebrand.mjs --verify
+//   node tooling/rebrand/rebrand.mjs --verify [--values my-brand.json]
 //
 // Values file (see tooling/rebrand/values.example.json):
 //   {
-//     "repoName":            "acme-cloud",          // required — repo slug
-//     "productName":         "Acme Cloud",          // required — display name
-//     "productDomain":       "acme.dev",            // required — product domain
-//     "pascalName":          "AcmeCloud",           // default: productName, non-alnum stripped
-//     "brandSlug":           "acme",                // default: repoName
-//     "cliBin":              "acme",                // default: repoName
-//     "apiBaseUrl":          "https://api.acme.dev",// default: https://api.<productDomain>
-//     "workersDevSubdomain": "my-subdomain",        // default: "your-workers-subdomain"
-//     "salesEmail":          "sales@acme.dev"       // optional: keeps baseline mailbox if absent
+//     "reponame":      "acme-cloud",           // required — repo slug
+//     "productname":   "Acme Cloud",           // required — display name
+//     "productdomain": "acme.dev",             // required — product domain
+//     "pascalName":    "AcmeCloud",            // default: productname, non-alnum stripped
+//     "brandSlug":     "acme",                 // default: reponame
+//     "cliBin":        "acme",                 // default: reponame
+//     "apibaseurl":    "https://api.acme.dev", // default: https://api.<productdomain>
+//     "subdomain":     "my-subdomain",         // default: "your-workers-subdomain"
+//     "salesEmail":    "sales@acme.dev"        // optional: keeps baseline mailbox if absent
 //   }
 //
 // Modes:
 //   (default)   apply the rename map in place, then run the leftover sweep
 //   --dry-run   report per-pair match counts and files; change nothing
-//   --verify    only run the leftover sweep (non-zero exit on residue)
+//   --verify    only run the leftover sweep (non-zero exit on residue); with
+//               --values, the product's own identity is not residue
 
 import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
@@ -50,11 +51,43 @@ const dryRun = flag("dry-run");
 const verifyOnly = flag("verify");
 
 let values = {};
-if (verifyOnly) {
-  // --verify takes no values file, but a fork carries the one the blueprint
-  // rendered. Read it best-effort for ONE field: the workspace slug. Without
-  // it the sweep cannot tell a correctly re-tenanted `secret://<slug>/` from
-  // the baseline's leftover, and a fork that legitimately deploys into the
+// --verify takes --values too, optionally: without them it cannot tell the
+// product's own identity from a leftover of the baseline's (below).
+const valuesPath = arg("values");
+if (!verifyOnly && !valuesPath) {
+  console.error("usage: rebrand.mjs --values <file> [--dry-run] | --verify [--values <file>]");
+  process.exit(2);
+}
+if (valuesPath) {
+  values = JSON.parse(fs.readFileSync(valuesPath, "utf8"));
+  // THE MANIFEST'S KEYS, and the old ones for the products that have them.
+  // The console manifest names its inputs `reponame`, `productname`, … and the
+  // blueprint renders values.json with those. Every product born from the
+  // flows' phase slices COMMITTED a values.json with the camelCase keys this
+  // file used to read (`reponame`, `productname`, …), and a phase run against
+  // one later brands with that file. Both are read, and the manifest's key
+  // wins where both are present.
+  const LEGACY = {
+    reponame: "repoName",
+    productname: "productName",
+    productdomain: "productDomain",
+    apibaseurl: "apiBaseUrl",
+    subdomain: "workersDevSubdomain",
+  };
+  for (const [key, old] of Object.entries(LEGACY)) {
+    if (values[key] === undefined && values[old] !== undefined) values[key] = values[old];
+  }
+  for (const required of ["reponame", "productname", "productdomain"]) {
+    if (typeof values[required] !== "string" || values[required].length === 0) {
+      console.error(`rebrand: values file is missing required field "${required}"`);
+      process.exit(2);
+    }
+  }
+} else {
+  // --verify with no values file: a fork carries the one the blueprint
+  // rendered. Read it best-effort for ONE thing: the workspace. Without it the
+  // sweep cannot tell a correctly re-tenanted `secret://<slug>/` from the
+  // baseline's leftover, and a fork that legitimately deploys into the
   // baseline's own workspace would fail verification for being right.
   try {
     const v = JSON.parse(fs.readFileSync(".rebrand/values.json", "utf8"));
@@ -64,52 +97,49 @@ if (verifyOnly) {
     /* absent or unreadable — the sweep just stays strict */
   }
 }
-if (!verifyOnly) {
-  const valuesPath = arg("values");
-  if (!valuesPath) {
-    console.error("usage: rebrand.mjs --values <file> [--dry-run] | --verify");
-    process.exit(2);
-  }
-  values = JSON.parse(fs.readFileSync(valuesPath, "utf8"));
-  for (const required of ["repoName", "productName", "productDomain"]) {
-    if (typeof values[required] !== "string" || values[required].length === 0) {
-      console.error(`rebrand: values file is missing required field "${required}"`);
-      process.exit(2);
-    }
-  }
-}
 
 // All fields are unused under --verify; the fallbacks keep derivation total.
-const repoName = values.repoName ?? "";
-const productName = values.productName ?? "";
-const productDomain = values.productDomain ?? "";
-const pascalName = values.pascalName ?? productName.replace(/[^A-Za-z0-9]/g, "");
-const brandSlug = values.brandSlug ?? repoName;
-const cliBin = values.cliBin ?? repoName;
-const apiBaseUrl = values.apiBaseUrl ?? `https://api.${productDomain}`;
-const workersDevSubdomain = values.workersDevSubdomain ?? "your-workers-subdomain";
+const reponame = values.reponame ?? "";
+const productname = values.productname ?? "";
+const productdomain = values.productdomain ?? "";
+const pascalName = values.pascalName ?? productname.replace(/[^A-Za-z0-9]/g, "");
+const brandSlug = values.brandSlug ?? reponame;
+const cliBin = values.cliBin ?? reponame;
+const apibaseurl = values.apibaseurl ?? `https://api.${productdomain}`;
+const subdomain = values.subdomain ?? "your-workers-subdomain";
 const salesEmail = values.salesEmail; // optional
 // A `secret://<workspace>/<project>/<env>/<KEY>` ref names the WORKSPACE
 // first and the project (repo) second. Here the two differ (`halo` /
 // `multi-tenant-saas`), so the repo-slug pass below must not be allowed to
 // rewrite the workspace segment — a fork whose refs point at a workspace that
 // does not exist fails every resolve with "Validation failed". The workspace
-// segment is renamed separately from orunWorkspaceSlug (a ws_… id cannot
-// appear here: the platform matches the run's org SLUG), falling back to the
-// fork's own slug only when the caller supplied nothing better.
+// segment is renamed separately: orunWorkspaceSlug when the caller supplied
+// one, else orunWorkspace itself.
+//
+// A ws_… id IS a valid workspace segment. The resolve verifies the segment
+// against membership and accepts a slug, a public id or a ws_ ref
+// (orun-cloud state-worker secrets-resolve.ts, verifySegments). This used to
+// skip a ws_… id on the belief that only a slug matched, and fell back to the
+// REPO name. The blueprint's `orunWorkspace` input IS a ws_… id, so every
+// product given no slug had refs naming a workspace that does not exist
+// (found on the cirrus baseline, which shares this engine's lineage):
+//
+//   Ref workspace "altocumulus" does not name this run's workspace
+//
+// The repo name remains the last resort only when no workspace was given.
 const orunWorkspaceSlug = (() => {
   const explicit = (values.orunWorkspaceSlug ?? "").trim();
   if (explicit) return explicit;
   const ws = (values.orunWorkspace ?? "").trim();
-  if (ws && !/^ws_/i.test(ws)) return ws; // already a slug
-  return repoName;
+  if (ws) return ws;
+  return reponame;
 })();
 // Derived code-shaped forms.
 const camelName = pascalName.charAt(0).toLowerCase() + pascalName.slice(1);
 const envPrefix = cliBin.toUpperCase().replace(/-/g, "_");
 
-if (!verifyOnly && /[^a-z0-9-]/.test(`${repoName}${brandSlug}${cliBin}`)) {
-  console.error("rebrand: repoName/brandSlug/cliBin must be lowercase slugs ([a-z0-9-])");
+if (!verifyOnly && /[^a-z0-9-]/.test(`${reponame}${brandSlug}${cliBin}`)) {
+  console.error("rebrand: reponame/brandSlug/cliBin must be lowercase slugs ([a-z0-9-])");
   process.exit(2);
 }
 
@@ -131,6 +161,9 @@ if (!verifyOnly && !dryRun && !flag("allow-dirty")) {
 const EXCLUDE_RE = new RegExp(
   [
     "^tooling/rebrand/",
+    // The values file IS the product's identity. Rewriting it would rewrite
+    // the input of every later phase's rebrand.
+    "^\\.rebrand/",
     "^FORKING\\.md$",
     "^ai/context/fork-from-baseline\\.md$",
     "^pnpm-lock\\.yaml$",
@@ -142,7 +175,18 @@ const EXCLUDE_RE = new RegExp(
 function trackedFiles() {
   return execFileSync("git", ["ls-files"], { encoding: "utf8" })
     .split("\n")
-    .filter((f) => f.length > 0 && !EXCLUDE_RE.test(f));
+    .filter((f) => f.length > 0 && !EXCLUDE_RE.test(f))
+    .filter((f) => {
+      // `git ls-files` also lists gitlinks (nested repos — a grounded sandbox
+      // checkout carries `baseline/` as one) and paths deleted from disk.
+      // Only regular files are sweepable; a gitlink crashed the sweep with
+      // readFileSync-on-directory mid-bootstrap (observed live on lumen).
+      try {
+        return fs.statSync(f).isFile();
+      } catch {
+        return false;
+      }
+    });
 }
 
 // ── Protected literals (org-owned identity, never rewritten) ───
@@ -159,6 +203,40 @@ const PROTECTED = [
 
 const MASK = (i, j) => `\u0000REBRAND_PROTECTED_${i}_${j}\u0000`;
 
+// ── Substituted values are opaque ──────────────────────────────
+//
+// The rules run in sequence over one buffer, and each used to write its VALUE
+// into it — where every later rule could match again. A value that contains a
+// baseline word was rewritten a second time (found on cirrus and lumen, whose
+// engines share this lineage):
+//
+//   Sourceplane-Webhooks  →  SourceplaneNext-Webhooks  →  SourceplaneNextNext-…
+//   sourceplane.ai        →  sourceplane-weather.dev   →  (cli bin pass) …
+//
+// So a rule writes a TOKEN standing for its value, and every token is expanded
+// once, after the last rule. A token is NUL, `H<n>`, NUL — NUL cannot occur in a
+// file this touches (binary files are skipped; the protected-literal mask above
+// relies on the same fact), and nothing between the NULs is anything a rule
+// matches. Its outer characters take the word/non-word class of the value's own
+// first and last characters, so a `\b` in a later rule sees the same boundary
+// beside the token that it would have seen beside the value.
+const heldValues = [];
+const heldIndex = new Map();
+function hold(value) {
+  if (value === "") return "";
+  let i = heldIndex.get(value);
+  if (i === undefined) {
+    i = heldValues.push(value) - 1;
+    heldIndex.set(value, i);
+  }
+  const edge = (c) => (/\w/.test(c) ? "0" : "\u0001");
+  return `${edge(value[0])}\u0000H${i}\u0000${edge(value[value.length - 1])}`;
+}
+const HELD_RE = /[0\u0001]\u0000H(\d+)\u0000[0\u0001]/g;
+function release(text) {
+  return text.replace(HELD_RE, (_, i) => heldValues[Number(i)]);
+}
+
 // ── Rename map (ordered, most specific first) ──────────────────
 
 function pairs() {
@@ -171,7 +249,7 @@ function pairs() {
     // Repo-derived values: intent metadata.name + per-env repo: params,
     // component.yaml repo: fields, Secrets Manager paths, OIDC role names,
     // Supabase project names, docs.
-    ["multi-tenant-saas", repoName, "repo slug"],
+    ["multi-tenant-saas", reponame, "repo slug"],
     // Deploy names: console worker/Pages prefix (covers the -next variant and
     // the legacy pages.dev fixtures in the CORS tests).
     ["sourceplane-web-console", `${brandSlug}-web-console`, "console worker prefix"],
@@ -180,18 +258,18 @@ function pairs() {
     ["sourceplane-integrations-worker", `${brandSlug}-integrations-worker`, "integrations UA"],
     ["Sourceplane-Webhooks", `${pascalName}-Webhooks`, "webhooks UA"],
     // CLI default API base (brand seam).
-    ["https://api.sourceplane.dev", apiBaseUrl, "CLI default API base"],
-    ["api.sourceplane.dev", apiBaseUrl.replace(/^https?:\/\//, ""), "CLI API host (bare)"],
+    ["https://api.sourceplane.dev", apibaseurl, "CLI default API base"],
+    ["api.sourceplane.dev", apibaseurl.replace(/^https?:\/\//, ""), "CLI API host (bare)"],
     // Product domain wherever it is the *product* (BASE_DOMAIN, console
     // custom domains, Polar success URLs, OAuth origins, CORS tests, docs).
     // The orun backend URL and company mailboxes are masked above.
-    ["sourceplane.ai", productDomain, "product domain"],
+    ["sourceplane.ai", productdomain, "product domain"],
     // Display-name seams keep the human-readable name even in .ts files.
-    ['PRODUCT_NAME = "Sourceplane"', `PRODUCT_NAME = "${productName}"`, "product-name seams"],
+    ['PRODUCT_NAME = "Sourceplane"', `PRODUCT_NAME = "${productname}"`, "product-name seams"],
     // Console localStorage namespace (console app-config seam).
     ['STORAGE_PREFIX = "sourceplane.next"', `STORAGE_PREFIX = "${brandSlug}.next"`, "storage prefix"],
     // Workers.dev subdomain (app-config seams, console component, identity template).
-    ["rahulvarghesepullely", workersDevSubdomain, "workers.dev subdomain"],
+    ["rahulvarghesepullely", subdomain, "workers.dev subdomain"],
     // SDK usage examples (integrations README): the client variable and the
     // product-namespaced check-run name.
     ["const sourceplane = new", `const ${camelName} = new`, "SDK example variable (decl)"],
@@ -213,17 +291,17 @@ function pairs() {
 // "blueprint rename map" boundary recorded in packages/cli/src/brand.ts:
 //   - code files (.ts/.js/...)            → pascalName
 //   - markdown code fences + inline code  → pascalName
-//   - everything else (prose, yaml, json) → productName
+//   - everything else (prose, yaml, json) → productname
 
 function replaceBrandWord(file, text, count) {
   const sub = (chunk, to) =>
     chunk.replace(/Sourceplane/g, () => {
       count();
-      return to;
+      return hold(to);
     });
 
   if (/\.(ts|tsx|mts|cts|js|mjs|cjs)$/.test(file)) return sub(text, pascalName);
-  if (!/\.(md|markdown)$/.test(file)) return sub(text, productName);
+  if (!/\.(md|markdown)$/.test(file)) return sub(text, productname);
 
   // Markdown: fenced blocks keep the identifier form …
   return text
@@ -236,7 +314,7 @@ function replaceBrandWord(file, text, count) {
         .map((span) =>
           span.startsWith("`") && span.endsWith("`")
             ? sub(span, pascalName)
-            : sub(span, productName),
+            : sub(span, productname),
         )
         .join("");
     })
@@ -358,7 +436,7 @@ function scopedPairs() {
 // values file to compare against, and --verify runs on forks where a kept
 // subdomain is not a missed rename, so it is skipped there too.
 const BASELINE_SUBDOMAIN = "rahulvarghesepullely";
-const subdomainChanged = !verifyOnly && workersDevSubdomain !== BASELINE_SUBDOMAIN;
+const subdomainChanged = !verifyOnly && subdomain !== BASELINE_SUBDOMAIN;
 const RESIDUE_RE = new RegExp(
   (subdomainChanged ? `${BASELINE_SUBDOMAIN}|` : "") +
     "multi-tenant-saas|Sourceplane|sourceplane\\.ai|api\\.sourceplane\\.dev|" +
@@ -377,16 +455,27 @@ const ALLOWED_RESIDUE = [
   ...(orunWorkspaceSlug === "halo" ? [/secret:\/\/halo\//] : []),
 ];
 
-function sweep(files) {
+function sweep(files, allowedLiterals = []) {
   const residue = [];
   for (const file of files) {
-    const text = fs.readFileSync(file, "utf8");
+    let text;
+    try {
+      text = fs.readFileSync(file, "utf8");
+    } catch {
+      continue; // unreadable/deleted/non-file — nothing to sweep
+    }
     for (const line of text.split("\n")) {
       // Strip allowed (org-owned) forms first; whatever still matches is residue.
-      const cleaned = ALLOWED_RESIDUE.reduce(
+      let cleaned = ALLOWED_RESIDUE.reduce(
         (l, re) => l.replace(new RegExp(re.source, "g"), ""),
         line,
       );
+      // Then the rename's own TARGET values: a product legitimately named with
+      // a baseline word inside it (repo "multi-tenant-saas-e2e", product
+      // "Sourceplane Cloud") is not residue.
+      for (const lit of allowedLiterals) {
+        if (lit) cleaned = cleaned.split(lit).join("");
+      }
       if (new RegExp(RESIDUE_RE.source).test(cleaned)) {
         residue.push(`${file}: ${line.trim().slice(0, 120)}`);
       }
@@ -399,8 +488,41 @@ function sweep(files) {
 
 const files = trackedFiles();
 
+const literalPairs = pairs();
+const regexPairs = scopedPairs();
+const counts = new Map();
+const touched = new Set();
+
+// Every value a rule can write. A value that some rule would match again is
+// HELD wherever it already stands in a file: every phase of a bootstrap re-runs
+// this over the whole tree, so the product a previous run branded is the input
+// to the next one, and a product called "Sourceplane Cloud" written by phase 01
+// must not become "Sourceplane Cloud Cloud" in phase 02.
+const produced = [
+  ...literalPairs.map(([, to]) => to),
+  pascalName,
+  productname,
+  `secret://${orunWorkspaceSlug}/`,
+  `${envPrefix}_`,
+  cliBin,
+  reponame,
+].filter((v, i, all) => v && all.indexOf(v) === i);
+const rematchable = (v) =>
+  literalPairs.some(([from]) => v.includes(from)) ||
+  /Sourceplane/.test(v) ||
+  regexPairs.some(({ re }) => new RegExp(re.source).test(v));
+// Longest first, so a held value is never split by a shorter one inside it.
+const guarded = produced.filter(rematchable).sort((a, b) => b.length - a.length);
+
 if (verifyOnly) {
-  const residue = sweep(files);
+  // A product whose own name, domain or workspace contains a baseline word
+  // carries that word legitimately, and without its values --verify cannot
+  // know that. Given --values, what this rebrand would write is allowed
+  // exactly as the post-rename sweep allows it.
+  const residue = sweep(
+    files,
+    valuesPath ? produced.filter((to) => new RegExp(RESIDUE_RE.source).test(to)) : [],
+  );
   if (residue.length > 0) {
     console.error(`rebrand --verify: ${residue.length} baseline-identity leftover(s):`);
     for (const r of residue) console.error(`  ${r}`);
@@ -409,11 +531,6 @@ if (verifyOnly) {
   console.log("rebrand --verify: no baseline-identity leftovers.");
   process.exit(0);
 }
-
-const literalPairs = pairs();
-const regexPairs = scopedPairs();
-const counts = new Map();
-const touched = new Set();
 
 for (const file of files) {
   let text;
@@ -435,12 +552,14 @@ for (const file of files) {
     });
   });
 
+  // What a previous run already wrote stays as written.
+  for (const value of guarded) text = text.split(value).join(hold(value));
+
   for (const [from, to, label] of literalPairs) {
     const n = text.split(from).length - 1;
-    if (n > 0) {
-      counts.set(label, (counts.get(label) ?? 0) + n);
-      text = text.split(from).join(to);
-    }
+    if (n === 0) continue;
+    text = text.split(from).join(hold(to));
+    counts.set(label, (counts.get(label) ?? 0) + n);
   }
   const brandLabel = "Sourceplane (class name in code, display name in prose)";
   text = replaceBrandWord(file, text, () =>
@@ -451,9 +570,12 @@ for (const file of files) {
     if (fileFilter && !fileFilter(file)) continue;
     text = text.replace(re, (...m) => {
       counts.set(label, (counts.get(label) ?? 0) + 1);
-      return replacement(file, ...m);
+      return hold(replacement(file, ...m));
     });
   }
+
+  // Every rule has run; only now do the values it wrote appear.
+  text = release(text);
 
   // Restore org-owned literals.
   for (const [token, value] of masks) text = text.split(token).join(value);
@@ -471,40 +593,20 @@ if (dryRun) {
   process.exit(0);
 }
 
-// Provenance stub, mirroring the convention the first fork established.
-const provenance = `# Fork tracking — ${repoName} from the baseline SaaS starter
+// NO provenance stub. This used to write ai/context/fork-from-baseline.md —
+// "Fork tracking — <repo> from the baseline SaaS starter … an instantiation of
+// sourceplane/multi-tenant-saas" — into every product: a statement about where
+// the product came from, in the product's own voice, in the directory an agent
+// is pointed at first. Cirrus's leak gate was written for exactly that file
+// (BE5); cirrus and lumen dropped the stub, and so does this.
 
-Generated by \`tooling/rebrand/rebrand.mjs\`. This repo is an instantiation of
-the reusable multi-tenant SaaS baseline (\`sourceplane/multi-tenant-saas\`) as
-**${productName}**. Track every transformation applied on top of the baseline
-here so the delta stays auditable.
-
-Rebrand values:
-
-| Field | Value |
-|---|---|
-| repoName | \`${repoName}\` |
-| productName | ${productName} |
-| pascalName | \`${pascalName}\` |
-| brandSlug | \`${brandSlug}\` |
-| productDomain | \`${productDomain}\` |
-| apiBaseUrl | \`${apiBaseUrl}\` |
-| cliBin | \`${cliBin}\` |
-| workersDevSubdomain | \`${workersDevSubdomain}\` |
-| salesEmail | ${salesEmail ?? "(baseline mailbox kept)"} |
-| Rebranded on | ${new Date().toISOString().slice(0, 10)} |
-
-See FORKING.md in the baseline for the operator checklist (cloud accounts,
-secrets, OAuth apps, GitHub Apps) that no script can do for you.
-`;
-fs.mkdirSync("ai/context", { recursive: true });
-fs.writeFileSync("ai/context/fork-from-baseline.md", provenance);
-console.log("rebrand: wrote ai/context/fork-from-baseline.md (provenance)");
-
-const residue = sweep(trackedFiles());
+const residue = sweep(
+  trackedFiles(),
+  produced.filter((to) => new RegExp(RESIDUE_RE.source).test(to)),
+);
 if (residue.length > 0) {
   console.error(`rebrand: ${residue.length} baseline-identity leftover(s) after rename:`);
   for (const r of residue) console.error(`  ${r}`);
   process.exit(1);
 }
-console.log("rebrand: leftover sweep clean. Next: FORKING.md operator checklist.");
+console.log("rebrand: leftover sweep clean.");
