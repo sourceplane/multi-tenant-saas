@@ -47,7 +47,15 @@ ROOTS = ("apps", "packages", "tests", "infra")
 APP_CONFIG = REPO / "apps" / "api-edge" / "src" / "app-config.ts"
 
 
-def workers_dev_subdomain() -> str:
+def workers_dev_subdomain(comps: dict) -> str | None:
+    # Only api-edge's own pages name the subdomain, and api-edge is where it is
+    # declared — so it is read only when api-edge is in the tree. A product
+    # built phase by phase has no api-edge until 05-edge, and this used to
+    # read app-config.ts unconditionally: every run before then died with
+    # FileNotFoundError, and CI's `--check` step with it, failing the plan job
+    # of every phase that came first.
+    if "api-edge" not in comps:
+        return None
     m = re.search(r'WORKERS_DEV_SUBDOMAIN\s*=\s*"([^"]+)"', APP_CONFIG.read_text())
     if not m:
         raise SystemExit(f"could not read WORKERS_DEV_SUBDOMAIN from {APP_CONFIG}")
@@ -548,7 +556,7 @@ PAGES = (("docs/overview.md", overview), ("docs/architecture.md", architecture),
 def main() -> int:
     check = "--check" in sys.argv[1:]
     comps = load_components()
-    sub = workers_dev_subdomain()
+    sub = workers_dev_subdomain(comps)
 
     drift, written = [], 0
     for c in sorted(comps.values(), key=lambda x: x["rel"]):

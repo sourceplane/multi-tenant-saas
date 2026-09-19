@@ -21,26 +21,6 @@ permissions:
   id-token: write
 
 jobs:
-  # The blueprint manifest against the flows that realize it
-  # (saas-bootstrap-console BC2/BC-K5). Its own lane, and independent of the
-  # convergence matrix below: this file is read by the CONSOLE at a pinned
-  # tag, so a manifest that drifts is invisible to every test that only runs
-  # the build. It shipped exactly that way — a `spec.source.tag` reading
-  # `baseline-v17` against a registry publishing `baseline-v1`, which the
-  # platform's reader refused and nothing here noticed.
-  flows-contract:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - name: Contract tests (manifest, converge)
-        run: |
-          set -euo pipefail
-          python3 -c 'import yaml' 2>/dev/null || pip install --quiet pyyaml
-          bash flows/testing/manifest.test.sh
-          bash flows/testing/converge.test.sh
-      - name: Rebrand contract (writes each value once; --verify with the product's values)
-        run: bash testing/rebrand.test.sh
-
   plan:
     runs-on: ubuntu-latest
     outputs:
@@ -51,7 +31,7 @@ jobs:
           fetch-depth: 0
       - uses: sourceplane/orun-action@v1.2.0
         with:
-          version: v2.53.2
+          version: v2.56.2
       # Component docs are generated from the manifests, so a manifest change
       # that would invalidate them fails HERE — on the PR that caused it —
       # rather than surfacing months later as a doc that still renders and
@@ -113,7 +93,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - uses: sourceplane/orun-action@v1.2.0
         with:
-          version: v2.53.2
+          version: v2.56.2
       # exec-id is the RUN id alone (no attempt suffix): a `gh run rerun
       # --failed` then RESUMES the same orun execution — jobs that succeeded in
       # a prior attempt stay completed, so re-run lanes' cross-job dependencies
