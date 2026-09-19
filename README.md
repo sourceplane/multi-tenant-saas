@@ -9,8 +9,8 @@ public edge API, with a Next.js console on Workers + Static Assets.
 ## Live deployment
 
 <!-- 08-docs:begin -->
-_Not yet recorded — run [`flows/phases/08-docs`](flows/phases/08-docs/README.md)
-after phase 06 to fill this section from verified live state
+_Not yet recorded — run [`08-docs`](docs/phases/08-docs.md) after
+`06-console` to fill this section from verified live state
 ([manifest](ai/context/deployment.md) · [operating contract](ai/context/operations.md))._
 <!-- 08-docs:end -->
 
@@ -40,16 +40,20 @@ after phase 06 to fill this section from verified live state
 
 ## Instantiating products
 
-This baseline births new products through the phased bootstrap
-(**[BOOTSTRAP.md](BOOTSTRAP.md)** → [flows/phases/](flows/phases/README.md)):
-eight idempotent workflows — scaffold, foundation, infrastructure, workers,
-edge, console, optional domain, docs — each landing a verified slice. An
+This baseline births new products from one artifact — `repo-blueprint.yaml`,
+run by `orun new` (**[BOOTSTRAP.md](BOOTSTRAP.md)** →
+[docs/phases/](docs/phases/README.md)). It declares ten idempotent phases —
+scaffold, foundation, infrastructure, database, workers, workers-restore,
+edge, console, optional domain, docs — each landing a verified slice, each
+selectable with `--phase <name>`. An
 operator needs two tokens and a workspace with Cloudflare and Supabase
 connected; everything else is headless.
 
 Products receive **product-only content** (source, infra, CI, their own
-docs). None of this baseline's machinery ships — not `flows/`, not the rebrand
-tooling, not `ai/` state — and a product's docs speak only about the product.
+docs). None of this baseline's machinery ships — not the rebrand tooling,
+not `agents/`, not `ai/` state, not FORKING.md — and a product's docs speak
+only about the product. `testing/leak.test.sh` and `testing/placement.test.sh`
+hold that line: until they did, the scaffold shipped all four.
 
 The mechanical identity rename (repo slug, product name/domain, SDK class,
 CLI bin, worker prefixes, workers.dev subdomain, and the `secret://` workspace
@@ -110,9 +114,10 @@ infra/terraform/cloudflare-kv      api-edge idempotency KV namespace
 infra/terraform/cloudflare-domain  Zone adoption + console custom domain
 infra/db-migrate                   Database migration runner component
 
-flows/                    The phased bootstrap (see BOOTSTRAP.md)
 tooling/tsconfig          Shared TypeScript configurations
 tooling/eslint            Shared ESLint configuration
+tooling/wire              Deploy-time wrangler config renderer
+tooling/docs              Component docs renderer (CI checks it)
 tests/*                   Per-component contract and verifier test suites
 ```
 
