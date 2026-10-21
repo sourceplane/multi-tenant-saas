@@ -7,6 +7,8 @@ apiVersion: orun.io/v1
 kind: TaskContract
 spec:
   goal: The web console is live on stage and prod, talking to the edge
+  # cloudflare-domain lands in this phase too, but parked: `affects` is what
+  # the convergence deploys, and a parked component deploys nothing.
   affects:
     - web-console-next
   doneWhen:

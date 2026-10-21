@@ -173,3 +173,57 @@ Verified: the manifest, phases, coverage and rebrand contract tests pass; a
 `spec.requires.integrations` — fails `manifest.test.sh` (exit 1) naming
 `inputs[subdomain].from`, and passes again once restored; leak and placement
 (orun 2.58.11, the CI pin) pass with 1083 files, unchanged.
+
+## The `domain` input, removed (2026-10-21, `baseline-v4`)
+
+`07-domain` was the one conditional phase: `when: inputs.domain`, off by
+default, landing a single component, `cloudflare-domain`. That component
+ships PARKED — `subscribe.environments: []` — so CI plans no lanes for it and
+the phase's convergence was a green run with nothing in it. A landing that
+deploys nothing, behind a switch that turns on a component which is already
+off, was one more question and one more PR for no effect. As cirrus-baseline
+did (where it folded into `01-product`, its only landing):
+
+### What shipped
+
+- `repo-blueprint.yaml`: the `domain` input is gone, and so is its key in the
+  `.rebrand/values.json` template; `cloudflare-domain` joins `06-console`'s
+  modules — the last landing that converges a deploy, and the one that places
+  the console the custom domain routes; the `07-domain` phase is deleted.
+  Nine phases remain under seven milestones. The numbering keeps its gap, so
+  `08-docs` keeps its name; it already required `06-console`.
+- `blueprint.yaml`: the programme drops the conditional `07-domain`
+  milestone.
+- `tasks/07-domain.TaskContract.yaml` and `docs/phases/07-domain.md` are
+  deleted. What the page said that is still true — the component ships
+  parked, the zone must exist in the account first, wiring it is restoring
+  the commented-out `subscribe` block and finishing the provider-v5
+  re-import — is now a section of `docs/phases/06-console.md`, and
+  `ai/context/operations.md` (which ships) says the same without naming a
+  factory path.
+- `06-console`'s task contract leaves `cloudflare-domain` out of `affects`:
+  that list is what the convergence deploys, and a parked component deploys
+  nothing.
+- `tests/fixtures/acme.json` loses `"domain": false`.
+
+### What the tests had to become
+
+- `testing/phases.test.sh` records `07-domain` as FOLDED into `06-console`
+  (`WAS["07-domain"]` stays as history), so the partition gate still proves
+  the component moved whole and nothing moved with it. Mutation-checked:
+  dropping `cloudflare-domain` from `06-console` fails it.
+- `testing/leak.test.sh` and `testing/placement.test.sh` no longer force
+  `domain` on: `06-console` places the component on every build, so the
+  gates cover it without help. The placement tier's phased sequence now ends
+  with `08-docs` after the rebrand — it requires the drifted `06-console`,
+  the case BE-O12 fixed.
+
+### Verification
+
+| check | result |
+|---|---|
+| manifest, phases, coverage, rebrand | all pass — 7 milestones agree; 58 narration lines resolve; 44 of 44 components placed |
+| component docs `--check` | 44 up to date |
+| `orun new --status` (orun 2.58.11, the CI pin) | parses; nine phases |
+| `testing/leak.test.sh` (orun 2.58.11) | pass — 1083 files, 2 context files, no factory paths |
+| `testing/placement.test.sh` (orun 2.58.11) | pass — 1083 product files, the same count as with `domain` forced on before; `01 → 08` place through the rebrand; `--resume` keeps the branding |

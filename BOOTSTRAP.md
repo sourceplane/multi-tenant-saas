@@ -117,8 +117,10 @@ every phase after `01-scaffold` brands the tree — derives as `drifted`, and
 
 The phases are `01-scaffold`, `02-foundation`, `03-infrastructure`,
 `03-infrastructure-database`, `04-workers`, `04-workers-restore`, `05-edge`,
-`06-console`, `07-domain` (only when `domain=true`), `08-docs` — ten phases
-filed under eight milestones. Each is idempotent, each follows one contract —
+`06-console`, `08-docs` — nine phases filed under seven milestones. The gap
+at 07 is the optional `07-domain` phase that used to land the custom-domain
+component behind a `domain` input; that component lands in `06-console` now,
+parked, and the input is gone. Each is idempotent, each follows one contract —
 **place its modules → land them as a PR that must go green → watch the
 convergence → verify the outcome** — and each carries its own narration.
 Full guide: [docs/phases/README.md](docs/phases/README.md), with a page per
@@ -138,8 +140,7 @@ orun new --blueprint repo-blueprint.yaml --out ~/sourceplane/acme --run-hooks \
 orun new --blueprint repo-blueprint.yaml --out ~/sourceplane/acme --run-hooks \
   --phase 02-foundation --values ~/sourceplane/acme/.rebrand/values.json
 # … 03-infrastructure, 03-infrastructure-database, 04-workers,
-#   04-workers-restore, 05-edge, 06-console, 08-docs;
-#   07-domain only with --set domain=true.
+#   04-workers-restore, 05-edge, 06-console, 08-docs.
 ```
 
 The flags that shape a run:
@@ -253,7 +254,7 @@ The console renders **`blueprint.yaml`**, the card, and never this file or
 the blueprint directly. The card owns the build contract: the overview, the
 three integrations and the admin key role it requires, the inputs the form
 collects, a read-only preview of the five brokered secrets and of the
-programme (the epic and its eight milestones), and `bootstrap.blueprint:
+programme (the epic and its seven milestones), and `bootstrap.blueprint:
 repo-blueprint.yaml` — the document a runner places. The registry row in
 orun-cloud owns identity and the pinned tag; the card is fetched *at* that
 tag, which is why it carries none.
@@ -268,8 +269,8 @@ What that means for a console build:
   anything is created. Only `productname` and `productdomain` are typed.
 - `orunWorkspace` is not on the form — it cannot be. The build runs inside
   the workspace, and `from: workspace` (orun ≥ v2.58.11) fills it from there.
-- The card collects no `domain`, so a console build skips `07-domain`. Run
-  it later from the CLI (and read its page first).
+- The custom-domain component lands in `06-console`, parked, on every
+  build; there is no `domain` switch to collect.
 - The runner hands its refreshed token over through `ORUN_TOKEN_FILE`
   (`bootstrap.tokenChannel`), so a session that rotates mid-build does not
   end it.
@@ -282,11 +283,14 @@ that mint them, and its programme and inputs to the blueprint's.
 
 - **Deployment record**: `08-docs` is the close-out, and safe to re-run any
   time as a live-state refresh.
-- **Custom domain**: `07-domain` needs the product zone to exist in
-  Cloudflare, and in this baseline the `cloudflare-domain` component ships
-  parked and mid-migration to provider v5, so the phase lands it without
-  deploying anything. See [docs/phases/07-domain.md](docs/phases/07-domain.md)
-  before running it.
+- **Custom domain**: the `cloudflare-domain` component is already in the
+  product, landed by `06-console` and parked (it subscribes to no
+  environment, and it is mid-migration to provider v5). Create the product
+  zone in Cloudflare, restore the component's commented-out `subscribe`
+  block and finish that migration in an ordinary PR (see
+  [docs/phases/06-console.md](docs/phases/06-console.md#the-custom-domain--parked)),
+  and re-run `--phase 08-docs` once it converges so the docs pick up the
+  domain URLs.
 - **Runtime secrets** (OAuth client secrets, billing keys, …): seed with
   `orun secrets set <KEY> --org <org> --env <env>`; the next deploy pushes
   them to the workers (`wire-now-seed-later` — nothing blocks on them).
