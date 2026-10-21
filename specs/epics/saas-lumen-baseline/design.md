@@ -158,6 +158,12 @@ Eight workflows, one contract each, all idempotent:
 | 07 | domain | custom domain (optional) | convergence green |
 | 08 | docs | live-deployment docs | committed manifest matches probed reality |
 
+> **Since then.** `07-domain` was folded into `06-console` in `baseline-v4`,
+> when the `domain` input was removed: its one component ships parked, so it
+> lands with the console. A bootstrap today runs nine phases under seven
+> milestones (`03` and `04` each have a second landing). The table above is
+> the shape this epic planned, kept as the record.
+
 Phase 01 takes the product identity once and writes `.rebrand/values.json`;
 every later phase reads it back and needs only `out`, `workspace`, and
 optionally `dryrun`.

@@ -79,6 +79,14 @@ WAS = {
 # is likewise new — the empty apps/infra/packages/tests roots orun's repo-scale
 # gate requires, which the scaffold flow used to create with a mkdir.
 ADDED = {"01-scaffold": ["discovery-roots"]}
+# FOLDED, deliberately: 07-domain's one component lands in 06-console since the
+# `domain` input went. It ships parked (it subscribes to no environment until
+# an owner wires a zone), so a landing of its own deployed nothing, and an
+# on/off switch for a component that is already off was one more question for
+# nothing. 06-console is the last landing that converges a deploy and the one
+# that places the console the custom domain routes. The module moves whole —
+# nothing is lost, and nothing else is allowed to move with it.
+FOLDED = {"07-domain": "06-console"}
 HOOK_ONLY = {"04-workers-restore", "08-docs"}
 
 by_name = {p["name"]: p for p in phases}
@@ -90,12 +98,18 @@ if names != sorted(names):
         f"order; a phase out of sequence is a barrier in the wrong place.")
 
 # ── the partition has not drifted ─────────────────────────────────────────
+for gone, into in FOLDED.items():
+    if gone in by_name:
+        bad(f"phase {gone} is declared again, but it is folded into {into}")
 for name, was in WAS.items():
+    if name in FOLDED:
+        continue
     if name not in by_name:
         bad(f"phase {name} is gone — the bootstrap ran it before BE1")
         continue
     now = sorted(by_name[name].get("modules") or [])
-    want = sorted(was + ADDED.get(name, []))
+    folded_in = [m for gone, into in FOLDED.items() if into == name for m in WAS[gone]]
+    want = sorted(was + ADDED.get(name, []) + folded_in)
     if now != want:
         moved_in = sorted(set(now) - set(want))
         moved_out = sorted(set(want) - set(now))
