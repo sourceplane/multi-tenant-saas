@@ -142,3 +142,34 @@ exists, because the registry pins a tag and never a branch.
 `expectedMinutes: 75` in the registry and catalog is Lumen's measured figure,
 labelled as inherited in both places (risk R5), and is replaced by this
 baseline's own first instantiation.
+
+## The workers.dev subdomain, read from the Cloudflare connection (2026-10-21, `baseline-v4`)
+
+`subdomain` was the one input a console build still asked for that the
+platform could answer. It belongs to the Cloudflare account the same way the
+account id does and has exactly one right answer, so a typed value could only
+be wrong — and wrong surfaced only after deploy, in CORS, OAuth origins, the
+smoke checks and the verify URLs. As cirrus-baseline did in `baseline-v23`:
+
+- `blueprint.yaml` declares `from: connection.cloudflare.workersSubdomain`.
+  The Cloudflare integration reads the subdomain from the account at connect
+  and on its hourly health check; the bootstrap door fills the input from the
+  connection the build is bound to — the same one `CLOUDFLARE_ACCOUNT_ID` and
+  the deploy tokens mint from — and refuses an account with no workers.dev
+  subdomain before anything is created. The console renders no field for it.
+- `testing/manifest.test.sh` accepts the new source and requires its provider
+  in `spec.requires.integrations` (the card lists `cloudflare`).
+- `repo-blueprint.yaml`, `BOOTSTRAP.md`, `docs/phases/01-scaffold.md` and
+  `docs/phases/README.md` say a hand-run build still passes `--set subdomain`.
+
+> **Superseded (2026-10-21).** This page never recorded `subdomain` as typed,
+> but `BOOTSTRAP.md`'s console section did ("only `productname`,
+> `productdomain` and `subdomain` are typed"). It is read from the connection
+> now; no probe and no orun action was needed, because the platform already
+> held the fact.
+
+Verified: the manifest, phases, coverage and rebrand contract tests pass; a
+**mutation check** — `cloudflare` deleted from the card's
+`spec.requires.integrations` — fails `manifest.test.sh` (exit 1) naming
+`inputs[subdomain].from`, and passes again once restored; leak and placement
+(orun 2.58.11, the CI pin) pass with 1083 files, unchanged.

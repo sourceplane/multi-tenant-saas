@@ -94,6 +94,12 @@ it, so a wrong value ships a product that deploys cleanly and is unreachable
 at every address it advertises. Find it under Workers & Pages in the
 dashboard.
 
+A build started from the console, or with `orun baseline new --from bst_…`,
+never asks for it: the platform reads the workers.dev subdomain of the
+Cloudflare account you deploy into from the workspace's Cloudflare
+connection, the same one the deploy tokens mint from. Only a hand-run build
+like this one passes it.
+
 **`--run-hooks` is the difference between placing files and bootstrapping a
 product.** Without it `orun new` writes the tree and stops: no repo is
 created, nothing is landed, no convergence is watched, and no phase probes
@@ -255,8 +261,11 @@ tag, which is why it carries none.
 What that means for a console build:
 
 - `reponame` and `githuborg` come from the repository the operator picked;
-  `apibaseurl` is derived (`https://api.{productdomain}`); only
-  `productname`, `productdomain` and `subdomain` are typed.
+  `apibaseurl` is derived (`https://api.{productdomain}`); `subdomain` is
+  read from the workspace's Cloudflare connection (`from:
+  connection.cloudflare.workersSubdomain`), the one the deploy tokens mint
+  from, and an account with no workers.dev subdomain is refused before
+  anything is created. Only `productname` and `productdomain` are typed.
 - `orunWorkspace` is not on the form — it cannot be. The build runs inside
   the workspace, and `from: workspace` (orun ≥ v2.58.11) fills it from there.
 - The card collects no `domain`, so a console build skips `07-domain`. Run
@@ -343,7 +352,7 @@ purpose, written down so they read as instructions rather than breakage.
 | api-edge deploy: `Service binding '<NAME>_WORKER' … not found` | A fleet worker never deployed in phase 04. Resume that convergence, then re-run `05-edge`. |
 | Convergence run fails, lanes look transient | `orun.run/watch@v1` already resumes it up to 3× (`gh run rerun --failed` is a true resume: exec-id + `--retry`). |
 | Convergence still red after the resume budget | Re-running the phase lands nothing new, and CI plans `--changed`, so nothing redeploys what the failed run left undeployed. Resume the run itself — `gh run rerun --failed <run-id>` — then re-run the phase so its `await` hooks verify. |
-| `/health` probes fail against a green deploy | Check `subdomain` first: it must be the Cloudflare account's workers.dev subdomain, and the default is a placeholder. |
+| `/health` probes fail against a green deploy | Check `subdomain` first: it must be the Cloudflare account's workers.dev subdomain. A console build reads it from the Cloudflare connection; on a hand-run build the default is a placeholder. |
 | CLI login dies with 429 `rate_limited` | Fixed ≥ v2.48.1 (redeem honours Retry-After). Upgrade the CLI. |
 | `unknown flag: --phase`, `cannot unmarshal !!map into []scaffold.Hook`, or an action `has no parameter "githubOwner"` / `"sha"` | The CLI is below the v2.58.11 floor. This blueprint is not readable by an older one. |
 | A fresh build stops before 01-scaffold: `✕ phase "04-workers" precondition "wiring" is not met: … project "<repo>" not found` | The CLI is below v2.58.10, which asks the preflight about the product's project before phase 01 has created it and calls the answer a failure. Upgrade; the probe is then deferred to phase 04. |
