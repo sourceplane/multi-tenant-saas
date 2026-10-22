@@ -113,7 +113,7 @@ orun integrations list --org <ws> --json && orun cloud check --org <ws>
 | add a runtime secret | `orun secrets set <KEY> --org <ws> --env <env>` |
 | resolve workspace identity | `orun workspace <ws-id-or-slug>` |
 | check integrations | `orun integrations list --org <ws> --json` |
-| custom domain | `infra/terraform/cloudflare-domain` ships parked (`subscribe.environments: []`). Once the zone exists in the Cloudflare account, restore the `subscribe` block its `component.yaml` carries commented out (and finish the provider-v5 re-import its comment names), merge, then run the `08-docs` phase |
+| custom domain | see [Setting the domain later](#setting-the-domain-later): replace the domain string, create the zone, restore `infra/terraform/cloudflare-domain`'s commented-out `subscribe` block (it ships parked, `subscribe.environments: []`, mid-way to provider v5), merge, then run the `08-docs` phase |
 | headless/CI credentials | `ORUN_TOKEN` (workspace-scoped) + `GITHUB_TOKEN` |
 
 The ops phases (docs refresh and the original deployment sequence) all live
@@ -129,11 +129,65 @@ orun new --blueprint repo-blueprint.yaml --out <product-checkout> \
 ```
 
 `<values.yaml>` carries this product's identity — at minimum `reponame`,
-`productname`, `productdomain`, `githuborg` and `orunWorkspace`, which the
-blueprint validates before anything runs. `--run-hooks` is what makes a phase
+`productname`, `githuborg` and `orunWorkspace`, which the blueprint validates
+before anything runs (and `productdomain` once the product has a domain;
+`.rebrand/values.json` in this repository is a complete one). `--run-hooks`
+is what makes a phase
 land and verify rather than just place files; `--status` previews without
 writing. Every phase is idempotent — re-running a completed one is a no-op
 that re-verifies.
+
+## Setting the domain later
+
+This product answers on workers.dev from its first deploy, and it was built
+without a domain. Every place the domain goes carries one string until an
+owner sets it — in this repository, `sourceplane.ai` (built without a domain,
+that is the reserved placeholder `<reponame>.example.com`, which can never be
+anyone's real domain). Nothing that uses the domain was removed; it waits:
+
+| where | what it is |
+|---|---|
+| `intent.yaml` | `BASE_DOMAIN` (every environment) and `CONSOLE_CUSTOM_DOMAIN` (`stage.sourceplane.ai`, `prod.sourceplane.ai`) — the parameters of the parked `infra/terraform/cloudflare-domain` |
+| `infra/terraform/cloudflare-domain` | `baseDomain` in its `component.yaml`, the Terraform variable's default, its README (its `workerNamePrefix` already names this product's console Worker, `sourceplane-web-console-next`) |
+| `apps/api-edge/wrangler.template.jsonc` | `CONSOLE_CUSTOM_DOMAIN`, the console origin CORS allows besides the workers.dev one |
+| `apps/identity-worker/wrangler.template.jsonc` | `OAUTH_ALLOWED_CONSOLE_ORIGINS`, which lists the workers.dev console too, so sign-in works without a domain |
+| `apps/notifications-worker/wrangler.template.jsonc` | `EMAIL_FROM_ADDRESS`, `no-reply@mail.sourceplane.ai` |
+| `apps/billing-worker/wrangler.template.jsonc` | `POLAR_SUCCESS_URL`, the fallback return after checkout |
+| `tests/api-edge` | the CORS fixtures, which follow the edge's config |
+
+To set it, in one PR:
+
+1. **Replace the string everywhere**, and record the domain as
+   `productdomain` in `.rebrand/values.json`, where the docs refresh reads
+   it:
+
+   ```bash
+   git grep -lF 'sourceplane.ai'          # every file that names it
+   git grep -lzF 'sourceplane.ai' | xargs -0 perl -pi -e 's/\Qsourceplane.ai\E/acme.dev/g'   # acme.dev: yours
+   ```
+
+2. **Create the zone** in the Cloudflare account the product deploys into
+   (dashboard; the platform does not create zones), then restore the
+   `subscribe` block `infra/terraform/cloudflare-domain/component.yaml`
+   carries commented out, and finish the provider-v5 custom-domain resource
+   its comments describe. Until then the console has no custom domain and
+   keeps its workers.dev URL.
+3. **Verify the mail domain** — `mail.<your domain>` in Cloudflare Email
+   Service (DKIM/SPF). The notifications worker sends from
+   `no-reply@mail.<your domain>`; until it is verified, sends surface as
+   `notification.failed` events and nothing else breaks.
+4. **Supabase auth URLs.** This product sets none: sign-in is the identity
+   worker's, and `infra/terraform/supabase` names no domain. If you have
+   since set Supabase Auth's site URL or redirect URLs in its dashboard,
+   point them at the domain too.
+5. **The CLI default, if you want it on the domain.** Built without a
+   domain, `DEFAULT_API_URL` in `packages/cli/src/brand.ts` is the prod edge
+   on workers.dev, `https://api-edge-prod.<subdomain>.workers.dev`;
+   replacing the domain string does not move it. Re-point it once a host on
+   your domain routes to the edge.
+6. **Merge, then run the docs flow** (the `08-docs` phase, above) once the
+   convergence is green and DNS resolves, so `deployment.md` records the
+   domain.
 
 ## Evolution
 

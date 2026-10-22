@@ -20,8 +20,10 @@ convergence watch up to 45 minutes too.
 `infra/terraform/cloudflare-domain` (the zone lookup and, once wired, a
 custom domain per environment for the console worker —
 `CONSOLE_CUSTOM_DOMAIN` in the product's `intent.yaml`, `stage.<productdomain>`
-and `prod.<productdomain>` after rebrand, empty for `dev`) lands with the
-console and **deploys nothing**: its `component.yaml` declares
+and `prod.<productdomain>` after rebrand, empty for `dev` — and, since the
+console asks for no domain, `<productdomain>` is the placeholder
+`<reponame>.example.com` until an owner sets one) lands with the console and
+**deploys nothing**: its `component.yaml` declares
 `subscribe.environments: []`, so CI plans no lanes for it. The product runs
 on workers.dev URLs until an owner wires it.
 
@@ -31,7 +33,11 @@ green run with nothing in it — so the phase and the switch are gone, and the
 task contract's `affects` leaves the component out: there is nothing in it to
 re-plan.
 
-Wiring it is a normal pull request in the product, once the zone exists:
+Wiring it is a normal pull request in the product, once the zone exists.
+The product's `ai/context/operations.md` ("Setting the domain later") carries
+the whole list for its owner: replace the placeholder everywhere it stands
+(`git grep -l <reponame>.example.com` — intent, the edge and identity console
+origins, the mail sender, the billing return URLs), then:
 
 1. **The zone first.** The product zone (e.g. `acme.dev`) must already exist
    in the Cloudflare account the product deploys into, created in the
@@ -54,7 +60,7 @@ Wiring it is a normal pull request in the product, once the zone exists:
 ## Inputs
 
 `--out` is the product repo. The blueprint's required inputs — `reponame`,
-`productname`, `productdomain`, `githuborg` — are validated before any phase
+`productname`, `githuborg` — are validated before any phase
 runs, so pass them on every invocation; the product's own
 `.rebrand/values.json` is a complete values file. See
 [the phases README](README.md#inputs).
