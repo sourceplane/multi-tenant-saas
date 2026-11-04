@@ -206,6 +206,7 @@ ignore:
   #
   # `testing/coverage.test.sh` keeps this list honest: a workflow that reads a
   # path under `testing/` must be named here, or the gate is red.
+  - "**/.github/workflows/tag.yml"
   - "**/.github/workflows/baseline.yml"
 
 # ── MODULES ───────────────────────────────────────────────────────────────
